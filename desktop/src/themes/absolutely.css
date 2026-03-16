@@ -1,6 +1,6 @@
 /*
  * Hana Theme: Absolutely
- * Claude Desktop 配色致敬 — 暖奶油底 + 赤陶 accent
+ * Claude Desktop 配色致敬 — 暖奶油底 + 哑光赤陶 accent
  */
 
 [data-theme="absolutely"] {
@@ -9,10 +9,10 @@
     --bg-card:      #FAF9F5;
     --bg-glass:     rgba(244, 243, 238, 0.92);
 
-    /* 主色调（赤陶 Terracotta） */
-    --accent:       #C96442;
-    --accent-hover: #B55636;
-    --accent-light: rgba(201, 100, 66, 0.08);
+    /* 主色调（哑光赤陶，降饱和） */
+    --accent:       #B5846E;
+    --accent-hover: #A27460;
+    --accent-light: rgba(181, 132, 110, 0.08);
 
     /* 文字 */
     --text:         #2D2B28;
@@ -20,13 +20,13 @@
     --text-muted:   #9B9793;
 
     /* 边框与阴影 */
-    --border:       rgba(177, 173, 161, 0.30);
-    --shadow:       rgba(45, 43, 40, 0.08);
+    --border:       rgba(177, 173, 161, 0.28);
+    --shadow:       rgba(45, 43, 40, 0.07);
 
     /* 状态色 */
     --green:        #7BAE7F;
     --green-rgb:    123, 174, 127;
-    --coral:        #D4836E;
+    --coral:        #C4917E;
 
     /* 侧边栏 */
     --sidebar-bg:   #EDEAE2;
@@ -37,18 +37,18 @@
 
     /* 聊天专用 */
     --hana-text:    #2D2B28;
-    --mood-bg:      rgba(201, 100, 66, 0.04);
-    --mood-text:    #9E5438;
-    --mood-border:  rgba(201, 100, 66, 0.18);
+    --mood-bg:      rgba(181, 132, 110, 0.05);
+    --mood-text:    #8C6A58;
+    --mood-border:  rgba(181, 132, 110, 0.16);
     --tool-bg:      rgba(177, 173, 161, 0.08);
     --tool-text:    #6B6864;
-    --user-bg:      rgba(201, 100, 66, 0.07);
+    --user-bg:      rgba(0, 0, 0, 0.035);
     --drop-overlay-bg: rgba(244, 243, 238, 0.85);
     --attach-bg:    rgba(0, 0, 0, 0.04);
 
     /* 辅助色 */
-    --accent-rgb:   201, 100, 66;
-    --coral-rgb:    212, 131, 110;
+    --accent-rgb:   181, 132, 110;
+    --coral-rgb:    196, 145, 126;
     --danger:       #8B3A3A;
     --danger-rgb:   139, 58, 58;
     --overlay-subtle: rgba(0, 0, 0, 0.03);
