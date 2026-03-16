@@ -37,9 +37,6 @@ tmp/
 /index.html
 homepage/
 
-# Skills 参考文件
-skills2set/**/references/
-
 # 环境变量 / 凭证
 .env
 .env.*
