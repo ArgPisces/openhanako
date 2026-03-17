@@ -91,7 +91,16 @@ function ChatModelSection({ providers }: { providers: Record<string, any> }) {
     autoSaveModels();
   };
 
+  const [customInput, setCustomInput] = useState('');
   const query = pickerSearch.toLowerCase();
+
+  const handleCustomSubmit = () => {
+    const val = customInput.trim();
+    if (!val) return;
+    addFavorite(val);
+    setCustomInput('');
+    setPickerOpen(false);
+  };
 
   return (
     <div className="cml-row">
@@ -159,6 +168,28 @@ function ChatModelSection({ providers }: { providers: Record<string, any> }) {
                 </React.Fragment>
               );
             })}
+          </div>
+          <div className="mdw-custom-row">
+            <input
+              type="text"
+              className="mdw-custom-input"
+              placeholder={t('settings.api.customInput')}
+              spellCheck={false}
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCustomSubmit();
+                e.stopPropagation();
+              }}
+            />
+            <button
+              type="button"
+              className="mdw-custom-confirm"
+              onClick={(e) => { e.stopPropagation(); handleCustomSubmit(); }}
+            >
+              ↵
+            </button>
           </div>
         </div>
       </div>
