@@ -542,8 +542,8 @@ function FavoritedModels({ providerId, summary }: {
           const meta = lookupModelMeta(mid) || {};
           return (
             <div key={mid} className="pv-fav-item">
-              <span className="pv-fav-item-name" title={mid}>{meta.displayName || mid}</span>
-              {meta.displayName && <span className="pv-fav-item-id">{mid}</span>}
+              <span className="pv-fav-item-name" title={mid}>{meta.displayName || meta.name || mid}</span>
+              {(meta.displayName || meta.name) && meta.displayName !== mid && meta.name !== mid && <span className="pv-fav-item-id">{mid}</span>}
               {meta.context && <span className="pv-model-ctx">{formatContext(meta.context)}</span>}
               <div className="pv-fav-item-actions">
                 <button
