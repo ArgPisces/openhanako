@@ -675,12 +675,16 @@ function createSettingsWindow(tab, theme) {
     title: "Settings",
     ...titleBarOpts({ x: 16, y: 14 }),
     backgroundColor: THEME_BG[theme || _browserViewerTheme] || THEME_BG["warm-paper"],
-    show: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  settingsWindow.once("ready-to-show", () => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.show();
   });
 
   // Dev 模式走 Vite dev server，prod 走构建产物，fallback 到源码

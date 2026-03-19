@@ -106,7 +106,7 @@ export async function switchSession(path: string): Promise<void> {
       sessionAgent = {
         name: data.agentName || ag?.name || data.agentId,
         yuan: ag?.yuan || 'hanako',
-        avatarUrl: hanaUrl(`/api/agents/${data.agentId}/avatar?t=${Date.now()}`),
+        avatarUrl: ag?.hasAvatar ? hanaUrl(`/api/agents/${data.agentId}/avatar?t=${Date.now()}`) : null,
       };
     }
 

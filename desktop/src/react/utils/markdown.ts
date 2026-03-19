@@ -5,8 +5,12 @@
  * 此处独立创建并管理 md 实例。
  */
 
+import mk from '@traptitech/markdown-it-katex';
+import 'katex/dist/katex.min.css';
+
 interface MarkdownIt {
   render(src: string): string;
+  use(plugin: any, ...args: any[]): MarkdownIt;
   core: { ruler: { after: (name: string, ruleName: string, fn: (state: unknown) => void) => void } };
 }
 
@@ -20,6 +24,7 @@ export function getMd(): MarkdownIt {
     linkify: true,
     typographer: true,
   });
+  _md.use(mk);
   return _md;
 }
 

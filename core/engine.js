@@ -313,7 +313,10 @@ export class HanaEngine {
 
   _syncAgentSkills() { this._skills.syncAgentSkills(this.agent); }
   _syncAllAgentSkills() { for (const ag of this._agentMgr.agents.values()) this._skills.syncAgentSkills(ag); }
-  getAllSkills() { return this._skills.getAllSkills(this.agent); }
+  getAllSkills(agentId) {
+    const ag = agentId ? this._agentMgr.getAgent(agentId) : this.agent;
+    return this._skills.getAllSkills(ag || this.agent);
+  }
   _getSkillsForAgent(ag) { return this._skills.getSkillsForAgent(ag); }
   get skillsDir() { return this._skills.skillsDir; }
   get userSkillsDir() { return this._skills.skillsDir; }

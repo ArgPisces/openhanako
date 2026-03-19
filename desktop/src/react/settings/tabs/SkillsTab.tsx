@@ -13,7 +13,7 @@ interface ExternalPathsData {
 }
 
 export function SkillsTab() {
-  const { skillsList, settingsConfig, showToast } = useSettingsStore();
+  const { skillsList, settingsConfig, showToast, settingsAgentId } = useSettingsStore();
 
   const [reloading, setReloading] = useState(false);
   const [externalPathsData, setExternalPathsData] = useState<ExternalPathsData>({
@@ -23,7 +23,8 @@ export function SkillsTab() {
 
   const loadSkills = useCallback(async () => {
     try {
-      const res = await hanaFetch('/api/skills');
+      const agentId = useSettingsStore.getState().getSettingsAgentId();
+      const res = await hanaFetch(`/api/skills${agentId ? `?agentId=${agentId}` : ''}`);
       const data = await res.json();
       useSettingsStore.setState({ skillsList: data.skills || [] });
     } catch (err) {
@@ -65,7 +66,7 @@ export function SkillsTab() {
   useEffect(() => {
     loadSkills();
     loadExternalPaths();
-  }, [loadSkills, loadExternalPaths]);
+  }, [loadSkills, loadExternalPaths, settingsAgentId]);
 
   const visible = skillsList.filter(s => !s.hidden);
   const userSkills = visible.filter(s => s.source !== 'learned' && s.source !== 'external');

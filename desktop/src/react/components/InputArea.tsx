@@ -806,8 +806,8 @@ function ThinkingLevelButton({ level, onChange, modelXhigh }: {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
   const selectLevel = useCallback(async (next: ThinkingLevel) => {
@@ -876,8 +876,8 @@ function ModelSelector({ models }: { models: Array<{ id: string; name: string; p
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
   const switchModel = useCallback(async (modelId: string) => {
