@@ -10,7 +10,7 @@
 import { useStore, type StoreState } from './stores';
 import { hanaFetch } from './hooks/use-hana-fetch';
 import { setupSidebarShim } from './shims/sidebar-shim';
-import { setupChannelsShim } from './shims/channels-shim';
+// channels-shim 已迁移到 React (ChannelsPanel)
 import { setupAppMessagesShim } from './shims/app-messages-shim';
 import { setupAppAgentsShim } from './shims/app-agents-shim';
 import { setupAppWsShim } from './shims/app-ws-shim';
@@ -76,8 +76,18 @@ function setupLegacyShims(): void {
   // sidebar（Phase 3f）
   setupSidebarShim(modules);
 
-  // channels（Phase 3f）
-  setupChannelsShim(modules);
+  // channels（已迁移到 React ChannelsPanel，只保留兼容 shim 给 _ch() 调用者）
+  if (!modules.channels) {
+    modules.channels = {
+      initChannels: () => {},
+      switchTab: (tab: string) => useStore.getState().setCurrentTab(tab as any),
+      loadChannels: () => useStore.getState().loadChannels(),
+      updateChannelTabBadge: () => {},
+      renderChannelList: () => {},
+      renderChannelMessages: () => {},
+      openChannel: (id: string, isDM?: boolean) => useStore.getState().openChannel(id, isDM),
+    };
+  }
 
   // app.js 分解（Phase 4）
   setupAppMessagesShim(modules);

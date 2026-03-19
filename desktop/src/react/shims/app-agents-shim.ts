@@ -13,7 +13,6 @@ interface AppAgentsCtx {
   state: Record<string, any>;
   hanaFetch: (path: string, opts?: RequestInit) => Promise<Response>;
   hanaUrl: (path: string) => string;
-  messagesEl: HTMLElement;
   renderTodoDisplay: () => void;
   _ar: () => Record<string, any>;
 }
@@ -92,11 +91,7 @@ async function applyAgentIdentity(opts: any = {}): Promise<void> {
   if (agents) tasks.push(loadAgents());
   await Promise.all(tasks);
 
-  // 刷新已渲染的助手头像
-  const newAvatar = state.agentAvatarUrl || yuanFallbackAvatar(state.agentYuan);
-  document.querySelectorAll<HTMLImageElement>('.hana-avatar').forEach(img => {
-    img.src = newAvatar;
-  });
+  // React 组件通过 agentAvatarUrl store 变更自动刷新头像
 }
 
 // ── Agent 加载 ──

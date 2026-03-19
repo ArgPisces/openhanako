@@ -67,7 +67,7 @@ if (!window.HanaModules.desk) {
 if (!window.HanaModules.sidebar) {
   var _sbNoop = function() {};
   window.HanaModules.sidebar = {
-    loadSessions: _sbNoop, renderSessionList: _sbNoop, switchSession: _sbNoop,
+    loadSessions: _sbNoop, switchSession: _sbNoop,
     createNewSession: _sbNoop, ensureSession: function() { return true; },
     archiveSession: _sbNoop,
     toggleSidebar: _sbNoop, updateTbToggleState: _sbNoop, updateLayout: _sbNoop,

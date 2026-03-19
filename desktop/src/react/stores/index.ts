@@ -29,7 +29,7 @@ export const useStore = create<StoreState>()((set, _get, _api) => ({
   ...createStreamingSlice(set),
   ...createUiSlice(set),
   ...createAgentSlice(set),
-  ...createChannelSlice(set),
+  ...createChannelSlice(set as any, _get as any),
   ...createDeskSlice(set, _get as any),
   ...createModelSlice(set),
   ...createMiscSlice(set),

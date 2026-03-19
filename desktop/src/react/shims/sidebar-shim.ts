@@ -33,13 +33,7 @@ async function loadSessions(): Promise<void> {
       state().currentSessionPath = state().sessions[0].path;
     }
 
-    renderSessionList();
   } catch { /* ignore */ }
-}
-
-// renderSessionList: React SessionList 通过 Zustand sessions 状态驱动渲染
-function renderSessionList(): void {
-  // no-op — React 响应式渲染
 }
 
 // ══════════════════════════════════════════════════════
@@ -108,7 +102,6 @@ async function switchSession(path: string): Promise<void> {
       await ctx!.loadMessages();
     }
     ctx!.loadDeskFiles('');
-    renderSessionList();
 
     // 切换会话后刷新 context ring
     state().contextTokens = null;
@@ -146,8 +139,6 @@ async function createNewSession(): Promise<void> {
   renderBrowserCard();
   ctx!.updateFolderButton();
   ctx!.loadDeskFiles('', state().selectedFolder || state().homeFolder);
-  renderSessionList();
-  ctx!.renderWelcomeAgentSelector();
   (document.getElementById('inputBox') as HTMLElement | null)?.focus();
 }
 
@@ -749,7 +740,7 @@ function initSidebarModule(injected: Record<string, any>): void {
 
 export function setupSidebarShim(modules: Record<string, unknown>): void {
   modules.sidebar = {
-    loadSessions, renderSessionList, switchSession,
+    loadSessions, switchSession,
     createNewSession, ensureSession, archiveSession,
     toggleSidebar, updateTbToggleState, updateLayout,
     initSidebar, initSidebarResize,

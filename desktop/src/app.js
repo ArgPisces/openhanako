@@ -44,9 +44,6 @@ async function loadAutomationBadge() {
 
 // ── DOM 引用 ──
 const $ = (sel) => document.querySelector(sel);
-const chatArea = $("#chatArea");
-const welcome = $("#welcome");
-const messagesEl = $("#messages");
 const settingsBtn = $("#settingsBtn");
 
 // ── Markdown 渲染器 ──
@@ -93,15 +90,6 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
   tokens[idx].attrSet("rel", "noopener noreferrer");
   return _defaultLinkOpen(tokens, idx, options, env, self);
 };
-
-// ── 工具名称 → 人性化描述 ──
-function getToolLabel(name, phase) {
-  const agentName = state.agentName;
-  const vars = { name: agentName };
-  const val = t(`tool.${name}.${phase}`, vars);
-  if (val !== `tool.${name}.${phase}`) return val;
-  return t(`tool._fallback.${phase}`, vars);
-}
 
 /** 构建带认证 token 的 URL */
 function hanaUrl(path) {
@@ -280,14 +268,8 @@ function initModules() {
   const _inp = () => window.HanaModules.appInput;
 
   const sharedCtx = {
-    state, $, hanaFetch, hanaUrl, md,
-    chatArea, welcome, messagesEl,
-    previewPanel: $("#previewPanel"),
-    previewBody: $("#previewBody"),
-    previewTitle: $("#previewTitle"),
-    getToolLabel,
+    state, $, hanaFetch, hanaUrl,
     yuanFallbackAvatar: (...a) => _ag().yuanFallbackAvatar(...a),
-    parseMoodFromContent: (...a) => _msg().parseMoodFromContent(...a),
   };
 
   // Phase 5: UI shim (model/planMode/todo/scroll init removed — now React)
@@ -305,7 +287,6 @@ function initModules() {
   });
   _ag().initAppAgents({
     state, hanaFetch, hanaUrl,
-    messagesEl,
     renderTodoDisplay: () => {},
     _ar,
   });
@@ -322,9 +303,7 @@ function initModules() {
     clearChat: (...a) => _ag().clearChat(...a),
     loadMessages: (...a) => _msg().loadMessages(...a),
     loadDeskFiles: (...a) => _dk().loadDeskFiles(...a),
-    requestStreamResume: (...a) => _ws().requestStreamResume(...a),
     updateFolderButton: (...a) => _dk().updateFolderButton(...a),
-    renderWelcomeAgentSelector: (...a) => _ag().renderWelcomeAgentSelector(...a),
     loadAvatars: (...a) => _ag().loadAvatars(...a),
   });
 }
@@ -386,15 +365,8 @@ async function init() {
 
   _inp().initDragDrop();
 
-  _ch().initChannels({
-    state, $: (sel) => document.querySelector(sel),
-    hanaFetch, hanaUrl, md,
-    showContextMenu: (...a) => _dk().showContextMenu(...a),
-    toggleSidebar: (...a) => _sb().toggleSidebar(...a),
-    toggleJianSidebar: (...a) => _dk().toggleJianSidebar(...a),
-    updateTbToggleState: (...a) => _sb().updateTbToggleState(...a),
-    yuanFallbackAvatar: (...a) => _ag().yuanFallbackAvatar(...a),
-  });
+  // channels 已迁移到 React (ChannelsPanel)，initChannels 为 no-op
+  _ch().initChannels();
 
   _sb().updateLayout();
 

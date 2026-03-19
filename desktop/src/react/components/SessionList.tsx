@@ -151,7 +151,6 @@ function SessionItem({ session: s, isActive, isStreaming, agents, browserUrl }: 
     const dirName = s.cwd.split('/').filter(Boolean).pop();
     if (dirName) parts.push(dirName);
   }
-  if (s.messageCount) parts.push(t('session.messageCount', { n: s.messageCount }));
   if (s.modified) parts.push(formatSessionDate(s.modified));
 
   return (

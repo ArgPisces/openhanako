@@ -7,6 +7,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { streamBufferManager } from '../hooks/use-stream-buffer';
+import { useStore } from '../stores';
 
 declare function t(key: string, vars?: Record<string, string>): any;
 
@@ -395,20 +396,23 @@ function handleServerMessage(msg: any): void {
       window.dispatchEvent(new CustomEvent('hana-plan-mode', { detail: { enabled: !!msg.enabled } }));
       break;
 
-    case 'channel_new_message':
-      if (msg.channelName && state.currentChannel === msg.channelName) {
-        _ch().openChannel(msg.channelName);
+    case 'channel_new_message': {
+      const store = useStore.getState();
+      if (msg.channelName && store.currentChannel === msg.channelName) {
+        store.openChannel(msg.channelName);
       } else if (msg.channelName) {
-        _ch().loadChannels();
+        store.loadChannels();
       }
       break;
+    }
 
     case 'dm_new_message': {
       const dmId = `dm:${msg.from}`;
-      if (state.currentChannel === dmId) {
-        _ch().openChannel(dmId, true);
+      const store2 = useStore.getState();
+      if (store2.currentChannel === dmId) {
+        store2.openChannel(dmId, true);
       } else {
-        _ch().loadChannels();
+        store2.loadChannels();
       }
       break;
     }
@@ -454,22 +458,12 @@ function handleServerMessage(msg: any): void {
 
 // ── Setup ──
 
-/**
- * 提前锁定 stream resume：切到正在 streaming 的 session 前调用，
- * 阻止实时事件写 DOM，直到 stream_resume 回放完成。
- */
-function lockStreamResumeFor(sessionPath: string): void {
-  ++_streamResumeRebuildVersion;
-  _streamResumeRebuildingFor = sessionPath;
-}
-
 export function setupAppWsShim(modules: Record<string, unknown>): void {
   modules.appWs = {
     connectWS,
     handleServerMessage,
     requestStreamResume,
     applyStreamingStatus,
-    lockStreamResumeFor,
     initAppWs: (injected: AppWsCtx) => { ctx = injected; },
   };
 }
