@@ -3,6 +3,11 @@
 ; Kills running Hanako processes before install/uninstall to prevent
 ; "file in use" errors on Windows overlay installs.
 
+; Disable CRC integrity check — electron-builder's post-compilation PE editing
+; (signtool + rcedit) corrupts the NSIS CRC when no signing cert is configured,
+; causing "Installer integrity check has failed" on Windows.
+CRCCheck off
+
 !macro customInit
   ; Kill Electron main process
   nsExec::ExecToLog 'taskkill /F /IM "Hanako.exe"'
