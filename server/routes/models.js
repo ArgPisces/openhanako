@@ -44,13 +44,16 @@ export function createModelsRoute(engine) {
       const available = engine.availableModels;
 
       const overrides = engine.config?.models?.overrides;
-      const result = favorites.map(id => {
-        const m = available.find(am => am.id === id);
+      const result = favorites.map(item => {
+        // 支持新格式 {id, provider} 和旧格式 string
+        const modelId = typeof item === "object" && item?.id ? item.id : String(item);
+        const hintProvider = typeof item === "object" ? item?.provider : undefined;
+        const m = available.find(am => am.id === modelId);
         return {
-          id,
-          name: resolveModelName(id, m?.name, overrides),
-          provider: m?.provider || "",
-          isCurrent: id === engine.currentModel?.id,
+          id: modelId,
+          name: resolveModelName(modelId, m?.name, overrides),
+          provider: m?.provider || hintProvider || "",
+          isCurrent: modelId === engine.currentModel?.id,
           reasoning: m ? !!m.reasoning : false,
           xhigh: m ? supportsXhigh(m) : false,
           vision: m?.provider ? (engine.providerRegistry.get(m.provider)?.capabilities?.vision !== false) : true,

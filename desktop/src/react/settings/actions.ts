@@ -82,13 +82,21 @@ export async function loadSettingsConfig() {
     const experienceData = await experienceRes.json();
     config._experience = experienceData.content || '';
 
+    // 旧格式裸 ID 的 provider 反查（用已加载的 config.providers）
+    const providerLookup = (id: string): string | null => {
+      for (const [name, p] of Object.entries(config.providers || {}) as [string, any][]) {
+        if ((p.models || []).includes(id)) return name;
+      }
+      return null;
+    };
+
     // favorites
     try {
       const favRes = await hanaFetch('/api/favorites');
       const favData = await favRes.json();
-      store.set({ pendingFavorites: deserializeFavorites(favData.favorites || []) });
+      store.set({ pendingFavorites: deserializeFavorites(favData.favorites || [], providerLookup) });
     } catch {
-      store.set({ pendingFavorites: deserializeFavorites(config.models?.favorites || []) });
+      store.set({ pendingFavorites: deserializeFavorites(config.models?.favorites || [], providerLookup) });
     }
 
     store.set({
@@ -96,7 +104,11 @@ export async function loadSettingsConfig() {
       globalModelsConfig: globalModels,
       homeFolder: config.desk?.home_folder || null,
       currentPins: pinnedData.pins || [],
-      pendingDefaultModel: config.models?.chat || '',
+      pendingDefaultModel: config.models?.chat
+        ? (providerLookup(config.models.chat)
+            ? `${providerLookup(config.models.chat)}:${config.models.chat}`
+            : config.models.chat)
+        : '',
     });
   } catch (err) {
     console.error('[settings] load failed:', err);

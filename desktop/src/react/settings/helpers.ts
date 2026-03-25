@@ -31,13 +31,16 @@ export function serializeFavorites(favSet: Set<string>): Array<string | { id: st
 /** Deserialize API favorites into Set<"provider:id"> */
 export function deserializeFavorites(
   raw: Array<string | { id: string; provider: string }>,
+  resolveProvider?: (id: string) => string | null,
 ): Set<string> {
   const set = new Set<string>();
   for (const item of raw) {
     if (typeof item === 'object' && item && item.id && item.provider) {
       set.add(favKey(item.provider, item.id));
     } else if (typeof item === 'string') {
-      set.add(item); // Old format: bare ID, keep as-is for backward compat
+      // 旧格式：尝试通过 resolveProvider 附加 provider
+      const prov = resolveProvider?.(item);
+      set.add(prov ? favKey(prov, item) : item);
     }
   }
   return set;
