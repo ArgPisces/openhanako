@@ -907,8 +907,10 @@ function createBrowserViewerWindow(opts = {}) {
 // ══════════════════════════════════════════
 
 // DOM 遍历脚本：生成页面快照（类似 AXTree）
+// 优化：同构兄弟（≥3）压缩为单行，保留全部 ref 和关键文本；超 30k 字符头尾截断
 const SNAPSHOT_SCRIPT = `(function() {
   var ref = 0;
+  var MAX_TREE = 30000;
   document.querySelectorAll('[data-hana-ref]').forEach(function(el) {
     el.removeAttribute('data-hana-ref');
   });
@@ -937,6 +939,77 @@ const SNAPSHOT_SCRIPT = `(function() {
       if (el.childNodes[i].nodeType === 3) t += el.childNodes[i].textContent;
     }
     return t.trim().replace(/\\s+/g, ' ').slice(0, 80);
+  }
+
+  // 结构签名：只看直接子元素的 tag 序列，用于检测同构兄弟
+  function sig(el) {
+    if (el.nodeType !== 1 || !isVisible(el)) return null;
+    var tag = el.tagName;
+    if (['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','SVG'].indexOf(tag) !== -1) return null;
+    var s = tag;
+    for (var i = 0; i < el.children.length; i++) {
+      var c = el.children[i];
+      if (c.nodeType === 1 && isVisible(c) && ['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','SVG'].indexOf(c.tagName) === -1) {
+        s += ',' + c.tagName;
+      }
+    }
+    return s;
+  }
+
+  // 单行紧凑格式：链接 | 按钮 | 文本1 · 文本2
+  function compact(el, depth) {
+    var links = [], ctrls = [], texts = [];
+    function collect(node) {
+      if (node.nodeType !== 1 || !isVisible(node)) return;
+      var tag = node.tagName;
+      if (['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','SVG'].indexOf(tag) !== -1) return;
+      if (isInteractive(node)) {
+        ref++;
+        node.setAttribute('data-hana-ref', String(ref));
+        var name = node.getAttribute('aria-label') || node.title || node.placeholder
+          || (node.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 60) || node.value || '';
+        if (tag === 'A' || node.getAttribute('role') === 'link') {
+          links.push('[' + ref + '] "' + name + '"');
+        } else {
+          ctrls.push('[' + ref + '] ' + name);
+        }
+        return; // 交互元素的子树已被 textContent 捕获，不再递归
+      }
+      var txt = directText(node);
+      if (txt && txt.length > 2) texts.push(txt);
+      for (var i = 0; i < node.children.length; i++) collect(node.children[i]);
+    }
+    collect(el);
+    if (!links.length && !ctrls.length && !texts.length) return '';
+    var pad = '';
+    for (var i = 0; i < depth; i++) pad += '  ';
+    var parts = links.concat(ctrls);
+    var line = parts.join(' | ');
+    if (texts.length) line += (line ? ' | ' : '') + texts.join(' \\u00b7 ');
+    return pad + line + '\\n';
+  }
+
+  // 分组遍历：连续 ≥3 个同构兄弟用 compact，其余正常 walk
+  function walkChildren(el, depth) {
+    var out = '';
+    var children = [], sigs = [];
+    for (var i = 0; i < el.children.length; i++) {
+      children.push(el.children[i]);
+      sigs.push(sig(el.children[i]));
+    }
+    var g = 0;
+    while (g < children.length) {
+      if (!sigs[g]) { out += walk(children[g], depth); g++; continue; }
+      var end = g + 1;
+      while (end < children.length && sigs[end] === sigs[g]) end++;
+      if (end - g >= 3) {
+        for (var k = g; k < end; k++) out += compact(children[k], depth);
+      } else {
+        for (var k = g; k < end; k++) out += walk(children[k], depth);
+      }
+      g = end;
+    }
+    return out;
   }
 
   function walk(el, depth) {
@@ -980,14 +1053,21 @@ const SNAPSHOT_SCRIPT = `(function() {
       }
     }
 
-    for (var j = 0; j < el.children.length; j++) {
-      out += walk(el.children[j], interactive ? depth + 1 : depth);
-    }
-
+    out += walkChildren(el, interactive ? depth + 1 : depth);
     return out;
   }
 
   var tree = walk(document.body, 0);
+
+  // 硬上限：超过 MAX_TREE 时保留头部 80% + 尾部 20%，在行边界截断
+  if (tree.length > MAX_TREE) {
+    var h = tree.lastIndexOf('\\n', Math.floor(MAX_TREE * 0.8));
+    if (h < MAX_TREE * 0.4) h = Math.floor(MAX_TREE * 0.8);
+    var tl = tree.indexOf('\\n', tree.length - Math.floor(MAX_TREE * 0.2));
+    if (tl < 0) tl = tree.length - Math.floor(MAX_TREE * 0.2);
+    tree = tree.slice(0, h) + '\\n\\n[... ' + (tl - h) + ' chars omitted ...]\\n\\n' + tree.slice(tl);
+  }
+
   return {
     title: document.title,
     currentUrl: location.href,
