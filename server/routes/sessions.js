@@ -241,7 +241,7 @@ export function createSessionsRoute(engine) {
       } else {
         await engine.createSession(null, cwd || undefined, memFlag);
       }
-      engine.persistMemoryEnabled();
+      engine.persistSessionMeta();
 
       // 记住工作目录 + 更新历史
       if (cwd) {

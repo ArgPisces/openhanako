@@ -294,7 +294,7 @@ export class HanaEngine {
   setUpdateChannel(ch) { this._prefs.setUpdateChannel(ch); }
   setMemoryEnabled(v) { return this._configCoord.setMemoryEnabled(v); }
   setMemoryMasterEnabled(id, v) { return this._configCoord.setMemoryMasterEnabled(id, v); }
-  persistMemoryEnabled() { return this._configCoord.persistMemoryEnabled(); }
+  persistSessionMeta() { return this._configCoord.persistSessionMeta(); }
   setPlanMode(enabled) { return this._sessionCoord.setPlanMode(enabled, allBuiltInTools); }
   async updateConfig(p) { return this._configCoord.updateConfig(p); }
 

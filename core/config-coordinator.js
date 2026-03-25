@@ -215,6 +215,7 @@ export class ConfigCoordinator {
     // 同步更新当前 session 的快照
     const sessionCoord = this._d.getSessionCoordinator();
     sessionCoord?.updateCurrentSessionModelId(modelId);
+    this.persistSessionMeta();
   }
 
   setThinkingLevel(level) {
@@ -235,7 +236,7 @@ export class ConfigCoordinator {
 
   setMemoryEnabled(val) {
     this._d.getAgent().setMemoryEnabled(val);
-    this.persistMemoryEnabled();
+    this.persistSessionMeta();
   }
 
   setMemoryMasterEnabled(agentId, val) {
@@ -243,24 +244,34 @@ export class ConfigCoordinator {
     if (ag) ag.setMemoryMasterEnabled(val);
   }
 
-  persistMemoryEnabled() {
+  persistSessionMeta() {
     const session = this._d.getSession();
     const sessPath = session?.sessionManager?.getSessionFile?.();
     if (!sessPath) return;
     const agent = this._d.getAgent();
     const metaPath = path.join(agent.sessionDir, "session-meta.json");
+
+    const sessionCoord = this._d.getSessionCoordinator();
+    const modelId = sessionCoord?.getCurrentSessionModelId() || null;
+
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         let meta = {};
         try { meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")); } catch {}
         const sessKey = path.basename(sessPath);
-        meta[sessKey] = { ...(meta[sessKey] || {}), memoryEnabled: agent.sessionMemoryEnabled };
-        fs.writeFileSync(metaPath + ".tmp", JSON.stringify(meta, null, 2) + "\n");
-        fs.renameSync(metaPath + ".tmp", metaPath);
+        meta[sessKey] = {
+          ...meta[sessKey],
+          memoryEnabled: agent.memoryEnabled,
+          ...(modelId && { modelId }),
+        };
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
         return;
       } catch (err) {
-        if (attempt === 0) continue;
-        console.error("[config] persistMemoryEnabled failed:", err.message);
+        if (attempt === 0) {
+          try { fs.mkdirSync(path.dirname(metaPath), { recursive: true }); } catch {}
+        } else {
+          console.error("[config] persistSessionMeta failed:", err.message);
+        }
       }
     }
   }
@@ -294,6 +305,7 @@ export class ConfigCoordinator {
         // 同步 SessionEntry 快照
         const sessionCoord = this._d.getSessionCoordinator();
         sessionCoord?.updateCurrentSessionModelId(partial.models.chat);
+        this.persistSessionMeta();
       }
     }
 
