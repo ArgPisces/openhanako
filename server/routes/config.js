@@ -484,6 +484,12 @@ export function createConfigRoute(engine) {
       if (!Array.isArray(favorites)) {
         return c.json({ error: "favorites must be an array" }, 400);
       }
+      // 验证每个元素是 string 或 {id, provider} 对象
+      for (const item of favorites) {
+        if (typeof item !== "string" && (typeof item !== "object" || !item?.id)) {
+          return c.json({ error: "each favorite must be a string or {id, provider} object" }, 400);
+        }
+      }
       debugLog()?.log("api", `PUT /api/favorites (${favorites.length} items)`);
       await engine.saveFavorites(favorites);
       return c.json({ ok: true });
