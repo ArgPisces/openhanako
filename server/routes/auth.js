@@ -14,6 +14,24 @@ import crypto from "crypto";
 import { Hono } from "hono";
 import { safeJson } from "../hono-helpers.js";
 
+/** 将 OAuth 底层错误转为用户可理解的诊断信息 */
+function diagnoseOAuthError(err) {
+  const msg = err.message || String(err);
+  const cause = err.cause?.message || err.cause?.code || "";
+  const full = cause ? `${msg} (${cause})` : msg;
+
+  // fetch 网络层失败（DNS/连接/超时）→ 代理没覆盖 Node 进程
+  if (/fetch failed/i.test(msg)) {
+    const detail = cause ? `（${cause}）` : "";
+    return `无法连接 OAuth 服务器${detail}。请确认代理开启了 TUN 模式，或设置 HTTPS_PROXY 环境变量`;
+  }
+  // 回调超时 → localhost 不通 / 端口问题
+  if (/timed out/i.test(msg)) {
+    return "OAuth 超时：未收到浏览器回调。请检查端口 1455 是否被防火墙拦截或已被占用，Windows 用户也请确认 localhost 未被解析到 IPv6";
+  }
+  return full;
+}
+
 export function createAuthRoute(engine) {
   const route = new Hono();
 
@@ -79,7 +97,9 @@ export function createAuthRoute(engine) {
     loginPromise.then(() => {
       flow.result = { ok: true };
     }).catch(err => {
-      flow.result = { ok: false, error: err.message };
+      const cause = err.cause?.message || err.cause?.code || "";
+      console.error(`[auth] OAuth login failed (${provider}): ${err.message}${cause ? ` [${cause}]` : ""}`);
+      flow.result = { ok: false, error: diagnoseOAuthError(err) };
     });
 
     try {
