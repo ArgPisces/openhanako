@@ -471,6 +471,7 @@ export class HanaEngine {
       systemPromptOverride: () => this.agent.systemPrompt,
       agentsFilesOverride: () => ({ agentsFiles: [] }),
       noExtensions: true,
+      noSkills: true,
       noPromptTemplates: true,
       noThemes: true,
       additionalSkillPaths: [skillsDir],

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSettingsStore } from '../store';
 import { hanaFetch } from '../api';
 import { t, autoSaveConfig } from '../helpers';
@@ -45,20 +45,22 @@ export function AgentTab() {
 
   const chatRaw = settingsConfig?.models?.chat;
   const currentModel = typeof chatRaw === 'object' && chatRaw?.id ? chatRaw.id : (chatRaw || '');
-  const allProviderModels = (() => {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const p of Object.values(settingsConfig?.providers || {}) as { models?: string[] }[]) {
-      for (const m of (p.models || [])) {
-        if (!seen.has(m)) { seen.add(m); result.push(m); }
-      }
+
+  // 从唯一信源 /api/models 获取模型列表（和聊天页一致）
+  const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; provider: string }>>([]);
+  useEffect(() => {
+    hanaFetch('/api/models').then(r => r.json()).then(data => {
+      setAvailableModels(data.models || []);
+    }).catch(() => {});
+  }, [settingsConfig]); // settingsConfig 变化时刷新
+
+  const modelOptions = useMemo(() => {
+    const opts = availableModels.map(m => ({ value: m.id, label: m.name || m.id, group: m.provider }));
+    if (currentModel && !availableModels.some(m => m.id === currentModel)) {
+      opts.unshift({ value: currentModel, label: currentModel, group: '' });
     }
-    return result;
-  })();
-  const modelOptions = allProviderModels.map(mid => ({ value: mid, label: mid }));
-  if (currentModel && !allProviderModels.includes(currentModel)) {
-    modelOptions.unshift({ value: currentModel, label: currentModel });
-  }
+    return opts;
+  }, [availableModels, currentModel]);
 
   const memoryEnabled = settingsConfig?.memory?.enabled !== false;
 
@@ -171,12 +173,9 @@ export function AgentTab() {
               value={currentModel}
               onChange={async (modelId) => {
                 const partial: Record<string, unknown> = { models: { chat: modelId } };
-                const provs = settingsConfig?.providers || {};
-                for (const [name, p] of Object.entries(provs) as [string, { models?: string[] }][]) {
-                  if ((p.models || []).includes(modelId)) {
-                    partial.api = { provider: name };
-                    break;
-                  }
+                const match = availableModels.find(m => m.id === modelId);
+                if (match?.provider) {
+                  partial.api = { provider: match.provider };
                 }
                 await autoSaveConfig(partial, { refreshModels: true });
               }}

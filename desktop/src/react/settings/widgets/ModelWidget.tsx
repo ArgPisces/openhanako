@@ -1,12 +1,21 @@
 /**
  * MDW（模型下拉组件）的 React 版本
- * 支持按 provider 分组、自定义输入
+ * 从 /api/models 读取唯一信源，按 provider 分组、支持搜索和自定义输入
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { hanaFetch } from '../api';
 import styles from '../Settings.module.css';
 
+interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number | null;
+}
+
 interface ModelWidgetProps {
-  providers: Record<string, { models?: string[]; base_url?: string }>;
+  /** @deprecated 不再使用，保留兼容签名 */
+  providers?: Record<string, { models?: string[]; base_url?: string }>;
   value: string;
   onSelect: (modelId: string) => void;
   placeholder?: string;
@@ -15,15 +24,23 @@ interface ModelWidgetProps {
 }
 
 export function ModelWidget({
-  providers, value, onSelect,
-  placeholder, lookupModelMeta, formatContext,
+  value, onSelect,
+  placeholder, formatContext,
 }: ModelWidgetProps) {
   const t = window.t || ((k: string) => k);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [customInput, setCustomInput] = useState('');
+  const [models, setModels] = useState<ModelInfo[]>([]);
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // 从唯一信源获取模型列表
+  useEffect(() => {
+    hanaFetch('/api/models').then(r => r.json()).then(data => {
+      setModels(data.models || []);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -43,20 +60,17 @@ export function ModelWidget({
 
   const query = search.toLowerCase();
 
-  // Collect all models from all providers
-  const allModels = useMemo(() => {
-    const models: string[] = [];
-    const seen = new Set<string>();
-    for (const p of Object.values(providers)) {
-      for (const m of (p.models || [])) {
-        if (!seen.has(m)) {
-          seen.add(m);
-          models.push(m);
-        }
-      }
+  // 按 provider 分组
+  const grouped = useMemo(() => {
+    const groups: Record<string, ModelInfo[]> = {};
+    for (const m of models) {
+      if (query && !m.id.toLowerCase().includes(query) && !m.name.toLowerCase().includes(query)) continue;
+      const g = m.provider || '';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(m);
     }
-    return models;
-  }, [providers]);
+    return groups;
+  }, [models, query]);
 
   const handleCustomSubmit = () => {
     const val = customInput.trim();
@@ -76,7 +90,7 @@ export function ModelWidget({
         <span className={styles['mdw-value']}>{value || `— ${placeholder || t('settings.api.selectModel')} —`}</span>
         <span className={styles['mdw-arrow']}>▾</span>
       </button>
-      <div className={`${styles['mdw-popup']}${open  ? ' ' + styles['open'] : ''}`}>
+      <div className={`${styles['mdw-popup']}${open ? ' ' + styles['open'] : ''}`}>
         <input
           ref={searchRef}
           className={styles['mdw-search']}
@@ -88,25 +102,24 @@ export function ModelWidget({
           onClick={(e) => e.stopPropagation()}
         />
         <div className={styles['mdw-options']}>
-          {allModels
-            .filter(mid => !query || mid.toLowerCase().includes(query))
-            .map(mid => {
-              const meta = lookupModelMeta?.(mid);
-              return (
+          {Object.entries(grouped).map(([provider, items]) => (
+            <div key={provider || '__none'}>
+              {provider && <div className={styles['mdw-group-header']}>{provider}</div>}
+              {items.map(m => (
                 <button
-                  key={mid}
-                  className={`${styles['mdw-option']}${mid === value  ? ' ' + styles['selected'] : ''}`}
+                  key={`${m.provider}/${m.id}`}
+                  className={`${styles['mdw-option']}${m.id === value ? ' ' + styles['selected'] : ''}`}
                   type="button"
-                  onClick={() => { onSelect(mid); setOpen(false); }}
+                  onClick={() => { onSelect(m.id); setOpen(false); }}
                 >
-                  <span className={styles['mdw-option-name']}>{mid}</span>
-                  {meta?.context && formatContext && (
-                    <span className={styles['mdw-option-ctx']}>{formatContext(meta.context)}</span>
+                  <span className={styles['mdw-option-name']}>{m.name || m.id}</span>
+                  {m.contextWindow && formatContext && (
+                    <span className={styles['mdw-option-ctx']}>{formatContext(m.contextWindow)}</span>
                   )}
                 </button>
-              );
-            })
-          }
+              ))}
+            </div>
+          ))}
           <div className={styles['mdw-custom-row']}>
             <input
               type="text"

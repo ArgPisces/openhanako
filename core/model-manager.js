@@ -111,9 +111,27 @@ export class ModelManager {
 
   // ── 刷新 ──
 
-  /** 刷新可用模型列表 */
+  /** 刷新可用模型列表，用 added-models.yaml 过滤 */
   async refreshAvailable() {
-    this._availableModels = await this._modelRegistry.getAvailable();
+    const allModels = await this._modelRegistry.getAvailable();
+    // Pi SDK 返回所有有 auth 的模型（包括 OAuth 内置模型），
+    // 但用户只想看自己配置的模型。用 added-models.yaml 的模型列表过滤。
+    const rawProviders = this.providerRegistry.getAllProvidersRaw();
+    const userModelSets = new Map();
+    for (const [name, raw] of Object.entries(rawProviders)) {
+      if (!raw.models?.length) continue;
+      const ids = new Set(raw.models.map(m => typeof m === "object" ? m.id : m));
+      userModelSets.set(name, ids);
+      // OAuth provider 的 authJsonKey 可能不同于 provider ID
+      const authKey = this.providerRegistry.getAuthJsonKey(name);
+      if (authKey !== name) userModelSets.set(authKey, ids);
+    }
+    this._availableModels = allModels.filter(m => {
+      const allowed = userModelSets.get(m.provider);
+      // 没有在 added-models.yaml 里的 provider → 全部放行（兼容未知来源）
+      if (!allowed) return true;
+      return allowed.has(m.id);
+    });
     return this._availableModels;
   }
 
@@ -122,7 +140,17 @@ export class ModelManager {
    * @returns {boolean} 是否有变化
    */
   async syncAndRefresh() {
-    const providers = this.providerRegistry.getAllProvidersRaw();
+    const rawProviders = this.providerRegistry.getAllProvidersRaw();
+    // 合并 plugin 默认值（base_url/api），YAML 里可能只存了 api_key + models
+    const providers = {};
+    for (const [name, raw] of Object.entries(rawProviders)) {
+      const entry = this.providerRegistry.get(name);
+      providers[name] = {
+        ...raw,
+        base_url: raw.base_url || entry?.baseUrl || "",
+        api: raw.api || entry?.api || "openai-completions",
+      };
+    }
     const changed = syncModels(providers, {
       modelsJsonPath: this.modelsJsonPath,
       authJsonPath: this.authJsonPath,

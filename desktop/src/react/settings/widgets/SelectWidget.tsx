@@ -10,6 +10,7 @@ export interface SelectOption {
   value: string;
   label: string;
   disabled?: boolean;
+  group?: string;
 }
 
 interface SelectWidgetProps {
@@ -83,20 +84,36 @@ export function SelectWidget({ options, value, onChange, placeholder, disabled }
       </button>
       {open && createPortal(
         <div className={`${styles['sdw-popup']} ${styles['sdw-popup-fixed']}`} ref={panelRef} style={panelStyle} data-sdw-popup>
-          {options.map(item => (
-            <button
-              type="button"
-              key={item.value}
-              className={`${styles['sdw-option']}${item.value === value ? ' ' + styles['selected'] : ''}${item.disabled ? ' ' + styles['disabled'] : ''}`}
-              onClick={() => {
-                if (item.disabled) return;
-                onChange(item.value);
-                close();
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
+          {(() => {
+            const hasGroups = options.some(o => o.group);
+            if (!hasGroups) {
+              return options.map(item => (
+                <button type="button" key={item.value}
+                  className={`${styles['sdw-option']}${item.value === value ? ' ' + styles['selected'] : ''}${item.disabled ? ' ' + styles['disabled'] : ''}`}
+                  onClick={() => { if (!item.disabled) { onChange(item.value); close(); } }}>
+                  {item.label}
+                </button>
+              ));
+            }
+            const groups: Record<string, SelectOption[]> = {};
+            for (const o of options) {
+              const g = o.group || '';
+              if (!groups[g]) groups[g] = [];
+              groups[g].push(o);
+            }
+            return Object.entries(groups).map(([group, items]) => (
+              <div key={group || '__none'}>
+                {group && <div className={styles['sdw-group-header']}>{group}</div>}
+                {items.map(item => (
+                  <button type="button" key={`${group}/${item.value}`}
+                    className={`${styles['sdw-option']}${item.value === value ? ' ' + styles['selected'] : ''}${item.disabled ? ' ' + styles['disabled'] : ''}`}
+                    onClick={() => { if (!item.disabled) { onChange(item.value); close(); } }}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ));
+          })()}
         </div>,
         document.body
       )}

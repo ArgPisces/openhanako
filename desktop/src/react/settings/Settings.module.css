@@ -4285,6 +4285,14 @@ a.about-link:hover {
     background: none;
 }
 
+.sdw-group-header {
+    padding: 0.35rem 0.65rem 0.15rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    user-select: none;
+}
+
 /* 供应商 tab 内的 SDW 取消宽度限制 */
 .providers-left .sdw {
     max-width: 100%;
@@ -4728,6 +4736,14 @@ a.about-link:hover {
     border-radius: 4px;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+.mdw-group-header {
+    padding: 0.35rem 0.65rem 0.15rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    user-select: none;
 }
 
 .cml-empty {
