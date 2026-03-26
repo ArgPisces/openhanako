@@ -2,7 +2,6 @@ import React from 'react';
 import { t } from '../../helpers';
 
 import kongBannerUrl from '../../../../assets/kong-banner.jpg';
-import styles from '../../Settings.module.css';
 
 export function YuanSelector({ currentYuan, onChange }: { currentYuan: string; onChange: (key: string) => void }) {
   const types = t('yuan.types') || {};
@@ -22,7 +21,7 @@ export function YuanSelector({ currentYuan, onChange }: { currentYuan: string; o
         {chips.map(([key, meta]) => (
           <button
             key={key}
-            className={`${'yuan-chip'}${key === currentYuan  ? ' ' + styles['selected'] : ''}`}
+            className={`yuan-chip${key === currentYuan ? ' selected' : ''}`}
             type="button"
             onClick={() => { if (key !== currentYuan) onChange(key); }}
           >
@@ -40,7 +39,7 @@ export function YuanSelector({ currentYuan, onChange }: { currentYuan: string; o
       </div>
       {kongMeta && (
         <button
-          className={`${'yuan-kong-banner'}${currentYuan === 'kong'  ? ' ' + styles['selected'] : ''}`}
+          className={`yuan-kong-banner${currentYuan === 'kong' ? ' selected' : ''}`}
           type="button"
           style={{ backgroundImage: `url(${kongBannerUrl})` }}
           onClick={() => { if (currentYuan !== 'kong') onChange('kong'); }}
