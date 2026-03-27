@@ -593,11 +593,16 @@ export class HanaEngine {
    * @param {import('../hub/event-bus.js').EventBus} bus
    */
   async initPlugins(bus) {
-    const pluginsDir = path.join(this.hanakoHome, "plugins");
+    const builtinPluginsDir = path.join(this.productDir, "..", "plugins");
+    const userPluginsDir = path.join(this.hanakoHome, "plugins");
     const pluginDataDir = path.join(this.hanakoHome, "plugin-data");
 
     const { PluginManager } = await import("./plugin-manager.js");
-    this._pluginManager = new PluginManager({ pluginsDir, dataDir: pluginDataDir, bus });
+    this._pluginManager = new PluginManager({
+      pluginsDirs: [builtinPluginsDir, userPluginsDir],
+      dataDir: pluginDataDir,
+      bus,
+    });
     this._pluginManager.scan();
     await this._pluginManager.loadAll();
 

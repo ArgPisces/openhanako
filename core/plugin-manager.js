@@ -7,8 +7,13 @@ const KNOWN_CONTRIBUTION_DIRS = [
 ];
 
 export class PluginManager {
-  constructor({ pluginsDir, dataDir, bus }) {
-    this._pluginsDir = pluginsDir;
+  /**
+   * @param {{ pluginsDirs: string[], dataDir: string, bus: object }} opts
+   * pluginsDirs: 多个扫描目录，先内嵌后用户（靠前的优先）
+   * 兼容旧签名 { pluginsDir: string } → 自动转为单元素数组
+   */
+  constructor({ pluginsDirs, pluginsDir, dataDir, bus }) {
+    this._pluginsDirs = pluginsDirs || (pluginsDir ? [pluginsDir] : []);
     this._dataDir = dataDir;
     this._bus = bus;
     this._plugins = new Map();
@@ -27,16 +32,21 @@ export class PluginManager {
   }
 
   scan() {
-    if (!fs.existsSync(this._pluginsDir)) return [];
     const results = [];
-    for (const entry of fs.readdirSync(this._pluginsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-      const pluginDir = path.join(this._pluginsDir, entry.name);
-      try {
-        const desc = this._readPluginDescriptor(pluginDir, entry.name);
-        results.push(desc);
-      } catch (err) {
-        console.error(`[plugin-manager] failed to read plugin "${entry.name}":`, err.message);
+    const seen = new Set();
+    for (const dir of this._pluginsDirs) {
+      if (!fs.existsSync(dir)) continue;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+        if (seen.has(entry.name)) continue; // 靠前的目录优先，同名跳过
+        seen.add(entry.name);
+        const pluginDir = path.join(dir, entry.name);
+        try {
+          const desc = this._readPluginDescriptor(pluginDir, entry.name);
+          results.push(desc);
+        } catch (err) {
+          console.error(`[plugin-manager] failed to read plugin "${entry.name}":`, err.message);
+        }
       }
     }
     this._scanned = results;

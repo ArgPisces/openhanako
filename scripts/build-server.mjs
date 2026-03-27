@@ -201,6 +201,13 @@ fs.mkdirSync(path.join(outDir, "desktop", "src", "locales"), { recursive: true }
 fs.cpSync(localesSrc, path.join(outDir, "desktop", "src", "locales"), { recursive: true });
 console.log("[build-server]   desktop/src/locales/");
 
+// 系统插件（内嵌到 app，运行时 fromRoot("plugins") 读取）
+const pluginsSrc = path.join(ROOT, "plugins");
+if (fs.existsSync(pluginsSrc)) {
+  fs.cpSync(pluginsSrc, path.join(outDir, "plugins"), { recursive: true });
+  console.log("[build-server]   plugins/");
+}
+
 console.log("[build-server] resource files copied");
 
 // ── 4. External dependencies ──
