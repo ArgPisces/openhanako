@@ -432,6 +432,7 @@
       "work": "工作",
       "skills": "技能",
       "bridge": "社群平台",
+      "plugins": "附加功能",
       "about": "關於"
     },
     "appearance": {
@@ -805,6 +806,15 @@
         "body2": "關閉後，所有技能將不經審查直接安裝。",
         "confirm": "我了解風險，關閉審查"
       }
+    },
+    "plugins": {
+      "title": "附加功能",
+      "desc": "目前實例中已載入的附加功能。",
+      "empty": "尚無附加功能",
+      "reload": "重新整理",
+      "statusLoaded": "已載入",
+      "statusFailed": "載入失敗",
+      "statusDisabled": "已停用"
     },
     "bridge": {
       "telegram": "Telegram",

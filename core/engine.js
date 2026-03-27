@@ -157,6 +157,9 @@ export class HanaEngine {
       resolveModelOverrides: (model, overrides) => this.resolveModelOverrides(model, overrides),
     });
 
+    // ── Plugin Manager ──
+    this._pluginManager = null;  // initialized async in initPlugins()
+
     // Pi SDK resources（init 时填充）
     this._resourceLoader = null;
 
@@ -582,17 +585,48 @@ export class HanaEngine {
   }
 
   // ════════════════════════════
+  //  插件系统
+  // ════════════════════════════
+
+  /**
+   * Initialize plugin system. Called after Hub construction (EventBus available).
+   * @param {import('../hub/event-bus.js').EventBus} bus
+   */
+  async initPlugins(bus) {
+    const pluginsDir = path.join(this.hanakoHome, "plugins");
+    const pluginDataDir = path.join(this.hanakoHome, "plugin-data");
+
+    const { PluginManager } = await import("./plugin-manager.js");
+    this._pluginManager = new PluginManager({ pluginsDir, dataDir: pluginDataDir, bus });
+    this._pluginManager.scan();
+    await this._pluginManager.loadAll();
+
+    // Register plugin skill paths with SkillManager
+    if (this._skills) {
+      const existing = this._skills._externalPaths || [];
+      const pluginPaths = this._pluginManager.getSkillPaths();
+      this._skills.setExternalPaths([...existing, ...pluginPaths]);
+    }
+  }
+
+  get pluginManager() { return this._pluginManager; }
+
+  // ════════════════════════════
   //  工具构建
   // ════════════════════════════
 
   buildTools(cwd, customTools, opts = {}) {
     const ct = customTools || this.agent.tools;
+    // Append plugin tools
+    const pluginTools = this._pluginManager?.getAllTools() || [];
+    const allTools = [...ct, ...pluginTools];
+
     const effectiveAgentDir = opts.agentDir || this.agent.agentDir;
     const effectiveWorkspace = opts.workspace !== undefined ? opts.workspace : this.homeCwd;
     const sandboxEnabled = this._readPreferences().sandbox !== false;
     const effectiveMode = opts.mode || (sandboxEnabled ? "standard" : "full-access");
 
-    return createSandboxedTools(cwd, ct, {
+    return createSandboxedTools(cwd, allTools, {
       agentDir: effectiveAgentDir,
       workspace: effectiveWorkspace,
       hanakoHome: this.hanakoHome,

@@ -45,6 +45,7 @@ import { createBridgeRoute } from "./routes/bridge.js";
 import { createAuthRoute } from "./routes/auth.js";
 import { createDiaryRoute } from "./routes/diary.js";
 import { createConfirmRoute } from "./routes/confirm.js";
+import { createPluginsRoute } from "./routes/plugins.js";
 // internal-browser WS is handled directly via raw ws.WebSocketServer in the
 // upgrade handler below (WsTransport needs raw ws .on()/.off() methods)
 import { ConfirmStore } from "../lib/confirm-store.js";
@@ -109,6 +110,9 @@ dlog.header(appVersion, {
 
 // ── 初始化 Hub（调度中枢，包装 engine） ──
 const hub = new Hub({ engine });
+
+// ── 初始化插件系统 ──
+await engine.initPlugins(hub.eventBus);
 
 // 启动 Hub 调度器（Scheduler + ChannelRouter）
 hub.initSchedulers();
@@ -185,6 +189,7 @@ app.route("/api", createBridgeRoute(engine, bridgeManager));
 app.route("/api", createAuthRoute(engine));
 app.route("/api", createDiaryRoute(engine));
 app.route("/api", createConfirmRoute(confirmStore, engine));
+app.route("/api", createPluginsRoute(engine));
 // internal-browser WS — see unified upgrade handler in server startup below
 
 // 健康检查 + 身份信息

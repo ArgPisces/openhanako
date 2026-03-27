@@ -433,6 +433,7 @@
       "work": "工作",
       "skills": "技能",
       "bridge": "社交平台",
+      "plugins": "附加功能",
       "about": "关于"
     },
     "appearance": {
@@ -806,6 +807,15 @@
         "body2": "关闭后，所有技能将不经审查直接安装。",
         "confirm": "我了解风险，关闭审查"
       }
+    },
+    "plugins": {
+      "title": "附加功能",
+      "desc": "当前实例中已加载的附加功能。",
+      "empty": "暂无附加功能",
+      "reload": "刷新",
+      "statusLoaded": "已加载",
+      "statusFailed": "加载失败",
+      "statusDisabled": "已禁用"
     },
     "bridge": {
       "telegram": "Telegram",

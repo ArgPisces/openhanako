@@ -16,6 +16,7 @@ import { SkillsTab } from './tabs/SkillsTab';
 import { BridgeTab } from './tabs/BridgeTab';
 import { ProvidersTab } from './tabs/ProvidersTab';
 import { AboutTab } from './tabs/AboutTab';
+import { PluginsTab } from './tabs/PluginsTab';
 import { CropOverlay } from './overlays/CropOverlay';
 import { AgentCreateOverlay } from './overlays/AgentCreateOverlay';
 import { AgentDeleteOverlay } from './overlays/AgentDeleteOverlay';
@@ -37,6 +38,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType> = {
   skills: SkillsTab,
   bridge: BridgeTab,
   providers: ProvidersTab,
+  // plugins: PluginsTab,  // 暂时隐藏，等社区插件开放后启用
   about: AboutTab,
 };
 

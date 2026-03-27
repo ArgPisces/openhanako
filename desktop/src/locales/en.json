@@ -433,6 +433,7 @@
       "work": "Work",
       "skills": "Skills",
       "bridge": "Social",
+      "plugins": "Add-ons",
       "about": "About"
     },
     "appearance": {
@@ -806,6 +807,15 @@
         "body2": "After disabling, all skills will be installed without review.",
         "confirm": "I understand the risks, disable review"
       }
+    },
+    "plugins": {
+      "title": "Add-ons",
+      "desc": "Add-ons loaded in this instance.",
+      "empty": "No add-ons available",
+      "reload": "Reload",
+      "statusLoaded": "loaded",
+      "statusFailed": "failed",
+      "statusDisabled": "disabled"
     },
     "bridge": {
       "telegram": "Telegram",
