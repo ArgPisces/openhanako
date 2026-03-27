@@ -13,11 +13,23 @@ const YUAN_AVATARS: Record<string, string> = {
   butter: 'Butter.png',
   ming: 'Ming.png',
 };
+const YUAN_SYMBOLS: Record<string, string> = {
+  hanako: '\u273F',  // ✿
+  butter: '\u274A',  // ❊
+  ming: '\u25C8',    // ◈
+};
+const YUAN_COLORS: Record<string, string> = {
+  hanako: '#537D96',
+  butter: '#5BA88C',
+  ming: '#8BA4B4',
+};
 
 export function SplashApp() {
   const [avatarSrc, setAvatarSrc] = useState('assets/Hanako.png');
   const [text, setText] = useState('');
   const [switching, setSwitching] = useState(false);
+  const [symbol, setSymbol] = useState(YUAN_SYMBOLS.hanako);
+  const [accentColor, setAccentColor] = useState(YUAN_COLORS.hanako);
   const linesRef = useRef<string[]>([]);
   const indexRef = useRef(0);
 
@@ -45,6 +57,9 @@ export function SplashApp() {
         if (splashInfo?.agentName) name = splashInfo.agentName;
         if (splashInfo?.locale?.startsWith('en')) locale = 'en';
         if (splashInfo?.yuan) yuan = splashInfo.yuan;
+
+        setSymbol(YUAN_SYMBOLS[yuan] || YUAN_SYMBOLS.hanako);
+        setAccentColor(YUAN_COLORS[yuan] || YUAN_COLORS.hanako);
       } catch {}
 
       // 加载语言包
@@ -98,7 +113,7 @@ export function SplashApp() {
       />
       <div className="splash-text-row">
         <p className={`splash-text${switching ? ' switching' : ''}`}>{text}</p>
-        <span className="splash-sakura">{'\u273F'}</span>
+        <span className="splash-sakura" style={{ color: accentColor }}>{symbol}</span>
       </div>
     </div>
   );
