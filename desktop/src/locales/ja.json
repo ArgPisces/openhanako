@@ -808,6 +808,25 @@
         "confirm": "リスクを理解した上で審査を無効にする"
       }
     },
+    "plugins": {
+      "title": "アドオン",
+      "desc": "このインスタンスで読み込まれているアドオン",
+      "empty": "アドオンはありません",
+      "reload": "再読み込み",
+      "statusLoaded": "読み込み済み",
+      "statusFailed": "失敗",
+      "statusDisabled": "無効",
+      "fullAccessToggle": "フルアクセスプラグインを許可",
+      "fullAccessDesc": "有効にすると、full-access を宣言したプラグインがシステムレベルの API（ルート、フック、Provider 等）を使用できます",
+      "dropzone": "プラグインフォルダまたは .zip をここにドラッグしてインストール、またはクリックして選択",
+      "statusRestricted": "フルアクセスが必要",
+      "deleteConfirm": "プラグイン「{name}」を削除しますか？プラグインのデータは保持されます。",
+      "installSuccess": "プラグイン「{name}」をインストールしました",
+      "installError": "プラグインのインストールに失敗しました",
+      "invalidPlugin": "有効なプラグインディレクトリではありません",
+      "pluginsDir": "プラグインディレクトリ：{path}",
+      "needsFullAccess": "このプラグインを使用するには「フルアクセスプラグインを許可」を有効にしてください"
+    },
     "bridge": {
       "telegram": "Telegram",
       "telegramToken": "Bot Token",
@@ -1267,6 +1286,7 @@
     "dialog": {
       "selectFolder": "作業フォルダを選択",
       "selectSkill": "スキルを選択",
+      "selectPlugin": "プラグインを選択",
       "launchFailedTitle": "Hanako の起動に失敗しました",
       "launchFailedBody": "{detail}\n\n詳細ログの保存先：\n{logPath}\n\nこのスクリーンショットまたはログファイルを開発者にお送りください。",
       "serverRestartFailed": "Server がクラッシュし、再起動に失敗しました。\n{error}\n\nアプリケーションを再起動してください。",

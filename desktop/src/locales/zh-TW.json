@@ -816,7 +816,17 @@
       "reload": "重新整理",
       "statusLoaded": "已載入",
       "statusFailed": "載入失敗",
-      "statusDisabled": "已停用"
+      "statusDisabled": "已停用",
+      "fullAccessToggle": "允許全權插件",
+      "fullAccessDesc": "開啟後，宣告 full-access 的插件將獲得完整系統權限（路由、鉤子、Provider 等）",
+      "dropzone": "拖入插件資料夾或 .zip 安裝，或點擊選擇",
+      "statusRestricted": "需要全權許可",
+      "deleteConfirm": "移除插件「{name}」？插件資料將保留。",
+      "installSuccess": "插件「{name}」已安裝",
+      "installError": "插件安裝失敗",
+      "invalidPlugin": "不是有效的插件目錄",
+      "pluginsDir": "插件目錄：{path}",
+      "needsFullAccess": "請先開啟「允許全權插件」"
     },
     "bridge": {
       "telegram": "Telegram",
@@ -1277,6 +1287,7 @@
     "dialog": {
       "selectFolder": "選擇工作資料夾",
       "selectSkill": "選擇技能",
+      "selectPlugin": "選擇插件",
       "launchFailedTitle": "Hanako 啟動失敗",
       "launchFailedBody": "{detail}\n\n詳細日誌已儲存至：\n{logPath}\n\n請將此截圖或日誌檔案傳送給開發者。",
       "serverRestartFailed": "Server 崩潰後重新啟動失敗。\n{error}\n\n請重新啟動應用程式。",

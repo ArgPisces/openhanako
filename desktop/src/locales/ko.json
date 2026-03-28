@@ -816,7 +816,17 @@
       "reload": "새로고침",
       "statusLoaded": "로드됨",
       "statusFailed": "실패",
-      "statusDisabled": "비활성화"
+      "statusDisabled": "비활성화",
+      "fullAccessToggle": "전체 권한 플러그인 허용",
+      "fullAccessDesc": "활성화하면 full-access를 선언한 플러그인이 시스템 수준 API(라우트, 훅, Provider 등)를 사용할 수 있어요",
+      "dropzone": "플러그인 폴더 또는 .zip을 여기에 끌어다 설치하거나 클릭하여 선택",
+      "statusRestricted": "전체 권한 필요",
+      "deleteConfirm": "플러그인 \"{name}\"을 제거할까요? 플러그인 데이터는 보존됩니다.",
+      "installSuccess": "플러그인 \"{name}\" 설치 완료",
+      "installError": "플러그인 설치 실패",
+      "invalidPlugin": "유효한 플러그인 디렉토리가 아닙니다",
+      "pluginsDir": "플러그인 디렉토리: {path}",
+      "needsFullAccess": "이 플러그인을 사용하려면 「전체 권한 플러그인 허용」을 먼저 활성화하세요"
     },
     "bridge": {
       "telegram": "Telegram",
@@ -1277,6 +1287,7 @@
     "dialog": {
       "selectFolder": "작업 폴더 선택",
       "selectSkill": "스킬 선택",
+      "selectPlugin": "플러그인 선택",
       "launchFailedTitle": "Hanako 실행 실패",
       "launchFailedBody": "{detail}\n\n상세 로그 저장 위치:\n{logPath}\n\n이 스크린샷이나 로그 파일을 개발자에게 보내주세요.",
       "serverRestartFailed": "Server가 충돌 후 재시작에 실패했어요.\n{error}\n\n앱을 다시 시작해 주세요.",

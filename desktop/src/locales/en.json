@@ -817,7 +817,17 @@
       "reload": "Reload",
       "statusLoaded": "loaded",
       "statusFailed": "failed",
-      "statusDisabled": "disabled"
+      "statusDisabled": "disabled",
+      "fullAccessToggle": "Allow full-access plugins",
+      "fullAccessDesc": "When enabled, plugins that declare full-access can use system-level APIs (routes, hooks, providers, etc.)",
+      "dropzone": "Drag plugin folder or .zip here to install, or click to select",
+      "statusRestricted": "needs full access",
+      "deleteConfirm": "Remove plugin \"{name}\"? Plugin data will be preserved.",
+      "installSuccess": "Plugin \"{name}\" installed",
+      "installError": "Plugin install failed",
+      "invalidPlugin": "Not a valid plugin directory",
+      "pluginsDir": "Plugin directory: {path}",
+      "needsFullAccess": "Enable \"Allow full-access plugins\" to use this plugin"
     },
     "bridge": {
       "telegram": "Telegram",
@@ -1292,6 +1302,7 @@
     "dialog": {
       "selectFolder": "Select Working Folder",
       "selectSkill": "Select Skill",
+      "selectPlugin": "Select Plugin",
       "launchFailedTitle": "Hanako Launch Failed",
       "launchFailedBody": "{detail}\n\nDetailed log saved to:\n{logPath}\n\nPlease send this screenshot or log file to the developer.",
       "serverRestartFailed": "Server crashed and failed to restart.\n{error}\n\nPlease restart the application.",
