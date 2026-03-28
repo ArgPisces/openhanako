@@ -875,3 +875,90 @@ describe("hot operations", () => {
     expect(pm.listPlugins()).toHaveLength(2);
   });
 });
+
+// ── Route context injection ───────────────────────────────────────────────────
+
+describe("route ctx injection", () => {
+  function makeBuiltinPluginDir(name) {
+    // Routes are full-access only; use pluginsDirs[0] as builtin
+    const builtinDir = path.join(tmpHome, `builtin-ctx-${name}`);
+    const dir = path.join(builtinDir, name);
+    return { builtinDir, dir };
+  }
+
+  it("factory function receives ctx as second arg", async () => {
+    const { builtinDir, dir } = makeBuiltinPluginDir("factory-ctx");
+    fs.mkdirSync(path.join(dir, "routes"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "routes", "api.js"), `
+      export default function(app, ctx) {
+        app.get("/test", (c) => c.json({ pluginId: ctx.pluginId }));
+      }
+    `);
+
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir],
+      dataDir,
+      bus: await makeBus(),
+    });
+    pm.scan();
+    await pm.loadAll();
+
+    const app = pm.routeRegistry.get("factory-ctx");
+    expect(app).toBeTruthy();
+    const res = await app.request(new Request("http://x/test"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.pluginId).toBe("factory-ctx");
+  });
+
+  it("error isolation: handler that throws returns 500 JSON with plugin id", async () => {
+    const { builtinDir, dir } = makeBuiltinPluginDir("error-isolation");
+    fs.mkdirSync(path.join(dir, "routes"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "routes", "boom.js"), `
+      export default function(app, ctx) {
+        app.get("/boom", (c) => { throw new Error("intentional crash"); });
+      }
+    `);
+
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir],
+      dataDir,
+      bus: await makeBus(),
+    });
+    pm.scan();
+    await pm.loadAll();
+
+    const app = pm.routeRegistry.get("error-isolation");
+    expect(app).toBeTruthy();
+    const res = await app.request(new Request("http://x/boom"));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe("Plugin internal error");
+    expect(body.plugin).toBe("error-isolation");
+  });
+
+  it("register function receives ctx as second arg", async () => {
+    const { builtinDir, dir } = makeBuiltinPluginDir("register-ctx");
+    fs.mkdirSync(path.join(dir, "routes"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "routes", "api.js"), `
+      export function register(app, ctx) {
+        app.get("/who", (c) => c.json({ pluginId: ctx.pluginId }));
+      }
+    `);
+
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir],
+      dataDir,
+      bus: await makeBus(),
+    });
+    pm.scan();
+    await pm.loadAll();
+
+    const app = pm.routeRegistry.get("register-ctx");
+    expect(app).toBeTruthy();
+    const res = await app.request(new Request("http://x/who"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.pluginId).toBe("register-ctx");
+  });
+});

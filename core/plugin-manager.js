@@ -262,24 +262,42 @@ export class PluginManager {
     if (!fs.existsSync(routesDir)) return;
     const { Hono } = await import("hono");
     const app = new Hono();
+    const ctx = entry.ctx;
+
+    // Error isolation: Hono's onError is the correct hook for handler throws
+    app.onError((err, c) => {
+      ctx.log.error("route error:", err.message);
+      return c.json({ error: "Plugin internal error", plugin: entry.id }, 500);
+    });
+
+    // Middleware: inject ctx
+    app.use("*", async (c, next) => {
+      c.set("pluginCtx", ctx);
+      await next();
+    });
+
     const files = fs.readdirSync(routesDir).filter((f) => f.endsWith(".js"));
     for (const file of files) {
       const filePath = path.join(routesDir, file);
       try {
         const mod = await freshImport(filePath);
         if (typeof mod.default === "function") {
-          // Default export is a Hono app or a function that returns one
           const sub = mod.default;
           if (sub && typeof sub.fetch === "function") {
-            // It's a Hono app — mount under the file's basename
+            // Static Hono app — inject ctx middleware onto sub-app too
+            sub.use("*", async (c, next) => {
+              c.set("pluginCtx", ctx);
+              await next();
+            });
             const prefix = "/" + path.basename(file, ".js");
             app.route(prefix, sub);
           } else if (typeof sub === "function") {
-            // It's a factory: sub(app) registers routes
-            sub(app);
+            // Factory function — pass ctx as second arg
+            sub(app, ctx);
           }
-        } else if (mod.register && typeof mod.register === "function") {
-          mod.register(app);
+        }
+        if (mod.register && typeof mod.register === "function") {
+          mod.register(app, ctx);
         }
       } catch (err) {
         console.error(`[plugin-manager] route "${file}" in "${entry.id}" failed to load:`, err.message);
