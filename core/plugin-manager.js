@@ -123,10 +123,18 @@ export class PluginManager {
       : "restricted";
     entry.accessLevel = accessLevel;
 
+    entry.ctx = createPluginContext({
+      pluginId: entry.id,
+      pluginDir: entry.pluginDir,
+      dataDir: path.join(this._dataDir, entry.id),
+      bus: this._bus,
+      accessLevel,
+    });
+
     // All plugins: declarative contributions
-    await this._loadTools(entry, accessLevel);
+    await this._loadTools(entry);
     await this._loadSkillPaths(entry);
-    await this._loadCommands(entry, accessLevel);
+    await this._loadCommands(entry);
     await this._loadAgentTemplates(entry);  // JSON declaration, no code execution
     this._loadConfiguration(entry);
 
@@ -144,13 +152,7 @@ export class PluginManager {
         if (PluginClass && typeof PluginClass === "function") {
           const instance = new PluginClass();
           entry.instance = instance;
-          instance.ctx = createPluginContext({
-            pluginId: entry.id,
-            pluginDir: entry.pluginDir,
-            dataDir: path.join(this._dataDir, entry.id),
-            bus: this._bus,
-            accessLevel: "full-access",
-          });
+          instance.ctx = entry.ctx;
           instance.register = (disposable) => {
             if (typeof disposable === "function") entry._disposables.push(disposable);
           };
@@ -163,17 +165,11 @@ export class PluginManager {
 
   // ── Task 5: Tool loader ──────────────────────────────────────────────────
 
-  async _loadTools(entry, accessLevel) {
+  async _loadTools(entry) {
     const toolsDir = path.join(entry.pluginDir, "tools");
     if (!fs.existsSync(toolsDir)) return;
     const files = fs.readdirSync(toolsDir).filter((f) => f.endsWith(".js"));
-    const ctx = createPluginContext({
-      pluginId: entry.id,
-      pluginDir: entry.pluginDir,
-      dataDir: path.join(this._dataDir, entry.id),
-      bus: this._bus,
-      accessLevel: accessLevel || "restricted",
-    });
+    const ctx = entry.ctx;
     for (const file of files) {
       const filePath = path.join(toolsDir, file);
       try {
@@ -234,7 +230,7 @@ export class PluginManager {
     return [...this._skillPaths];
   }
 
-  async _loadCommands(entry, accessLevel) {
+  async _loadCommands(entry) {
     const cmdsDir = path.join(entry.pluginDir, "commands");
     if (!fs.existsSync(cmdsDir)) return;
     const files = fs.readdirSync(cmdsDir).filter((f) => f.endsWith(".js"));

@@ -135,6 +135,23 @@ describe("loadAll", () => {
     expect(pm.getPlugin("static-only").status).toBe("loaded");
     expect(pm.getPlugin("static-only").instance).toBeNull();
   });
+
+  it("stores ctx on entry after loading", async () => {
+    const dir = path.join(pluginsDir, "ctx-test");
+    fs.mkdirSync(path.join(dir, "tools"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "tools", "t.js"),
+      'export const name = "t";\nexport const description = "test";\nexport const parameters = {};\nexport async function execute() { return "ok"; }\n');
+    const pm = new PluginManager({ pluginsDir, dataDir, bus: await makeBus() });
+    pm.scan();
+    await pm.loadAll();
+    const entry = pm.getPlugin("ctx-test");
+    expect(entry).toBeTruthy();
+    expect(entry.ctx).toBeTruthy();
+    expect(entry.ctx.pluginId).toBeTruthy();
+    expect(entry.ctx.bus).toBeTruthy();
+    expect(entry.ctx.config).toBeTruthy();
+    expect(entry.ctx.log).toBeTruthy();
+  });
 });
 
 describe("tool loading", () => {
