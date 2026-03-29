@@ -167,14 +167,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check if tag is on stable
-        id: check
-        run: |
-          if git branch -r --contains "${{ github.ref_name }}" | grep -q 'origin/stable'; then
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          fi
+      # 所有 Release 默认 pre-release，手动在 GitHub 上将稳定版本标记为 latest
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -249,14 +242,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish release (un-draft)
+      - name: Publish release (un-draft, pre-release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.ref_name }}"
-          PRERELEASE="${{ steps.check.outputs.prerelease }}"
-          if [ "$PRERELEASE" = "true" ]; then
-            gh release edit "$TAG" --prerelease --draft=false
-          else
-            gh release edit "$TAG" --latest --draft=false
-          fi
+          gh release edit "${{ github.ref_name }}" --prerelease --draft=false
