@@ -599,6 +599,7 @@
       "format": "格式",
       "quality": "质量",
       "watermark": "水印",
+      "aspectRatio": "长宽比",
       "speechRecognition": "语音识别",
       "speechSynthesis": "语音合成",
       "comingSoon": "即将推出",

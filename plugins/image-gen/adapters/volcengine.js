@@ -10,8 +10,8 @@ export const volcengineAdapter = {
   /**
    * @param {{ prompt: string, modelId: string, apiKey: string, baseUrl: string, size?: string, format?: string, quality?: string, providerDefaults?: object }} opts
    */
-  async generate({ prompt, modelId, apiKey, baseUrl, size, format, quality, providerDefaults }) {
-    const outputFormat = format || "png";
+  async generate({ prompt, modelId, apiKey, baseUrl, size, format, quality, aspectRatio, image, providerDefaults }) {
+    const outputFormat = format || providerDefaults?.format || "png";
     const body = {
       model: modelId,
       prompt,
@@ -19,11 +19,13 @@ export const volcengineAdapter = {
       output_format: outputFormat,
     };
 
-    if (size) body.size = size;
+    if (size || providerDefaults?.size) body.size = size || providerDefaults.size;
+    if (aspectRatio || providerDefaults?.aspect_ratio) body.aspect_ratio = aspectRatio || providerDefaults.aspect_ratio;
+    if (image) body.image = Array.isArray(image) ? image : [image];
 
-    // Apply provider-specific defaults
+    // Apply provider-specific defaults (watermark defaults to false)
+    body.watermark = providerDefaults?.watermark ?? false;
     if (providerDefaults) {
-      if (providerDefaults.watermark !== undefined) body.watermark = providerDefaults.watermark;
       if (providerDefaults.guidance_scale !== undefined) body.guidance_scale = providerDefaults.guidance_scale;
       if (providerDefaults.seed !== undefined) body.seed = providerDefaults.seed;
     }

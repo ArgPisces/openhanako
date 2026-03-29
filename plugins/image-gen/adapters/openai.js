@@ -7,8 +7,8 @@ const FORMAT_TO_MIME = {
 };
 
 export const openaiAdapter = {
-  async generate({ prompt, modelId, apiKey, baseUrl, size, format, quality, providerDefaults }) {
-    const outputFormat = format || "png";
+  async generate({ prompt, modelId, apiKey, baseUrl, size, format, quality, aspectRatio, image, providerDefaults }) {
+    const outputFormat = format || providerDefaults?.format || "png";
     const body = {
       model: modelId,
       prompt,
@@ -16,12 +16,11 @@ export const openaiAdapter = {
       output_format: outputFormat,
     };
 
-    if (size) body.size = size;
-    if (quality) body.quality = quality;
+    if (size || providerDefaults?.size) body.size = size || providerDefaults.size;
+    if (quality || providerDefaults?.quality) body.quality = quality || providerDefaults.quality;
 
     if (providerDefaults) {
       if (providerDefaults.background) body.background = providerDefaults.background;
-      if (providerDefaults.quality && !quality) body.quality = providerDefaults.quality;
     }
 
     const url = `${baseUrl.replace(/\/+$/, "")}/images/generations`;

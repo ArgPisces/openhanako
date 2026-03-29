@@ -207,7 +207,7 @@ export function MediaProviderDetail({ providerId, provider, config, onSaveConfig
           <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>
             {t('settings.media.providerDefaults')}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 {t('settings.media.size')}
@@ -217,10 +217,28 @@ export function MediaProviderDetail({ providerId, provider, config, onSaveConfig
                 value={defaults.size || ''}
                 onChange={(e) => updateDefault('size', e.target.value || undefined)}
               >
-                <option value="">默认</option>
-                <option value="1024x1024">1024 × 1024</option>
                 <option value="2K">2K</option>
                 <option value="4K">4K</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                {t('settings.media.aspectRatio')}
+              </span>
+              <select
+                style={{ fontFamily: 'inherit', fontSize: '0.75rem', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg)', color: 'var(--text)' }}
+                value={defaults.aspect_ratio || ''}
+                onChange={(e) => updateDefault('aspect_ratio', e.target.value || undefined)}
+              >
+                <option value="">默认</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+                <option value="21:9">21:9</option>
               </select>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

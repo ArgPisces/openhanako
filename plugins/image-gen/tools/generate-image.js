@@ -6,12 +6,15 @@ export const description = "根据文字描述生成图片";
 export const parameters = {
   type: "object",
   properties: {
-    prompt:   { type: "string", description: "图片描述" },
-    model:    { type: "string", description: "可选，覆盖默认模型 ID" },
-    provider: { type: "string", description: "可选，与 model 配合指定 provider" },
-    size:     { type: "string", description: "可选，如 1024x1024、2K" },
-    format:   { type: "string", description: "可选，png / jpeg / webp" },
-    quality:  { type: "string", description: "可选，low / medium / high" },
+    prompt:       { type: "string", description: "图片描述" },
+    filename:     { type: "string", description: "可选，保存的文件名（不含扩展名），如 sunset-cat" },
+    image:        { type: "string", description: "可选，参考图的文件路径或 URL（用于图生图）" },
+    aspect_ratio: { type: "string", description: "可选，长宽比如 1:1、16:9、9:16、4:3、3:4" },
+    model:        { type: "string", description: "可选，覆盖默认模型 ID" },
+    provider:     { type: "string", description: "可选，与 model 配合指定 provider" },
+    size:         { type: "string", description: "可选，如 1024x1024、2K" },
+    format:       { type: "string", description: "可选，png / jpeg / webp" },
+    quality:      { type: "string", description: "可选，low / medium / high" },
   },
   required: ["prompt"],
 };
@@ -51,12 +54,14 @@ export async function execute(input, ctx) {
       size: input.size,
       format: input.format,
       quality: input.quality,
+      aspectRatio: input.aspect_ratio,
+      image: input.image,
       providerDefaults,
     });
 
     // 6. Save first image
     const img = result.images[0];
-    const { filePath } = await saveImage(img.buffer, img.mimeType, ctx.dataDir);
+    const { filePath } = await saveImage(img.buffer, img.mimeType, ctx.dataDir, input.filename);
     let response = `图片已生成并保存到 ${filePath}\n请立即调用 stage_files 工具将此文件呈现给用户：stage_files({ filepaths: ["${filePath}"] })`;
     if (result.revisedPrompt) {
       response += `\n修正后的描述：${result.revisedPrompt}`;
