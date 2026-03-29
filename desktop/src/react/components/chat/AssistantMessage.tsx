@@ -131,7 +131,9 @@ const ContentBlockView = memo(function ContentBlockView({ block, agentName, yuan
     case 'xing':
       return <XingCard title={block.title} content={block.content} sealed={block.sealed} agentName={agentName} />;
     case 'file_output':
-      return <FileOutputCard filePath={block.filePath} label={block.label} ext={block.ext} />;
+      return IMAGE_EXTS.has(block.ext)
+        ? <ImageOutputCard filePath={block.filePath} label={block.label} ext={block.ext} />
+        : <FileOutputCard filePath={block.filePath} label={block.label} ext={block.ext} />;
     case 'artifact':
       return <ArtifactCard title={block.title} artifactType={block.artifactType} artifactId={block.artifactId} content={block.content} language={block.language} />;
     case 'browser_screenshot':
@@ -159,6 +161,28 @@ const EXT_LABELS: Record<string, string> = {
   csv: 'CSV', svg: 'SVG', skill: 'Skill',
   png: 'Image', jpg: 'Image', jpeg: 'Image', gif: 'Image', webp: 'Image',
 };
+
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp']);
+
+const ImageOutputCard = memo(function ImageOutputCard({ filePath, label, ext }: { filePath: string; label: string; ext: string }) {
+  const [failed, setFailed] = useState(false);
+  const displayName = label || filePath.split('/').pop() || filePath;
+
+  if (failed) return <FileOutputCard filePath={filePath} label={label} ext={ext} />;
+
+  return (
+    <div className={styles.imageOutputCard} onClick={() => openFilePreview(filePath, label, ext)} style={{ cursor: 'pointer' }}>
+      <img
+        src={`file://${filePath}`}
+        alt={displayName}
+        className={styles.imageOutputPreview}
+        onError={() => setFailed(true)}
+        draggable={false}
+      />
+      <div className={styles.imageOutputName}>{displayName}</div>
+    </div>
+  );
+});
 
 const FileOutputCard = memo(function FileOutputCard({ filePath, label, ext }: { filePath: string; label: string; ext: string }) {
   const handleOpen = (e: React.MouseEvent) => {

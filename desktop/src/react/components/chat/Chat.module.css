@@ -797,6 +797,40 @@
     background: var(--overlay-light, rgba(0,0,0,0.04));
 }
 
+/* ── 图片输出卡片 ── */
+
+.imageOutputCard {
+    display: inline-flex;
+    flex-direction: column;
+    max-width: 100%;
+    margin: var(--space-sm) 0;
+    border: 1px solid var(--border, rgba(0,0,0,0.1));
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.imageOutputCard:hover {
+    border-color: var(--text-muted, rgba(0,0,0,0.2));
+}
+
+.imageOutputPreview {
+    display: block;
+    max-width: 100%;
+    max-height: 450px;
+    object-fit: contain;
+    background: var(--overlay-subtle, rgba(0,0,0,0.03));
+}
+
+.imageOutputName {
+    padding: 0.45rem 0.7rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* ── 聊天气泡中的 Artifact 卡片 ── */
 
 .artifactCard {
