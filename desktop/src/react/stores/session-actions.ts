@@ -159,7 +159,6 @@ export async function switchSession(path: string): Promise<void> {
       selectedAgentId: null,
       welcomeVisible: false,
       memoryEnabled: data.memoryEnabled !== false,
-      isStreaming: !!data.isStreaming,
       streamingSessions,
       sessionAgent,
       browserRunning: !!data.browserRunning,
@@ -216,7 +215,6 @@ export async function createNewSession(): Promise<void> {
   const s = useStore.getState();
 
   useStore.setState({
-    isStreaming: false,
     welcomeVisible: true,
     currentSessionPath: null,
     selectedFolder: s.homeFolder || null,

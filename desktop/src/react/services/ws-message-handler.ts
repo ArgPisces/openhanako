@@ -66,7 +66,7 @@ function hasOptimisticCurrentSession(): boolean {
 }
 
 export function applyStreamingStatus(isStreaming: boolean): void {
-  useStore.setState({ isStreaming: !!isStreaming });
+  // isStreaming 已由 streamingSessions 派生，不再写全局布尔值
   if (isStreaming) {
     ensureCurrentSessionVisible();
   } else {

@@ -41,7 +41,7 @@ function InputAreaInner() {
   const { t } = useI18n();
 
   // Zustand state
-  const isStreaming = useStore(s => s.isStreaming);
+  const isStreaming = useStore(s => s.streamingSessions.includes(s.currentSessionPath || ''));
   const connected = useStore(s => s.connected);
   const pendingNewSession = useStore(s => s.pendingNewSession);
   const currentSessionPath = useStore(s => s.currentSessionPath);
@@ -104,7 +104,8 @@ function InputAreaInner() {
   const sendAsUser = useCallback(async (text: string, displayText?: string): Promise<boolean> => {
     const ws = getWebSocket();
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-    if (useStore.getState().isStreaming) return false;
+    const _s = useStore.getState();
+    if (_s.streamingSessions.includes(_s.currentSessionPath || '')) return false;
 
     if (pendingNewSession) {
       const ok = await ensureSession();

@@ -7,7 +7,6 @@ import styles from './InputArea.module.css';
 export function ContextRing() {
   const { t } = useI18n();
   const agentYuan = useStore(s => s.agentYuan);
-  const isStreaming = useStore(s => s.isStreaming);
   const [tokens, setTokens] = useState<number | null>(null);
   const [contextWindow, setContextWindow] = useState<number | null>(null);
   const [percent, setPercent] = useState<number | null>(null);

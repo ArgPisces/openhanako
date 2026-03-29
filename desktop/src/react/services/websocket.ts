@@ -59,7 +59,7 @@ export function connectWebSocket(port?: string, token?: string): void {
     useStore.setState({ wsState: 'connected', wsReconnectAttempt: 0, compactingSessions: [] });
 
     const s = useStore.getState();
-    if (s.currentSessionPath && s.isStreaming) {
+    if (s.currentSessionPath && s.streamingSessions.includes(s.currentSessionPath)) {
       const myVersion = ++_wsResumeVersion;
       const targetPath = s.currentSessionPath;
       Promise.resolve().then(async () => {

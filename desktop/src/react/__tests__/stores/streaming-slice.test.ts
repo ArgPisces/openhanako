@@ -21,7 +21,6 @@ describe('streaming-slice', () => {
   });
 
   it('初始状态', () => {
-    expect(slice.isStreaming).toBe(false);
     expect(slice.streamingSessions).toEqual([]);
   });
 
@@ -53,12 +52,5 @@ describe('streaming-slice', () => {
     slice.addStreamingSession('/s1');
     slice.removeStreamingSession('/x');
     expect(slice.streamingSessions).toEqual(['/s1']);
-  });
-
-  it('setIsStreaming 切换布尔值', () => {
-    slice.setIsStreaming(true);
-    expect(slice.isStreaming).toBe(true);
-    slice.setIsStreaming(false);
-    expect(slice.isStreaming).toBe(false);
   });
 });
