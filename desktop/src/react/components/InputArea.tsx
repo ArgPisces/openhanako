@@ -28,6 +28,9 @@ import {
   type SlashCommand,
 } from './input/slash-commands';
 import styles from './input/InputArea.module.css';
+import type { TodoItem } from '../types';
+
+const EMPTY_TODOS: TodoItem[] = [];
 
 export type { SlashCommand };
 
@@ -47,8 +50,7 @@ function InputAreaInner() {
   const currentSessionPath = useStore(s => s.currentSessionPath);
   const compacting = useStore(s => currentSessionPath ? s.compactingSessions.includes(currentSessionPath) : false);
   const inlineError = useStore(s => s.inlineErrors[s.currentSessionPath || ''] ?? s.inlineError);
-  const todosBySession = useStore(s => s.todosBySession);
-  const sessionTodos = (todosBySession && currentSessionPath && todosBySession[currentSessionPath]) || [];
+  const sessionTodos = useStore(s => (s.currentSessionPath && s.todosBySession[s.currentSessionPath]) || EMPTY_TODOS);
   const attachedFiles = useStore(s => s.attachedFiles);
   const docContextAttached = useStore(s => s.docContextAttached);
   const quotedSelection = useStore(s => s.quotedSelection);
@@ -62,8 +64,7 @@ function InputAreaInner() {
 
   const currentModelInfo = useMemo(() => models.find(m => m.isCurrent), [models]);
   const supportsVision = currentModelInfo?.vision !== false;
-  const chatSessions = useStore(s => s.chatSessions);
-  const sessionHasMessages = !!(currentSessionPath && chatSessions[currentSessionPath]?.items?.length);
+  const sessionHasMessages = useStore(s => !!(s.currentSessionPath && s.chatSessions[s.currentSessionPath]?.items?.length));
 
   // Local state
   const [inputText, setInputText] = useState('');

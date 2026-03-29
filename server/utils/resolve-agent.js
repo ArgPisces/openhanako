@@ -4,6 +4,11 @@
  * Falls back to focus agent for backward compatibility.
  */
 export function resolveAgent(engine, c) {
-  const agentId = c.req.query("agentId") || c.req.param("agentId") || engine.currentAgentId;
-  return engine.getAgent(agentId) || engine.agent;
+  const explicit = c.req.query("agentId") || c.req.param("agentId");
+  if (explicit) {
+    const found = engine.getAgent(explicit);
+    if (!found) console.warn(`[resolveAgent] agentId "${explicit}" not found, falling back to focus agent`);
+    return found || engine.agent;
+  }
+  return engine.getAgent(engine.currentAgentId) || engine.agent;
 }

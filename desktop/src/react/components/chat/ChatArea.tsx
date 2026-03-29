@@ -8,6 +8,8 @@
 import { memo, useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '../../stores';
 import { loadMoreMessages } from '../../stores/session-actions';
+
+const EMPTY_ITEMS: ChatListItem[] = [];
 import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
 import type { ChatListItem } from '../../stores/chat-types';
@@ -31,14 +33,13 @@ export function ChatArea() {
 
 function PanelHost() {
   const currentPath = useStore(s => s.currentSessionPath);
-  const chatSessions = useStore(s => s.chatSessions);
+  const currentHasItems = useStore(s => !!(currentPath && s.chatSessions[currentPath]?.items?.length));
   const welcomeVisible = useStore(s => s.welcomeVisible);
   const [alive, setAlive] = useState<string[]>([]);
 
   // 加入 alive 列表（不重排已有位置，避免 React 移动 DOM 节点导致 scrollTop 丢失）
   useEffect(() => {
-    if (!currentPath) return;
-    if (!chatSessions[currentPath] || chatSessions[currentPath].items.length === 0) return;
+    if (!currentPath || !currentHasItems) return;
     setAlive(prev => {
       if (prev.includes(currentPath)) return prev; // 已存在，不动
       if (prev.length >= MAX_ALIVE) {
@@ -51,7 +52,7 @@ function PanelHost() {
       }
       return [...prev, currentPath];
     });
-  }, [currentPath, chatSessions]);
+  }, [currentPath, currentHasItems]);
 
   if (welcomeVisible || !currentPath) return null;
 
@@ -69,7 +70,7 @@ function PanelHost() {
 const SCROLL_THRESHOLD = 300;
 
 const Panel = memo(function Panel({ path, active }: { path: string; active: boolean }) {
-  const items = useStore(s => s.chatSessions[path]?.items || []);
+  const items = useStore(s => s.chatSessions[path]?.items || EMPTY_ITEMS);
   const hasMore = useStore(s => s.chatSessions[path]?.hasMore ?? false);
   const loadingMore = useStore(s => s.chatSessions[path]?.loadingMore ?? false);
   const isSessionStreaming = useStore(s => s.streamingSessions.includes(path));
