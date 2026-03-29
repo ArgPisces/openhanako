@@ -180,6 +180,8 @@ export class PluginManager {
           name: `${entry.id}_${mod.name}`,
           description: mod.description,
           parameters: mod.parameters ?? {},
+          ...(mod.promptSnippet ? { promptSnippet: mod.promptSnippet } : {}),
+          ...(mod.promptGuidelines ? { promptGuidelines: mod.promptGuidelines } : {}),
           execute: async (_toolCallId, params, runtimeCtx) => {
             const raw = await origExecute(params, runtimeCtx ? { ...ctx, ...runtimeCtx } : ctx);
             // Pi SDK 期望 { content: ContentBlock[], details? }
