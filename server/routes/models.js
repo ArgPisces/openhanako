@@ -24,19 +24,16 @@ export function createModelsRoute(engine) {
     try {
       const overrides = engine.config?.models?.overrides;
       const cur = engine.currentModel;
-      const models = engine.availableModels.map(m => {
-        const resolved = engine.resolveModelOverrides(m);
-        return {
-          id: m.id,
-          name: resolveModelName(m.id, m.name, overrides, m.provider),
-          provider: m.provider,
-          isCurrent: modelRefEquals(m, cur),
-          vision: resolved.vision,
-          reasoning: resolved.reasoning,
-          contextWindow: resolved.contextWindow,
-          maxTokens: resolved.maxTokens,
-        };
-      });
+      const models = engine.availableModels.map(m => ({
+        id: m.id,
+        name: resolveModelName(m.id, m.name, overrides, m.provider),
+        provider: m.provider,
+        isCurrent: modelRefEquals(m, cur),
+        vision: m.vision,
+        reasoning: m.reasoning,
+        contextWindow: m.contextWindow,
+        maxTokens: m.maxTokens,
+      }));
       return c.json({ models, current: cur?.id || null });
     } catch (err) {
       return c.json({ error: err.message }, 500);

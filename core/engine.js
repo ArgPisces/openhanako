@@ -155,7 +155,6 @@ export class HanaEngine {
       getPreferences: () => this._readPreferences(),
       buildTools: (cwd, customTools, opts) => this.buildTools(cwd, customTools, opts),
       getHomeCwd: () => this.homeCwd,
-      resolveModelOverrides: (model, overrides) => this.resolveModelOverrides(model, overrides),
     });
 
     // ── Plugin Manager ──
@@ -289,27 +288,6 @@ export class HanaEngine {
 
   /** 刷新可用模型列表（含 OAuth 自定义模型注入） */
   async refreshModels() { return this._models.refreshAvailable(); }
-
-  /**
-   * 返回应用了用户 override 的模型对象（浅拷贝）。
-   * override 字段映射集中在此处：ov.context→contextWindow, ov.maxOutput→maxTokens。
-   * 不处理 displayName（模型显示名有独立的解析链 resolveModelName）。
-   * @param {object} model - Pi SDK 模型对象
-   * @param {object} [overrides] - 可选，指定 override map。不传则用当前 focus agent 的 config。
-   *   bridge session 需要传入对应 agent 的 overrides，因为 bridge session 可能不属于 focus agent。
-   */
-  resolveModelOverrides(model, overrides) {
-    if (!model) return null;
-    const ov = (overrides || this.config?.models?.overrides)?.[model.id];
-    if (!ov) return model;
-    return {
-      ...model,
-      vision: ov.vision !== undefined ? ov.vision : model.vision,
-      reasoning: ov.reasoning !== undefined ? ov.reasoning : model.reasoning,
-      contextWindow: ov.context || model.contextWindow || null,
-      maxTokens: ov.maxOutput || model.maxTokens || null,
-    };
-  }
 
   getHomeFolder() { return this._configCoord.getHomeFolder(); }
   setHomeFolder(f) { return this._configCoord.setHomeFolder(f); }
@@ -475,6 +453,9 @@ export class HanaEngine {
 
     // 0b. Provider 迁移（旧数据 → added-models.yaml，只跑一次）
     migrateToProvidersYaml(this.hanakoHome, this.agentsDir, log);
+
+    // 0c. Model overrides 迁移（config.models.overrides → added-models.yaml，只跑一次）
+    this._models.providerRegistry.migrateOverridesToAddedModels(this.agentsDir, log);
 
     // 1. Pi SDK + 模型基础设施（必须在 agent init 之前，agent 需要解析记忆模型）
     log(`[init] 1/5 Pi SDK 初始化...`);

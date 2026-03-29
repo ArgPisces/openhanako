@@ -34,7 +34,7 @@ export function resolveProviderForModel(modelId: string): string | null {
   if (!modelId || !config) return null;
   const providers = config.providers || {};
   for (const [name, p] of Object.entries(providers) as [string, any][]) {
-    if ((p.models || []).includes(modelId)) return name;
+    if ((p.models || []).some((m: any) => (typeof m === 'object' ? m.id : m) === modelId)) return name;
   }
   return null;
 }
@@ -57,15 +57,29 @@ function lookupReferenceModelMeta(modelId: string): any {
 }
 
 export function lookupModelMeta(modelId: string): any {
-  const { settingsConfig } = useSettingsStore.getState();
   if (!modelId) return null;
   const reference = lookupReferenceModelMeta(modelId);
-  const override = settingsConfig?.models?.overrides?.[modelId];
-  if (!reference && !override) return null;
+
+  // 从 provider summaries 提取用户在 added-models.yaml 中设置的模型元数据
+  const { providersSummary, settingsConfig } = useSettingsStore.getState();
+  let userEntry: Record<string, any> | null = null;
+  if (providersSummary) {
+    for (const summary of Object.values(providersSummary)) {
+      const found = (summary.models || []).find(
+        (m: any) => typeof m === 'object' && m?.id === modelId,
+      );
+      if (found) { userEntry = found as unknown as Record<string, any>; break; }
+    }
+  }
+
+  // 兼容旧数据：仍然读 config.models.overrides 的 displayName
+  const legacyOverride = settingsConfig?.models?.overrides?.[modelId];
+
+  if (!reference && !userEntry && !legacyOverride) return null;
   return {
     ...(reference || {}),
-    ...(override || {}),
-    _source: override ? 'override' : reference?._source || null,
+    ...(userEntry || {}),
+    ...(legacyOverride?.displayName ? { displayName: legacyOverride.displayName } : {}),
   };
 }
 

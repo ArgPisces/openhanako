@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSettingsStore } from '../../store';
-import { t, lookupModelMeta, autoSaveConfig, CONTEXT_PRESETS, OUTPUT_PRESETS } from '../../helpers';
+import { t, lookupModelMeta, CONTEXT_PRESETS, OUTPUT_PRESETS } from '../../helpers';
+import { hanaFetch } from '../../api';
 import { ComboInput } from '../../widgets/ComboInput';
 import { Toggle } from '../../widgets/Toggle';
 import styles from '../../Settings.module.css';
 
-export function ModelEditPanel({ modelId, anchorEl, onClose }: {
+const platform = window.platform;
+
+export function ModelEditPanel({ modelId, providerId, anchorEl, onClose, onRefresh }: {
   modelId: string;
+  providerId: string;
   anchorEl: HTMLElement | null;
   onClose: () => void;
+  onRefresh?: () => Promise<void>;
 }) {
   const { showToast } = useSettingsStore();
   const meta = lookupModelMeta(modelId) || {};
-  const [displayName, setDisplayName] = useState(meta.displayName || '');
+  const [displayName, setDisplayName] = useState(meta.displayName || meta.name || '');
   const [ctxVal, setCtxVal] = useState(String(meta.context || ''));
   const [outVal, setOutVal] = useState(String(meta.maxOutput || ''));
   const [vision, setVision] = useState<boolean>(meta.vision === true);
@@ -32,20 +37,29 @@ export function ModelEditPanel({ modelId, anchorEl, onClose }: {
   }, [anchorEl]);
 
   const save = async () => {
-    const entry: Record<string, string | number | boolean> = {};
+    const entry: Record<string, any> = {};
     const name = displayName.trim();
     const ctx = ctxVal.trim();
     const maxOut = outVal.trim();
-    if (name) entry.displayName = name;
+    if (name) entry.name = name;
     if (ctx) entry.context = parseInt(ctx);
     if (maxOut) entry.maxOutput = parseInt(maxOut);
     entry.vision = vision;
     entry.reasoning = reasoning;
-    const config = useSettingsStore.getState().settingsConfig;
-    const currentOverrides = config?.models?.overrides || {};
-    await autoSaveConfig({ models: { overrides: { ...currentOverrides, [modelId]: entry } } });
-    showToast(t('settings.saved'), 'success');
-    onClose();
+
+    try {
+      await hanaFetch(`/api/providers/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      });
+      showToast(t('settings.saved'), 'success');
+      platform?.settingsChanged?.('models-changed');
+      await onRefresh?.();
+      onClose();
+    } catch (err: any) {
+      showToast(t('settings.saveFailed') + ': ' + err.message, 'error');
+    }
   };
 
   return (

@@ -109,7 +109,7 @@ export function OtherModelsSection({ providers }: { providers: Record<string, { 
   // 根据 model ID 反查所属 provider
   const resolveProvider = (modelId: string): string | null => {
     for (const [name, p] of Object.entries(providers)) {
-      if ((p.models || []).includes(modelId)) return name;
+      if ((p.models || []).some((m: any) => (typeof m === 'object' ? m.id : m) === modelId)) return name;
     }
     return null;
   };

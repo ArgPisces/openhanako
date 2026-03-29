@@ -36,20 +36,23 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
 
   useEffect(() => { loadDiscoveredModels(); }, [providerId]);
 
-  const currentModels = summary.models || [];
-  // Merge: discovered model IDs + custom_models, deduplicated, with currentModels included for display
+  const rawModels = summary.models || [];
+  /** 从混合数组条目提取 model ID */
+  const modelId = (m: any): string => typeof m === 'object' ? m.id : m;
+  const currentModelIds = rawModels.map(modelId);
+  // Merge: discovered model IDs + custom_models, deduplicated, with currentModelIds included for display
   const discoveredIds = discoveredModels.map(m => m.id);
-  const allModels = [...new Set([...currentModels, ...discoveredIds, ...(summary.custom_models || [])])];
+  const allModels = [...new Set([...currentModelIds, ...discoveredIds, ...(summary.custom_models || [])])];
   const query = search.toLowerCase();
   const filtered = query ? allModels.filter(m => m.toLowerCase().includes(query)) : allModels;
 
   const addModelToProvider = async (mid: string) => {
-    if (currentModels.includes(mid)) return;
+    if (currentModelIds.includes(mid)) return;
     try {
       await hanaFetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ providers: { [providerId]: { models: [...currentModels, mid] } } }),
+        body: JSON.stringify({ providers: { [providerId]: { models: [...rawModels, mid] } } }),
       });
       await onRefresh();
       platform?.settingsChanged?.('models-changed');
@@ -61,7 +64,7 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
 
   const removeModelFromProvider = async (mid: string) => {
     try {
-      const next = currentModels.filter(m => m !== mid);
+      const next = rawModels.filter((m: any) => (typeof m === 'object' ? m.id : m) !== mid);
       await hanaFetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -91,7 +94,7 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
         await hanaFetch('/api/config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ providers: { [providerId]: { models: [...currentModels, id] } } }),
+          body: JSON.stringify({ providers: { [providerId]: { models: [...rawModels, id] } } }),
         });
       }
       setCustomInput('');
@@ -171,14 +174,14 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
   return (
     <div className={styles['pv-models']}>
       {/* Added models list */}
-      {currentModels.length > 0 && (
+      {currentModelIds.length > 0 && (
         <div className={styles['pv-fav-section']}>
           <div className={styles['pv-fav-title']}>
             {t('settings.api.addedModels')}
-            <span className={styles['pv-models-count']}>{currentModels.length}</span>
+            <span className={styles['pv-models-count']}>{currentModelIds.length}</span>
           </div>
           <div className={styles['pv-fav-list']}>
-            {currentModels.map(mid => {
+            {currentModelIds.map(mid => {
               const meta = lookupModelMeta(mid) || {};
               return (
                 <div key={mid} className={styles['pv-fav-item']}>
@@ -207,7 +210,7 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
             })}
           </div>
           {editing && (
-            <ModelEditPanel modelId={editing.id} anchorEl={editing.anchor} onClose={() => setEditing(null)} />
+            <ModelEditPanel modelId={editing.id} providerId={providerId} anchorEl={editing.anchor} onClose={() => setEditing(null)} onRefresh={onRefresh} />
           )}
         </div>
       )}
@@ -245,7 +248,7 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
             />
             <div className={styles['pv-model-dropdown-list']}>
               {filtered.map(mid => {
-                const isAdded = currentModels.includes(mid);
+                const isAdded = currentModelIds.includes(mid);
                 const meta = lookupModelMeta(mid) || {};
                 const discovered = discoveredModels.find(d => d.id === mid);
                 const ctx = meta.context || discovered?.context;

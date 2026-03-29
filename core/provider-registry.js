@@ -146,6 +146,76 @@ export class ProviderRegistry {
     this._entries.delete(plugin.id);
   }
 
+  /**
+   * 一次性迁移：将 agent config.models.overrides 的模型能力字段迁移到 added-models.yaml
+   * @param {string} agentsDir - agents 目录
+   * @param {Function} [log] - 日志函数
+   */
+  migrateOverridesToAddedModels(agentsDir, log = () => {}) {
+    const CAPABILITY_KEYS = ["context", "maxOutput", "vision", "reasoning"];
+    const userConfig = this._loadAddedModels();
+    let changed = false;
+
+    // 扫描所有 agent 的 config.yaml
+    let agentDirs;
+    try { agentDirs = fs.readdirSync(agentsDir, { withFileTypes: true }).filter(d => d.isDirectory()); }
+    catch { return; }
+
+    for (const dir of agentDirs) {
+      const cfgPath = path.join(agentsDir, dir.name, "config.yaml");
+      const cfg = safeReadYAMLSync(cfgPath, null, YAML);
+      if (!cfg?.models?.overrides) continue;
+
+      const overrides = cfg.models.overrides;
+      let cfgChanged = false;
+
+      for (const [modelId, ov] of Object.entries(overrides)) {
+        if (!ov || typeof ov !== "object") continue;
+        const meta = {};
+        for (const key of CAPABILITY_KEYS) {
+          if (ov[key] !== undefined) {
+            meta[key] = ov[key];
+            delete ov[key];
+            cfgChanged = true;
+          }
+        }
+        if (Object.keys(meta).length === 0) continue;
+
+        // 找到对应 provider 并更新条目
+        for (const [provName, prov] of Object.entries(userConfig)) {
+          if (!prov.models || !Array.isArray(prov.models)) continue;
+          const idx = prov.models.findIndex(m => (typeof m === "object" ? m.id : m) === modelId);
+          if (idx === -1) continue;
+          const existing = typeof prov.models[idx] === "object" ? prov.models[idx] : { id: modelId };
+          prov.models[idx] = { ...existing, ...meta };
+          changed = true;
+          log(`[migrate] override ${modelId}: ${Object.keys(meta).join(",")} → added-models.yaml`);
+          break;
+        }
+      }
+
+      // 清理空的 override 条目，保存 config.yaml
+      if (cfgChanged) {
+        for (const [modelId, ov] of Object.entries(overrides)) {
+          if (ov && typeof ov === "object" && Object.keys(ov).length === 0) {
+            delete overrides[modelId];
+          }
+        }
+        if (Object.keys(overrides).length === 0) {
+          delete cfg.models.overrides;
+        }
+        const header = "# Hanako Agent 配置\n# 由设置页面管理，手动编辑也可以\n\n";
+        const yamlStr = header + YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"', forceQuotes: false });
+        fs.writeFileSync(cfgPath, yamlStr, "utf-8");
+      }
+    }
+
+    if (changed) {
+      this._saveAddedModels(userConfig);
+      log("[migrate] model overrides migrated to added-models.yaml");
+    }
+  }
+
   /** 从 _hanakoHome 直接读 added-models.yaml（不走全局 config-loader） */
   _loadAddedModels() {
     const ymlPath = path.join(this._hanakoHome, "added-models.yaml");
@@ -413,6 +483,48 @@ export class ProviderRegistry {
     uc.models = uc.models.filter(
       (m) => (typeof m === "object" ? m.id : m) !== modelId,
     );
+    this._saveAddedModels(userConfig);
+    this._entries.clear();
+  }
+
+  /**
+   * 更新某 provider 的模型条目（按 id 查找并替换），立即持久化
+   * 裸字符串条目会被升级为对象
+   * @param {string} providerId
+   * @param {string} modelId
+   * @param {{ name?: string, context?: number, maxOutput?: number, vision?: boolean, reasoning?: boolean }} meta
+   */
+  updateModelEntry(providerId, modelId, meta) {
+    const userConfig = this._loadAddedModels();
+    const uc = userConfig[providerId];
+    if (!uc?.models || !Array.isArray(uc.models)) {
+      throw new Error(`Provider "${providerId}" not found or has no models`);
+    }
+
+    // 白名单：只允许模型能力字段
+    const ALLOWED = ["name", "context", "maxOutput", "vision", "reasoning"];
+    const safe = {};
+    for (const key of ALLOWED) {
+      if (meta[key] !== undefined) safe[key] = meta[key];
+    }
+
+    let found = false;
+    uc.models = uc.models.map((m) => {
+      const mid = typeof m === "object" ? m.id : m;
+      if (mid !== modelId) return m;
+      found = true;
+      // 合并：保留已有对象字段，覆盖传入的 meta
+      const base = typeof m === "object" ? m : { id: mid };
+      const merged = { ...base, ...safe };
+      // 清理空值：name 为空时删除让 model-sync 走词典/humanize
+      if (!merged.name) delete merged.name;
+      return merged;
+    });
+
+    if (!found) {
+      throw new Error(`Model "${modelId}" not found in provider "${providerId}"`);
+    }
+
     this._saveAddedModels(userConfig);
     this._entries.clear();
   }

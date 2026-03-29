@@ -140,12 +140,6 @@ describe("model sync related routes", () => {
       currentModel: { id: "gpt-5.4", name: "Gpt 5.4" },
       config: {},
       providerRegistry: { get: () => ({}) },
-      resolveModelOverrides(model) {
-        if (!model) return null;
-        const ov = this.config?.models?.overrides?.[model.id];
-        if (!ov) return model;
-        return { ...model, ...ov };
-      },
     };
 
     app.route("/api", createModelsRoute(engine));

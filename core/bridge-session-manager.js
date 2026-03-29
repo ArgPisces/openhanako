@@ -243,9 +243,7 @@ export class BridgeSessionManager {
 
       try {
         // 非 vision 模型：静默剥离图片，只发文字
-        // 注意：bridge session 可能不属于 focus agent，必须传入该 session 对应 agent 的 overrides
-        const _resolved = this._deps.resolveModelOverrides?.(session.model, agent.config?.models?.overrides);
-        if (opts.images?.length && _resolved?.vision === false) {
+        if (opts.images?.length && session.model?.vision === false) {
           opts.images = undefined;
         }
         const promptOpts = opts.images?.length ? { images: opts.images } : undefined;

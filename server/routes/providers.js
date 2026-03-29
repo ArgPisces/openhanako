@@ -102,7 +102,10 @@ export function createProvidersRoute(engine) {
       const isOAuth = provRegistry.isOAuth(name);
       const oauthInfo = getOAuthLoginInfo(name);
       const sdkIds = sdkByProvider.get(name) || [];
-      const allModels = [...new Set([...(p.models || []), ...sdkIds])];
+      // 合并 added-models.yaml 条目 + SDK 发现的模型 ID，按 ID 去重（保留原始对象形式）
+      const rawModels = p.models || [];
+      const seenIds = new Set(rawModels.map(m => typeof m === "object" ? m.id : m));
+      const allModels = [...rawModels, ...sdkIds.filter(id => !seenIds.has(id))];
       const customModels = oauthCustom[name] || [];
 
       result[name] = {
@@ -358,6 +361,28 @@ export function createProvidersRoute(engine) {
       return c.json({ ok: res.ok, status: res.status });
     } catch (err) {
       return c.json({ ok: false, error: err.message });
+    }
+  });
+
+  /**
+   * 更新模型元数据（context/vision/reasoning/maxOutput/name）
+   * 写回 added-models.yaml → 触发 model-sync → SDK 模型对象更新
+   */
+  route.put("/providers/:name/models/:modelId", async (c) => {
+    const providerName = c.req.param("name");
+    const modelId = decodeURIComponent(c.req.param("modelId"));
+    const body = await safeJson(c);
+    if (!body || typeof body !== "object") {
+      return c.json({ error: "invalid body" }, 400);
+    }
+    try {
+      engine.providerRegistry.updateModelEntry(providerName, modelId, body);
+      engine.providerRegistry.reload();
+      await engine.syncModelsAndRefresh();
+      return c.json({ ok: true });
+    } catch (err) {
+      const status = err.message?.includes("not found") ? 404 : 500;
+      return c.json({ error: err.message }, status);
     }
   });
 

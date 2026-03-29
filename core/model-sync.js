@@ -42,14 +42,15 @@ function buildModelEntry(modelEntry, provider) {
   const id = isObj ? modelEntry.id : modelEntry;
   const known = lookupKnown(provider, id);
 
-  const vision = known?.vision === true;
+  // 优先级：用户设置（added-models.yaml 对象字段）> known-models 词典 > 默认值
+  const vision = (isObj && modelEntry.vision !== undefined) ? modelEntry.vision : (known?.vision === true);
   const entry = {
     id,
     name: (isObj && modelEntry.name) || known?.name || humanizeName(id),
     input: vision ? ["text", "image"] : ["text"],
     contextWindow: (isObj && modelEntry.context) || known?.context || DEFAULT_CONTEXT_WINDOW,
     vision,
-    reasoning: known?.reasoning === true,
+    reasoning: (isObj && modelEntry.reasoning !== undefined) ? modelEntry.reasoning : (known?.reasoning === true),
   };
 
   const maxOutput = (isObj && modelEntry.maxOutput) || known?.maxOutput;
