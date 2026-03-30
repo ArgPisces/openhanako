@@ -528,10 +528,11 @@ export class ProviderRegistry {
    */
   updateModelEntry(providerId, modelId, meta) {
     const userConfig = this._loadAddedModels();
-    const uc = userConfig[providerId];
-    if (!uc?.models || !Array.isArray(uc.models)) {
-      throw new Error(`Provider "${providerId}" not found or has no models`);
+    if (!userConfig[providerId]) userConfig[providerId] = {};
+    if (!Array.isArray(userConfig[providerId].models)) {
+      userConfig[providerId].models = [];
     }
+    const uc = userConfig[providerId];
 
     // 白名单：只允许模型能力字段
     const ALLOWED = ["name", "context", "maxOutput", "vision", "reasoning", "type"];
@@ -545,16 +546,15 @@ export class ProviderRegistry {
       const mid = typeof m === "object" ? m.id : m;
       if (mid !== modelId) return m;
       found = true;
-      // 合并：保留已有对象字段，覆盖传入的 meta
       const base = typeof m === "object" ? m : { id: mid };
       const merged = { ...base, ...safe };
-      // 清理空值：name 为空时删除让 model-sync 走词典/humanize
       if (!merged.name) delete merged.name;
       return merged;
     });
 
+    // upsert：模型不在列表中时自动添加
     if (!found) {
-      throw new Error(`Model "${modelId}" not found in provider "${providerId}"`);
+      uc.models.push({ id: modelId, ...safe });
     }
 
     this._saveAddedModels(userConfig);
