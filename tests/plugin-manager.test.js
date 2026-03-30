@@ -218,43 +218,90 @@ describe("command loading", () => {
   });
 });
 
-describe("hooks", () => {
-  it("loads hooks from hooks.json and executes them", async () => {
-    const dir = path.join(pluginsDir, "hook-plug");
-    fs.mkdirSync(path.join(dir, "hooks"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "hooks.json"), JSON.stringify({
-      "test:event": "./hooks/handler.js"
-    }));
-    fs.writeFileSync(path.join(dir, "hooks", "handler.js"), `
-      export default async function(event) { return { injected: true }; }
+describe("extensions", () => {
+  it("loads extension factories from extensions/ directory (full-access)", async () => {
+    const builtinDir = path.join(tmpHome, "builtin-ext");
+    const dir = path.join(builtinDir, "ext-plug");
+    fs.mkdirSync(path.join(dir, "extensions"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "extensions", "strip.js"), `
+      export default function(pi) {
+        pi.on("before_provider_request", (event) => {
+          return event.payload;
+        });
+      }
     `);
-    const pm = new PluginManager({ pluginsDir, dataDir, bus: await makeBus() });
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir],
+      dataDir,
+      bus: await makeBus(),
+    });
     pm.scan();
     await pm.loadAll();
-    const result = await pm.executeHook("test:event", { data: 1 });
-    expect(result).toEqual({ injected: true });
+    const factories = pm.getExtensionFactories();
+    expect(factories).toHaveLength(1);
+    expect(typeof factories[0]).toBe("function");
   });
 
-  it("before-* hook returning null cancels the event", async () => {
-    const dir = path.join(pluginsDir, "cancel-hook");
-    fs.mkdirSync(path.join(dir, "hooks"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "hooks.json"), JSON.stringify({
-      "before-send": "./hooks/block.js"
-    }));
-    fs.writeFileSync(path.join(dir, "hooks", "block.js"), `
-      export default async function() { return null; }
+  it("skips extension files that don't export a function", async () => {
+    const builtinDir = path.join(tmpHome, "builtin-ext-bad");
+    const dir = path.join(builtinDir, "bad-ext");
+    fs.mkdirSync(path.join(dir, "extensions"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "extensions", "not-a-fn.js"), `
+      export const value = 42;
     `);
-    const pm = new PluginManager({ pluginsDir, dataDir, bus: await makeBus() });
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir],
+      dataDir,
+      bus: await makeBus(),
+    });
     pm.scan();
     await pm.loadAll();
-    const result = await pm.executeHook("before-send", { text: "hi" });
-    expect(result).toBeNull();
+    expect(pm.getExtensionFactories()).toHaveLength(0);
   });
 
-  it("hooks with no handlers return original event unchanged", async () => {
-    const pm = new PluginManager({ pluginsDir, dataDir, bus: await makeBus() });
-    const result = await pm.executeHook("no:handler", { x: 1 });
-    expect(result).toEqual({ x: 1 });
+  it("restricted plugins do not load extensions", async () => {
+    const builtinDir = path.join(tmpHome, "builtin-ext-r");
+    fs.mkdirSync(builtinDir, { recursive: true });
+    const communityDir = path.join(tmpHome, "community-ext-r");
+    const dir = path.join(communityDir, "restricted-ext");
+    fs.mkdirSync(path.join(dir, "extensions"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "extensions", "e.js"), `
+      export default function(pi) { pi.on("tool_call", () => {}); }
+    `);
+    fs.mkdirSync(path.join(dir, "tools"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "tools", "t.js"), `
+      export const name = "t";
+      export const description = "test";
+      export const parameters = {};
+      export async function execute() { return "ok"; }
+    `);
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir, communityDir],
+      dataDir,
+      bus: await makeBus(),
+    });
+    pm.scan();
+    await pm.loadAll();
+    expect(pm.getExtensionFactories()).toHaveLength(0);
+  });
+
+  it("unloadPlugin removes extension factories for that plugin", async () => {
+    const builtinDir = path.join(tmpHome, "builtin-ext-unload");
+    const dir = path.join(builtinDir, "unload-ext");
+    fs.mkdirSync(path.join(dir, "extensions"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "extensions", "e.js"), `
+      export default function(pi) { pi.on("tool_call", () => {}); }
+    `);
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir],
+      dataDir,
+      bus: await makeBus(),
+    });
+    pm.scan();
+    await pm.loadAll();
+    expect(pm.getExtensionFactories()).toHaveLength(1);
+    await pm.unloadPlugin("unload-ext");
+    expect(pm.getExtensionFactories()).toHaveLength(0);
   });
 });
 
@@ -332,19 +379,16 @@ describe("provider declarations", () => {
 // ── 权限执行 ─────────────────────────────────────────────────────────────────
 
 describe("permission enforcement", () => {
-  it("builtin plugin always gets full-access (routes and hooks loaded)", async () => {
+  it("builtin plugin always gets full-access (routes and extensions loaded)", async () => {
     const builtinDir = path.join(tmpHome, "builtin-plugins");
     const dir = path.join(builtinDir, "core-plug");
     fs.mkdirSync(path.join(dir, "routes"), { recursive: true });
     fs.writeFileSync(path.join(dir, "routes", "api.js"), `
       export function register(app) { app.get("/test", (c) => c.text("ok")); }
     `);
-    fs.writeFileSync(path.join(dir, "hooks.json"), JSON.stringify({
-      "test:event": "./hooks/handler.js"
-    }));
-    fs.mkdirSync(path.join(dir, "hooks"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "hooks", "handler.js"), `
-      export default async function(event) { return { hooked: true }; }
+    fs.mkdirSync(path.join(dir, "extensions"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "extensions", "ext.js"), `
+      export default function(pi) { pi.on("tool_call", () => {}); }
     `);
     const pm = new PluginManager({
       pluginsDirs: [builtinDir],
@@ -357,11 +401,10 @@ describe("permission enforcement", () => {
     expect(entry.status).toBe("loaded");
     expect(entry.accessLevel).toBe("full-access");
     expect(pm.routeRegistry.has("core-plug")).toBe(true);
-    const hookResult = await pm.executeHook("test:event", { x: 1 });
-    expect(hookResult).toEqual({ hooked: true });
+    expect(pm.getExtensionFactories()).toHaveLength(1);
   });
 
-  it("community restricted plugin skips routes/hooks/providers/lifecycle", async () => {
+  it("community restricted plugin skips routes/extensions/providers/lifecycle", async () => {
     const builtinDir = path.join(tmpHome, "builtin-plugins-2");
     fs.mkdirSync(builtinDir, { recursive: true });
     const communityDir = path.join(tmpHome, "community-plugins");
@@ -377,12 +420,9 @@ describe("permission enforcement", () => {
     fs.writeFileSync(path.join(dir, "routes", "api.js"), `
       export function register(app) { app.get("/x", (c) => c.text("x")); }
     `);
-    fs.writeFileSync(path.join(dir, "hooks.json"), JSON.stringify({
-      "test:hook": "./hooks/h.js"
-    }));
-    fs.mkdirSync(path.join(dir, "hooks"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "hooks", "h.js"), `
-      export default async function() { return { hooked: true }; }
+    fs.mkdirSync(path.join(dir, "extensions"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "extensions", "e.js"), `
+      export default function(pi) { pi.on("tool_call", () => {}); }
     `);
     fs.mkdirSync(path.join(dir, "providers"), { recursive: true });
     fs.writeFileSync(path.join(dir, "providers", "p.js"), `
@@ -408,9 +448,8 @@ describe("permission enforcement", () => {
     expect(pm.routeRegistry.has("comm-plug")).toBe(false);
     expect(pm.getProviderPlugins().some(p => p._pluginId === "comm-plug")).toBe(false);
     expect(entry.instance).toBeNull();
-    // Hook not registered
-    const hookResult = await pm.executeHook("test:hook", { x: 1 });
-    expect(hookResult).toEqual({ x: 1 }); // unchanged, no handler
+    // Extensions not registered
+    expect(pm.getExtensionFactories()).toHaveLength(0);
   });
 
   it("community full-access plugin with global toggle OFF → status 'restricted', not loaded", async () => {

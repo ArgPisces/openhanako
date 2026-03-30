@@ -69,8 +69,7 @@ my-plugin/
 │   └── *.js
 ├── providers/             # LLM Provider declarations (requires full-access)
 │   └── *.js
-├── hooks.json             # Event interception mapping (requires full-access)
-├── hooks/                 # Hook handler scripts (requires full-access)
+├── extensions/            # Pi SDK extension factories (requires full-access)
 │   └── *.js
 └── index.js               # Optional, stateful plugin entry point, loaded last (requires full-access)
 ```
@@ -98,7 +97,7 @@ No manifest declaration needed; community plugins default to restricted.
 | `bus.emit / subscribe / request` | Publish events, subscribe to events, call others' capabilities |
 | `contributes.configuration` | JSON Schema config declarations |
 
-**What you cannot do:** `bus.handle`, routes, hooks, providers, `registerTool`, lifecycle (onload/onunload).
+**What you cannot do:** `bus.handle`, routes, extensions, providers, `registerTool`, lifecycle (onload/onunload).
 
 Restricted plugin tool/command code runs in the main process with full Node.js API access. The permission model controls "which system extension points you get", not code-level sandboxing.
 
@@ -121,7 +120,7 @@ In addition to restricted capabilities:
 |------------|-------------|
 | `bus.handle` | Register capabilities for other plugins to call |
 | `routes/*.js` | HTTP endpoints |
-| `hooks.json` | Intercept system events |
+| `extensions/*.js` | Pi SDK event interception (tool calls, provider requests, etc.) |
 | `providers/*.js` | LLM Providers |
 | `ctx.registerTool` | Dynamically register tools at runtime |
 | `onload` / `onunload` | Lifecycle hooks |
@@ -230,34 +229,35 @@ export function register(app, ctx) {
 
 All three patterns are backward-compatible: plugins that don't use ctx need no changes. `ctx.bus` can directly call built-in session operations: `session:send`, `session:abort`, `session:history`, `session:list`, `agent:list`. See the Route Context and Session Bus Handlers sections in `.docs/PLUGIN-DEV.md` for the full API.
 
-### Hooks (Event Interception) ⚡ full-access
+### Extensions (Pi SDK Event Interception) ⚡ full-access
 
-`hooks.json` maps event types to handler scripts:
-
-```json
-{
-  "session:before-send": "./hooks/inject.js",
-  "agent:init": "./hooks/setup.js"
-}
-```
-
-Hook event types come in two flavors:
-
-- **before-\* types** (e.g. `session:before-send`): Intercept and optionally modify the event
-  - Return `null` → cancel the event (no further handlers execute)
-  - Return a new object → replace the event, continue to next handler
-  - Return `undefined` → pass through unchanged
-- **Regular types** (e.g. `agent:init`): Observe the event; the last handler returning non-`undefined` determines the final result
-
-Handler signature:
+Each `.js` file in the `extensions/` directory exports a factory function that receives Pi SDK's `ExtensionAPI` and subscribes to LLM pipeline events:
 
 ```js
-// hooks/inject.js
-export default async function(event, hookCtx) {
-  // hookCtx: { pluginId, eventType, bus }
-  return event;
+// extensions/strip-empty-tools.js
+export default function(pi) {
+  pi.on("before_provider_request", (event) => {
+    const p = event.payload;
+    if (p && Array.isArray(p.tools) && p.tools.length === 0) {
+      delete p.tools;
+    }
+    return p;
+  });
 }
 ```
+
+Common events:
+
+| Event | Timing | What you can do |
+|-------|--------|-----------------|
+| `tool_call` | Before tool execution | Modify args, block the call |
+| `tool_result` | After tool returns | Modify the result |
+| `before_provider_request` | Before HTTP request | Rewrite payload |
+| `context` | Before each LLM call | Filter/inject messages |
+| `before_agent_start` | After user input | Inject system prompt |
+| `input` | When user input arrives | Intercept/transform input |
+
+Factory functions are invoked by Pi SDK at session creation time; handlers fire when the corresponding event occurs. See Pi SDK extension documentation for the full event list.
 
 ### Providers (LLM Provider) ⚡ full-access
 

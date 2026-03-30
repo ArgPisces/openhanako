@@ -30,8 +30,8 @@ export class PluginManager {
     this._agentTemplates = [];
     this._providerPlugins = [];
     this._configSchemas = [];
-    // hookRegistry: Map<eventType, Array<{ pluginId, handlerPath, _cache?: Function }>>
-    this._hookRegistry = new Map();
+    // extensionFactories: Array<{ pluginId: string, factory: Function }>
+    this._extensionFactories = [];
   }
 
   scan() {
@@ -78,7 +78,7 @@ export class PluginManager {
     for (const dir of KNOWN_CONTRIBUTION_DIRS) {
       if (fs.existsSync(path.join(pluginDir, dir))) contributions.push(dir);
     }
-    if (fs.existsSync(path.join(pluginDir, "hooks.json"))) contributions.push("hooks");
+    if (fs.existsSync(path.join(pluginDir, "extensions"))) contributions.push("extensions");
     if (fs.existsSync(path.join(pluginDir, "index.js"))) contributions.push("lifecycle");
     const trust = manifest?.trust === "full-access" ? "full-access" : "restricted";
     return { id, name, version, description, pluginDir, manifest, contributions, trust };
@@ -141,7 +141,7 @@ export class PluginManager {
     // Full-access only: system-level extension points
     if (accessLevel === "full-access") {
       await this._loadRoutes(entry);
-      this._loadHooks(entry);
+      await this._loadExtensions(entry);
       await this._loadProviders(entry);
 
       // Lifecycle (index.js)
@@ -322,76 +322,30 @@ export class PluginManager {
     this.routeRegistry.set(entry.id, app);
   }
 
-  // ── Task 8: Hook loader ──────────────────────────────────────────────────
-
-  _loadHooks(entry) {
-    const hooksJsonPath = path.join(entry.pluginDir, "hooks.json");
-    if (!fs.existsSync(hooksJsonPath)) return;
-    let hookMap;
-    try {
-      hookMap = JSON.parse(fs.readFileSync(hooksJsonPath, "utf-8"));
-    } catch (err) {
-      console.error(`[plugin-manager] hooks.json in "${entry.id}" is invalid:`, err.message);
-      return;
-    }
-    for (const [eventType, handlerPath] of Object.entries(hookMap)) {
-      if (!this._hookRegistry.has(eventType)) this._hookRegistry.set(eventType, []);
-      this._hookRegistry.get(eventType).push({
-        pluginId: entry.id,
-        // Resolve relative path against plugin directory
-        handlerPath: path.resolve(entry.pluginDir, handlerPath),
-        _cache: null,
-      });
-    }
-  }
+  // ── Task 8: Extension loader ─────────────────────────────────────────────
 
   /**
-   * Execute hooks for a given event type.
-   *
-   * Semantics for before-* hooks:
-   *   - handler returns null   → cancel (propagation stops, return null)
-   *   - handler returns object → replace event with returned value, continue chain
-   *   - handler returns undefined → pass-through unchanged
-   *
-   * For non-before-* hooks, the result of the last responding handler is returned.
-   * If no handlers exist, the original event is returned unchanged.
+   * 加载 extensions/ 目录下的 Pi SDK extension 工厂函数。
+   * 每个 .js 文件导出 (pi: ExtensionAPI) => void，在 session 创建时被 Pi SDK 调用。
    */
-  async executeHook(eventType, event) {
-    const handlers = this._hookRegistry.get(eventType);
-    if (!handlers || handlers.length === 0) return event;
-
-    const isBefore = eventType.startsWith("before-");
-    let current = event;
-
-    for (const hookEntry of handlers) {
-      // Lazy-load and cache the handler function
-      if (!hookEntry._cache) {
-        try {
-          const mod = await freshImport(hookEntry.handlerPath);
-          hookEntry._cache = mod.default ?? mod;
-        } catch (err) {
-          console.error(`[plugin-manager] hook handler "${hookEntry.handlerPath}" failed to load:`, err.message);
+  async _loadExtensions(entry) {
+    const extDir = path.join(entry.pluginDir, "extensions");
+    if (!fs.existsSync(extDir)) return;
+    const files = fs.readdirSync(extDir).filter((f) => f.endsWith(".js"));
+    for (const file of files) {
+      const filePath = path.join(extDir, file);
+      try {
+        const mod = await freshImport(filePath);
+        const factory = mod.default ?? mod;
+        if (typeof factory !== "function") {
+          console.warn(`[plugin-manager] extension "${file}" in "${entry.id}" does not export a function, skipped`);
           continue;
         }
-      }
-      let result;
-      try {
-        const hookCtx = { pluginId: hookEntry.pluginId, eventType, bus: this._bus };
-        result = await hookEntry._cache(current, hookCtx);
+        this._extensionFactories.push({ pluginId: entry.id, factory });
       } catch (err) {
-        console.error(`[plugin-manager] hook handler "${hookEntry.handlerPath}" threw:`, err.message);
-        continue;
-      }
-
-      if (isBefore) {
-        if (result === null) return null; // cancelled
-        if (result !== undefined) current = result; // replaced
-        // undefined → pass-through, current stays
-      } else {
-        if (result !== undefined) current = result;
+        console.error(`[plugin-manager] extension "${file}" in "${entry.id}" failed to load:`, err.message);
       }
     }
-    return current;
   }
 
   // ── Task 9: Configuration loader ─────────────────────────────────────────
@@ -635,11 +589,7 @@ export class PluginManager {
     this._agentTemplates = this._agentTemplates.filter(t => t._pluginId !== pluginId);
     this._providerPlugins = this._providerPlugins.filter(p => p._pluginId !== pluginId);
     this._configSchemas = this._configSchemas.filter(s => s.pluginId !== pluginId);
-    for (const [eventType, handlers] of this._hookRegistry) {
-      const filtered = handlers.filter(h => h.pluginId !== pluginId);
-      if (filtered.length === 0) this._hookRegistry.delete(eventType);
-      else this._hookRegistry.set(eventType, filtered);
-    }
+    this._extensionFactories = this._extensionFactories.filter(e => e.pluginId !== pluginId);
     this.routeRegistry.delete(pluginId);
 
     entry.status = "unloaded";
@@ -661,7 +611,7 @@ export class PluginManager {
   isValidPluginDir(dirPath) {
     const validMarkers = [
       ...KNOWN_CONTRIBUTION_DIRS,
-      "manifest.json", "index.js", "hooks.json",
+      "manifest.json", "index.js", "extensions",
     ];
     return validMarkers.some(marker => {
       const p = path.join(dirPath, marker);
@@ -672,6 +622,11 @@ export class PluginManager {
   /** 获取指定插件的路由 app */
   getRouteApp(pluginId) {
     return this.routeRegistry.get(pluginId) || null;
+  }
+
+  /** 获取所有活跃插件的 extension 工厂函数（供 Engine 注入 Pi SDK） */
+  getExtensionFactories() {
+    return this._extensionFactories.map(e => e.factory);
   }
 
   getPlugin(id) { return this._plugins.get(id) || null; }

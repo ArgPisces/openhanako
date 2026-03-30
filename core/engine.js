@@ -498,7 +498,7 @@ export class HanaEngine {
       noPromptTemplates: true,
       noThemes: true,
       additionalSkillPaths: [skillsDir],
-      extensionFactories: [
+      extensionFactories: this._extensionFactories = [
         /** 剥离空 tools 数组 — dashscope / volcengine 不接受 tools: [] */
         (pi) => {
           pi.on("before_provider_request", (event) => {
@@ -611,6 +611,12 @@ export class HanaEngine {
       const pluginPaths = this._pluginManager.getSkillPaths();
       this._skills.setExternalPaths([...existing, ...pluginPaths]);
       this._syncAllAgentSkills();
+    }
+
+    // Inject plugin extension factories into ResourceLoader (same array reference)
+    const pluginExtFactories = this._pluginManager.getExtensionFactories();
+    if (pluginExtFactories.length > 0) {
+      this._extensionFactories.push(...pluginExtFactories);
     }
   }
 

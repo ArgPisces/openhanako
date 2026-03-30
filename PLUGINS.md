@@ -69,8 +69,7 @@ my-plugin/
 │   └── *.js
 ├── providers/             # LLM Provider 声明（需要 full-access）
 │   └── *.js
-├── hooks.json             # 事件拦截映射（需要 full-access）
-├── hooks/                 # hook handler 脚本（需要 full-access）
+├── extensions/            # Pi SDK extension 工厂（需要 full-access）
 │   └── *.js
 └── index.js               # 可选，有状态 plugin 入口，最后加载（需要 full-access）
 ```
@@ -98,7 +97,7 @@ my-plugin/
 | `bus.emit / subscribe / request` | 发布事件、订阅事件、调用别人的能力 |
 | `contributes.configuration` | JSON Schema 配置声明 |
 
-**不能做的事：** `bus.handle`、routes、hooks、providers、`registerTool`、lifecycle（onload/onunload）。
+**不能做的事：** `bus.handle`、routes、extensions、providers、`registerTool`、lifecycle（onload/onunload）。
 
 restricted 插件的 tool/command 代码在主进程运行，有完整的 Node.js API 访问能力。权限模型管的是"系统给你什么扩展接口"，不是代码级沙盒。
 
@@ -121,7 +120,7 @@ restricted 插件的 tool/command 代码在主进程运行，有完整的 Node.j
 |------|------|
 | `bus.handle` | 注册能力供其他 plugin 调用 |
 | `routes/*.js` | HTTP 端点 |
-| `hooks.json` | 拦截系统事件 |
+| `extensions/*.js` | Pi SDK 事件拦截（tool 调用、provider 请求等） |
 | `providers/*.js` | LLM Provider |
 | `ctx.registerTool` | 运行时动态注册工具 |
 | `onload` / `onunload` | 生命周期钩子 |
@@ -230,34 +229,35 @@ export function register(app, ctx) {
 
 三种写法向后兼容：不使用 ctx 的老插件无需改动。`ctx.bus` 可直接调用内置 session 操作：`session:send`、`session:abort`、`session:history`、`session:list`、`agent:list`。完整 API 见 `.docs/PLUGIN-DEV.md` 的 Route Context 和 Session Bus Handlers 章节。
 
-### Hooks（事件拦截）⚡ full-access
+### Extensions（Pi SDK 事件拦截）⚡ full-access
 
-`hooks.json` 映射事件类型到 handler 脚本：
-
-```json
-{
-  "session:before-send": "./hooks/inject.js",
-  "agent:init": "./hooks/setup.js"
-}
-```
-
-Hook 事件类型分两种：
-
-- **before-\* 类型**（如 `session:before-send`）：拦截事件并可修改
-  - 返回 `null` → 取消事件（后续 handler 不再执行）
-  - 返回新对象 → 替换原 event，继续传给下一个 handler
-  - 返回 `undefined` → 不干预，event 原样传递
-- **普通类型**（如 `agent:init`）：观测事件，最后一个返回非 `undefined` 的 handler 结果作为最终结果
-
-handler 签名：
+`extensions/` 目录下的每个 `.js` 文件导出一个工厂函数，接收 Pi SDK 的 `ExtensionAPI`，可以订阅 LLM 调用链上的事件：
 
 ```js
-// hooks/inject.js
-export default async function(event, hookCtx) {
-  // hookCtx: { pluginId, eventType, bus }
-  return event;
+// extensions/strip-empty-tools.js
+export default function(pi) {
+  pi.on("before_provider_request", (event) => {
+    const p = event.payload;
+    if (p && Array.isArray(p.tools) && p.tools.length === 0) {
+      delete p.tools;
+    }
+    return p;
+  });
 }
 ```
+
+常用事件：
+
+| 事件 | 时机 | 能做什么 |
+|------|------|----------|
+| `tool_call` | 工具调用前 | 修改参数、block 调用 |
+| `tool_result` | 工具返回后 | 修改返回结果 |
+| `before_provider_request` | HTTP 请求发出前 | 改写 payload |
+| `context` | 每次 LLM 调用前 | 过滤/注入消息 |
+| `before_agent_start` | 用户输入后 | 注入 system prompt |
+| `input` | 用户输入到达时 | 拦截/变换输入 |
+
+工厂函数在 session 创建时被 Pi SDK 调用，handler 在对应事件触发时执行。完整事件列表参见 Pi SDK extension 文档。
 
 ### Providers（LLM Provider）⚡ full-access
 
