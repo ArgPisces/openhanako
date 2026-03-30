@@ -264,4 +264,16 @@ export class ModelManager {
     }
     return this.executionRouter.resolveUtilityConfig(agentConfig, sharedModels, utilApi);
   }
+
+  /**
+   * 从 Pi SDK registry 获取某 provider 的所有模型（不经过 added-models.yaml 过滤）
+   * 用于模型发现（fetch-models），不影响主应用的 availableModels
+   * @param {string} name - provider ID
+   * @returns {object[]}
+   */
+  getRegistryModelsForProvider(name) {
+    const authKey = this.providerRegistry.getAuthJsonKey(name);
+    const all = this._modelRegistry.getAll();
+    return all.filter(m => m.provider === name || m.provider === authKey);
+  }
 }
