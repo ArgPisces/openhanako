@@ -8,6 +8,7 @@
 
 import { useCallback } from 'react';
 import { useStore } from '../stores';
+import { updateKeyed } from '../stores/create-keyed-slice';
 import { hanaFetch } from '../hooks/use-hana-fetch';
 
 export function BrowserCard() {
@@ -27,10 +28,18 @@ export function BrowserCard() {
 
   const handleClose = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setBrowserRunning(false);
-    setBrowserThumbnail(null);
-    window.platform?.browserEmergencyStop?.();
     const sessionPath = useStore.getState().currentSessionPath;
+    // 同时清除 keyed 状态和全局 compat 状态，确保卡片立即隐藏
+    if (sessionPath) {
+      updateKeyed('browserBySession', sessionPath,
+        { running: false, url: null, thumbnail: null },
+        (_s, d) => ({ browserRunning: d.running, browserUrl: d.url, browserThumbnail: d.thumbnail }),
+      );
+    } else {
+      setBrowserRunning(false);
+      setBrowserThumbnail(null);
+    }
+    window.platform?.browserEmergencyStop?.();
     if (sessionPath) {
       hanaFetch('/api/browser/close-session', {
         method: 'POST',
