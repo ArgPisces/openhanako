@@ -163,6 +163,12 @@ export function createChatRoute(engine, hub, { upgradeWebSocket }) {
 
   // 单订阅：事件只写入一次，再按需广播到所有连接中的客户端。
   hub.subscribe((event, sessionPath) => {
+    // Non-session-scoped events: handle before session resolution
+    if (event.type === "plugin_ui_changed") {
+      broadcast({ type: "plugin_ui_changed" });
+      return;
+    }
+
     const isActive = sessionPath === engine.currentSessionPath;
     const ss = sessionPath ? getState(sessionPath) : null;
 

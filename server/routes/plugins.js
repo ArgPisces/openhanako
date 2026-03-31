@@ -202,6 +202,51 @@ export function createPluginsRoute(engine) {
     })));
   });
 
+  // ── Plugin UI panel endpoints ──
+
+  route.get("/plugins/pages", (c) => {
+    const pm = engine.pluginManager;
+    if (!pm) return c.json([]);
+    const pages = pm.getPages().map(p => ({
+      pluginId: p.pluginId,
+      title: p.title,
+      icon: p.icon,
+      routeUrl: `/api/plugins/${p.pluginId}${p.route}`,
+    }));
+    return c.json(pages);
+  });
+
+  route.get("/plugins/widgets", (c) => {
+    const pm = engine.pluginManager;
+    if (!pm) return c.json([]);
+    const widgets = pm.getWidgets().map(w => ({
+      pluginId: w.pluginId,
+      title: w.title,
+      icon: w.icon,
+      routeUrl: `/api/plugins/${w.pluginId}${w.route}`,
+    }));
+    return c.json(widgets);
+  });
+
+  route.get("/plugins/theme.css", (c) => {
+    const theme = c.req.query("theme") || "warm-paper";
+    // Sanitize theme name to prevent path traversal
+    const safeName = path.basename(theme).replace(/[^a-zA-Z0-9_-]/g, "");
+    const candidates = [
+      path.join(path.dirname(new URL(import.meta.url).pathname), "..", "..", "desktop", "src", "themes", `${safeName}.css`),
+      path.join(path.dirname(new URL(import.meta.url).pathname), "..", "..", "desktop", "dist-renderer", "themes", `${safeName}.css`),
+    ];
+    const found = candidates.find(p => fs.existsSync(p));
+    if (!found) {
+      c.header("Content-Type", "text/css");
+      return c.body("/* theme not found */");
+    }
+    const css = fs.readFileSync(found, "utf-8");
+    c.header("Content-Type", "text/css");
+    c.header("Cache-Control", "public, max-age=300");
+    return c.body(css);
+  });
+
   // ── Plugin route proxy (catch-all last) ──
 
   route.all("/plugins/:pluginId/*", async (c) => {

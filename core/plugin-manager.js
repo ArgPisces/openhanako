@@ -514,6 +514,7 @@ export class PluginManager {
         entry.status = "failed";
         entry.error = err.message;
       }
+      this._bus?.emit({ type: "plugin_ui_changed" });
       return entry;
     });
   }
@@ -534,6 +535,7 @@ export class PluginManager {
       } else {
         console.warn("[plugin-manager] removePlugin: preferencesManager unavailable, disabled list not updated");
       }
+      this._bus?.emit({ type: "plugin_ui_changed" });
       return entry.pluginDir;
     });
   }
@@ -554,6 +556,7 @@ export class PluginManager {
       } else {
         console.warn("[plugin-manager] disablePlugin: preferencesManager unavailable, preference not persisted");
       }
+      this._bus?.emit({ type: "plugin_ui_changed" });
     });
   }
 
@@ -573,6 +576,7 @@ export class PluginManager {
         const allowed = this._preferencesManager?.getAllowFullAccessPlugins() || false;
         if (!allowed) {
           entry.status = "restricted";
+          this._bus?.emit({ type: "plugin_ui_changed" });
           return;
         }
       }
@@ -587,6 +591,7 @@ export class PluginManager {
         entry.status = "failed";
         entry.error = err.message;
       }
+      this._bus?.emit({ type: "plugin_ui_changed" });
     });
   }
 
@@ -615,6 +620,7 @@ export class PluginManager {
           entry.status = "restricted";
         }
       }
+      this._bus?.emit({ type: "plugin_ui_changed" });
     });
   }
 
