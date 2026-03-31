@@ -222,6 +222,10 @@ export function handleServerMessage(msg: any): void {
       useStore.getState().triggerBridgeReload();
       break;
 
+    case 'plugin_ui_changed':
+      import('../stores/plugin-ui-actions').then(m => m.refreshPluginUI());
+      break;
+
     case 'bridge_message':
       if (msg.message) {
         useStore.getState().addBridgeMessage(msg.message);

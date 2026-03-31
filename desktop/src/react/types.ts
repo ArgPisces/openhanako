@@ -107,7 +107,23 @@ export interface TodoItem {
 
 // ── 浮动面板类型 ──
 export type ActivePanel = 'activity' | 'automation' | 'bridge' | null;
-export type TabType = 'chat' | 'channels';
+export type TabType = 'chat' | 'channels' | `plugin:${string}`;
+
+// ── 插件 UI 信息 ──
+
+export interface PluginPageInfo {
+  pluginId: string;
+  title: string | Record<string, string>;
+  icon: string | null;
+  routeUrl: string;
+}
+
+export interface PluginWidgetInfo {
+  pluginId: string;
+  title: string | Record<string, string>;
+  icon: string | null;
+  routeUrl: string;
+}
 
 // ── Platform API 类型声明 ──
 export interface PlatformApi {

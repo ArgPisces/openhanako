@@ -18,6 +18,7 @@ import { loadChannels } from './stores/channel-actions';
 import { initEditorEvents } from './stores/artifact-actions';
 import { updateLayout } from './components/SidebarLayout';
 import { initErrorBusBridge } from './errors/error-bus-bridge';
+import { refreshPluginUI } from './stores/plugin-ui-actions';
 // @ts-expect-error — shared JS module
 import { errorBus as _errorBus } from '../../../shared/error-bus.js';
 // @ts-expect-error — shared JS module
@@ -145,6 +146,9 @@ export async function initApp(): Promise<void> {
     const anyConnected = data.telegram?.status === 'connected' || data.feishu?.status === 'connected' || data.qq?.status === 'connected' || data.whatsapp?.status === 'connected';
     useStore.setState({ bridgeDotConnected: anyConnected });
   } catch { /* ignore */ }
+
+  // 16. 加载插件 UI（pages / widgets）
+  refreshPluginUI();
 
   // 18. 设置快捷键
   document.addEventListener('keydown', (e) => {
