@@ -47,6 +47,7 @@ function createMocks() {
     steerBridgeSession: vi.fn().mockReturnValue(false),
     agentName: "TestAgent",
     hanakoHome: os.tmpdir(),
+    currentAgentId: "hana",
   };
 
   const hub = {
@@ -82,7 +83,7 @@ describe("BridgeManager._handleMessage", () => {
 
       // _flushGroupMessage is fire-and-forget (not awaited), wait for it
       const promise = bm._handleMessage("telegram", {
-        sessionKey: "tg_group_g1",
+        sessionKey: "tg_group_g1@hana",
         text: "hello",
         senderName: "Alice",
         userId: "user1",
@@ -95,7 +96,7 @@ describe("BridgeManager._handleMessage", () => {
 
       expect(hub.send).toHaveBeenCalledWith(
         tagged("Alice: hello"),
-        expect.objectContaining({ sessionKey: "tg_group_g1", role: "guest", isGroup: true }),
+        expect.objectContaining({ sessionKey: "tg_group_g1@hana", role: "guest", isGroup: true }),
       );
       await vi.waitFor(() => expect(adapter.sendReply).toHaveBeenCalled());
       expect(adapter.sendReply).toHaveBeenCalledWith("g1", "AI response");
@@ -105,7 +106,7 @@ describe("BridgeManager._handleMessage", () => {
       const { bm, hub } = createMocks();
 
       await bm._handleMessage("telegram", {
-        sessionKey: "tg_group_g1",
+        sessionKey: "tg_group_g1@hana",
         text: "hi there",
         senderName: "Bob",
         userId: "user2",
@@ -124,13 +125,13 @@ describe("BridgeManager._handleMessage", () => {
       const { bm, hub, adapter } = createMocks();
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "hello",
         userId: "owner123",
         chatId: "owner123",
       });
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "world",
         userId: "owner123",
         chatId: "owner123",
@@ -143,7 +144,7 @@ describe("BridgeManager._handleMessage", () => {
       expect(hub.send).toHaveBeenCalledOnce();
       expect(hub.send).toHaveBeenCalledWith(
         expect.stringMatching(/^<t>\d{2}-\d{2} \d{2}:\d{2}<\/t> hello\nworld$/),
-        expect.objectContaining({ sessionKey: "tg_dm_owner123", role: "owner" }),
+        expect.objectContaining({ sessionKey: "tg_dm_owner123@hana", role: "owner" }),
       );
       expect(adapter.sendReply).toHaveBeenCalledWith("owner123", "AI response");
     });
@@ -152,7 +153,7 @@ describe("BridgeManager._handleMessage", () => {
       const { bm, hub } = createMocks();
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "first",
         userId: "owner123",
         chatId: "owner123",
@@ -162,7 +163,7 @@ describe("BridgeManager._handleMessage", () => {
       expect(hub.send).not.toHaveBeenCalled();
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "second",
         userId: "owner123",
         chatId: "owner123",
@@ -183,7 +184,7 @@ describe("BridgeManager._handleMessage", () => {
       const { bm, hub } = createMocks();
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "hi",
         userId: "owner123",
         chatId: "owner123",
@@ -201,7 +202,7 @@ describe("BridgeManager._handleMessage", () => {
       const { bm, hub } = createMocks();
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_stranger",
+        sessionKey: "tg_dm_stranger@hana",
         text: "hi",
         senderName: "Stranger",
         userId: "stranger",
@@ -225,7 +226,7 @@ describe("BridgeManager._handleMessage", () => {
       engine.isBridgeSessionStreaming.mockReturnValue(true);
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "new msg",
         userId: "owner123",
         chatId: "owner123",
@@ -240,7 +241,7 @@ describe("BridgeManager._handleMessage", () => {
       engine.isBridgeSessionStreaming.mockReturnValue(false);
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "new msg",
         userId: "owner123",
         chatId: "owner123",
@@ -258,20 +259,20 @@ describe("BridgeManager._handleMessage", () => {
       engine.abortBridgeSession.mockResolvedValue(true);
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "hello",
         userId: "owner123",
         chatId: "owner123",
       });
 
       await bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "/stop",
         userId: "owner123",
         chatId: "owner123",
       });
 
-      expect(engine.abortBridgeSession).toHaveBeenCalledWith("tg_dm_owner123");
+      expect(engine.abortBridgeSession).toHaveBeenCalledWith("tg_dm_owner123@hana");
 
       await vi.advanceTimersByTimeAsync(3000);
       expect(hub.send).not.toHaveBeenCalled();
@@ -282,7 +283,7 @@ describe("BridgeManager._handleMessage", () => {
       engine.isBridgeSessionStreaming.mockReturnValue(false);
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_stranger",
+        sessionKey: "tg_dm_stranger@hana",
         text: "/stop",
         senderName: "Stranger",
         userId: "stranger",
@@ -300,6 +301,76 @@ describe("BridgeManager._handleMessage", () => {
     });
   });
 
+  // ── Agent isolation ──
+
+  describe("agent isolation via sessionKey", () => {
+    it("same userId with different agentId produces different sessionKeys", async () => {
+      const { bm, hub } = createMocks();
+
+      bm._handleMessage("telegram", {
+        sessionKey: "tg_dm_owner123@hana",
+        text: "msg to hana",
+        userId: "owner123",
+        chatId: "owner123",
+        agentId: "hana",
+      });
+
+      bm._handleMessage("telegram", {
+        sessionKey: "tg_dm_owner123@kuro",
+        text: "msg to kuro",
+        userId: "owner123",
+        chatId: "owner123",
+        agentId: "kuro",
+      });
+
+      await vi.advanceTimersByTimeAsync(2100);
+
+      // Both messages should have been sent with their respective sessionKeys
+      expect(hub.send).toHaveBeenCalledTimes(2);
+      expect(hub.send).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ sessionKey: "tg_dm_owner123@hana" }),
+      );
+      expect(hub.send).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ sessionKey: "tg_dm_owner123@kuro" }),
+      );
+    });
+
+    it("messages are properly isolated between agents (debounce per sessionKey)", async () => {
+      const { bm, hub } = createMocks();
+
+      // Send two messages with different agentIds — they should NOT merge
+      bm._handleMessage("telegram", {
+        sessionKey: "tg_dm_owner123@hana",
+        text: "hello hana",
+        userId: "owner123",
+        chatId: "owner123",
+        agentId: "hana",
+      });
+      bm._handleMessage("telegram", {
+        sessionKey: "tg_dm_owner123@kuro",
+        text: "hello kuro",
+        userId: "owner123",
+        chatId: "owner123",
+        agentId: "kuro",
+      });
+
+      await vi.advanceTimersByTimeAsync(2100);
+
+      // Each agent gets its own message, not merged
+      expect(hub.send).toHaveBeenCalledTimes(2);
+      const calls = hub.send.mock.calls;
+      const hanaCall = calls.find(c => c[1].sessionKey === "tg_dm_owner123@hana");
+      const kuroCall = calls.find(c => c[1].sessionKey === "tg_dm_owner123@kuro");
+      expect(hanaCall[0]).toMatch(/hello hana/);
+      expect(kuroCall[0]).toMatch(/hello kuro/);
+      // Neither message contains the other agent's text
+      expect(hanaCall[0]).not.toMatch(/hello kuro/);
+      expect(kuroCall[0]).not.toMatch(/hello hana/);
+    });
+  });
+
   // ── Processing lock ──
 
   describe("processing lock", () => {
@@ -312,7 +383,7 @@ describe("BridgeManager._handleMessage", () => {
       );
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "msg1",
         userId: "owner123",
         chatId: "owner123",
@@ -320,7 +391,7 @@ describe("BridgeManager._handleMessage", () => {
       await vi.advanceTimersByTimeAsync(2100);
 
       bm._handleMessage("telegram", {
-        sessionKey: "tg_dm_owner123",
+        sessionKey: "tg_dm_owner123@hana",
         text: "msg2",
         userId: "owner123",
         chatId: "owner123",
