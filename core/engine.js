@@ -121,6 +121,7 @@ export class HanaEngine {
       getAgentById: (id) => this._agentMgr.getAgent(id),
       listAgents: () => this.listAgents(),
       getConfirmStore: () => this._confirmStore,
+      getDeferredResultStore: () => this._deferredResultStore,
     });
 
     // ── Config Coordinator ──
@@ -191,6 +192,14 @@ export class HanaEngine {
         this._emitEvent({ type: "confirmation_resolved", confirmId, action }, null);
       };
     }
+  }
+
+  setDeferredResultStore(store) {
+    this._deferredResultStore = store;
+  }
+
+  get deferredResults() {
+    return this._deferredResultStore || null;
   }
 
   // 向后兼容 getter
@@ -644,9 +653,22 @@ export class HanaEngine {
    * 在 initPlugins 以及任何插件热操作后调用。
    */
   _syncExtensionFactories() {
-    if (!this._pluginManager || !this._extensionFactories) return;
-    // 保留首个内置 factory（空 tools 剥离），替换后续所有插件 factory
-    this._extensionFactories.splice(1, Infinity, ...this._pluginManager.getExtensionFactories());
+    if (!this._extensionFactories) return;
+    const frameworkFactories = this._frameworkExtFactories || [];
+    const pluginFactories = this._pluginManager?.getExtensionFactories() || [];
+    this._extensionFactories.splice(1, Infinity, ...frameworkFactories, ...pluginFactories);
+  }
+
+  /**
+   * Register a framework-level extension factory.
+   * Tracked separately so _syncExtensionFactories preserves them across plugin hot-reloads.
+   * Only affects sessions created after this call.
+   */
+  registerExtensionFactory(factory) {
+    if (!this._extensionFactories) return;
+    if (!this._frameworkExtFactories) this._frameworkExtFactories = [];
+    this._frameworkExtFactories.push(factory);
+    this._syncExtensionFactories();
   }
 
   get pluginManager() { return this._pluginManager; }
