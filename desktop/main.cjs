@@ -1995,6 +1995,20 @@ wrapIpcHandler("write-file", (_event, filePath, content) => {
   } catch { return false; }
 });
 
+// 写入二进制文件（截图用）— 支持 ~ 开头路径
+wrapIpcHandler("write-file-binary", (_event, filePath, base64Data) => {
+  if (!filePath) return false;
+  const resolved = filePath.startsWith("~")
+    ? path.join(os.homedir(), filePath.slice(1))
+    : filePath;
+  if (!path.isAbsolute(resolved)) return false;
+  try {
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.writeFileSync(resolved, Buffer.from(base64Data, "base64"));
+    return true;
+  } catch { return false; }
+});
+
 // 文件监听（artifact 编辑 — 外部变更刷新用）
 const _fileWatchers = new Map();
 wrapIpcHandler("watch-file", (event, filePath) => {

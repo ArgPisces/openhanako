@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld("hana", {
   showInFinder: (path) => ipcRenderer.invoke("show-in-finder", path),
   readFile: (path) => ipcRenderer.invoke("read-file", path),
   writeFile: (filePath, content) => ipcRenderer.invoke("write-file", filePath, content),
+  writeFileBinary: (filePath, base64Data) => ipcRenderer.invoke("write-file-binary", filePath, base64Data),
   watchFile: (filePath) => ipcRenderer.invoke("watch-file", filePath),
   unwatchFile: (filePath) => ipcRenderer.invoke("unwatch-file", filePath),
   onFileChanged: (cb) => ipcRenderer.on("file-changed", (_, filePath) => cb(filePath)),
