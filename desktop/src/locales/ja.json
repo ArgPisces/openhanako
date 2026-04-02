@@ -398,7 +398,7 @@
     },
     "ask_agent": {
       "running": "💬 {name} は誰かに聞いている",
-      "done": "💬 返事がきた",
+      "done": "💬 質問を送った、返事待ち",
       "failed": "💬 返事がない"
     },
     "check_pending_tasks": {

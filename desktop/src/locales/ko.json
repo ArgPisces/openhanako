@@ -398,7 +398,7 @@
     },
     "ask_agent": {
       "running": "💬 {name}이(가) 다른 사람에게 물어보고 있어요",
-      "done": "💬 답변을 받았어요",
+      "done": "💬 질문을 보냈어요, 답변 대기 중",
       "failed": "💬 답변을 못 받았어요"
     },
     "check_pending_tasks": {

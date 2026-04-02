@@ -399,7 +399,7 @@
     },
     "ask_agent": {
       "running": "💬 {name} is asking around",
-      "done": "💬 Got a reply",
+      "done": "💬 Question sent, awaiting reply",
       "failed": "💬 No reply"
     },
     "check_pending_tasks": {

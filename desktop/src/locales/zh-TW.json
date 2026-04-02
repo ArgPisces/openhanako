@@ -398,7 +398,7 @@
     },
     "ask_agent": {
       "running": "💬 {name} 去問別人了",
-      "done": "💬 收到回覆了",
+      "done": "💬 已發出詢問，等待回覆",
       "failed": "💬 沒問到"
     },
     "check_pending_tasks": {
