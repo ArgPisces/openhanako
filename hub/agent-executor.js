@@ -31,7 +31,7 @@ import { READ_ONLY_BUILTIN_TOOLS } from "../core/config-coordinator.js";
  * @param {boolean} [opts.readOnly=false] - 只读模式（只保留读取类工具，排除写/编辑/ask_agent/dm 等）
  * @returns {Promise<string>}  capture 轮的输出（已去掉 MOOD 块）
  */
-export async function runAgentSession(agentId, rounds, { engine, signal, sessionSuffix = "temp", systemAppend, keepSession = false, noMemory = false, noTools = false, readOnly = false } = {}) {
+export async function runAgentSession(agentId, rounds, { engine, signal, sessionSuffix = "temp", ephemeralDir, systemAppend, keepSession = false, noMemory = false, noTools = false, readOnly = false } = {}) {
   // 1. 从长驻 Map 获取 Agent 实例
   const agent = engine.getAgent(agentId);
   if (!agent) {
@@ -51,7 +51,7 @@ export async function runAgentSession(agentId, rounds, { engine, signal, session
 
   // 3. 临时 session
   const cwd = engine.homeCwd || process.cwd();
-  const sessionDir = path.join(agentDir, "sessions", sessionSuffix);
+  const sessionDir = ephemeralDir || path.join(agentDir, "sessions", sessionSuffix);
   fs.mkdirSync(sessionDir, { recursive: true });
   const tempSessionMgr = SessionManager.create(cwd, sessionDir);
 

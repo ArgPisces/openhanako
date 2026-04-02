@@ -587,8 +587,33 @@ export class HanaEngine {
     const sandboxEnabled = this._readPreferences().sandbox !== false;
     log(`✿ 沙盒${sandboxEnabled ? "已启用" : "已关闭"}`);
 
+    // 9. 清理过期的 .ephemeral session 文件（>7 天）
+    this._cleanEphemeralSessions();
+
     const totalTime = ((Date.now() - startupTimer) / 1000).toFixed(1);
     log(`✿ 初始化完成（${totalTime}s）`);
+  }
+
+  /** 清理所有 agent 的 .ephemeral/ 目录中超过 7 天的文件 */
+  _cleanEphemeralSessions() {
+    const maxAge = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    try {
+      if (!this.agentsDir || !fs.existsSync(this.agentsDir)) return;
+      for (const entry of fs.readdirSync(this.agentsDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const ephDir = path.join(this.agentsDir, entry.name, '.ephemeral');
+        if (!fs.existsSync(ephDir)) continue;
+        for (const file of fs.readdirSync(ephDir)) {
+          if (!file.endsWith('.jsonl')) continue;
+          const filePath = path.join(ephDir, file);
+          try {
+            const stat = fs.statSync(filePath);
+            if (now - stat.mtimeMs > maxAge) fs.unlinkSync(filePath);
+          } catch { /* best effort */ }
+        }
+      }
+    } catch { /* best effort */ }
   }
 
   async dispose() {

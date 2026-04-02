@@ -1292,6 +1292,8 @@
     "settingsTimeout": "「{label}」修改确认超时，设置未变更",
     "subagentMaxConcurrent": "当前已有 {max} 个子 agent 在运行，请等待完成后再发起。",
     "subagentFailed": "子 agent 执行失败: {msg}",
+    "subagentTimeout": "子 agent 执行超时（{minutes} 分钟）",
+    "askAgentTimeout": "{name} 响应超时（{minutes} 分钟）",
     "subagentNoOutput": "(子 agent 未产生输出)",
     "subagentDispatched": "子任务已派出 (task-id: {taskId})。完成后结果会自动送达。",
     "askAgentDispatched": "已向 {name} 发送请求 (task-id: {taskId})。收到回复后会自动送达。",

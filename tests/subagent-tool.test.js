@@ -1,144 +1,110 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSubagentTool } from "../lib/tools/subagent-tool.js";
 
-describe("subagent-tool", () => {
-  it("dispatches task via deferred store and returns immediately", async () => {
+describe("subagent-tool (sync await)", () => {
+  it("awaits result and returns it as tool_result", async () => {
     const executeIsolated = vi.fn().mockResolvedValue({
-      replyText: "done",
+      replyText: "分析结果：技术面看多",
       error: null,
     });
-
-    const mockStore = {
-      defer: vi.fn(),
-      resolve: vi.fn(),
-      fail: vi.fn(),
-    };
 
     const tool = createSubagentTool({
       executeIsolated,
       resolveUtilityModel: () => "utility-model",
       readOnlyBuiltinTools: ["read", "grep", "find", "ls"],
-      getDeferredStore: () => mockStore,
-      getSessionPath: () => "/test/session.jsonl",
     });
 
-    const result = await tool.execute("call_1", { task: "查一下项目状态" });
+    const result = await tool.execute("call_1", { task: "分析技术面" });
 
-    // 立即返回 dispatched 消息（t() 在测试环境返回 key）
-    expect(result.content[0].text).toContain("subagentDispatched");
+    expect(result).toEqual({
+      content: [{ type: "text", text: "分析结果：技术面看多" }],
+    });
 
-    // store.defer 应该被调用
-    expect(mockStore.defer).toHaveBeenCalledWith(
-      expect.stringMatching(/^subagent-/),
-      "/test/session.jsonl",
-      expect.objectContaining({ type: "subagent" }),
-    );
-
-    // executeIsolated 应该被调用（后台执行）
     expect(executeIsolated).toHaveBeenCalledWith(
-      expect.stringContaining("任务：\n查一下项目状态"),
+      expect.stringContaining("分析技术面"),
       expect.objectContaining({
         model: "utility-model",
         toolFilter: "*",
         builtinFilter: ["read", "grep", "find", "ls"],
       }),
     );
-
-    // 等 promise 链走完
-    await vi.waitFor(() => {
-      expect(mockStore.resolve).toHaveBeenCalledWith(
-        expect.stringMatching(/^subagent-/),
-        "done",
-      );
-    });
   });
 
-  it("calls store.fail when execution errors", async () => {
+  it("returns error message when execution fails", async () => {
+    const executeIsolated = vi.fn().mockResolvedValue({
+      replyText: "",
+      error: "模型调用失败",
+    });
+
+    const tool = createSubagentTool({
+      executeIsolated,
+      resolveUtilityModel: () => "utility-model",
+      readOnlyBuiltinTools: ["read"],
+    });
+
+    const result = await tool.execute("call_1", { task: "会失败的任务" });
+
+    // t() 在测试环境返回 key
+    expect(result.content[0].text).toContain("subagentFailed");
+  });
+
+  it("returns timeout message on abort", async () => {
+    const executeIsolated = vi.fn().mockResolvedValue({
+      replyText: "",
+      error: "aborted",
+    });
+
+    const tool = createSubagentTool({
+      executeIsolated,
+      resolveUtilityModel: () => "utility-model",
+      readOnlyBuiltinTools: ["read"],
+    });
+
+    const result = await tool.execute("call_1", { task: "超时任务" });
+
+    expect(result.content[0].text).toContain("subagentTimeout");
+  });
+
+  it("catches thrown errors gracefully", async () => {
     const executeIsolated = vi.fn().mockRejectedValue(new Error("boom"));
 
-    const mockStore = {
-      defer: vi.fn(),
-      resolve: vi.fn(),
-      fail: vi.fn(),
-    };
-
     const tool = createSubagentTool({
       executeIsolated,
       resolveUtilityModel: () => "utility-model",
       readOnlyBuiltinTools: ["read"],
-      getDeferredStore: () => mockStore,
-      getSessionPath: () => "/test/session.jsonl",
     });
 
-    await tool.execute("call_1", { task: "会失败的任务" });
+    const result = await tool.execute("call_1", { task: "会抛异常的任务" });
 
-    await vi.waitFor(() => {
-      expect(mockStore.fail).toHaveBeenCalledWith(
-        expect.stringMatching(/^subagent-/),
-        "boom",
-      );
-    });
+    expect(result.content[0].text).toContain("subagentFailed");
   });
 
-  it("falls back to sync execution when deferred store is unavailable", async () => {
-    const executeIsolated = vi.fn().mockResolvedValue({
-      replyText: "sync result",
-      error: null,
-    });
-
-    const tool = createSubagentTool({
-      executeIsolated,
-      resolveUtilityModel: () => "utility-model",
-      readOnlyBuiltinTools: ["read"],
-      getDeferredStore: () => null,
-      getSessionPath: () => null,
-    });
-
-    const result = await tool.execute("call_1", { task: "同步任务" });
-
-    expect(result).toEqual({
-      content: [{ type: "text", text: "sync result" }],
-    });
-  });
-
-  it("rejects new work when the concurrency limit is reached", async () => {
+  it("rejects when concurrency limit (5) is reached", async () => {
     const releases = [];
     const executeIsolated = vi.fn().mockImplementation(() => new Promise((resolve) => {
-      releases.push(resolve);
+      releases.push(() => resolve({ replyText: "ok", error: null }));
     }));
-
-    const mockStore = {
-      defer: vi.fn(),
-      resolve: vi.fn(),
-      fail: vi.fn(),
-    };
 
     const tool = createSubagentTool({
       executeIsolated,
       resolveUtilityModel: () => "utility-model",
       readOnlyBuiltinTools: ["read"],
-      getDeferredStore: () => mockStore,
-      getSessionPath: () => "/test/session.jsonl",
     });
 
-    const running = [
-      tool.execute("call_1", { task: "任务 1" }),
-      tool.execute("call_2", { task: "任务 2" }),
-      tool.execute("call_3", { task: "任务 3" }),
-    ];
+    // 同步启动 5 个（不 await，让它们 pending）
+    const running = [];
+    for (let i = 0; i < 5; i++) {
+      running.push(tool.execute(`call_${i}`, { task: `任务 ${i}` }));
+    }
 
-    // 等前 3 个都派出
+    // 第 6 个应该被拒绝
+    const blocked = await tool.execute("call_5", { task: "任务 5" });
+    expect(blocked.content[0].text).toContain("subagentMaxConcurrent");
+
+    // 释放全部 pending 任务
+    for (const release of releases) release();
     await Promise.all(running);
 
-    const blocked = await tool.execute("call_4", { task: "任务 4" });
-
-    expect(blocked).toEqual({
-      content: [{ type: "text", text: "error.subagentMaxConcurrent" }],
-    });
-
-    for (const release of releases) {
-      release({ replyText: "ok", error: null });
-    }
-    expect(executeIsolated).toHaveBeenCalledTimes(3);
+    expect(executeIsolated).toHaveBeenCalledTimes(5);
   });
 });

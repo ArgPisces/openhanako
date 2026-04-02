@@ -679,7 +679,7 @@ export class SessionCoordinator {
       }
     };
     try {
-      const sessionDir = opts.persist || targetAgent.sessionDir;
+      const sessionDir = opts.persist || path.join(targetAgent.agentDir, '.ephemeral');
       fs.mkdirSync(sessionDir, { recursive: true });
 
       const execCwd = opts.cwd || this._d.getHomeCwd() || process.cwd();

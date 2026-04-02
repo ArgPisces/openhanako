@@ -1254,6 +1254,8 @@
     "settingsTimeout": "「{label}」修改確認逾時，設定未變更",
     "subagentMaxConcurrent": "目前已有 {max} 個子 agent 在執行，請等待完成後再發起。",
     "subagentFailed": "子 agent 執行失敗: {msg}",
+    "subagentTimeout": "子 agent 執行逾時（{minutes} 分鐘）",
+    "askAgentTimeout": "{name} 回應逾時（{minutes} 分鐘）",
     "subagentNoOutput": "(子 agent 未產生輸出)",
     "subagentDispatched": "子任務已派出 (task-id: {taskId})。完成後結果會自動送達。",
     "askAgentDispatched": "已向 {name} 發送請求 (task-id: {taskId})。收到回覆後會自動送達。",

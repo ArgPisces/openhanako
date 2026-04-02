@@ -1292,6 +1292,8 @@
     "settingsTimeout": "\"{label}\" change confirmation timed out, no changes made",
     "subagentMaxConcurrent": "{max} sub-agents are already running, please wait before starting new ones.",
     "subagentFailed": "Sub-agent execution failed: {msg}",
+    "subagentTimeout": "Sub-agent timed out after {minutes} minutes",
+    "askAgentTimeout": "{name} timed out after {minutes} minutes",
     "subagentNoOutput": "(Sub-agent produced no output)",
     "subagentDispatched": "Sub-task dispatched (task-id: {taskId}). Results will be delivered when ready.",
     "askAgentDispatched": "Request sent to {name} (task-id: {taskId}). Reply will be delivered when ready.",

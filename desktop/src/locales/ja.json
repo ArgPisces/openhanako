@@ -1254,6 +1254,8 @@
     "settingsTimeout": "「{label}」の変更確認がタイムアウトしました。設定は変更されていません",
     "subagentMaxConcurrent": "現在 {max} 個のサブエージェントが実行中です。完了をお待ちください。",
     "subagentFailed": "サブエージェントの実行に失敗しました: {msg}",
+    "subagentTimeout": "サブエージェントがタイムアウトしました（{minutes}分）",
+    "askAgentTimeout": "{name} がタイムアウトしました（{minutes}分）",
     "subagentNoOutput": "(サブエージェントは出力を生成しませんでした)",
     "subagentDispatched": "サブタスクを送信しました (task-id: {taskId})。完了後、結果は自動的に届きます。",
     "askAgentDispatched": "{name} にリクエストを送信しました (task-id: {taskId})。返信は自動的に届きます。",
