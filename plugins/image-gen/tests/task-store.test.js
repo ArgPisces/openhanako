@@ -97,6 +97,25 @@ describe("add / get", () => {
     task.status = "done"; // mutate the copy
     expect(store.get("tid-1").status).toBe("pending");
   });
+
+  it("stores sessionPath when provided", () => {
+    const store = makeStore();
+    const task = store.add(makeTask({ sessionPath: "/path/to/session.jsonl" }));
+    expect(task.sessionPath).toBe("/path/to/session.jsonl");
+  });
+
+  it("defaults sessionPath to null", () => {
+    const store = makeStore();
+    const task = store.add(makeTask({}));
+    expect(task.sessionPath).toBeNull();
+  });
+
+  it("defaults imageWidth and imageHeight to null", () => {
+    const store = makeStore();
+    const task = store.add(makeTask({}));
+    expect(task.imageWidth).toBeNull();
+    expect(task.imageHeight).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
