@@ -80,7 +80,12 @@
     "me": "我",
     "more": "更多",
     "empty": "空",
-    "edit": "編輯"
+    "edit": "編輯",
+    "screenshot": "截圖",
+    "selectMessage": "選擇訊息",
+    "screenshotSaved": "截圖已儲存到 {path}",
+    "screenshotFailed": "截圖儲存失敗",
+    "selectedCount": "已選 {count} 則"
   },
   "chat": {
     "send": "傳送",
@@ -385,6 +390,56 @@
       "running": "🌐 {name} 正在操作瀏覽器",
       "done": "🌐 {name} 操作完了",
       "failed": "🌐 {name} 瀏覽器不聽使喚"
+    },
+    "subagent": {
+      "running": "🧭 {name} 分身有術",
+      "done": "🧭 分身回來了",
+      "failed": "🧭 分身出了岔子"
+    },
+    "ask_agent": {
+      "running": "💬 {name} 去問別人了",
+      "done": "💬 收到回覆了",
+      "failed": "💬 沒問到"
+    },
+    "check_pending_tasks": {
+      "running": "📋 {name} 正在找找沒做完的事兒",
+      "done": "📋 {name} 找完了",
+      "failed": "📋 找不著"
+    },
+    "cron": {
+      "running": "⏰ {name} 正在設定時任務",
+      "done": "⏰ 設好了",
+      "failed": "⏰ 沒設成"
+    },
+    "notify": {
+      "running": "🔔 {name} 正在發通知",
+      "done": "🔔 通知發了",
+      "failed": "🔔 通知沒發出去"
+    },
+    "artifact": {
+      "running": "🖼️ {name} 正在寫寫畫畫",
+      "done": "🖼️ 畫好了",
+      "failed": "🖼️ 畫崩了"
+    },
+    "dm": {
+      "running": "✉️ {name} 打開了手機",
+      "done": "✉️ 發出去了",
+      "failed": "✉️ 沒發出去"
+    },
+    "channel": {
+      "running": "📢 {name} 正在頻道發言",
+      "done": "📢 發完了",
+      "failed": "📢 發不出去"
+    },
+    "install_skill": {
+      "running": "📥 {name} 正在裝技能",
+      "done": "📥 裝好了",
+      "failed": "📥 沒裝上"
+    },
+    "update_settings": {
+      "running": "⚙️ {name} 正在改設定",
+      "done": "⚙️ 改好了",
+      "failed": "⚙️ 沒改成"
     },
     "_fallback": {
       "running": "🔧 {name} 正在忙碌中…",
@@ -1200,6 +1255,8 @@
     "subagentMaxConcurrent": "目前已有 {max} 個子 agent 在執行，請等待完成後再發起。",
     "subagentFailed": "子 agent 執行失敗: {msg}",
     "subagentNoOutput": "(子 agent 未產生輸出)",
+    "subagentDispatched": "子任務已派出 (task-id: {taskId})。完成後結果會自動送達。",
+    "askAgentDispatched": "已向 {name} 發送請求 (task-id: {taskId})。收到回覆後會自動送達。",
     "installSkillDisabled": "自學技能能力未啟用。請在設定中開啟「允許 Agent 自行建立/安裝技能」。",
     "installSkillGithubDisabled": "GitHub 技能獲取未啟用。請在設定中開啟「允許從 GitHub 獲取技能」。",
     "installSkillInvalidGithubUrl": "無效的 GitHub URL：{url}",
@@ -1402,7 +1459,7 @@
     },
     "askAgent": {
       "label": "跨 Agent 呼叫",
-      "description": "派任務給另一個 agent，立即取得結果。對方會當場處理並回覆，你可以直接把結果告訴使用者。\n適用場景：讓對方 review 程式碼、翻譯一段文字、從對方的專業視角分析問題等需要即時回饋的任務。\n對方以自己的人格和模型回覆，有唯讀工具（讀檔案、搜尋、web fetch），不能寫檔案或呼叫其他 agent。\n提示：不確定該找哪個 agent 時，傳 agent=\"?\" 可以查看所有可用 agent 的能力說明和模型。",
+      "description": "派任務給另一個 agent。任務在背景執行，對方回覆後結果會自動送達目前對話。\n\n你的判斷：\n- 如果目前還有可以並行推進的工作，繼續做\n- 如果必須拿到回覆才能進行下一步，告訴使用者你已經派出去了、在等回覆，然後正常等待即可\n\n適用場景：讓對方 review 程式碼、翻譯一段文字、從對方的專業視角分析問題等。\n對方以自己的人格和模型回覆，有唯讀工具（讀檔案、搜尋、web fetch），不能寫檔案或呼叫其他 agent。\n提示：不確定該找哪個 agent 時，傳 agent=\"?\" 可以查看所有可用 agent 的能力說明和模型。",
       "agentDesc": "目標 agent 的 ID。傳 \"?\" 可查看所有可用 agent。",
       "taskDesc": "任務描述（對方看到的完整 prompt）"
     },
@@ -1462,7 +1519,7 @@
     },
     "subagent": {
       "label": "啟動子 Agent",
-      "description": "啟動一個子 agent 在隔離的上下文中處理獨立任務。子 agent 在背景執行，擁有獨立的上下文視窗，只回傳最終結果，不佔用目前對話的上下文。\n適用場景：\n- 需要大量搜尋、閱讀後總結為簡短結論的調研任務\n- 可以和目前思路並行的獨立子問題\n- 需要在多個方向同時探索的任務（可同時發起多個 subagent 呼叫）\n不適用：需要修改檔案、執行命令等有副作用的操作\n\n重要：task 參數要寫清楚完整的指令和必要背景，子 agent 看不到目前的對話歷史。",
+      "description": "啟動一個子 agent 在隔離的上下文中處理獨立任務。任務在背景執行，完成後結果會自動送達目前對話。\n\n你的判斷：\n- 如果目前還有可以並行推進的工作，繼續做\n- 如果必須拿到結果才能進行下一步，告訴使用者你已經派出去了、在等回覆，然後正常等待即可\n\n適用場景：\n- 需要大量搜尋、閱讀後總結為簡短結論的調研任務\n- 可以和目前思路並行的獨立子問題\n- 需要在多個方向同時探索的任務（可同時發起多個 subagent 呼叫）\n不適用：需要修改檔案、執行命令等有副作用的操作\n\n重要：task 參數要寫清楚完整的指令和必要背景，子 agent 看不到目前的對話歷史。",
       "taskDesc": "子 agent 的完整指令，包含必要的背景資訊",
       "modelDesc": "指定模型（可選，預設使用 utility 模型）"
     },

@@ -81,7 +81,12 @@
     "me": "Me",
     "more": "More",
     "empty": "Empty",
-    "edit": "Edit"
+    "edit": "Edit",
+    "screenshot": "Screenshot",
+    "selectMessage": "Select message",
+    "screenshotSaved": "Screenshot saved to {path}",
+    "screenshotFailed": "Screenshot save failed",
+    "selectedCount": "{count} selected"
   },
   "chat": {
     "send": "Send",
@@ -386,6 +391,56 @@
       "running": "🌐 {name} is browsing the web",
       "done": "🌐 {name} done with the browser",
       "failed": "🌐 {name}'s browser wouldn't cooperate"
+    },
+    "subagent": {
+      "running": "🧭 {name} sent out a clone",
+      "done": "🧭 Clone is back",
+      "failed": "🧭 Clone ran into trouble"
+    },
+    "ask_agent": {
+      "running": "💬 {name} is asking around",
+      "done": "💬 Got a reply",
+      "failed": "💬 No reply"
+    },
+    "check_pending_tasks": {
+      "running": "📋 {name} is checking unfinished business",
+      "done": "📋 {name} all caught up",
+      "failed": "📋 Couldn't check"
+    },
+    "cron": {
+      "running": "⏰ {name} is setting a scheduled task",
+      "done": "⏰ All set",
+      "failed": "⏰ Couldn't set it up"
+    },
+    "notify": {
+      "running": "🔔 {name} is sending a notification",
+      "done": "🔔 Notification sent",
+      "failed": "🔔 Notification didn't go through"
+    },
+    "artifact": {
+      "running": "🖼️ {name} is doodling away",
+      "done": "🖼️ Masterpiece ready",
+      "failed": "🖼️ Canvas fell apart"
+    },
+    "dm": {
+      "running": "✉️ {name} picked up the phone",
+      "done": "✉️ Message sent",
+      "failed": "✉️ Message didn't go through"
+    },
+    "channel": {
+      "running": "📢 {name} is posting in a channel",
+      "done": "📢 Posted",
+      "failed": "📢 Couldn't post"
+    },
+    "install_skill": {
+      "running": "📥 {name} is installing a skill",
+      "done": "📥 Installed",
+      "failed": "📥 Installation failed"
+    },
+    "update_settings": {
+      "running": "⚙️ {name} is updating settings",
+      "done": "⚙️ Settings updated",
+      "failed": "⚙️ Couldn't update"
     },
     "_fallback": {
       "running": "🔧 {name} is busy working…",
@@ -1238,6 +1293,8 @@
     "subagentMaxConcurrent": "{max} sub-agents are already running, please wait before starting new ones.",
     "subagentFailed": "Sub-agent execution failed: {msg}",
     "subagentNoOutput": "(Sub-agent produced no output)",
+    "subagentDispatched": "Sub-task dispatched (task-id: {taskId}). Results will be delivered when ready.",
+    "askAgentDispatched": "Request sent to {name} (task-id: {taskId}). Reply will be delivered when ready.",
     "installSkillDisabled": "Self-learning skills not enabled. Please enable \"Allow Agent to create/install skills\" in settings.",
     "installSkillGithubDisabled": "GitHub skill fetching not enabled. Please enable \"Allow fetching skills from GitHub\" in settings.",
     "installSkillInvalidGithubUrl": "Invalid GitHub URL: {url}",
@@ -1441,7 +1498,7 @@
     },
     "askAgent": {
       "label": "Cross-Agent Call",
-      "description": "Assign a task to another agent and get an immediate result. The other agent processes it on the spot and responds, and you can relay the result to the user.\nGood for: having the other agent review code, translate text, analyze a problem from their expertise, or any task requiring instant feedback.\nThe other agent responds with its own persona and model, has read-only tools (read files, search, web fetch), and cannot write files or call other agents.\nTip: If you're unsure which agent to call, pass agent=\"?\" to list all available agents with their capabilities and models.",
+      "description": "Assign a task to another agent. The task runs in the background; the reply is delivered automatically to the current conversation when ready.\n\nYour judgment:\n- If you have other work to do in parallel, continue with it\n- If you need the reply before proceeding, tell the user you've sent the request and are waiting for the reply, then wait normally\n\nGood for: having the other agent review code, translate text, analyze a problem from their expertise, etc.\nThe other agent responds with its own persona and model, has read-only tools (read files, search, web fetch), and cannot write files or call other agents.\nTip: If you're unsure which agent to call, pass agent=\"?\" to list all available agents with their capabilities and models.",
       "agentDesc": "Target agent's ID. Use \"?\" to list all available agents.",
       "taskDesc": "Task description (the full prompt the other agent sees)"
     },
@@ -1501,7 +1558,7 @@
     },
     "subagent": {
       "label": "Launch Sub-agent",
-      "description": "Launch a sub-agent to handle an independent task in an isolated context. The sub-agent runs in the background with its own context window and only returns the final result, without consuming the current conversation's context.\nGood for:\n- Research tasks that require extensive searching and reading, summarized into a brief conclusion\n- Independent sub-problems that can run in parallel with your current work\n- Tasks that need simultaneous exploration in multiple directions (you can fire multiple subagent calls at once)\nNot for: Operations with side effects like modifying files or executing commands\n\nImportant: The task parameter must contain complete instructions and necessary background, as the sub-agent cannot see the current conversation history.",
+      "description": "Launch a sub-agent to handle an independent task in an isolated context. The task runs in the background; results are delivered automatically to the current conversation when ready.\n\nYour judgment:\n- If you have other work to do in parallel, continue with it\n- If you need the results before proceeding, tell the user you've dispatched the task and are waiting for the reply, then wait normally\n\nGood for:\n- Research tasks that require extensive searching and reading, summarized into a brief conclusion\n- Independent sub-problems that can run in parallel with your current work\n- Tasks that need simultaneous exploration in multiple directions (you can fire multiple subagent calls at once)\nNot for: Operations with side effects like modifying files or executing commands\n\nImportant: The task parameter must contain complete instructions and necessary background, as the sub-agent cannot see the current conversation history.",
       "taskDesc": "Full instructions for the sub-agent, including necessary background",
       "modelDesc": "Specify model (optional, defaults to utility model)"
     },
