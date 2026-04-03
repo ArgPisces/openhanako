@@ -94,7 +94,9 @@ export function SkillsTab() {
 
   const installSkillFromPath = async (filePath: string) => {
     try {
-      const res = await hanaFetch('/api/skills/install', {
+      const agentId = useSettingsStore.getState().getSettingsAgentId();
+      const qs = agentId ? `?agentId=${agentId}` : '';
+      const res = await hanaFetch(`/api/skills/install${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: filePath }),

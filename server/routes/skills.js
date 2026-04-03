@@ -39,6 +39,15 @@ function rmDirSync(dir) {
 export function createSkillsRoute(engine) {
   const route = new Hono();
 
+  // 安装/删除/reload 共享互斥锁，防止 reloadSkills() 并发导致 500
+  let _installLock = Promise.resolve();
+  function withInstallLock(fn) {
+    const prev = _installLock;
+    let resolve;
+    _installLock = new Promise(r => { resolve = r; });
+    return prev.then(fn).finally(resolve);
+  }
+
   route.get("/skills", async (c) => {
     try {
       const agentId = c.req.query("agentId");
@@ -77,6 +86,7 @@ export function createSkillsRoute(engine) {
 
   // ── 安装用户技能 ──
   route.post("/skills/install", async (c) => {
+    return withInstallLock(async () => {
     try {
       const body = await safeJson(c);
       const { path: srcPath } = body;
@@ -193,8 +203,10 @@ export function createSkillsRoute(engine) {
         skill: skill || { name: safeName, type: "user" },
       });
     } catch (err) {
+      console.error("[skills] install failed:", err);
       return c.json({ error: err.message }, 500);
     }
+    }); // withInstallLock
   });
 
   // ── 外部兼容技能路径 ──
@@ -230,6 +242,7 @@ export function createSkillsRoute(engine) {
 
   // ── 删除技能 ──
   route.delete("/skills/:name", async (c) => {
+    return withInstallLock(async () => {
     try {
       const name = c.req.param("name");
       if (!sanitizeSkillName(name)) {
@@ -285,16 +298,19 @@ export function createSkillsRoute(engine) {
     } catch (err) {
       return c.json({ error: err.message }, 500);
     }
+    }); // withInstallLock
   });
 
   // POST /skills/reload — 强制重新加载所有技能
   route.post("/skills/reload", async (c) => {
+    return withInstallLock(async () => {
     try {
       await engine.reloadSkills();
       return c.json({ ok: true, skills: engine.getAllSkills() });
     } catch (err) {
       return c.json({ error: err.message }, 500);
     }
+    }); // withInstallLock
   });
 
   // POST /skills/translate — 用工具模型翻译技能名
