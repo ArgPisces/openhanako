@@ -49,6 +49,8 @@ import {
 import { debugLog } from "../lib/debug-log.js";
 import { createSandboxedTools } from "../lib/sandbox/index.js";
 import { t } from "../server/i18n.js";
+import { CheckpointStore } from "../lib/checkpoint-store.js";
+import { wrapWithCheckpoint } from "../lib/checkpoint-wrapper.js";
 
 export class HanaEngine {
   /**
@@ -153,6 +155,11 @@ export class HanaEngine {
       buildTools: (cwd, customTools, opts) => this.buildTools(cwd, customTools, opts),
       getHomeCwd: () => this.homeCwd,
     });
+
+    // Checkpoint 备份存储
+    this._checkpointStore = new CheckpointStore(
+      path.join(this.hanakoHome, "checkpoints")
+    );
 
     // ── Plugin Manager ──
     this._pluginManager = null;  // initialized async in initPlugins()
@@ -319,6 +326,15 @@ export class HanaEngine {
   setThinkingLevel(l) { return this._configCoord.setThinkingLevel(l); }
   getSandbox() { return this._prefs.getSandbox(); }
   setSandbox(v) { this._prefs.setSandbox(v); }
+  getFileBackup() { return this._prefs.getFileBackup(); }
+  setFileBackup(p) { this._prefs.setFileBackup(p); }
+  listCheckpoints() { return this._checkpointStore.list(); }
+  restoreCheckpoint(id) { return this._checkpointStore.restore(id); }
+  removeCheckpoint(id) { return this._checkpointStore.remove(id); }
+  cleanupCheckpoints() {
+    const cfg = this._prefs.getFileBackup();
+    return this._checkpointStore.cleanup(cfg.retention_days || 1);
+  }
   getLearnSkills() { return this._prefs.getLearnSkills(); }
   setLearnSkills(p) { this._prefs.setLearnSkills(p); }
   getLocale() { return this._prefs.getLocale(); }
@@ -725,12 +741,29 @@ export class HanaEngine {
     const sandboxEnabled = this._readPreferences().sandbox !== false;
     const effectiveMode = opts.mode || (sandboxEnabled ? "standard" : "full-access");
 
-    return createSandboxedTools(cwd, allTools, {
+    let result = createSandboxedTools(cwd, allTools, {
       agentDir: effectiveAgentDir,
       workspace: effectiveWorkspace,
       hanakoHome: this.hanakoHome,
       mode: effectiveMode,
     });
+
+    // Checkpoint wrapper (outside sandbox layer)
+    const backupCfg = this._prefs.getFileBackup();
+    if (backupCfg.enabled) {
+      const getSessionPath = opts.getSessionPath || (() => null);
+      result = {
+        ...result,
+        tools: wrapWithCheckpoint(result.tools, {
+          store: this._checkpointStore,
+          maxFileSizeKb: backupCfg.max_file_size_kb,
+          cwd,
+          getSessionPath,
+        }),
+      };
+    }
+
+    return result;
   }
 
   // ════════════════════════════

@@ -21,6 +21,7 @@ export const CONFIG_SCHEMA = {
   locale:                       { scope: 'global', setter: 'setLocale',         getter: 'getLocale' },
   timezone:                     { scope: 'global', setter: 'setTimezone',       getter: 'getTimezone' },
   sandbox:                      { scope: 'global', setter: 'setSandbox',        getter: 'getSandbox' },
+  file_backup:                  { scope: 'global', setter: 'setFileBackup',    getter: 'getFileBackup' },
   update_channel:               { scope: 'global', setter: 'setUpdateChannel',  getter: 'getUpdateChannel' },
   thinking_level:               { scope: 'global', setter: 'setThinkingLevel',  getter: 'getThinkingLevel' },
   'capabilities.learn_skills':  { scope: 'global', setter: 'setLearnSkills',    getter: 'getLearnSkills' },

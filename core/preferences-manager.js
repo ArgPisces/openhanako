@@ -57,6 +57,24 @@ export class PreferencesManager {
     this.savePreferences(prefs);
   }
 
+  /** 读取文件备份配置 */
+  getFileBackup() {
+    const cfg = this.getPreferences().file_backup;
+    if (!cfg) return { enabled: false, retention_days: 1, max_file_size_kb: 1024 };
+    return {
+      enabled: !!cfg.enabled,
+      retention_days: cfg.retention_days || 1,
+      max_file_size_kb: cfg.max_file_size_kb || 1024,
+    };
+  }
+
+  /** 合并写入文件备份配置 */
+  setFileBackup(partial) {
+    const prefs = this.getPreferences();
+    prefs.file_backup = { ...(prefs.file_backup || {}), ...partial };
+    this.savePreferences(prefs);
+  }
+
   /** 读取自学技能配置（全局，跨 agent） */
   getLearnSkills() {
     const cfg = this.getPreferences().learn_skills;

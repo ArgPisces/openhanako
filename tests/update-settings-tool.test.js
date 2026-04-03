@@ -20,6 +20,8 @@ function makeMockPrefs(initial = {}) {
     setTimezone(v) { store.timezone = v; },
     getThinkingLevel: () => store.thinking_level || "auto",
     setThinkingLevel(v) { store.thinking_level = v; },
+    getFileBackup: () => store.file_backup || { enabled: false, retention_days: 1, max_file_size_kb: 1024 },
+    setFileBackup(v) { store.file_backup = { ...(store.file_backup || {}), ...v }; },
     _store: store,
   };
 }
@@ -40,6 +42,7 @@ function makeMockEngine(overrides = {}) {
     getHomeFolder: () => overrides.homeFolder || "/home/test",
     setHomeFolder: vi.fn(),
     setSandbox: vi.fn(function (v) { prefs.setSandbox(v); }),
+    setFileBackup: vi.fn(function (v) { prefs.setFileBackup(v); }),
     setLocale: vi.fn(function (v) { prefs.setLocale(v); }),
     setTimezone: vi.fn(function (v) { prefs.setTimezone(v); }),
     setThinkingLevel: vi.fn(function (v) { prefs.setThinkingLevel(v); }),
@@ -96,6 +99,16 @@ describe("update-settings-tool", () => {
 
       expect(engine.setSandbox.mock.calls[0][0]).toBe(true);
       expect(engine._prefs._store.sandbox).toBe(true);
+    });
+  });
+
+  describe("file_backup toggle", () => {
+    it("enables file backup", async () => {
+      const { tool, engine } = buildTool({ prefsData: {} });
+      await tool.execute("c3", { action: "apply", key: "file_backup", value: "true" });
+
+      expect(engine.setFileBackup).toHaveBeenCalled();
+      expect(engine.setFileBackup.mock.calls[0][0]).toEqual({ enabled: true });
     });
   });
 
