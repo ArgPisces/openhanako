@@ -104,7 +104,8 @@ export const markdownDecoPlugin = ViewPlugin.fromClass(
       this.decorations = buildMarkdownDecorations(view);
     }
     update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged
+          || syntaxTree(update.startState) !== syntaxTree(update.state)) {
         this.decorations = buildMarkdownDecorations(update.view);
       }
     }

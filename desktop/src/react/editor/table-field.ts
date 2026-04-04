@@ -1,6 +1,6 @@
 import { EditorView, Decoration } from '@codemirror/view';
 import type { DecorationSet } from '@codemirror/view';
-import { EditorState, StateField, RangeSetBuilder } from '@codemirror/state';
+import { EditorState, StateField, RangeSetBuilder, type Transaction } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
 import { TableWidget } from './widgets/table';
 
@@ -43,8 +43,9 @@ function buildTableDecorations(state: EditorState): DecorationSet {
 
 export const tableDecoField = StateField.define<DecorationSet>({
   create(state) { return buildTableDecorations(state); },
-  update(value, tr) {
-    if (tr.docChanged || tr.selection) {
+  update(value, tr: Transaction) {
+    if (tr.docChanged || tr.selection
+        || syntaxTree(tr.startState) !== syntaxTree(tr.state)) {
       return buildTableDecorations(tr.state);
     }
     return value;
