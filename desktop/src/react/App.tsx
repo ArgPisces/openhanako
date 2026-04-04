@@ -5,7 +5,7 @@
  * 此文件只负责 titlebar + sidebar + 主区域 + overlays 的组装。
  */
 
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useRef, lazy, Suspense } from 'react';
 import { useStore } from './stores';
 import type { ActivePanel } from './types';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -189,6 +189,21 @@ function App() {
     });
   }, []);
 
+  // 测量 input-area 高度，写入 CSS 变量供 sessionPanel 约束滚动区域
+  const inputAreaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = inputAreaRef.current;
+    if (!el) return;
+    const parent = el.closest('.main-content') as HTMLElement | null;
+    if (!parent) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const h = entry.borderBoxSize?.[0]?.blockSize ?? el.offsetHeight;
+      parent.style.setProperty('--input-area-h', `${h}px`);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <ErrorBoundary>
       {/* Headless behavior components */}
@@ -313,7 +328,7 @@ function App() {
             </RegionalErrorBoundary>
           </div>
 
-          <div className={`input-area${currentTab === 'chat' ? '' : ' hidden'}`}>
+          <div ref={inputAreaRef} className={`input-area${currentTab === 'chat' ? '' : ' hidden'}`}>
             <RegionalErrorBoundary region="input" resetKeys={[currentSessionPath]}>
               <InputArea key={currentSessionPath || '__new'} />
             </RegionalErrorBoundary>
