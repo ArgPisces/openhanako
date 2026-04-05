@@ -33,6 +33,7 @@ import {
   XING_PROMPT, executeDiary, executeCompact, buildSlashCommands,
   type SlashItem,
 } from './input/slash-commands';
+import { attachFilesFromPaths } from '../MainContent';
 import styles from './input/InputArea.module.css';
 import type { TodoItem } from '../types';
 
@@ -82,6 +83,17 @@ function InputAreaInner() {
 
   const isComposing = useRef(false);
   const [inputText, setInputText] = useState('');
+
+  // ── 全局 inline notice（截图等非斜杠命令的轻提示）──
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { text, type } = (e as CustomEvent).detail;
+      setSlashResult({ text, type });
+      setTimeout(() => setSlashResult(null), 3000);
+    };
+    window.addEventListener('hana-inline-notice', handler);
+    return () => window.removeEventListener('hana-inline-notice', handler);
+  }, []);
 
   // ── Placeholder ──
   const placeholder = (() => {
@@ -468,7 +480,10 @@ function InputAreaInner() {
         </div>
       )}
       {!slashBusy && !compacting && !inlineError && slashResult && (
-        <div className={styles['slash-busy-bar']}><span>{slashResult.text}</span></div>
+        <div className={styles['slash-busy-bar']}>
+          <span className={styles[slashResult.type === 'success' ? 'slash-result-dot-ok' : 'slash-result-dot-err']} />
+          <span>{slashResult.text}</span>
+        </div>
       )}
       {(attachedFiles.length > 0 || quotedSelection || sessionTodos.length > 0) && (
         <div className={styles['input-context-row']}>
@@ -494,6 +509,19 @@ function InputAreaInner() {
         </div>
         <div className={styles['input-bottom-bar']}>
           <div className={styles['input-actions']}>
+            <button
+              className={styles['attach-btn']}
+              title={t('input.attachFiles')}
+              onClick={async () => {
+                const paths = await window.platform?.selectFiles?.();
+                if (paths && paths.length > 0) await attachFilesFromPaths(paths);
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
             <PlanModeButton enabled={planMode} onToggle={setPlanMode} />
             <DocContextButton active={docContextAttached} disabled={!hasDoc} onToggle={toggleDocContext} />
             <ContextRing />

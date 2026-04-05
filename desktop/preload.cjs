@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("hana", {
   onAutoUpdateState: (cb) => ipcRenderer.on("auto-update-state", (_, state) => cb(state)),
   appReady: () => ipcRenderer.invoke("app-ready"),
   selectFolder: () => ipcRenderer.invoke("select-folder"),
+  selectFiles: () => ipcRenderer.invoke("select-files"),
   selectSkill: () => ipcRenderer.invoke("select-skill"),
   selectPlugin: () => ipcRenderer.invoke("select-plugin"),
   openFolder: (path) => ipcRenderer.invoke("open-folder", path),

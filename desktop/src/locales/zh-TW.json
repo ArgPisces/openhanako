@@ -83,7 +83,7 @@
     "edit": "編輯",
     "screenshot": "截圖",
     "selectMessage": "選擇訊息",
-    "screenshotSaved": "截圖已儲存到 {path}",
+    "screenshotSaved": "截圖已儲存",
     "screenshotFailed": "截圖儲存失敗",
     "selectedCount": "已選 {count} 則"
   },
@@ -122,6 +122,7 @@
     "planMode": "操作電腦",
     "deskContext": "看著書桌說",
     "pastedImage": "貼上圖片",
+    "attachFiles": "新增檔案",
     "docContext": "看著文件說",
     "thinkingLevel": {
       "off": "關閉",
@@ -1224,7 +1225,7 @@
     "agentNoReply": "（{name} 沒有回覆）",
     "agentCallFailed": "呼叫 {name} 失敗: {msg}",
     "cronNoJobs": "沒有定時任務",
-    "cronAddNeedParams": "錯誤：add 需要 type, schedule, prompt 參數",
+    "cronAddNeedParams": "錯誤：add 需要 scheduleType, schedule, prompt 參數",
     "cronEveryMustBeNumber": "錯誤：every 類型的 schedule 必須是正整數（毫秒）",
     "cronCreated": "已建立定時任務: {label} ({id})",
     "cronConfirmed": "使用者已確認，定時任務已建立: {label} ({id})",
@@ -1494,9 +1495,9 @@
     },
     "cron": {
       "label": "排程任務",
-      "description": "建立和管理排程任務。排程任務在背景自動執行，到時間時會開一個獨立 session 執行指定的 prompt。\n操作：\n- list：查看所有任務\n- add(type, schedule, prompt, label?, model?)：建立任務\n  - type \"at\"：一次性，schedule 為 ISO 時間字串\n  - type \"every\"：間隔，schedule 為毫秒數（如 3600000 = 1 小時）\n  - type \"cron\"：cron 表達式（如 \"0 7 * * *\" = 每天早上 7 點）\n  - model：可選，指定執行任務使用的模型（不填則使用預設對話模型）\n- remove(id)：刪除任務\n- toggle(id)：啟用/停用任務",
+      "description": "建立和管理排程任務。排程任務在背景自動執行，到時間時會開一個獨立 session 執行指定的 prompt。\n操作：\n- list：查看所有任務\n- add(scheduleType, schedule, prompt, label?, model?)：建立任務\n  - scheduleType \"at\"：一次性，schedule 為 ISO 時間字串\n  - scheduleType \"every\"：間隔，schedule 為分鐘數（如 60 = 每小時）\n  - scheduleType \"cron\"：cron 運算式（如 \"0 7 * * *\" = 每天早上 7 點）\n  - model：可選，指定執行任務使用的模型（不填則使用預設對話模型）\n- remove(id)：刪除任務\n- toggle(id)：啟用/停用任務",
       "actionDesc": "操作類型",
-      "typeDesc": "排程類型（add 時必填）",
+      "scheduleTypeDesc": "排程類型（add 時必填）",
       "scheduleDesc": "排程參數：ISO 時間(at)，分鐘數(every，如 60=每小時)，cron 運算式(cron)",
       "promptDesc": "到時間時執行的 prompt（add 時必填）",
       "labelDesc": "任務顯示標籤（可選）",

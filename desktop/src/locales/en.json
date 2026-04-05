@@ -84,7 +84,7 @@
     "edit": "Edit",
     "screenshot": "Screenshot",
     "selectMessage": "Select message",
-    "screenshotSaved": "Screenshot saved to {path}",
+    "screenshotSaved": "Screenshot saved",
     "screenshotFailed": "Screenshot save failed",
     "selectedCount": "{count} selected"
   },
@@ -123,6 +123,7 @@
     "planMode": "Use computer",
     "deskContext": "With desk context",
     "pastedImage": "Pasted image",
+    "attachFiles": "Add files",
     "docContext": "With document",
     "thinkingLevel": {
       "off": "off",
@@ -1267,7 +1268,7 @@
     "agentNoReply": "({name} did not reply)",
     "agentCallFailed": "Calling {name} failed: {msg}",
     "cronNoJobs": "No scheduled tasks",
-    "cronAddNeedParams": "Error: add requires type, schedule, prompt parameters",
+    "cronAddNeedParams": "Error: add requires scheduleType, schedule, prompt parameters",
     "cronEveryMustBeNumber": "Error: schedule for every type must be a positive integer (milliseconds)",
     "cronCreated": "Scheduled task created: {label} ({id})",
     "cronConfirmed": "User confirmed, scheduled task created: {label} ({id})",
@@ -1538,9 +1539,9 @@
     },
     "cron": {
       "label": "Scheduled Tasks",
-      "description": "Create and manage scheduled tasks. Scheduled tasks run automatically in the background, spawning an independent session to execute the specified prompt when triggered.\nActions:\n- list: View all tasks\n- add(type, schedule, prompt, label?, model?): Create a task\n  - type \"at\": One-time, schedule is an ISO time string\n  - type \"every\": Interval, schedule is milliseconds (e.g. 3600000 = 1 hour)\n  - type \"cron\": Cron expression (e.g. \"0 7 * * *\" = every day at 7 AM)\n  - model: Optional, specify the model for task execution (defaults to the chat model)\n- remove(id): Delete a task\n- toggle(id): Enable/disable a task",
+      "description": "Create and manage scheduled tasks. Scheduled tasks run automatically in the background, spawning an independent session to execute the specified prompt when triggered.\nActions:\n- list: View all tasks\n- add(scheduleType, schedule, prompt, label?, model?): Create a task\n  - scheduleType \"at\": One-time, schedule is an ISO time string\n  - scheduleType \"every\": Interval, schedule is minutes (e.g. 60 = hourly)\n  - scheduleType \"cron\": Cron expression (e.g. \"0 7 * * *\" = every day at 7 AM)\n  - model: Optional, specify the model for task execution (defaults to the chat model)\n- remove(id): Delete a task\n- toggle(id): Enable/disable a task",
       "actionDesc": "Action type",
-      "typeDesc": "Schedule type (required for add)",
+      "scheduleTypeDesc": "Schedule type (required for add)",
       "scheduleDesc": "Schedule: ISO time (at), minutes (every, e.g. 60=hourly), cron expression (cron)",
       "promptDesc": "Prompt to execute when triggered (required for add)",
       "labelDesc": "Task display label (optional)",

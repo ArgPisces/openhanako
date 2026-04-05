@@ -83,7 +83,7 @@
     "edit": "편집",
     "screenshot": "스크린샷",
     "selectMessage": "메시지 선택",
-    "screenshotSaved": "스크린샷이 {path}에 저장되었습니다",
+    "screenshotSaved": "스크린샷이 저장되었습니다",
     "screenshotFailed": "스크린샷 저장 실패",
     "selectedCount": "{count}개 선택됨"
   },
@@ -122,6 +122,7 @@
     "planMode": "컴퓨터 사용",
     "deskContext": "책상 컨텍스트 포함",
     "pastedImage": "붙여넣은 이미지",
+    "attachFiles": "파일 추가",
     "docContext": "문서 포함",
     "thinkingLevel": {
       "off": "끔",
@@ -1224,7 +1225,7 @@
     "agentNoReply": "({name}이(가) 응답하지 않았어요)",
     "agentCallFailed": "{name} 호출 실패: {msg}",
     "cronNoJobs": "예약 작업이 없어요",
-    "cronAddNeedParams": "오류: add에는 type, schedule, prompt 파라미터가 필요해요",
+    "cronAddNeedParams": "오류: add에는 scheduleType, schedule, prompt 파라미터가 필요해요",
     "cronEveryMustBeNumber": "오류: every 타입의 schedule은 양의 정수(밀리초)여야 해요",
     "cronCreated": "예약 작업을 생성했어요: {label} ({id})",
     "cronConfirmed": "사용자가 확인했어요. 예약 작업을 생성했어요: {label} ({id})",
@@ -1494,9 +1495,9 @@
     },
     "cron": {
       "label": "예약 작업",
-      "description": "예약 작업을 만들고 관리해요. 예약 작업은 백그라운드에서 자동 실행되고, 지정 시간에 독립 session을 열어서 prompt를 실행해요.\n동작:\n- list: 전체 작업 보기\n- add(type, schedule, prompt, label?, model?): 작업 만들기\n  - type \"at\": 일회성, schedule은 ISO 시간 문자열\n  - type \"every\": 간격, schedule은 밀리초 (예: 3600000 = 1시간)\n  - type \"cron\": cron 표현식 (예: \"0 7 * * *\" = 매일 아침 7시)\n  - model: 선택, 작업 실행에 사용할 모델 지정 (미지정 시 대화 모델 사용)\n- remove(id): 작업 삭제\n- toggle(id): 작업 활성화/비활성화",
+      "description": "예약 작업을 만들고 관리해요. 예약 작업은 백그라운드에서 자동 실행되고, 지정 시간에 독립 session을 열어서 prompt를 실행해요.\n동작:\n- list: 전체 작업 보기\n- add(scheduleType, schedule, prompt, label?, model?): 작업 만들기\n  - scheduleType \"at\": 일회성, schedule은 ISO 시간 문자열\n  - scheduleType \"every\": 간격, schedule은 분 (예: 60 = 매시간)\n  - scheduleType \"cron\": cron 표현식 (예: \"0 7 * * *\" = 매일 아침 7시)\n  - model: 선택, 작업 실행에 사용할 모델 지정 (미지정 시 대화 모델 사용)\n- remove(id): 작업 삭제\n- toggle(id): 작업 활성화/비활성화",
       "actionDesc": "동작 유형",
-      "typeDesc": "스케줄 유형 (add에 필수)",
+      "scheduleTypeDesc": "스케줄 유형 (add에 필수)",
       "scheduleDesc": "스케줄: ISO 시간(at), 분(every, 예: 60=매시간), cron 표현식(cron)",
       "promptDesc": "지정 시간에 실행할 prompt (add에 필수)",
       "labelDesc": "작업 표시 라벨 (선택)",

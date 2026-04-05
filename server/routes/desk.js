@@ -239,21 +239,22 @@ export function createDeskRoute(engine, hub) {
 
     switch (action) {
       case "add": {
-        if (!params.type || !params.schedule || !params.prompt) {
-          return c.json({ error: "type, schedule, prompt required" }, 400);
+        const type = params.scheduleType || params.type;
+        if (!type || !params.schedule || !params.prompt) {
+          return c.json({ error: "scheduleType, schedule, prompt required" }, 400);
         }
         const VALID_TYPES = new Set(["at", "every", "cron"]);
-        if (!VALID_TYPES.has(params.type)) {
-          return c.json({ error: `Invalid type: ${params.type}. Must be at/every/cron.` }, 400);
+        if (!VALID_TYPES.has(type)) {
+          return c.json({ error: `Invalid scheduleType: ${type}. Must be at/every/cron.` }, 400);
         }
-        if (params.type === "every") {
+        if (type === "every") {
           const minutes = parseInt(params.schedule, 10);
           if (isNaN(minutes) || minutes <= 0) {
             return c.json({ error: "every schedule must be a positive number (minutes)" }, 400);
           }
           params.schedule = minutes * 60_000;
         }
-        const job = store.addJob(params);
+        const job = store.addJob({ type, schedule: params.schedule, prompt: params.prompt, label: params.label, model: params.model });
         return c.json({ ok: true, job, jobs: store.listJobs() });
       }
 

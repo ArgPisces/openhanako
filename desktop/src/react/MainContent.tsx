@@ -40,25 +40,19 @@ async function installSkillFile(filePath: string): Promise<void> {
   }
 }
 
-async function handleDrop(e: React.DragEvent): Promise<void> {
-  const files = e.dataTransfer?.files;
-  if (!files || files.length === 0) return;
-
-  const store = useStore.getState();
-  if (store.attachedFiles.length >= 9) return;
-
-  let srcPaths: string[] = [];
-  const nameMap: Record<string, string> = {};
-  for (const file of Array.from(files)) {
-    const filePath = window.platform?.getFilePath?.(file);
-    if (filePath) {
-      srcPaths.push(filePath);
-      nameMap[filePath] = file.name;
-    }
-  }
+/**
+ * attachFilesFromPaths — 将文件系统路径列表附加为聊天附件
+ *
+ * 拖拽和文件选择器共用此逻辑。nameMap 可选，用于保留拖拽时的原始文件名。
+ */
+export async function attachFilesFromPaths(
+  srcPaths: string[],
+  nameMap: Record<string, string> = {},
+): Promise<void> {
   if (srcPaths.length === 0) return;
+  if (useStore.getState().attachedFiles.length >= 9) return;
 
-  // .skill / .zip(含 SKILL.md) 文件直接安装为用户技能，不当附件处理
+  // .skill 文件直接安装为用户技能，不当附件处理
   const skillPaths = srcPaths.filter(p => /\.skill$/i.test(p));
   if (skillPaths.length) {
     srcPaths = srcPaths.filter(p => !skillPaths.includes(p));
@@ -113,6 +107,22 @@ async function handleDrop(e: React.DragEvent): Promise<void> {
       });
     }
   }
+}
+
+async function handleDrop(e: React.DragEvent): Promise<void> {
+  const files = e.dataTransfer?.files;
+  if (!files || files.length === 0) return;
+
+  const nameMap: Record<string, string> = {};
+  const srcPaths: string[] = [];
+  for (const file of Array.from(files)) {
+    const filePath = window.platform?.getFilePath?.(file);
+    if (filePath) {
+      srcPaths.push(filePath);
+      nameMap[filePath] = file.name;
+    }
+  }
+  await attachFilesFromPaths(srcPaths, nameMap);
 }
 
 // ── DropText ──

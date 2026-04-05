@@ -42,10 +42,10 @@ export function AgentCreateOverlay() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      await switchToAgent(data.id);
       close();
       showToast(t('settings.agent.created', { name: data.name }), 'success');
       platform?.settingsChanged?.('agent-created', { agentId: data.id, name: data.name });
-      await switchToAgent(data.id);
     } catch (err: any) {
       showToast(t('settings.agent.createFailed') + ': ' + err.message, 'error');
     } finally {
@@ -82,7 +82,7 @@ export function AgentCreateOverlay() {
               {entries.filter(([key]) => key !== 'kong').map(([key, meta]) => (
                 <button
                   key={key}
-                  className={`${'yuan-chip'}${key === yuan  ? ' ' + styles['selected'] : ''}`}
+                  className={`yuan-chip${key === yuan ? ' selected' : ''}`}
                   type="button"
                   onClick={() => setYuan(key)}
                 >
@@ -97,7 +97,7 @@ export function AgentCreateOverlay() {
             {entries.filter(([key]) => key === 'kong').map(([key, meta]) => (
               <button
                 key={key}
-                className={`${'yuan-chip'}${key === yuan  ? ' ' + styles['selected'] : ''}`}
+                className={`yuan-chip${key === yuan ? ' selected' : ''}`}
                 type="button"
                 onClick={() => setYuan(key)}
               >

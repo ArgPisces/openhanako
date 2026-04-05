@@ -738,14 +738,12 @@ export class HanaEngine {
 
     const effectiveAgentDir = opts.agentDir || this.agent.agentDir;
     const effectiveWorkspace = opts.workspace !== undefined ? opts.workspace : this.homeCwd;
-    const sandboxEnabled = this._readPreferences().sandbox !== false;
-    const effectiveMode = opts.mode || (sandboxEnabled ? "standard" : "full-access");
 
     let result = createSandboxedTools(cwd, allTools, {
       agentDir: effectiveAgentDir,
       workspace: effectiveWorkspace,
       hanakoHome: this.hanakoHome,
-      mode: effectiveMode,
+      getSandboxEnabled: () => this._readPreferences().sandbox !== false,
     });
 
     // Checkpoint wrapper (outside sandbox layer)
@@ -905,11 +903,5 @@ export class HanaEngine {
   //  巡检工具白名单（向后兼容静态引用）
   // ════════════════════════════
 
-  static PATROL_TOOLS_DEFAULT = [
-    "search_memory", "pin_memory", "unpin_memory",
-    "recall_experience", "record_experience",
-    "web_search", "web_fetch",
-    "todo", "notify",
-    "stage_files",
-  ];
+  static PATROL_TOOLS_DEFAULT = "*";
 }

@@ -52,6 +52,7 @@
 
     // 系统对话框 → Web 降级
     selectFolder: async () => null,
+    selectFiles: async () => [],
     selectSkill: async () => null,
     selectPlugin: async () => null,
 

@@ -77,7 +77,7 @@ export async function takeScreenshot(targetMessageId: string, sessionPath: strin
   const result = await hana.screenshotRender(payload);
   if (result.success) {
     window.dispatchEvent(new CustomEvent('hana-inline-notice', {
-      detail: { text: t('common.screenshotSaved').replace('{path}', result.filePath), type: 'success' },
+      detail: { text: t('common.screenshotSaved'), type: 'success' },
     }));
   } else {
     window.dispatchEvent(new CustomEvent('hana-inline-notice', {
@@ -113,7 +113,7 @@ export async function takeArticleScreenshot(markdown: string): Promise<void> {
 
   if (result.success) {
     window.dispatchEvent(new CustomEvent('hana-inline-notice', {
-      detail: { text: t('common.screenshotSaved').replace('{path}', result.filePath), type: 'success' },
+      detail: { text: t('common.screenshotSaved'), type: 'success' },
     }));
   } else {
     window.dispatchEvent(new CustomEvent('hana-inline-notice', {

@@ -83,7 +83,7 @@
     "edit": "編集",
     "screenshot": "スクリーンショット",
     "selectMessage": "メッセージを選択",
-    "screenshotSaved": "スクリーンショットを {path} に保存しました",
+    "screenshotSaved": "スクリーンショットを保存しました",
     "screenshotFailed": "スクリーンショットの保存に失敗しました",
     "selectedCount": "{count} 件選択中"
   },
@@ -122,6 +122,7 @@
     "planMode": "コンピュータを使う",
     "deskContext": "デスクのコンテキスト付き",
     "pastedImage": "貼り付け画像",
+    "attachFiles": "ファイルを追加",
     "docContext": "ドキュメント付き",
     "thinkingLevel": {
       "off": "オフ",
@@ -1224,7 +1225,7 @@
     "agentNoReply": "（{name} は返信しませんでした）",
     "agentCallFailed": "{name} の呼び出しに失敗しました: {msg}",
     "cronNoJobs": "スケジュールタスクはありません",
-    "cronAddNeedParams": "エラー：add には type, schedule, prompt パラメータが必要です",
+    "cronAddNeedParams": "エラー：add には scheduleType, schedule, prompt パラメータが必要です",
     "cronEveryMustBeNumber": "エラー：every タイプの schedule は正の整数（ミリ秒）である必要があります",
     "cronCreated": "スケジュールタスクを作成しました: {label} ({id})",
     "cronConfirmed": "ユーザーが確認しました。スケジュールタスクを作成しました: {label} ({id})",
@@ -1494,9 +1495,9 @@
     },
     "cron": {
       "label": "スケジュールタスク",
-      "description": "スケジュールタスクを作成・管理します。スケジュールタスクはバックグラウンドで自動実行され、指定時刻に独立した session を起動して prompt を実行します。\n操作：\n- list：全タスクを表示\n- add(type, schedule, prompt, label?, model?)：タスクを作成\n  - type \"at\"：一回限り、schedule は ISO 時間文字列\n  - type \"every\"：間隔、schedule はミリ秒数（例：3600000 = 1 時間）\n  - type \"cron\"：cron 式（例：\"0 7 * * *\" = 毎朝 7 時）\n  - model：オプション、タスク実行に使うモデルを指定（未指定の場合はチャットモデルを使用）\n- remove(id)：タスクを削除\n- toggle(id)：タスクの有効/無効を切り替え",
+      "description": "スケジュールタスクを作成・管理します。スケジュールタスクはバックグラウンドで自動実行され、指定時刻に独立した session を起動して prompt を実行します。\n操作：\n- list：全タスクを表示\n- add(scheduleType, schedule, prompt, label?, model?)：タスクを作成\n  - scheduleType \"at\"：一回限り、schedule は ISO 時間文字列\n  - scheduleType \"every\"：間隔、schedule は分数（例：60 = 毎時）\n  - scheduleType \"cron\"：cron 式（例：\"0 7 * * *\" = 毎朝 7 時）\n  - model：オプション、タスク実行に使うモデルを指定（未指定の場合はチャットモデルを使用）\n- remove(id)：タスクを削除\n- toggle(id)：タスクの有効/無効を切り替え",
       "actionDesc": "操作タイプ",
-      "typeDesc": "スケジュールタイプ（add の場合必須）",
+      "scheduleTypeDesc": "スケジュールタイプ（add の場合必須）",
       "scheduleDesc": "スケジュール: ISO時刻(at)、分数(every、例:60=毎時)、cron式(cron)",
       "promptDesc": "指定時刻に実行する prompt（add の場合必須）",
       "labelDesc": "タスクの表示ラベル（オプション）",

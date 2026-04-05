@@ -41,6 +41,29 @@
     min-width: 0;
 }
 
+/* 附件添加按钮 */
+.attach-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    border: 1px solid rgba(var(--accent-rgb), 0.12);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--duration) var(--ease-out);
+    -webkit-app-region: no-drag;
+    flex-shrink: 0;
+}
+
+.attach-btn:hover {
+    color: var(--accent);
+    border-color: rgba(var(--accent-rgb), 0.25);
+}
+
 /* Plan Mode 按钮 */
 .plan-mode-btn {
     display: inline-flex;
@@ -701,6 +724,9 @@
     margin-bottom: 6px;
     font-size: 0.85rem;
     color: var(--text-muted);
+    background: var(--bg-card, #fff);
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .slash-busy-dot {
@@ -722,6 +748,22 @@
 @keyframes slash-pulse {
     0%, 100% { opacity: 0.3; }
     50% { opacity: 1; }
+}
+
+.slash-result-dot-ok {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #6a9;
+    flex-shrink: 0;
+}
+
+.slash-result-dot-err {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #c08080;
+    flex-shrink: 0;
 }
 
 .slash-error-bar {
