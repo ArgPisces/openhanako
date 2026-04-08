@@ -22,6 +22,7 @@ export interface HistoryApiResponse {
     images?: Array<{ data: string; mimeType: string }>;
   }>;
   blocks?: Array<any>;
+  // COMPAT(v0.98): 以下三个老字段在新服务端不再返回，v0.98 后可删
   fileOutputs?: Array<{
     afterIndex: number;
     files: Array<{ filePath: string; label: string; ext: string }>;
@@ -45,12 +46,12 @@ export interface HistoryApiResponse {
 // ── 兼容层 ──
 
 /**
- * 兼容层：将老格式（fileOutputs/artifacts/cards）转为新 blocks[] 格式。
- * 新服务端返回 blocks[]，此函数只在升级过渡期（老服务端 → 新前端）命中。
+ * COMPAT(v0.98): 兼容层，v0.98 后可整个删除。
  *
- * COMPAT(old-sessions): 如果没有 data.blocks，还需从 toolCalls 重建
- * cron/settings 确认卡片，因为老 session 的 toolResult.details 没有
- * jobData/settingKey 字段，server 侧 extractor 无法生成这些 blocks。
+ * 将老格式（fileOutputs/artifacts/cards）转为新 blocks[] 格式。
+ * 新服务端返回 blocks[]，此函数只在升级过渡期（老服务端 → 新前端）命中。
+ * 如果没有 data.blocks，还需从 toolCalls 重建 cron/settings 确认卡片，
+ * 因为老 session 的 toolResult.details 没有 jobData/settingKey 字段。
  */
 function normalizeBlocks(data: HistoryApiResponse): Array<any> {
   if (data.blocks) return data.blocks;

@@ -8,7 +8,7 @@
  */
 
 export const BLOCK_EXTRACTORS = {
-  // COMPAT(v0.78): present_files 是 stage_files 的旧名，共用 extractor
+  // COMPAT(v0.98): present_files 是 stage_files 的旧名，共用 extractor。v0.98 后可删
   stage_files: (details) => {
     const files = details.files || [];
     if (!files.length && details.filePath) {
@@ -52,7 +52,7 @@ export const BLOCK_EXTRACTORS = {
   cron: (details) => {
     let jobData = details.jobData;
     if (!jobData && details.job) {
-      // COMPAT: 老 session 没有 jobData 字段，从 job 对象重建
+      // COMPAT(v0.98): 老 session 没有 jobData 字段，从 job 对象重建。v0.98 后可删
       const j = details.job;
       jobData = { type: j.type, schedule: j.schedule, prompt: j.prompt, label: j.label, model: j.model };
     }
@@ -86,7 +86,7 @@ export const BLOCK_EXTRACTORS = {
   },
 };
 
-BLOCK_EXTRACTORS.present_files = BLOCK_EXTRACTORS.stage_files;
+BLOCK_EXTRACTORS.present_files = BLOCK_EXTRACTORS.stage_files; // COMPAT(v0.98)
 
 function extractPluginCard(details) {
   if (!details?.card?.pluginId) return null;
