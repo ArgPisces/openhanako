@@ -11,7 +11,7 @@ import { hanaFetch } from '../../hooks/use-hana-fetch';
 import { useI18n } from '../../hooks/use-i18n';
 
 interface Props {
-  confirmId: string;
+  confirmId?: string;
   settingKey: string;
   cardType: 'toggle' | 'list' | 'text';
   currentValue: string;

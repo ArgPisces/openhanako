@@ -8,7 +8,6 @@ import { MoodBlock } from './MoodBlock';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolGroupBlock } from './ToolGroupBlock';
 import { PluginCardBlock } from './PluginCardBlock';
-import { XingCard } from './XingCard';
 import { SettingsConfirmCard } from './SettingsConfirmCard';
 import { MessageActions } from './MessageActions';
 const lazyScreenshot = () => import('../../utils/screenshot').then(m => m.takeScreenshot);
@@ -169,15 +168,13 @@ const ContentBlockView = memo(function ContentBlockView({ block, agentName, yuan
       return <ToolGroupBlock tools={block.tools} collapsed={block.collapsed} agentName={agentName} />;
     case 'text':
       return <MarkdownContent html={block.html} />;
-    case 'xing':
-      return <XingCard title={block.title} content={block.content} sealed={block.sealed} agentName={agentName} />;
-    case 'file_output':
+    case 'file':
       return IMAGE_EXTS.has(block.ext)
         ? <ImageOutputCard filePath={block.filePath} label={block.label} ext={block.ext} />
         : <FileOutputCard filePath={block.filePath} label={block.label} ext={block.ext} />;
     case 'artifact':
       return <ArtifactCard title={block.title} artifactType={block.artifactType} artifactId={block.artifactId} content={block.content} language={block.language} />;
-    case 'browser_screenshot':
+    case 'screenshot':
       return <BrowserScreenshot base64={block.base64} mimeType={block.mimeType} />;
     case 'skill':
       return <SkillCard skillName={block.skillName} skillFilePath={block.skillFilePath} />;

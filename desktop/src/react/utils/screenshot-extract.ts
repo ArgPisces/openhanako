@@ -36,7 +36,7 @@ function extractBlocks(blocks: ContentBlock[]): ScreenshotBlock[] {
   for (const block of blocks) {
     if (block.type === 'text') {
       result.push({ type: 'html', content: block.html });
-    } else if (block.type === 'file_output' && IMAGE_EXTS.has(block.ext)) {
+    } else if (block.type === 'file' && IMAGE_EXTS.has(block.ext)) {
       result.push({ type: 'image', content: block.filePath });
     }
   }

@@ -5,7 +5,7 @@
  */
 
 import type { ChatMessage, ChatListItem, ContentBlock } from '../stores/chat-types';
-import { parseMoodFromContent, parseXingFromContent, parseCardFromContent, parseUserAttachments } from './message-parser';
+import { parseMoodFromContent, parseCardFromContent, parseUserAttachments } from './message-parser';
 import { renderMarkdown } from './markdown';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- API 历史消息 JSON 结构动态，难以静态收窄 */
@@ -154,19 +154,13 @@ export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] 
         }
       }
 
-      // 4. 主文本（去掉 mood、xing 和 card 后的内容）
-      const { xingBlocks, text: afterXing } = parseXingFromContent(afterMood);
-      const { cards, text: mainText } = parseCardFromContent(afterXing);
+      // 4. 主文本（去掉 mood 和 card 后的内容）
+      const { cards, text: mainText } = parseCardFromContent(afterMood);
       if (mainText) {
         blocks.push({ type: 'text', html: renderMarkdown(mainText) });
       }
 
-      // 5. Xing
-      for (const xb of xingBlocks) {
-        blocks.push({ type: 'xing', title: xb.title, content: xb.content, sealed: true });
-      }
-
-      // 6. Cards (after xing, before file outputs)
+      // 5. Cards (before file outputs)
       for (const card of cards) {
         blocks.push({ type: 'plugin_card', card });
       }
@@ -175,7 +169,7 @@ export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] 
       const files = fileMap[i];
       if (files) {
         for (const f of files) {
-          blocks.push({ type: 'file_output', filePath: f.filePath, label: f.label, ext: f.ext });
+          blocks.push({ type: 'file', filePath: f.filePath, label: f.label, ext: f.ext });
         }
       }
 

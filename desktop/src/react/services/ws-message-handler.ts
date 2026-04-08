@@ -29,10 +29,8 @@ declare function t(key: string, vars?: Record<string, string>): any;
 const REACT_CHAT_EVENTS = new Set([
   'text_delta', 'thinking_start', 'thinking_delta', 'thinking_end',
   'mood_start', 'mood_text', 'mood_end',
-  'xing_start', 'xing_text', 'xing_end',
   'tool_start', 'tool_end', 'turn_end',
-  'file_output', 'plugin_card', 'skill_activated', 'artifact',
-  'browser_screenshot', 'cron_confirmation', 'settings_confirmation',
+  'content_block', 'plugin_card',
   'compaction_start', 'compaction_end',
 ]);
 
@@ -144,9 +142,9 @@ export function handleServerMessage(msg: any): void {
       const sp = msg.sessionPath;
       if (sp) useStore.getState().addCompactingSession(sp);
     }
-    // artifact 需要通知 artifacts shim 更新预览
-    if (msg.type === 'artifact' && state.currentTab === 'chat') {
-      handleArtifact(msg);
+    // content_block 中的 artifact 需要通知 artifacts shim 更新预览
+    if (msg.type === 'content_block' && msg.block?.type === 'artifact' && state.currentTab === 'chat') {
+      handleArtifact(msg.block);
     }
     return;
   }

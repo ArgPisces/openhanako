@@ -75,7 +75,7 @@ describe('extractScreenshotPayload', () => {
       {
         id: '1', role: 'assistant' as const, blocks: [
           { type: 'text' as const, html: '<p>text</p>' },
-          { type: 'file_output' as const, filePath: '/tmp/img.png', label: 'img', ext: 'png' },
+          { type: 'file' as const, filePath: '/tmp/img.png', label: 'img', ext: 'png' },
         ],
       },
     ];
@@ -89,7 +89,7 @@ describe('extractScreenshotPayload', () => {
       {
         id: '1', role: 'assistant' as const, blocks: [
           { type: 'text' as const, html: '<p>code</p>' },
-          { type: 'file_output' as const, filePath: '/tmp/file.py', label: 'file', ext: 'py' },
+          { type: 'file' as const, filePath: '/tmp/file.py', label: 'file', ext: 'py' },
         ],
       },
     ];

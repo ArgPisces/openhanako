@@ -8,7 +8,7 @@
  * app-ws-shim 直接调用 streamBufferManager.handle(msg)。
  */
 
-import type { ChatMessage, ContentBlock, ChatListItem } from '../stores/chat-types';
+import type { ChatMessage, ContentBlock } from '../stores/chat-types';
 import { useStore } from '../stores';
 import { renderMarkdown } from '../utils/markdown';
 import { cleanMoodText } from '../utils/message-parser';
@@ -23,11 +23,8 @@ interface Buffer {
   thinkingAcc: string;
   moodAcc: string;
   moodYuan: string;
-  xingAcc: string;
-  xingTitle: string;
   inThinking: boolean;
   inMood: boolean;
-  inXing: boolean;
   inCard: boolean;
   cardAttrs: { type: string; plugin: string; route: string; title?: string } | null;
   cardDescAcc: string;
@@ -44,11 +41,8 @@ function createBuffer(sessionPath: string): Buffer {
     thinkingAcc: '',
     moodAcc: '',
     moodYuan: 'hanako',
-    xingAcc: '',
-    xingTitle: '',
     inThinking: false,
     inMood: false,
-    inXing: false,
     inCard: false,
     cardAttrs: null,
     cardDescAcc: '',
@@ -150,19 +144,6 @@ class StreamBufferManager {
         }
       }
 
-      // ── Xing ──
-      if (buf.xingAcc || buf.inXing) {
-        const idx = blocks.findIndex(b => b.type === 'xing');
-        const xingBlock: ContentBlock = {
-          type: 'xing',
-          title: buf.xingTitle,
-          content: buf.xingAcc,
-          sealed: !buf.inXing,
-        };
-        if (idx >= 0) blocks[idx] = xingBlock;
-        else blocks.push(xingBlock);
-      }
-
       return { ...msg, blocks };
     });
   }
@@ -213,23 +194,6 @@ class StreamBufferManager {
 
       case 'mood_end':
         buf.inMood = false;
-        this.flush(buf);
-        break;
-
-      case 'xing_start':
-        this.ensureMessage(buf);
-        buf.inXing = true;
-        buf.xingAcc = '';
-        buf.xingTitle = msg.title || (window.t?.('xing.title') || 'Reflection');
-        this.flush(buf);
-        break;
-
-      case 'xing_text':
-        buf.xingAcc += msg.delta || '';
-        break;
-
-      case 'xing_end':
-        buf.inXing = false;
         this.flush(buf);
         break;
 
@@ -315,88 +279,15 @@ class StreamBufferManager {
         });
         break;
 
-      case 'file_output':
+      case 'content_block': {
         this.ensureMessage(buf);
         this.flush(buf);
         useStore.getState().updateLastMessage(sessionPath, (m) => ({
           ...m,
-          blocks: [...(m.blocks || []), { type: 'file_output', filePath: msg.filePath, label: msg.label, ext: msg.ext }],
+          blocks: [...(m.blocks || []), msg.block],
         }));
         break;
-
-      case 'plugin_card':
-        this.ensureMessage(buf);
-        this.flush(buf);
-        useStore.getState().updateLastMessage(sessionPath, (m) => ({
-          ...m,
-          blocks: [...(m.blocks || []), { type: 'plugin_card', card: msg.card }],
-        }));
-        break;
-
-      case 'artifact':
-        this.ensureMessage(buf);
-        this.flush(buf);
-        useStore.getState().updateLastMessage(sessionPath, (m) => ({
-          ...m,
-          blocks: [...(m.blocks || []), {
-            type: 'artifact',
-            artifactId: msg.artifactId || msg.id,
-            artifactType: msg.artifactType || msg.type,
-            title: msg.title || '',
-            content: msg.content || '',
-            language: msg.language,
-          }],
-        }));
-        break;
-
-      case 'browser_screenshot':
-        this.ensureMessage(buf);
-        this.flush(buf);
-        useStore.getState().updateLastMessage(sessionPath, (m) => ({
-          ...m,
-          blocks: [...(m.blocks || []), { type: 'browser_screenshot', base64: msg.base64, mimeType: msg.mimeType }],
-        }));
-        break;
-
-      case 'skill_activated':
-        this.ensureMessage(buf);
-        this.flush(buf);
-        useStore.getState().updateLastMessage(sessionPath, (m) => ({
-          ...m,
-          blocks: [...(m.blocks || []), { type: 'skill', skillName: msg.skillName, skillFilePath: msg.skillFilePath }],
-        }));
-        break;
-
-      case 'cron_confirmation':
-        this.ensureMessage(buf);
-        this.flush(buf);
-        useStore.getState().updateLastMessage(sessionPath, (m) => ({
-          ...m,
-          blocks: [...(m.blocks || []), { type: 'cron_confirm', confirmId: msg.confirmId, jobData: msg.jobData, status: 'pending' as const }],
-        }));
-        break;
-
-      case 'settings_confirmation':
-        this.ensureMessage(buf);
-        this.flush(buf);
-        useStore.getState().updateLastMessage(sessionPath, (m) => ({
-          ...m,
-          blocks: [...(m.blocks || []), {
-            type: 'settings_confirm' as const,
-            confirmId: msg.confirmId,
-            settingKey: msg.settingKey,
-            cardType: msg.cardType,
-            currentValue: msg.currentValue,
-            proposedValue: msg.proposedValue,
-            options: msg.options,
-            optionLabels: msg.optionLabels,
-            label: msg.label,
-            description: msg.description,
-            frontend: msg.frontend,
-            status: 'pending' as const,
-          }],
-        }));
-        break;
+      }
 
       case 'compaction_start':
         break;
@@ -410,15 +301,14 @@ class StreamBufferManager {
         buf.textAcc = '';
         buf.thinkingAcc = '';
         buf.moodAcc = '';
-        buf.xingAcc = '';
         buf.inThinking = false;
         buf.inMood = false;
-        buf.inXing = false;
         buf.inCard = false;
         buf.cardAttrs = null;
         buf.cardDescAcc = '';
         buf.messageAppended = false;
         break;
+
     }
   }
 
