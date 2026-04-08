@@ -1135,20 +1135,6 @@
     object-fit: cover;
 }
 
-.subagentAvatarFallback {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--accent-light, #e8ddd0);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--accent, #537D96);
-}
-
 .subagentBody {
     flex: 1;
     min-width: 0;

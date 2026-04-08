@@ -5,7 +5,7 @@
  * 思考 / 文字输出 / 工具调用 / 已完成 / 失败 / 已中断
  */
 
-import { memo, useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef, useMemo } from 'react';
 import { subscribeStreamKey } from '../../services/stream-key-dispatcher';
 import { hanaUrl } from '../../hooks/use-hana-fetch';
 import { useStore } from '../../stores';
@@ -33,13 +33,23 @@ export const SubagentCard = memo(function SubagentCard({ block }: SubagentCardPr
     return '准备中...';
   });
   const textRef = useRef('');
-  const [imgError, setImgError] = useState(false);
 
-  // 头像：优先用 agent 头像 API，fallback 到首字母
+  // 头像：优先用 agent 头像 API，fallback 到 yuan 剪影头像
   const currentAgentId = useStore(s => s.currentAgentId);
+  const agents = useStore(s => s.agents);
   const agentId = block.agentId || currentAgentId || '';
   const agentName = block.agentName || block.agentId || 'Subagent';
-  const avatarSrc = agentId ? hanaUrl(`/api/agents/${agentId}/avatar`) : '';
+
+  const agent = agents?.find((a: any) => a.id === agentId);
+  const fallbackAvatar = useMemo(() => {
+    const types = (window.t?.('yuan.types') || {}) as Record<string, { avatar?: string }>;
+    const yuan = agent?.yuan || 'hanako';
+    const entry = types[yuan] || types['hanako'];
+    return `assets/${entry?.avatar || 'Hanako.png'}`;
+  }, [agent?.yuan]);
+  const avatarSrc = (agent?.hasAvatar && agentId)
+    ? hanaUrl(`/api/agents/${agentId}/avatar?t=${agentId}`)
+    : fallbackAvatar;
 
   // Sync block prop changes (from block_update patch)
   useEffect(() => {
@@ -79,19 +89,21 @@ export const SubagentCard = memo(function SubagentCard({ block }: SubagentCardPr
 
   return (
     <div className={`${styles.subagentCard} ${styles[`subagent-${status}`]}`}>
-      {avatarSrc && !imgError ? (
-        <img
-          className={styles.subagentAvatar}
-          src={avatarSrc}
-          alt={agentName}
-          draggable={false}
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <div className={styles.subagentAvatarFallback}>
-          <span>{agentName[0]?.toUpperCase()}</span>
-        </div>
-      )}
+      <img
+        className={styles.subagentAvatar}
+        src={avatarSrc}
+        alt={agentName}
+        draggable={false}
+        onError={(e) => {
+          const img = e.target as HTMLImageElement;
+          if (img.src.endsWith(fallbackAvatar)) {
+            img.onerror = null;
+            return;
+          }
+          img.onerror = null;
+          img.src = fallbackAvatar;
+        }}
+      />
       <div className={styles.subagentBody}>
         <div className={styles.subagentName}>{agentName}</div>
         <div className={styles.subagentDisplay}>
