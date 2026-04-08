@@ -21,6 +21,7 @@ export interface HistoryApiResponse {
     toolCalls?: Array<{ name: string; args?: Record<string, unknown> }>;
     images?: Array<{ data: string; mimeType: string }>;
   }>;
+  blocks?: Array<any>;
   fileOutputs?: Array<{
     afterIndex: number;
     files: Array<{ filePath: string; label: string; ext: string }>;
@@ -41,24 +42,39 @@ export interface HistoryApiResponse {
   hasMore?: boolean;
 }
 
+// ── 兼容层 ──
+
+/**
+ * 兼容层：将老格式（fileOutputs/artifacts/cards）转为新 blocks[] 格式。
+ * 新服务端返回 blocks[]，此函数只在升级过渡期（老服务端 → 新前端）命中。
+ */
+function normalizeBlocks(data: HistoryApiResponse): Array<any> {
+  if (data.blocks) return data.blocks;
+  const blocks: Array<any> = [];
+  for (const fo of (data.fileOutputs || [])) {
+    for (const f of fo.files) {
+      blocks.push({ type: 'file', afterIndex: fo.afterIndex, filePath: f.filePath, label: f.label, ext: f.ext });
+    }
+  }
+  for (const ar of (data.artifacts || [])) {
+    blocks.push({ type: 'artifact', afterIndex: ar.afterIndex, artifactId: ar.artifactId, artifactType: ar.artifactType, title: ar.title, content: ar.content, language: ar.language });
+  }
+  for (const cd of (data.cards || [])) {
+    blocks.push({ type: 'plugin_card', afterIndex: cd.afterIndex, card: { ...cd.card, type: cd.card.type || 'iframe' } });
+  }
+  return blocks;
+}
+
 // ── 构建 ──
 
 export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] {
   const items: ChatListItem[] = [];
 
-  // 按 afterIndex 分组 fileOutputs、artifacts、cards
-  const fileMap: Record<number, Array<{ filePath: string; label: string; ext: string }>> = {};
-  const artMap: Record<number, Array<{ artifactId: string; artifactType: string; title: string; content: string; language?: string }>> = {};
-  const cardMap: Record<number, Array<{ type: string; pluginId: string; route: string; title?: string; description?: string }>> = {};
-
-  for (const fo of (data.fileOutputs || [])) {
-    (fileMap[fo.afterIndex] ??= []).push(...fo.files);
-  }
-  for (const ar of (data.artifacts || [])) {
-    (artMap[ar.afterIndex] ??= []).push(ar);
-  }
-  for (const cd of (data.cards || [])) {
-    (cardMap[cd.afterIndex] ??= []).push(cd.card);
+  // 按 afterIndex 分组统一 blocks
+  const allBlocks = normalizeBlocks(data);
+  const blockMap: Record<number, Array<any>> = {};
+  for (const b of allBlocks) {
+    (blockMap[b.afterIndex] ??= []).push(b);
   }
 
   for (let i = 0; i < data.messages.length; i++) {
@@ -108,50 +124,16 @@ export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] 
 
       // 3. Tool calls
       if (m.toolCalls?.length) {
-        // 分离确认类工具和普通工具
-        const normalTools = [];
-        for (const tc of m.toolCalls) {
-          if (tc.name === 'update_settings' && tc.args) {
-            const a = tc.args as Record<string, string>;
-            // 仅 apply 调用（或旧格式无 action）重建卡片，search 调用跳过
-            if (a.action === 'apply' || (!a.action && a.key && a.value)) {
-              blocks.push({
-                type: 'settings_confirm',
-                confirmId: '',
-                settingKey: a.key || '',
-                cardType: (a.key === 'sandbox' || a.key === 'memory.enabled' ? 'toggle' : 'list') as any,
-                currentValue: '',
-                proposedValue: a.value || '',
-                label: a.key || '',
-                status: 'confirmed',
-              } as any);
-            } else {
-              normalTools.push(tc);
-            }
-          } else if (tc.name === 'cron' && tc.args && (tc.args as any).action === 'add') {
-            // 重建 cron 确认卡片（已完成状态）
-            const a = tc.args as Record<string, any>;
-            blocks.push({
-              type: 'cron_confirm',
-              jobData: { type: a.type, schedule: a.schedule, prompt: a.prompt, label: a.label },
-              status: 'approved',
-            } as any);
-          } else {
-            normalTools.push(tc);
-          }
-        }
-        if (normalTools.length) {
-          blocks.push({
-            type: 'tool_group',
-            tools: normalTools.map(tc => ({
-              name: tc.name,
-              args: tc.args,
-              done: true,
-              success: true,
-            })),
-            collapsed: normalTools.length > 1,
-          });
-        }
+        blocks.push({
+          type: 'tool_group',
+          tools: m.toolCalls.map(tc => ({
+            name: tc.name,
+            args: tc.args,
+            done: true,
+            success: true,
+          })),
+          collapsed: m.toolCalls.length > 1,
+        });
       }
 
       // 4. 主文本（去掉 mood 和 card 后的内容）
@@ -165,38 +147,10 @@ export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] 
         blocks.push({ type: 'plugin_card', card });
       }
 
-      // 7. 跟在这条消息后面的 file outputs
-      const files = fileMap[i];
-      if (files) {
-        for (const f of files) {
-          blocks.push({ type: 'file', filePath: f.filePath, label: f.label, ext: f.ext });
-        }
-      }
-
-      // 8. 跟在这条消息后面的 artifacts
-      const arts = artMap[i];
-      if (arts) {
-        for (const a of arts) {
-          blocks.push({
-            type: 'artifact',
-            artifactId: a.artifactId,
-            artifactType: a.artifactType,
-            title: a.title,
-            content: a.content,
-            language: a.language,
-          });
-        }
-      }
-
-      // 9. 跟在这条消息后面的 plugin cards（来自 toolResult.details.card）
-      const cds = cardMap[i];
-      if (cds) {
-        for (const cd of cds) {
-          blocks.push({
-            type: 'plugin_card',
-            card: { ...cd, type: cd.type || 'iframe' },
-          } as any);
-        }
+      // 6. Content Blocks from unified sideband
+      const msgBlocks = blockMap[i];
+      if (msgBlocks) {
+        for (const b of msgBlocks) blocks.push(b);
       }
 
       const msg: ChatMessage = { id, role: 'assistant', blocks };
