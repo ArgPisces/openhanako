@@ -49,6 +49,7 @@ export type RichBlock =
   | { type: 'skill'; skillName: string; skillFilePath: string }
   | { type: 'cron_confirm'; confirmId?: string; jobData: Record<string, unknown>; status: 'pending' | 'approved' | 'rejected' }
   | { type: 'settings_confirm'; confirmId?: string; settingKey: string; cardType: 'toggle' | 'list' | 'text'; currentValue: string; proposedValue: string; options?: string[]; optionLabels?: Record<string, string>; label: string; description?: string; frontend?: boolean; status: 'pending' | 'confirmed' | 'rejected' | 'timeout' }
+  | { type: 'subagent'; taskId: string; task: string; agentId?: string; agentName?: string; streamKey: string; streamStatus: 'running' | 'done' | 'failed'; summary?: string }
   | { type: 'plugin_card'; card: import('../types').PluginCardDetails };
 
 export type ContentBlock = TextDecorator | RichBlock;

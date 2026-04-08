@@ -238,6 +238,29 @@ describe('update_settings', () => {
   });
 });
 
+// ─── subagent ─────────────────────────────────────────────────────────────────
+
+describe('subagent', () => {
+  it("subagent: 正常", () => {
+    const blocks = extractBlocks("subagent", { taskId: "t1", task: "do stuff", agentId: "hana", agentName: "Hana", sessionPath: "/s/t.jsonl", streamStatus: "running" });
+    expect(blocks[0]).toMatchObject({ type: "subagent", taskId: "t1", streamKey: "/s/t.jsonl", streamStatus: "running" });
+  });
+
+  it("subagent: done 状态", () => {
+    const blocks = extractBlocks("subagent", { taskId: "t2", task: "done task", sessionPath: "/s/t2.jsonl", streamStatus: "done", summary: "结果摘要" });
+    expect(blocks[0]).toMatchObject({ type: "subagent", streamStatus: "done", summary: "结果摘要" });
+  });
+
+  it("subagent: 无 taskId 返回空", () => {
+    expect(extractBlocks("subagent", {})).toEqual([]);
+  });
+
+  it("subagent: 最小字段", () => {
+    const blocks = extractBlocks("subagent", { taskId: "t3" });
+    expect(blocks[0]).toMatchObject({ type: "subagent", taskId: "t3", task: "", agentId: null, streamKey: "", streamStatus: "running" });
+  });
+});
+
 // ─── plugin card extraction ───────────────────────────────────────────────────
 
 describe('extractBlocks: plugin card extraction', () => {

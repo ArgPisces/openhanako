@@ -68,6 +68,20 @@ export const BLOCK_EXTRACTORS = {
     }];
   },
 
+  subagent: (details) => {
+    if (!details.taskId) return null;
+    return [{
+      type: "subagent",
+      taskId: details.taskId,
+      task: details.task || "",
+      agentId: details.agentId || null,
+      agentName: details.agentName || null,
+      streamKey: details.sessionPath || "",
+      streamStatus: details.streamStatus || "running",
+      summary: details.summary || null,
+    }];
+  },
+
   update_settings: (details) => {
     if (!details.settingKey) return null;
     const status = details.confirmed === "timeout"
