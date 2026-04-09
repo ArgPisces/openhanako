@@ -14,6 +14,30 @@ import { parseSessionKey, collectKnownUsers, KNOWN_PLATFORMS } from "../../lib/b
 import { t } from "../i18n.js";
 import { resolveAgent } from "../utils/resolve-agent.js";
 
+/**
+ * Resolve owner dict for a specific agent.
+ * Owner keys can be "platform" (legacy global) or "platform:agentId" (per-agent).
+ * Returns a flat { platform: userId } dict for the given agent.
+ */
+function resolveOwnerForAgent(ownerDict, agentId) {
+  const result = {};
+  for (const [key, userId] of Object.entries(ownerDict)) {
+    const colonIdx = key.indexOf(':');
+    if (colonIdx === -1) {
+      // Legacy global key: "telegram" → matches any agent
+      result[key] = userId;
+    } else {
+      // Per-agent key: "telegram:agentId" → only matches that agent
+      const plat = key.slice(0, colonIdx);
+      const keyAgentId = key.slice(colonIdx + 1);
+      if (!agentId || keyAgentId === agentId) {
+        result[plat] = userId; // Per-agent takes precedence over legacy
+      }
+    }
+  }
+  return result;
+}
+
 export function createBridgeRoute(engine, bridgeManager) {
   const route = new Hono();
 
@@ -25,9 +49,11 @@ export function createBridgeRoute(engine, bridgeManager) {
     const filterAgentId = c.req.query("agentId") || null;
 
     // Helper: build platform status, filtered by agentId
+    // null/undefined agentId in config = "unbound" → matches any agent (backward compat)
     const platformStatus = (plat, cfg, extraFields) => {
-      if (filterAgentId && (cfg?.agentId || null) !== filterAgentId) {
-        return { status: 'unconfigured', configured: false, enabled: false, agentId: cfg?.agentId || null };
+      const cfgAgentId = cfg?.agentId || null;
+      if (filterAgentId && cfgAgentId && cfgAgentId !== filterAgentId) {
+        return { status: 'unconfigured', configured: false, enabled: false, agentId: cfgAgentId };
       }
       return {
         ...extraFields,
@@ -59,28 +85,31 @@ export function createBridgeRoute(engine, bridgeManager) {
         token: bridge.wechat?.botToken || "",
       }),
       readOnly: !!bridge.readOnly,
-      knownUsers: collectKnownUsers(engine.getBridgeIndex()),
-      owner: bridge.owner || {},
+      knownUsers: collectKnownUsers(engine.getBridgeIndex(filterAgentId)),
+      owner: resolveOwnerForAgent(bridge.owner || {}, filterAgentId),
     });
   });
 
-  /** 设置 owner（哪个账号是你） */
+  /** 设置 owner（哪个账号是你）— per-agent keyed */
   route.post("/bridge/owner", async (c) => {
     const body = await safeJson(c);
-    const { platform, userId } = body;
+    const { platform, userId, agentId } = body;
     if (!platform || !KNOWN_PLATFORMS.includes(platform)) {
       return c.json({ ok: false, error: "invalid platform" });
     }
     const prefs = engine.getPreferences();
     if (!prefs.bridge) prefs.bridge = {};
     if (!prefs.bridge.owner) prefs.bridge.owner = {};
+    // Use composite key: "platform:agentId" for per-agent isolation
+    // Fall back to bare platform key for backward compat (no agentId = global)
+    const ownerKey = agentId ? `${platform}:${agentId}` : platform;
     if (userId) {
-      prefs.bridge.owner[platform] = userId;
+      prefs.bridge.owner[ownerKey] = userId;
     } else {
-      delete prefs.bridge.owner[platform];
+      delete prefs.bridge.owner[ownerKey];
     }
     engine.savePreferences(prefs);
-    debugLog()?.log("api", `POST /api/bridge/owner platform=${platform} owner=${userId ? "[set]" : "[cleared]"}`);
+    debugLog()?.log("api", `POST /api/bridge/owner platform=${platform} agentId=${agentId || 'global'} owner=${userId ? "[set]" : "[cleared]"}`);
     return c.json({ ok: true });
   });
 
@@ -177,16 +206,18 @@ export function createBridgeRoute(engine, bridgeManager) {
   /** 获取最近消息日志（实时内存缓冲） */
   route.get("/bridge/messages", async (c) => {
     const limit = parseInt(c.req.query("limit"), 10) || 50;
-    return c.json({ messages: bridgeManager.getMessages(limit) });
+    const agentId = c.req.query("agentId") || null;
+    return c.json({ messages: bridgeManager.getMessages(limit, agentId) });
   });
 
   /** 获取 bridge session 列表 */
   route.get("/bridge/sessions", async (c) => {
     const platform = c.req.query("platform"); // optional filter
-    const index = engine.getBridgeIndex();
-    const bridgeDir = path.join(resolveAgent(engine, c).sessionDir, "bridge");
+    const agent = resolveAgent(engine, c);
+    const index = engine.getBridgeIndex(agent.id);
+    const bridgeDir = path.join(agent.sessionDir, "bridge");
     const prefs = engine.getPreferences();
-    const owner = prefs.bridge?.owner || {};
+    const owner = resolveOwnerForAgent(prefs.bridge?.owner || {}, agent.id);
     const sessions = [];
 
     for (const [sessionKey, raw] of Object.entries(index)) {
@@ -209,7 +240,7 @@ export function createBridgeRoute(engine, bridgeManager) {
         lastActive = stat.mtimeMs;
       } catch {}
 
-      // isOwner 运行时计算：entry.userId 匹配 prefs.bridge.owner[platform]
+      // isOwner 运行时计算：per-agent owner dict
       const ownerUserId = owner[plat] || null;
       const isOwner = !!(entry.userId && ownerUserId && entry.userId === ownerUserId);
 
@@ -229,12 +260,13 @@ export function createBridgeRoute(engine, bridgeManager) {
   /** 读取指定 bridge session 的消息 */
   route.get("/bridge/sessions/:sessionKey/messages", async (c) => {
     const sessionKey = c.req.param("sessionKey");
-    const index = engine.getBridgeIndex();
+    const agent = resolveAgent(engine, c);
+    const index = engine.getBridgeIndex(agent.id);
     const raw = index[sessionKey];
     const file = typeof raw === "string" ? raw : raw?.file;
     if (!file) return c.json({ error: "session not found", messages: [] });
 
-    const bridgeDir = path.join(resolveAgent(engine, c).sessionDir, "bridge");
+    const bridgeDir = path.join(agent.sessionDir, "bridge");
     const fp = path.resolve(bridgeDir, file);
 
     // 防止 path traversal
@@ -285,7 +317,9 @@ export function createBridgeRoute(engine, bridgeManager) {
   /** 重置 bridge session（清除上下文，下次消息新建 session） */
   route.post("/bridge/sessions/:sessionKey/reset", async (c) => {
     const sessionKey = c.req.param("sessionKey");
-    const index = engine.getBridgeIndex();
+    const agent = resolveAgent(engine, c);
+    const agentId = agent.id;
+    const index = engine.getBridgeIndex(agentId);
     const raw = index[sessionKey];
     if (!raw) return c.json({ ok: false, error: "session not found" });
 
@@ -293,7 +327,7 @@ export function createBridgeRoute(engine, bridgeManager) {
     const entry = typeof raw === "string" ? {} : { ...raw };
     delete entry.file;
     index[sessionKey] = entry;
-    engine.saveBridgeIndex(index);
+    engine.saveBridgeIndex(index, agentId);
 
     return c.json({ ok: true });
   });

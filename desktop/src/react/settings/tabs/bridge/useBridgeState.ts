@@ -155,11 +155,12 @@ export function useBridgeState() {
   };
 
   const setOwner = async (plat: string, userId: string) => {
+    const agentId = selectedAgentId;
     try {
       await hanaFetch('/api/bridge/owner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform: plat, userId: userId || null }),
+        body: JSON.stringify({ platform: plat, userId: userId || null, agentId }),
       });
       showToast(t('settings.bridge.ownerSaved'), 'success');
     } catch {

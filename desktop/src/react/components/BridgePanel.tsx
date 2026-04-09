@@ -168,7 +168,8 @@ export function BridgePanel() {
     setCurrentKey(sessionKey);
     setCurrentName(displayName);
     try {
-      const res = await hanaFetch(`/api/bridge/sessions/${encodeURIComponent(sessionKey)}/messages`);
+      const agentQuery = bridgeAgentId ? `?agentId=${encodeURIComponent(bridgeAgentId)}` : '';
+      const res = await hanaFetch(`/api/bridge/sessions/${encodeURIComponent(sessionKey)}/messages${agentQuery}`);
       const data = await res.json();
       setMessages(data.messages || []);
       setChatOpen(true);
@@ -179,17 +180,18 @@ export function BridgePanel() {
       console.error('[bridge] open session failed:', err);
       setChatOpen(false);
     }
-  }, []);
+  }, [bridgeAgentId]);
 
   const resetSession = useCallback(async () => {
     if (!currentKey) return;
     try {
-      await hanaFetch(`/api/bridge/sessions/${encodeURIComponent(currentKey)}/reset`, { method: 'POST' });
+      const agentQuery = bridgeAgentId ? `?agentId=${encodeURIComponent(bridgeAgentId)}` : '';
+      await hanaFetch(`/api/bridge/sessions/${encodeURIComponent(currentKey)}/reset${agentQuery}`, { method: 'POST' });
       openSession(currentKey, currentName);
     } catch (err) {
       console.error('[bridge] reset session failed:', err);
     }
-  }, [currentKey, currentName, openSession]);
+  }, [currentKey, currentName, openSession, bridgeAgentId]);
 
   if (!visible) return null;
 
