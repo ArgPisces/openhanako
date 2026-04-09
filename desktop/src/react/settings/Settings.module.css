@@ -201,6 +201,31 @@
 .agent-cards:hover {
     width: max(240px, calc(var(--cards-spread-width, 240) * 1px));
     transition-delay: 0s;
+    /* overflow scroll for 9+ cards */
+    max-width: min(100%, 600px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.agent-cards:hover::-webkit-scrollbar {
+    display: none;
+}
+
+.agent-cards.dragging-active {
+    width: max(240px, calc(var(--cards-spread-width, 240) * 1px));
+    max-width: min(100%, 600px);
+    overflow-x: hidden;
+}
+
+.agent-cards.dragging-active .agent-card {
+    transform-origin: center center;
+    transform: rotate(0deg) translateX(var(--tx-spread, 0px)) translateY(var(--lift, 0px));
+    transition-delay: 0s;
+}
+
+.agent-cards.dragging-active .agent-card-name {
+    opacity: 1;
 }
 
 /* 单张卡片 — 收起扇形，展开直线 */
