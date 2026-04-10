@@ -8,6 +8,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import YAML from "js-yaml";
 import { safeCopyDir } from '../shared/safe-fs.js';
 import { AppError } from '../shared/errors.js';
 import { errorBus } from '../shared/error-bus.js';
@@ -57,7 +58,6 @@ export function ensureFirstRun(hanakoHome, productDir) {
       prefsPath,
       JSON.stringify({
         primaryAgent: "hanako",
-        home_folder: path.join(os.homedir(), "Desktop"),
       }, null, 2) + "\n",
       "utf-8",
     );
@@ -79,10 +79,18 @@ function seedDefaultAgent(agentsDir, productDir) {
   fs.mkdirSync(path.join(agentDir, "desk"), { recursive: true });
 
   // config.yaml（保持模板默认值：name=Hanako, yuan=hanako）
+  const cfgDest = path.join(agentDir, "config.yaml");
   const configSrc = path.join(productDir, "config.example.yaml");
   if (fs.existsSync(configSrc)) {
-    fs.copyFileSync(configSrc, path.join(agentDir, "config.yaml"));
+    fs.copyFileSync(configSrc, cfgDest);
   }
+  // 写入默认工作空间（per-agent，不存全局）
+  try {
+    const raw = fs.existsSync(cfgDest) ? YAML.load(fs.readFileSync(cfgDest, "utf-8")) || {} : {};
+    raw.desk = { ...(raw.desk || {}), home_folder: path.join(os.homedir(), "Desktop") };
+    fs.writeFileSync(cfgDest, YAML.dump(raw, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
+  } catch {}
+
 
   // identity.md（填入默认名字）
   const identitySrc = path.join(productDir, "identity.example.md");

@@ -537,4 +537,48 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
     expect(p.home_folder).toBe("/workspace");
     expect(p._dataVersion).toBe(2);
   });
+
+  it("is idempotent — rerun after success is a no-op", () => {
+    writeAgentConfig(agentsDir, "hana", { api: { provider: "" } });
+    const prefs = makePrefs(userDir);
+    prefs.savePreferences({
+      primaryAgent: "hana",
+      home_folder: "/workspace",
+      _dataVersion: 2,
+    });
+
+    runMigration3(prefs);
+    expect(prefs.getPreferences()._dataVersion).toBe(3);
+
+    // Manually reset _dataVersion to 2 to simulate forced rerun
+    const p2 = prefs.getPreferences();
+    p2._dataVersion = 2;
+    prefs.savePreferences(p2);
+    runMigration3(prefs);
+
+    // home_folder is gone from prefs, so migration skips cleanly
+    expect(prefs.getPreferences()._dataVersion).toBe(3);
+    const config = readAgentConfig(agentsDir, "hana");
+    expect(config.desk.home_folder).toBe("/workspace");
+  });
+
+  it("preserves existing desk fields when merging home_folder", () => {
+    writeAgentConfig(agentsDir, "hana", {
+      api: { provider: "" },
+      desk: { heartbeat_enabled: false, heartbeat_interval: 30 },
+    });
+    const prefs = makePrefs(userDir);
+    prefs.savePreferences({
+      primaryAgent: "hana",
+      home_folder: "/workspace",
+      _dataVersion: 2,
+    });
+
+    runMigration3(prefs);
+
+    const config = readAgentConfig(agentsDir, "hana");
+    expect(config.desk.home_folder).toBe("/workspace");
+    expect(config.desk.heartbeat_enabled).toBe(false);
+    expect(config.desk.heartbeat_interval).toBe(30);
+  });
 });

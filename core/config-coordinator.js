@@ -404,6 +404,20 @@ export class ConfigCoordinator {
     prefs.heartbeat_master = !!enabled;
     this._savePrefs(prefs);
     log.log(`setHeartbeatMaster: ${enabled}`);
+
+    // 联动 scheduler：启停所有 agent 的 heartbeat
+    const scheduler = this._d.getHub()?.scheduler;
+    if (!scheduler) return;
+    const agents = this._d.getAgents();
+    for (const [, agent] of agents) {
+      const hb = scheduler.getHeartbeat(agent.id);
+      if (!hb) continue;
+      if (!enabled) {
+        hb.stop();
+      } else if (agent.config?.desk?.heartbeat_enabled !== false) {
+        hb.start();
+      }
+    }
   }
 
   // ── helpers ──
