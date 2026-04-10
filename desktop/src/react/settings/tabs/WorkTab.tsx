@@ -136,7 +136,7 @@ export function WorkTab() {
       {/* ── Agent selector row ── */}
       <section className={styles['settings-section']}>
         <div className={styles['work-agent-row']}>
-          <div className={styles['bridge-agent-select']}>
+          <div className={styles['work-agent-select']}>
             <AgentSelect value={selectedAgentId} onChange={setSelectedAgentId} />
           </div>
           <div className={styles['work-agent-hb']}>

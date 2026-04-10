@@ -5284,8 +5284,13 @@ a.about-link:hover {
   gap: 8px;
 }
 
-.work-agent-row .bridge-agent-select {
+.work-agent-select {
   flex: 1;
+  min-width: 0;
+}
+
+.work-agent-select :global(.bridge-agent-select) {
+  margin-bottom: 0;
 }
 
 .work-agent-hb {
