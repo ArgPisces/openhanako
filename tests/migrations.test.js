@@ -503,7 +503,7 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
     expect(prefs.getPreferences().home_folder).toBeUndefined();
   });
 
-  it("does not write to non-primary agents", () => {
+  it("does not write home_folder to non-primary agents, but disables their heartbeat", () => {
     writeAgentConfig(agentsDir, "hana", { api: { provider: "" } });
     writeAgentConfig(agentsDir, "assistant", { api: { provider: "" } });
     const prefs = makePrefs(userDir);
@@ -518,7 +518,8 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
     const hanaConfig = readAgentConfig(agentsDir, "hana");
     const assistantConfig = readAgentConfig(agentsDir, "assistant");
     expect(hanaConfig.desk.home_folder).toBe("/workspace");
-    expect(assistantConfig.desk).toBeUndefined();
+    expect(assistantConfig.desk.home_folder).toBeUndefined();
+    expect(assistantConfig.desk.heartbeat_enabled).toBe(false);
   });
 
   it("preserves data when no agent config.yaml exists (version stays at 2)", () => {
@@ -580,5 +581,50 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
     expect(config.desk.home_folder).toBe("/workspace");
     expect(config.desk.heartbeat_enabled).toBe(false);
     expect(config.desk.heartbeat_interval).toBe(30);
+  });
+
+  it("disables heartbeat for non-primary agents", () => {
+    writeAgentConfig(agentsDir, "hana", { api: { provider: "" } });
+    writeAgentConfig(agentsDir, "assistant", { api: { provider: "" } });
+    writeAgentConfig(agentsDir, "research", { api: { provider: "" } });
+    const prefs = makePrefs(userDir);
+    prefs.savePreferences({
+      primaryAgent: "hana",
+      home_folder: "/workspace",
+      _dataVersion: 2,
+    });
+
+    runMigration3(prefs);
+
+    // Primary agent keeps heartbeat on (default)
+    const hanaConfig = readAgentConfig(agentsDir, "hana");
+    expect(hanaConfig.desk.heartbeat_enabled).toBeUndefined();
+
+    // Non-primary agents get heartbeat disabled
+    const assistantConfig = readAgentConfig(agentsDir, "assistant");
+    expect(assistantConfig.desk.heartbeat_enabled).toBe(false);
+
+    const researchConfig = readAgentConfig(agentsDir, "research");
+    expect(researchConfig.desk.heartbeat_enabled).toBe(false);
+  });
+
+  it("respects existing heartbeat_enabled on non-primary agents", () => {
+    writeAgentConfig(agentsDir, "hana", { api: { provider: "" } });
+    writeAgentConfig(agentsDir, "assistant", {
+      api: { provider: "" },
+      desk: { heartbeat_enabled: true },
+    });
+    const prefs = makePrefs(userDir);
+    prefs.savePreferences({
+      primaryAgent: "hana",
+      home_folder: "/workspace",
+      _dataVersion: 2,
+    });
+
+    runMigration3(prefs);
+
+    // User explicitly set heartbeat_enabled=true → migration respects it
+    const assistantConfig = readAgentConfig(agentsDir, "assistant");
+    expect(assistantConfig.desk.heartbeat_enabled).toBe(true);
   });
 });

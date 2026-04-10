@@ -265,24 +265,20 @@ function migrateBridgeToPerAgent(ctx) {
 }
 
 /**
- * #3 — workspace (home_folder) 从全局 preferences 迁移到主 agent config.yaml
+ * #3 — workspace 迁移 + 非主 agent 巡检默认关闭
  *
- * preferences.json 中 home_folder 是顶层字段（不在 desk. 下）。
- * 迁移后写入主 agent 的 config.yaml 的 desk.home_folder，
- * 其他 agent 运行时通过 fallback 链继承主 agent 的值。
+ * 两件事：
+ * 1. home_folder 从全局 preferences 迁移到主 agent 的 config.yaml
+ * 2. 非主 agent 的 heartbeat_enabled 设为 false（老用户预期只有主 agent 巡检）
  */
 function migrateWorkspaceToPerAgent(ctx) {
   const { agentsDir, prefs, log } = ctx;
   const preferences = prefs.getPreferences();
   const homeFolder = preferences.home_folder;
-
-  if (!homeFolder) {
-    log("[migrations] #3: no home_folder in preferences, skipping");
-    return;
-  }
-
-  // Find primary agent
   const primaryAgentId = preferences.primaryAgent || null;
+
+  // ── 1. 找到主 agent ──
+
   let targetAgentId = null;
 
   if (primaryAgentId) {
@@ -306,23 +302,45 @@ function migrateWorkspaceToPerAgent(ctx) {
     } catch {}
   }
 
-  if (!targetAgentId) {
-    throw new Error("no agent with config.yaml found, home_folder preserved in preferences");
+  // ── 2. 迁移 home_folder ──
+
+  if (homeFolder) {
+    if (!targetAgentId) {
+      throw new Error("no agent with config.yaml found, home_folder preserved in preferences");
+    }
+
+    const cfgPath = path.join(agentsDir, targetAgentId, "config.yaml");
+    saveConfig(cfgPath, { desk: { home_folder: homeFolder } });
+
+    // Verify write
+    const verify = safeReadYAMLSync(cfgPath, null, YAML);
+    if (verify?.desk?.home_folder !== homeFolder) {
+      throw new Error(`write verification failed for agent ${targetAgentId}, home_folder preserved in preferences`);
+    }
+
+    delete preferences.home_folder;
+    prefs.savePreferences(preferences);
+    log(`[migrations] #3: migrated home_folder "${homeFolder}" → agent ${targetAgentId}`);
   }
 
-  // Write to agent config
-  const cfgPath = path.join(agentsDir, targetAgentId, "config.yaml");
-  saveConfig(cfgPath, { desk: { home_folder: homeFolder } });
+  // ── 3. 非主 agent 的巡检默认关闭 ──
 
-  // Verify write
-  const verify = safeReadYAMLSync(cfgPath, null, YAML);
-  if (verify?.desk?.home_folder !== homeFolder) {
-    throw new Error(`write verification failed for agent ${targetAgentId}, home_folder preserved in preferences`);
+  try {
+    const dirs = fs.readdirSync(agentsDir, { withFileTypes: true }).filter(d => d.isDirectory());
+    for (const d of dirs) {
+      if (d.name === targetAgentId) continue; // 主 agent 保持原状
+      const cfgPath = path.join(agentsDir, d.name, "config.yaml");
+      if (!fs.existsSync(cfgPath)) continue;
+
+      const config = safeReadYAMLSync(cfgPath, null, YAML);
+      if (!config) continue;
+      // 只在未显式设置过时关闭（如果用户已经手动设了，尊重他的选择）
+      if (config.desk?.heartbeat_enabled !== undefined) continue;
+
+      saveConfig(cfgPath, { desk: { heartbeat_enabled: false } });
+      log(`[migrations] #3: disabled heartbeat for non-primary agent "${d.name}"`);
+    }
+  } catch (err) {
+    log(`[migrations] #3: warning — failed to disable non-primary heartbeats: ${err.message}`);
   }
-
-  // Delete from preferences only after verified write
-  delete preferences.home_folder;
-  prefs.savePreferences(preferences);
-
-  log(`[migrations] #3: migrated home_folder "${homeFolder}" → agent ${targetAgentId}`);
 }
