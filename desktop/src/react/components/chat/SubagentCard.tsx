@@ -100,7 +100,7 @@ export const SubagentCard = memo(function SubagentCard({ block }: SubagentCardPr
 
   const handleAbort = useCallback(async () => {
     try {
-      const res = await fetch(hanaUrl(`/api/subagent/${block.taskId}/abort`), { method: 'POST' });
+      const res = await fetch(hanaUrl(`/api/task/${block.taskId}/abort`), { method: 'POST' });
       if (res.ok) {
         setStatus('aborted');
         setDisplay(window.t?.('subagentAborted') || '已终止');
