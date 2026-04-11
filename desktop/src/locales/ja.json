@@ -1364,7 +1364,9 @@
     "memorySearchDateToDesc": "終了日、形式 YYYY-MM-DD",
     "memorySearchEmpty": "記憶バンクに関連する内容が見つかりませんでした。",
     "memorySearchError": "記憶検索エラー: {msg}",
-    "fallbackUserName": "ユーザー"
+    "fallbackUserName": "ユーザー",
+    "uploadFailed": "ファイルのインポートに失敗しました",
+    "uploadPartialFail": "一部のファイルをインポートできませんでした：{files}"
   },
   "main": {
     "tray": {

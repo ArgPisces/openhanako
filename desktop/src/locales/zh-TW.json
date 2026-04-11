@@ -1364,7 +1364,9 @@
     "memorySearchDateToDesc": "結束日期，格式 YYYY-MM-DD",
     "memorySearchEmpty": "記憶庫裡沒有找到相關內容。",
     "memorySearchError": "記憶搜尋出錯: {msg}",
-    "fallbackUserName": "使用者"
+    "fallbackUserName": "使用者",
+    "uploadFailed": "檔案匯入失敗",
+    "uploadPartialFail": "部分檔案匯入失敗：{files}"
   },
   "main": {
     "tray": {

@@ -1409,7 +1409,9 @@
     "memorySearchDateToDesc": "End date, format YYYY-MM-DD",
     "memorySearchEmpty": "No relevant content found in memory.",
     "memorySearchError": "Memory search error: {msg}",
-    "fallbackUserName": "User"
+    "fallbackUserName": "User",
+    "uploadFailed": "Failed to import files",
+    "uploadPartialFail": "Some files could not be imported: {files}"
   },
   "main": {
     "tray": {

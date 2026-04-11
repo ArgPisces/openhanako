@@ -89,6 +89,7 @@ export async function attachFilesFromPaths(
       body: JSON.stringify({ paths: srcPaths }),
     });
     const data = await res.json();
+    const failed: string[] = [];
     for (const item of data.uploads || []) {
       if (item.dest) {
         useStore.getState().addAttachedFile({
@@ -96,16 +97,22 @@ export async function attachFilesFromPaths(
           name: item.name,
           isDirectory: item.isDirectory || false,
         });
+      } else if (item.error) {
+        failed.push(nameMap[item.src] || item.src.split('/').pop() || item.src);
       }
+    }
+    if (failed.length > 0) {
+      useStore.getState().addToast(
+        t('error.uploadPartialFail', { files: failed.join(', ') }),
+        'error',
+      );
     }
   } catch (err) {
     console.error('[upload]', err);
-    for (const p of srcPaths) {
-      useStore.getState().addAttachedFile({
-        path: p,
-        name: nameMap[p] || p.split('/').pop() || p,
-      });
-    }
+    useStore.getState().addToast(
+      t('error.uploadFailed'),
+      'error',
+    );
   }
 }
 

@@ -1364,7 +1364,9 @@
     "memorySearchDateToDesc": "종료 날짜, 형식 YYYY-MM-DD",
     "memorySearchEmpty": "기억 뱅크에서 관련 내용을 찾을 수 없어요.",
     "memorySearchError": "기억 검색 오류: {msg}",
-    "fallbackUserName": "사용자"
+    "fallbackUserName": "사용자",
+    "uploadFailed": "파일 가져오기 실패",
+    "uploadPartialFail": "일부 파일을 가져올 수 없습니다: {files}"
   },
   "main": {
     "tray": {

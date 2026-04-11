@@ -1414,7 +1414,9 @@
     "memorySearchDateToDesc": "结束日期，格式 YYYY-MM-DD",
     "memorySearchEmpty": "记忆库里没有找到相关内容。",
     "memorySearchError": "记忆搜索出错: {msg}",
-    "fallbackUserName": "用户"
+    "fallbackUserName": "用户",
+    "uploadFailed": "文件导入失败",
+    "uploadPartialFail": "部分文件导入失败：{files}"
   },
   "main": {
     "tray": {
