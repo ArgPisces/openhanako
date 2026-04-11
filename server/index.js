@@ -185,12 +185,12 @@ hub.eventBus.handle("deferred:register", ({ taskId, sessionPath, meta }) => {
   deferredResultStore.defer(taskId, sessionPath, meta);
   return { ok: true, sessionPath };
 });
-hub.eventBus.handle("deferred:resolve", ({ taskId, result }) => {
-  deferredResultStore.resolve(taskId, result);
+hub.eventBus.handle("deferred:resolve", ({ taskId, result, files }) => {
+  deferredResultStore.resolve(taskId, result ?? files);
   return { ok: true };
 });
-hub.eventBus.handle("deferred:fail", ({ taskId, reason }) => {
-  deferredResultStore.fail(taskId, reason);
+hub.eventBus.handle("deferred:fail", ({ taskId, reason, error }) => {
+  deferredResultStore.fail(taskId, reason ?? error?.message ?? String(error));
   return { ok: true };
 });
 hub.eventBus.handle("deferred:query", ({ taskId }) => {
