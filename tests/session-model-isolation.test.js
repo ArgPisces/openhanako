@@ -65,6 +65,14 @@ function makeMockSessionCoordinator(models) {
       currentSession = entry.session;
       return entry.session;
     },
+    switchSessionModel(sessionPath, newModel) {
+      const entry = sessions.get(sessionPath);
+      if (!entry) throw new Error("session not found");
+      entry.session.model = newModel;
+      entry.modelId = newModel.id;
+      entry.modelProvider = newModel.provider;
+      return { adaptations: [] };
+    },
     getCurrentSessionModelRef() {
       if (!currentSession) return null;
       return { id: currentSession.model?.id, provider: currentSession.model?.provider };
@@ -194,5 +202,61 @@ describe("Session model isolation", () => {
     models.setDefaultModel("mimo", "minimax");
     expect(sessionA.model).toBe(MODEL_A);
     expect(sessionB.model).toBe(MODEL_B);
+  });
+
+  describe("switchSessionModel", () => {
+    it("switches model on existing session without creating new session", () => {
+      const models = makeMockModels();
+      const coord = makeMockSessionCoordinator(models);
+
+      const { sessionPath } = coord.createSession(null, null, true, MODEL_A);
+      const sessionsBefore = coord._sessions.size;
+
+      coord.switchSessionModel(sessionPath, MODEL_B);
+
+      expect(coord._sessions.size).toBe(sessionsBefore);
+      expect(coord.session.model).toBe(MODEL_B);
+    });
+
+    it("does not affect pendingModel or defaultModel", () => {
+      const models = makeMockModels();
+      const coord = makeMockSessionCoordinator(models);
+
+      coord.setPendingModel(MODEL_A);
+      const { sessionPath } = coord.createSession(null, null, true, MODEL_A);
+
+      // pendingModel was consumed by createSession
+      expect(coord.pendingModel).toBeNull();
+
+      coord.switchSessionModel(sessionPath, MODEL_B);
+
+      // pendingModel stays null, defaultModel stays unchanged
+      expect(coord.pendingModel).toBeNull();
+      expect(models.currentModel).toBe(MODEL_DEFAULT);
+    });
+
+    it("throws for unknown sessionPath", () => {
+      const models = makeMockModels();
+      const coord = makeMockSessionCoordinator(models);
+
+      expect(() => coord.switchSessionModel("/nonexistent/path", MODEL_B))
+        .toThrow("session not found");
+    });
+
+    it("updates entry modelId and modelProvider", () => {
+      const models = makeMockModels();
+      const coord = makeMockSessionCoordinator(models);
+
+      const { sessionPath } = coord.createSession(null, null, true, MODEL_A);
+      const entry = coord._sessions.get(sessionPath);
+
+      expect(entry.modelId).toBe(MODEL_A.id);
+      expect(entry.modelProvider).toBe(MODEL_A.provider);
+
+      coord.switchSessionModel(sessionPath, MODEL_B);
+
+      expect(entry.modelId).toBe(MODEL_B.id);
+      expect(entry.modelProvider).toBe(MODEL_B.provider);
+    });
   });
 });

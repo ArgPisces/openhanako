@@ -8,7 +8,7 @@
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
-import { createAgentSession, SessionManager } from "../lib/pi-sdk/index.js";
+import { createAgentSession, SessionManager, estimateTokens, findCutPoint, generateSummary } from "../lib/pi-sdk/index.js";
 import { createDefaultSettings } from "./session-defaults.js";
 import { createModuleLogger } from "../lib/debug-log.js";
 import { BrowserManager } from "../lib/browser/browser-manager.js";
@@ -355,6 +355,216 @@ After dispatching subagent or other background tasks:
     if (!entry?.session.isStreaming) return false;
     await entry.session.abort();
     return true;
+  }
+
+  // ── Mid-session model switch ──
+
+  /**
+   * 在已有 session 上切换模型（不创建新 session）。
+   * 如果新模型的上下文窗口容不下当前对话，先压缩/截断。
+   *
+   * @param {string} sessionPath
+   * @param {object} newModel - Pi SDK Model 对象
+   * @returns {Promise<{ adaptations: string[] }>}
+   */
+  async switchSessionModel(sessionPath, newModel) {
+    const entry = this._sessions.get(sessionPath);
+    if (!entry) throw new Error(t("error.sessionNotInCache", { path: sessionPath }));
+
+    const { session } = entry;
+
+    // 并发 guard
+    if (entry._switching) {
+      throw new Error("Model switch already in progress for this session");
+    }
+    if (session.isCompacting) {
+      throw new Error("Cannot switch model while compaction is in progress");
+    }
+
+    entry._switching = true;
+    const adaptations = [];
+    const oldModel = session.model;
+
+    try {
+      // 估算当前上下文 token 数
+      const usage = session.getContextUsage?.();
+      let currentTokens = usage?.tokens;
+      if (currentTokens == null) {
+        // fallback: 逐消息估算
+        const msgs = session.agent.state.messages;
+        currentTokens = msgs.reduce((sum, m) => sum + estimateTokens(m), 0);
+      }
+
+      const effectiveWindow = Math.floor(newModel.contextWindow * 0.9) - 4000;
+
+      if (currentTokens > effectiveWindow) {
+        // 尝试压缩
+        try {
+          await this._compactWithModel(session, effectiveWindow, oldModel);
+          adaptations.push("compacted");
+        } catch (compactErr) {
+          log.warn(`compactWithModel failed, falling back to hard truncate: ${compactErr.message}`);
+          // 压缩失败，尝试硬截断
+          try {
+            await this._hardTruncate(session, effectiveWindow);
+            adaptations.push("truncated");
+          } catch (truncErr) {
+            throw new Error(`Failed to fit context into new model window: ${truncErr.message}`);
+          }
+        }
+
+        // 终极检查：压缩/截断后仍然超窗口则拒绝
+        const postMsgs = session.agent.state.messages;
+        const postTokens = postMsgs.reduce((sum, m) => sum + estimateTokens(m), 0);
+        if (postTokens > effectiveWindow) {
+          throw new Error(
+            `Context still exceeds new model window after adaptation (${postTokens} > ${effectiveWindow})`
+          );
+        }
+      }
+
+      // 执行模型切换
+      await session.setModel(newModel);
+      entry.modelId = newModel.id;
+      entry.modelProvider = newModel.provider;
+
+      return { adaptations };
+    } finally {
+      entry._switching = false;
+    }
+  }
+
+  /**
+   * 用 LLM 生成摘要来压缩对话历史（为 model switch 准备窗口）。
+   * @private
+   */
+  async _compactWithModel(session, effectiveWindow, model) {
+    const sm = session.sessionManager;
+    const pathEntries = sm.getBranch();
+
+    // 计算 keepRecentTokens：保留的 token 数（不超过窗口的 60%）
+    const keepRecentTokens = Math.floor(effectiveWindow * 0.6);
+
+    // 找到有 message 的 entry 的范围
+    const messageEntries = pathEntries.filter(e => e.type === "message");
+    if (messageEntries.length < 2) {
+      throw new Error("Not enough messages to compact");
+    }
+
+    // findCutPoint 操作的是 JSONL path entries
+    const startIndex = 0;
+    const endIndex = pathEntries.length;
+    const cutResult = findCutPoint(pathEntries, startIndex, endIndex, keepRecentTokens);
+
+    const { firstKeptEntryIndex, turnStartIndex, isSplitTurn } = cutResult;
+
+    // split-turn 时使用 turnStartIndex 避免 assistant 与 user prompt 分离
+    const effectiveCutIndex = isSplitTurn ? turnStartIndex : firstKeptEntryIndex;
+
+    if (effectiveCutIndex <= 0) {
+      throw new Error("Cut point at beginning — nothing to compact");
+    }
+
+    // 收集要摘要的消息（从 pathEntries[i].message，非 agent.state.messages）
+    const messagesToSummarize = [];
+    for (let i = 0; i < effectiveCutIndex; i++) {
+      if (pathEntries[i].type === "message" && pathEntries[i].message) {
+        messagesToSummarize.push(pathEntries[i].message);
+      }
+    }
+
+    if (messagesToSummarize.length === 0) {
+      throw new Error("No messages to summarize before cut point");
+    }
+
+    // 链接之前的 compaction summary
+    let previousSummary;
+    for (const entry of pathEntries) {
+      if (entry.type === "compaction" && entry.summary) {
+        previousSummary = entry.summary;
+      }
+    }
+
+    // 获取 API key
+    const models = this._d.getModels();
+    const auth = await models.modelRegistry.getApiKeyAndHeaders(model);
+    if (!auth.ok) {
+      throw new Error(`Auth failed for model ${model.id}: ${auth.error}`);
+    }
+    if (!auth.apiKey) {
+      throw new Error(`No API key for provider ${model.provider}`);
+    }
+
+    // 计算压缩前 token 数
+    const tokensBefore = messagesToSummarize.reduce((sum, m) => sum + estimateTokens(m), 0);
+
+    // 保留 token 数给摘要本身
+    const reserveTokens = 4000;
+
+    // 生成摘要
+    const summary = await generateSummary(
+      messagesToSummarize,
+      model,
+      reserveTokens,
+      auth.apiKey,
+      auth.headers,
+      undefined,        // signal
+      undefined,        // customInstructions
+      previousSummary,
+    );
+
+    // firstKeptEntryId 是要保留的第一个 entry 的 id
+    const firstKeptEntryId = pathEntries[effectiveCutIndex].id;
+
+    // 持久化
+    sm.appendCompaction(summary, firstKeptEntryId, tokensBefore, {});
+
+    // 重建上下文
+    const ctx = sm.buildSessionContext();
+    session.agent.replaceMessages(ctx.messages);
+  }
+
+  /**
+   * 硬截断对话历史（无 API 调用，用固定文本作为摘要）。
+   * @private
+   */
+  async _hardTruncate(session, effectiveWindow) {
+    const sm = session.sessionManager;
+    const pathEntries = sm.getBranch();
+
+    const keepRecentTokens = Math.floor(effectiveWindow * 0.6);
+
+    const messageEntries = pathEntries.filter(e => e.type === "message");
+    if (messageEntries.length < 2) {
+      throw new Error("Not enough messages to truncate");
+    }
+
+    const startIndex = 0;
+    const endIndex = pathEntries.length;
+    const cutResult = findCutPoint(pathEntries, startIndex, endIndex, keepRecentTokens);
+
+    const { firstKeptEntryIndex, turnStartIndex, isSplitTurn } = cutResult;
+    const effectiveCutIndex = isSplitTurn ? turnStartIndex : firstKeptEntryIndex;
+
+    if (effectiveCutIndex <= 0) {
+      throw new Error("Cut point at beginning — nothing to truncate");
+    }
+
+    // 计算截断前 token 数
+    let tokensBefore = 0;
+    for (let i = 0; i < effectiveCutIndex; i++) {
+      if (pathEntries[i].type === "message" && pathEntries[i].message) {
+        tokensBefore += estimateTokens(pathEntries[i].message);
+      }
+    }
+
+    const summary = "[由于模型切换，早期对话历史已被截断]";
+    const firstKeptEntryId = pathEntries[effectiveCutIndex].id;
+
+    sm.appendCompaction(summary, firstKeptEntryId, tokensBefore, {});
+
+    const ctx = sm.buildSessionContext();
+    session.agent.replaceMessages(ctx.messages);
   }
 
   /** Get plan mode for the current (focused) session */
