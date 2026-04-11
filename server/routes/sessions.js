@@ -103,20 +103,37 @@ export function createSessionsRoute(engine) {
           .map(b => ({ ...b, afterIndex: b.afterIndex - startIdx }));
       }
 
-      // 修正 subagent blocks 的状态：从子代理 session 文件读取完成状态
-      // 子代理 session 保留在 subagent-sessions/ 下（persist 模式），不依赖 deferred store
+      // 修正 subagent blocks 的状态：优先从 deferred store 读终态，其次从 session 文件推断
       {
         const fsSync = (await import("fs")).default;
         const deferredStore = engine.deferredResults;
         for (const b of slicedBlocks) {
           if (b.type !== "subagent" || !b.taskId) continue;
           if (b.streamStatus !== "running") continue;
-          // 找到子代理 session 文件路径：优先从 block.streamKey，其次从 deferred store meta
+
+          // 优先查 deferred store 的持久化终态（aborted / failed）
+          if (deferredStore) {
+            const task = deferredStore.query(b.taskId);
+            if (task?.status === "aborted") {
+              b.streamStatus = "aborted";
+              b.summary = task.reason || "aborted";
+              if (task.meta?.sessionPath) b.streamKey = task.meta.sessionPath;
+              continue;
+            }
+            if (task?.status === "failed") {
+              b.streamStatus = "failed";
+              b.summary = task.reason || "failed";
+              if (task.meta?.sessionPath) b.streamKey = task.meta.sessionPath;
+              continue;
+            }
+          }
+
+          // 从 session 文件推断 done 状态
           let sp = b.streamKey || null;
           if (!sp && deferredStore) {
             const task = deferredStore.query(b.taskId);
             sp = task?.meta?.sessionPath || null;
-            if (sp) b.streamKey = sp; // 同时补上 streamKey
+            if (sp) b.streamKey = sp;
           }
           if (!sp) continue;
           try {
