@@ -223,8 +223,6 @@ export class Agent {
         weekMdPath: this.weekMdPath,
         longtermMdPath: this.longtermMdPath,
         factsMdPath: this.factsMdPath,
-        experienceDir: path.join(this.agentDir, "experience"),
-        experienceIndexPath: path.join(this.agentDir, "experience.md"),
       });
       log(`  [agent] 4. memoryTicker 创建完成`);
 
@@ -715,6 +713,26 @@ export class Agent {
         "Break down and manage your work with the todo tool. When you receive complex or multi-step tasks, decompose them into sub-tasks before executing step by step. " +
         "Mark each sub-task as completed as soon as you finish it — do not batch up completions. " +
         "This helps the user track your progress. Simple single-step tasks (answering questions, single lookups, simple edits) do not need todos."
+    );
+
+    // 经验库引导
+    parts.push(isZh
+      ? "\n## 经验库\n\n" +
+        "你有一个经验库，记录着过往工作中踩过的坑和学到的教训。\n\n" +
+        "**查**：接到工作任务时，先调用 recall_experience 扫一眼索引，看有没有相关经验。\n\n" +
+        "**记**：工作中遇到以下情况时，用 record_experience 记录一条简洁的教训：\n" +
+        "- 用户纠正了你的错误\n" +
+        "- 用户表现出不满或反复强调某件事\n" +
+        "- 你自己试错后找到了正确做法\n" +
+        "- 巡检或自主工作时踩了坑"
+      : "\n## Experience Library\n\n" +
+        "You have an experience library that stores lessons from past work — mistakes, corrections, and discoveries.\n\n" +
+        "**Recall**: When you receive a work task, call recall_experience to scan the index for relevant experience first.\n\n" +
+        "**Record**: During work, use record_experience to log a concise lesson when:\n" +
+        "- The user corrects a mistake you made\n" +
+        "- The user shows frustration or repeatedly emphasizes something\n" +
+        "- You discover the right approach after trial and error\n" +
+        "- You hit a pitfall during patrol or autonomous work"
     );
 
     // 工具使用纪律（轻量优先）

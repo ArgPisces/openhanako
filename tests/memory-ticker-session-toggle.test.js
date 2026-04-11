@@ -15,10 +15,6 @@ vi.mock("../lib/memory/deep-memory.js", () => ({
   processDirtySessions: vi.fn().mockResolvedValue({ processed: 0, factsAdded: 0 }),
 }));
 
-vi.mock("../lib/experience-extractor.js", () => ({
-  extractSessionExperiences: vi.fn().mockResolvedValue({ extracted: 0 }),
-}));
-
 vi.mock("../lib/debug-log.js", () => ({
   debugLog: () => null,
 }));
