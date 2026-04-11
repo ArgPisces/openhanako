@@ -110,5 +110,38 @@ export function createModelsRoute(engine) {
     }
   });
 
+  // 会话内切换模型
+  route.post("/models/switch", async (c) => {
+    try {
+      const body = await safeJson(c);
+      const { sessionPath, modelId, provider } = body;
+      if (!sessionPath) return c.json({ error: t("error.missingParam", { param: "sessionPath" }) }, 400);
+      if (!modelId) return c.json({ error: t("error.missingParam", { param: "modelId" }) }, 400);
+
+      if (engine.isSessionStreaming(sessionPath)) {
+        return c.json({ error: "cannot switch model while streaming" }, 409);
+      }
+
+      const result = await engine.switchSessionModel(sessionPath, modelId, provider);
+
+      // Build model info for response
+      const session = engine.getSessionByPath(sessionPath);
+      const sessionModel = session?.model;
+      const overrides = engine.config?.models?.overrides;
+      const modelInfo = sessionModel ? {
+        id: sessionModel.id,
+        name: resolveModelName(sessionModel.id, sessionModel.name, overrides, sessionModel.provider),
+        provider: sessionModel.provider,
+        vision: sessionModel.vision,
+        reasoning: sessionModel.reasoning,
+        contextWindow: sessionModel.contextWindow,
+      } : null;
+
+      return c.json({ ok: true, model: modelInfo, adaptations: result.adaptations });
+    } catch (err) {
+      return c.json({ error: err.message }, 500);
+    }
+  });
+
   return route;
 }
