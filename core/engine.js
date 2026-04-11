@@ -126,7 +126,7 @@ export class HanaEngine {
       listAgents: () => this.listAgents(),
       getConfirmStore: () => this._confirmStore,
       getDeferredResultStore: () => this._deferredResultStore,
-      getSubagentRegistry: () => this._subagentRegistry,
+      getTaskRegistry: () => this._taskRegistry,
     });
 
     // ── Config Coordinator ──
@@ -160,7 +160,16 @@ export class HanaEngine {
     });
 
     // 任务注册表（外部 abort 用）
-    this._subagentRegistry = new TaskRegistry();
+    this._taskRegistry = new TaskRegistry();
+
+    // subagent AbortController 存储（engine 级别，跨 agent 共享）
+    this._subagentControllers = new Map();
+    this._taskRegistry.registerHandler("subagent", {
+      abort: (taskId) => {
+        const ctrl = this._subagentControllers.get(taskId);
+        if (ctrl) ctrl.abort();
+      },
+    });
 
     // Checkpoint 备份存储
     this._checkpointStore = new CheckpointStore(
@@ -221,9 +230,12 @@ export class HanaEngine {
     return this._deferredResultStore || null;
   }
 
-  get subagentRegistry() {
-    return this._subagentRegistry;
+  get taskRegistry() {
+    return this._taskRegistry;
   }
+
+  setSubagentController(taskId, controller) { this._subagentControllers.set(taskId, controller); }
+  removeSubagentController(taskId) { this._subagentControllers.delete(taskId); }
 
   // 向后兼容 getter
   get agentDir() { return this.agent?.agentDir || path.join(this.agentsDir, this.currentAgentId); }

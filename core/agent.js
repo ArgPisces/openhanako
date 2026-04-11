@@ -375,7 +375,7 @@ export class Agent {
       },
       resolveUtilityModel: () => this._cb?.getCurrentModelId?.() || null,
       getDeferredStore: () => this._cb?.getDeferredResults?.(),
-      getSubagentRegistry: () => this._cb?.getSubagentRegistry?.(),
+      getSubagentRegistry: () => this._cb?.getTaskRegistry?.(),
       getSessionPath: () => this._cb?.getCurrentSessionPath?.(),
       listAgents: this._listAgents || null,
       currentAgentId: this.channelsDir && this.agentsDir ? path.basename(this.agentDir) : undefined,

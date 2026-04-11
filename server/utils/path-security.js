@@ -18,7 +18,7 @@ const SENSITIVE_DIRS = [".ssh", ".gnupg", ".aws", ".config/gcloud", ".kube"];
 
 /**
  * 检查路径是否指向敏感位置
- * @param {string} srcPath - 待检查的绝对路径
+ * @param {string} srcPath - 待检查的路径（相对路径视为敏感，fail-closed）
  * @param {string} [hanakoHome] - hanakoHome 路径（也视为敏感）
  * @returns {boolean}
  */

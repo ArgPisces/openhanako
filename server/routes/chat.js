@@ -505,7 +505,7 @@ export function createChatRoute(engine, hub, { upgradeWebSocket }) {
 
   restRoute.post("/subagent/:taskId/abort", async (c) => {
     const taskId = c.req.param("taskId");
-    const registry = engine.subagentRegistry;
+    const registry = engine.taskRegistry;
     if (!registry) return c.json({ error: "registry unavailable" }, 500);
     const result = registry.abort(taskId);
     if (result === "not_found") return c.json({ error: "task not found" }, 404);

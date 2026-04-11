@@ -199,6 +199,31 @@ hub.eventBus.handle("deferred:query", ({ taskId }) => {
 hub.eventBus.handle("deferred:list-pending", ({ sessionPath }) => {
   return deferredResultStore.listPending(sessionPath);
 });
+hub.eventBus.handle("deferred:abort", ({ taskId, reason }) => {
+  deferredResultStore.abort(taskId, reason);
+  return { ok: true };
+});
+
+// Task registry bus handlers (plugin access)
+hub.eventBus.handle("task:register-handler", ({ type, abort }) => {
+  engine.taskRegistry.registerHandler(type, { abort });
+  return { ok: true };
+});
+hub.eventBus.handle("task:unregister-handler", ({ type }) => {
+  engine.taskRegistry.unregisterHandler(type);
+  return { ok: true };
+});
+hub.eventBus.handle("task:register", ({ taskId, type, parentSessionPath, meta }) => {
+  engine.taskRegistry.register(taskId, { type, parentSessionPath, meta });
+  return { ok: true };
+});
+hub.eventBus.handle("task:remove", ({ taskId }) => {
+  engine.taskRegistry.remove(taskId);
+  return { ok: true };
+});
+hub.eventBus.handle("task:abort", ({ taskId }) => {
+  return { result: engine.taskRegistry.abort(taskId) };
+});
 hub.eventBus.handle("session:get-titles", async ({ paths }) => {
   if (!Array.isArray(paths) || !paths.length) return { titles: {} };
   const coord = engine._sessionCoord;

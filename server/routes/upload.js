@@ -61,19 +61,6 @@ export function createUploadRoute(engine) {
       return c.json({ error: t("error.pathsRequired") }, 400);
     }
 
-    // 统计总文件数（文件夹递归计数）
-    let totalFiles = 0;
-    for (const p of paths) {
-      totalFiles += countFiles(p);
-    }
-    if (totalFiles > MAX_FILES) {
-      return c.json({
-        error: t("error.tooManyFiles", { max: MAX_FILES, n: totalFiles }),
-        totalFiles,
-        max: MAX_FILES,
-      }, 400);
-    }
-
     // 确定 uploads 目录
     const uploadsDir = path.join(engine.hanakoHome, "uploads");
 
@@ -83,8 +70,18 @@ export function createUploadRoute(engine) {
     cleanOldUploads(uploadsDir);
 
     const results = [];
+    let totalFiles = 0;
 
     for (const srcPath of paths) {
+      // 超出文件数限制后，对剩余路径统一报错
+      if (totalFiles > MAX_FILES) {
+        results.push({
+          src: srcPath,
+          error: t("error.tooManyFiles", { max: MAX_FILES, n: totalFiles }),
+        });
+        continue;
+      }
+
       try {
         if (!path.isAbsolute(srcPath)) {
           results.push({ src: srcPath, error: "Path must be absolute" });
@@ -96,6 +93,17 @@ export function createUploadRoute(engine) {
         }
         if (!fs.existsSync(srcPath)) {
           results.push({ src: srcPath, error: t("error.pathNotFound") });
+          continue;
+        }
+
+        // 安全检查通过后再统计文件数
+        const pathFileCount = countFiles(srcPath);
+        totalFiles += pathFileCount;
+        if (totalFiles > MAX_FILES) {
+          results.push({
+            src: srcPath,
+            error: t("error.tooManyFiles", { max: MAX_FILES, n: totalFiles }),
+          });
           continue;
         }
 
