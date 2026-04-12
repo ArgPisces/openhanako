@@ -232,7 +232,7 @@
     width: 260px;
     height: 110px;
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: flex-end;
     transition: width 0.35s var(--ease-out) 0.8s;
 }
@@ -240,7 +240,6 @@
 .agent-cards:hover {
     width: max(240px, calc(var(--cards-spread-width, 240) * 1px));
     transition-delay: 0s;
-    justify-content: flex-start;
     /* overflow scroll for 9+ cards */
     max-width: min(100%, 600px);
     overflow-x: auto;
@@ -255,7 +254,6 @@
 .agent-cards.dragging-active {
     width: max(240px, calc(var(--cards-spread-width, 240) * 1px));
     max-width: min(100%, 600px);
-    justify-content: flex-start;
     overflow-x: hidden;
 }
 
@@ -277,7 +275,8 @@
     height: 62px;
     cursor: pointer;
     transform-origin: center 340px;
-    transform: rotate(var(--rot-tight, 0deg)) translateY(var(--lift, 0px));
+    left: 0;
+    transform: rotate(var(--rot-tight, 0deg)) translateX(99px) translateY(var(--lift, 0px));
     z-index: var(--z, 0);
     transition: transform 0.35s var(--ease-out) 0.8s,
                 transform-origin 0.35s var(--ease-out) 0.8s,
