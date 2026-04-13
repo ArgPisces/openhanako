@@ -26,13 +26,13 @@ export function AgentCardStack({ agents, selectedId, currentAgentId, onSelect, o
   agentsRef.current = agents;
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
-  // Horizontal scroll on wheel (only when overflowing)
+  // Wheel 在本区域内只用于左右翻卡，永远不传穿透到外层触发页面纵向滚动
   useEffect(() => {
     const el = cardsRef.current;
     if (!el) return;
     const handler = (e: WheelEvent) => {
-      if (el.scrollWidth <= el.clientWidth) return;
       e.preventDefault();
+      if (el.scrollWidth <= el.clientWidth) return;
       el.scrollLeft += e.deltaY;
     };
     el.addEventListener('wheel', handler, { passive: false });
@@ -116,7 +116,7 @@ export function AgentCardStack({ agents, selectedId, currentAgentId, onSelect, o
             container.classList.add(styles['dragging-active']);
           }
 
-          card.style.transform = `rotate(0deg) translateX(${origTx + dx}px) translateY(-4px)`;
+          card.style.transform = `translateX(${origTx + dx}px) rotate(0deg) translateY(-4px)`;
 
           const currentPos = origTx + dx;
           let newIdx = dragIdx;
@@ -131,9 +131,9 @@ export function AgentCardStack({ agents, selectedId, currentAgentId, onSelect, o
             if (c === card || c.dataset.addBtn) return;
             if (ci >= Math.min(dragIdx, newIdx) && ci <= Math.max(dragIdx, newIdx) && newIdx !== dragIdx) {
               const shift = dragIdx < newIdx ? -spreadStep : spreadStep;
-              c.style.transform = `rotate(0deg) translateX(${positions[ci] + shift}px)`;
+              c.style.transform = `translateX(${positions[ci] + shift}px) rotate(0deg)`;
             } else {
-              c.style.transform = `rotate(0deg) translateX(${positions[ci]}px)`;
+              c.style.transform = `translateX(${positions[ci]}px) rotate(0deg)`;
             }
             c.style.transition = 'transform 0.2s var(--ease-out)';
           });
