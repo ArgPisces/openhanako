@@ -1444,8 +1444,8 @@
     },
     "browser": {
       "label": "브라우저",
-      "description": "브라우저를 조작해서 웹페이지를 탐색해요. 내비게이션, 클릭, 입력, 스크롤, 스크린샷이 가능해요.\n동작:\n- start: 브라우저 시작 (처음 사용 전에 반드시 호출)\n- stop: 브라우저 닫기\n- navigate(url): 지정 URL로 이동\n- snapshot: 현재 페이지의 요소 트리 가져오기 (권장: 텍스트 형식, 저비용)\n- screenshot: 현재 페이지 스크린샷 찍기 (시각 정보가 필요할 때만 사용)\n- click(ref): snapshot이 반환한 [ref] 번호의 요소 클릭\n- type(text, ref?): 요소에 텍스트 입력, 선택적으로 ref를 클릭해서 포커스\n- scroll(direction, amount?): 페이지 스크롤, direction은 up/down\n- select(ref, value): 드롭다운 옵션 선택\n- key(key): 키 누르기, 예: Enter, Escape, Tab, Control+a\n- wait(timeout?, state?): 페이지 로딩 대기\n- evaluate(expression): 페이지에서 JavaScript 실행\n- show: 브라우저 창을 앞으로 가져오기\n\n중요: snapshot이 반환한 [ref] 번호는 페이지 변경 후 무효가 돼요. navigate/click 후에 새로운 snapshot이 자동으로 반환돼요.",
-      "actionDesc": "동작 유형",
+      "description": "헤드리스 브라우저를 제어해요（navigate, click, type, scroll, screenshot, JS 실행）. action 파라미터로 작업을 선택하고, 각 action에 필요한 파라미터는 action 필드 설명을 참고하세요. 주의: snapshot이 반환한 [ref] 번호는 navigate/click/type 이후 무효가 돼요. 이 작업들은 자동으로 새 snapshot을 반환하므로 항상 최신 snapshot의 ref를 사용하세요.",
+      "actionDesc": "실행할 작업. 각 action의 필수 파라미터: navigate→url; click→ref; type→text (선택 ref, pressEnter); scroll→direction (선택 amount); select→ref+value; key→key; wait→(선택 timeout, state); evaluate→expression. start, stop, snapshot, screenshot, show는 추가 파라미터 불필요.",
       "urlDesc": "URL (navigate에 필수)",
       "refDesc": "요소 ref 번호 (click/type/select에 사용)",
       "textDesc": "입력 텍스트 (type에 필수)",
