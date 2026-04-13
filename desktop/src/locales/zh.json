@@ -1494,8 +1494,8 @@
     },
     "browser": {
       "label": "浏览器",
-      "description": "控制浏览器浏览网页。可以导航、点击、输入、滚动、截图。\n操作：\n- start：启动浏览器（首次使用前必须调用）\n- stop：关闭浏览器\n- navigate(url)：导航到指定 URL\n- snapshot：获取当前页面的元素树（推荐：文本格式，成本低）\n- screenshot：截取当前页面截图（仅在需要视觉信息时使用）\n- click(ref)：点击 snapshot 返回的 [ref] 编号对应的元素\n- type(text, ref?)：在元素中输入文本，可选先点击 ref 聚焦\n- scroll(direction, amount?)：滚动页面，direction 为 up/down\n- select(ref, value)：选择下拉菜单选项\n- key(key)：按键，如 Enter、Escape、Tab、Control+a\n- wait(timeout?, state?)：等待页面加载\n- evaluate(expression)：执行页面 JavaScript\n- show：将浏览器窗口置于前台\n\n重要：snapshot 返回的 [ref] 编号在页面变化后会失效，每次 navigate/click 后会自动返回新的 snapshot。",
-      "actionDesc": "操作类型",
+      "description": "控制无头浏览器（导航、点击、输入、滚动、截图、执行 JS）。通过 action 参数选择操作，具体每个 action 需要的参数见 action 字段的说明。注意：snapshot 返回的 [ref] 编号在 navigate/click/type 后会失效，这些操作会自动返回新的 snapshot，请始终使用最新 snapshot 里的 ref。",
+      "actionDesc": "要执行的操作。每个 action 的必填参数：navigate→url；click→ref；type→text（可选 ref、pressEnter）；scroll→direction（可选 amount）；select→ref+value；key→key；wait→（可选 timeout、state）；evaluate→expression。start、stop、snapshot、screenshot、show 无需额外参数。",
       "urlDesc": "URL（navigate 时必填）",
       "refDesc": "元素 ref 编号（click/type/select 时使用）",
       "textDesc": "输入文本（type 时必填）",
