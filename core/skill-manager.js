@@ -238,13 +238,24 @@ export class SkillManager {
   // ── 外部路径 watcher ──
 
   _watchExternalPaths() {
-    for (const { dirPath } of this._externalPaths) {
+    for (const { dirPath, scope } of this._externalPaths) {
       if (!fs.existsSync(dirPath)) continue;
       if (this._externalWatchers.has(dirPath)) continue;
       try {
+        // workspace 下的 skill 目录本身就在 .agents/.claude 等隐藏目录里，
+        // 不能用全局 dot ignore，否则 dirPath 内的所有文件都会被 chokidar 吞掉。
+        // 改为相对 dirPath 的 ignore 判断，允许 dirPath 自身及其直接子目录，
+        // 只屏蔽子目录内部的隐藏文件（如 .DS_Store）和编辑器临时文件。
+        const ignored = scope === "workspace"
+          ? (absPath) => {
+              const rel = path.relative(dirPath, absPath);
+              if (!rel || rel === "") return false;
+              return /(^|[/\\])\./.test(rel) || /[~#]$/.test(rel);
+            }
+          : [/(^|[/\\])\./, /[~#]$/];
         const w = chokidar.watch(dirPath, {
           ignoreInitial: true,
-          ignored: [/(^|[/\\])\./, /[~#]$/],
+          ignored,
           persistent: true,
         });
         w.on("all", () => {

@@ -342,7 +342,7 @@ export function createDeskRoute(engine, hub) {
         const dest = path.join(skillsDir, destName);
         fs.cpSync(filePath, dest, { recursive: true });
         if (realPath(cwd) === realPath(engine.deskCwd)) {
-          await engine.syncWorkspaceSkillPaths(cwd, { reload: true, emitEvent: true });
+          await engine.syncWorkspaceSkillPaths(cwd, { reload: true, emitEvent: true, force: true });
         }
         return c.json({ ok: true, name: destName });
       }
@@ -373,7 +373,7 @@ export function createDeskRoute(engine, hub) {
           fs.renameSync(tmpDir, dest);
         }
         if (realPath(cwd) === realPath(engine.deskCwd)) {
-          await engine.syncWorkspaceSkillPaths(cwd, { reload: true, emitEvent: true });
+          await engine.syncWorkspaceSkillPaths(cwd, { reload: true, emitEvent: true, force: true });
         }
         return c.json({ ok: true, name: skillName });
       }

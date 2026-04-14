@@ -258,9 +258,7 @@ export class HanaEngine {
   setPrimaryAgent(agentId) { return this._agentMgr.setPrimaryAgent(agentId); }
   agentIdFromSessionPath(p) { return this._agentMgr.agentIdFromSessionPath(p); }
   async createSessionForAgent(agentId, cwd, mem) {
-    const result = await this._agentMgr.createSessionForAgent(agentId, cwd, mem);
-    await this.syncWorkspaceSkillPaths(cwd || this.cwd, { reload: true, emitEvent: false });
-    return result;
+    return this._agentMgr.createSessionForAgent(agentId, cwd, mem);
   }
 
   // 向后兼容：agent 属性代理
@@ -286,9 +284,7 @@ export class HanaEngine {
   get deskCwd() { return this._sessionCoord.session?.sessionManager?.getCwd?.() || this.homeCwd || null; }
 
   async createSession(mgr, cwd, mem, model) {
-    const result = await this._sessionCoord.createSession(mgr, cwd, mem, model);
-    await this.syncWorkspaceSkillPaths(cwd || this.cwd, { reload: true, emitEvent: false });
-    return result;
+    return this._sessionCoord.createSession(mgr, cwd, mem, model);
   }
   async switchSession(p) {
     const result = await this._sessionCoord.switchSession(p);
@@ -539,11 +535,11 @@ export class HanaEngine {
     });
   }
 
-  async syncWorkspaceSkillPaths(cwd = null, { reload = true, emitEvent = false } = {}) {
+  async syncWorkspaceSkillPaths(cwd = null, { reload = true, emitEvent = false, force = false } = {}) {
     if (!this._skills) return false;
     const resolved = this._getResolvedExternalSkillPaths(cwd);
     const changed = !this._sameExternalSkillPaths(this._skills._externalPaths || [], resolved);
-    if (!changed) return false;
+    if (!changed && !force) return false;
 
     this._skills.setExternalPaths(resolved);
     if (reload) await this.reloadSkills();

@@ -17,11 +17,15 @@ describe('chat message session ownership', () => {
     expect(userSource).not.toMatch(/currentSessionPath/);
   });
 
-  it('ChatArea 把显式 sessionPath 传给消息组件', () => {
+  it('消息组件通过显式 sessionPath 渲染，不从全局焦点推导', () => {
+    // 7687243 后 ChatArea 的消息渲染提取到了 ChatTranscript，sessionPath 由 ChatTranscript
+    // 以 props 形式传给 UserMessage / AssistantMessage。这里校验这条链路仍然成立。
     const chatAreaSource = read('components/chat/ChatArea.tsx');
+    expect(chatAreaSource).toMatch(/<ChatTranscript[\s\S]*sessionPath=\{path\}/);
 
-    expect(chatAreaSource).toMatch(/<UserMessage[\s\S]*sessionPath=\{sessionPath\}/);
-    expect(chatAreaSource).toMatch(/<AssistantMessage[\s\S]*sessionPath=\{sessionPath\}/);
+    const transcriptSource = read('components/chat/ChatTranscript.tsx');
+    expect(transcriptSource).toMatch(/<UserMessage[\s\S]*sessionPath=\{sessionPath\}/);
+    expect(transcriptSource).toMatch(/<AssistantMessage[\s\S]*sessionPath=\{sessionPath\}/);
   });
 
   it('聊天消息 selector 不再为缺失 key 内联返回新空数组', () => {

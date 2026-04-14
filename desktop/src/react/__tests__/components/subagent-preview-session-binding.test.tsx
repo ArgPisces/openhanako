@@ -267,4 +267,59 @@ describe('SubagentSessionPreview session binding', () => {
 
     expect(screen.getByText('第一句 已经来了')).toBeTruthy();
   });
+
+  it('多轮 turn 场景下：items 里已有上一轮 assistant 时，新一轮的 streamMessage 不会被误清', async () => {
+    // 初始 items 里已经落盘了"第一轮"的 assistant 消息 —— 模拟 subagent 内部
+    // 已经完成过一次 agent inference。streamStatus 仍是 running，意味着正在跑下一轮。
+    useStore.setState({
+      chatSessions: {
+        '/session/subagent': {
+          items: [
+            {
+              type: 'message',
+              data: {
+                id: 'u-1',
+                role: 'user',
+                text: 'synthetic prompt',
+                textHtml: '<p>synthetic prompt</p>',
+              },
+            },
+            {
+              type: 'message',
+              data: {
+                id: 'a-first-turn',
+                role: 'assistant',
+                blocks: [{ type: 'text', html: '<p>第一轮已落盘</p>' }],
+              },
+            },
+          ],
+          hasMore: false,
+          loadingMore: false,
+        },
+      },
+    } as never);
+    mockedLoadMessages.mockImplementation(async () => {});
+
+    render(
+      <SubagentSessionPreview
+        taskId="task-a"
+        sessionPath="/session/subagent"
+        streamStatus="running"
+        scrollContainerRef={makeScrollContainerRef()}
+      />,
+    );
+
+    await act(async () => {});
+    expect(screen.getByText('第一轮已落盘')).toBeTruthy();
+
+    // 第二轮开始：thinking_start + text_delta。新的 streamMessage 应当独立渲染，
+    // 不能因为 items 里残留的第一轮 assistant 就被清空。
+    act(() => {
+      dispatchStreamKey('/session/subagent', { type: 'thinking_start', sessionPath: '/session/subagent' });
+      dispatchStreamKey('/session/subagent', { type: 'text_delta', sessionPath: '/session/subagent', delta: '第二轮的正文' });
+    });
+
+    expect(screen.getByText('第一轮已落盘')).toBeTruthy();
+    expect(screen.getByText('第二轮的正文')).toBeTruthy();
+  });
 });

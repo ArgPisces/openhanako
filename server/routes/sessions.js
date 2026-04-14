@@ -22,9 +22,22 @@ import { loadLatestTodosFromSessionFile } from "../../lib/tools/todo-compat.js";
 export function createSessionsRoute(engine) {
   const route = new Hono();
 
-  function applySubagentIdentity(block, task = null) {
+  // session-meta.json sidecar 按 session 目录共享；同一个 request 里遍历几十个 block
+  // 时不必每个 block 都重复 readFileSync + JSON.parse。调用端构造一次 Map 当 cache。
+  function createSubagentMetaCache() {
+    const map = new Map();
+    return (sessionPath) => {
+      if (!sessionPath) return null;
+      if (map.has(sessionPath)) return map.get(sessionPath);
+      const meta = readSubagentSessionMetaSync(sessionPath);
+      map.set(sessionPath, meta);
+      return meta;
+    };
+  }
+
+  function applySubagentIdentity(block, task, readSessionMeta) {
     const sessionPath = block.streamKey || task?.meta?.sessionPath || null;
-    const sessionMeta = sessionPath ? readSubagentSessionMetaSync(sessionPath) : null;
+    const sessionMeta = readSessionMeta(sessionPath);
     const resolved =
       materializeExecutorIdentity(sessionMeta, engine.getAgent?.bind(engine))
       || materializeExecutorIdentity(task?.meta, engine.getAgent?.bind(engine))
@@ -46,9 +59,9 @@ export function createSessionsRoute(engine) {
     block.agentName = inferredAgent?.agentName || "Unknown agent";
   }
 
-  function patchBlockExecutorMetadata(block, task = null) {
+  function patchBlockExecutorMetadata(block, task, readSessionMeta) {
     const sessionPath = block.streamKey || task?.meta?.sessionPath || null;
-    const sessionMeta = sessionPath ? readSubagentSessionMetaSync(sessionPath) : null;
+    const sessionMeta = readSessionMeta(sessionPath);
     const sources = [sessionMeta, task?.meta, block];
 
     for (const source of sources) {
@@ -169,14 +182,15 @@ export function createSessionsRoute(engine) {
       {
         const fsSync = (await import("fs")).default;
         const deferredStore = engine.deferredResults;
+        const readSessionMeta = createSubagentMetaCache();
         for (const b of slicedBlocks) {
           if (b.type !== "subagent" || !b.taskId) continue;
           const task = deferredStore?.query?.(b.taskId) || null;
           const deferredSessionPath = task?.meta?.sessionPath || null;
           if (!b.streamKey && deferredSessionPath) b.streamKey = deferredSessionPath;
           patchBlockRequestedMetadata(b, task);
-          patchBlockExecutorMetadata(b, task);
-          applySubagentIdentity(b, task);
+          patchBlockExecutorMetadata(b, task, readSessionMeta);
+          applySubagentIdentity(b, task, readSessionMeta);
 
           if (b.streamStatus !== "running") continue;
 
@@ -187,8 +201,8 @@ export function createSessionsRoute(engine) {
               b.summary = task.reason || "aborted";
               if (task.meta?.sessionPath) b.streamKey = task.meta.sessionPath;
               patchBlockRequestedMetadata(b, task);
-              patchBlockExecutorMetadata(b, task);
-              applySubagentIdentity(b, task);
+              patchBlockExecutorMetadata(b, task, readSessionMeta);
+              applySubagentIdentity(b, task, readSessionMeta);
               continue;
             }
             if (task?.status === "failed") {
@@ -196,8 +210,8 @@ export function createSessionsRoute(engine) {
               b.summary = task.reason || "failed";
               if (task.meta?.sessionPath) b.streamKey = task.meta.sessionPath;
               patchBlockRequestedMetadata(b, task);
-              patchBlockExecutorMetadata(b, task);
-              applySubagentIdentity(b, task);
+              patchBlockExecutorMetadata(b, task, readSessionMeta);
+              applySubagentIdentity(b, task, readSessionMeta);
               continue;
             }
           }

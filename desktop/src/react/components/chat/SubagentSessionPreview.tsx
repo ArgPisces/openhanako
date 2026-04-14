@@ -104,11 +104,9 @@ export function SubagentSessionPreview({ taskId, sessionPath, agentId, streamSta
     return () => ro.disconnect();
   }, [scrollToBottom, items.length, streamRevision]);
 
-  useEffect(() => {
-    if (streamMessage && hasAssistantHistory(items)) {
-      setStreamMessage(null);
-    }
-  }, [items, streamMessage]);
+  // streamMessage 的清理完全交给 turn_end 事件（下方 subscribeStreamKey 分支中处理）。
+  // 不能用 hasAssistantHistory(items) 做被动推断：多轮 turn 场景下 items 永远有上一轮的
+  // assistant 记录，被动清理会把刚开始的新一轮 streamMessage 立刻抹掉。
 
   useEffect(() => {
     if (!sessionPath) return;

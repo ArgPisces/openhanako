@@ -19,16 +19,28 @@ export function DeskSkillsSection() {
 
   const loadDeskSkillsFn = useCallback(async () => {
     try {
-      const agentId = useStore.getState().currentAgentId;
+      const snapshot = useStore.getState();
+      const agentId = snapshot.currentAgentId;
       if (!agentId) return; // currentAgentId 未就绪时跳过，避免错位
+      // 记录发起时的 session 指纹，fetch 回来后校验是否还是同一个 session，
+      // 否则会把旧 session 的 fetch 结果写到 patchCurrentOwner 当前 owner 槽，
+      // 污染用户已经切到的新 session。
+      const requestAgentId = agentId;
+      const requestSessionPath = snapshot.currentSessionPath || null;
+
       const res = await hanaFetch(`/api/skills?agentId=${encodeURIComponent(agentId)}&runtime=1`);
       const data = await res.json();
       if (data.error) return;
+
+      const now = useStore.getState();
+      if (now.currentAgentId !== requestAgentId) return;
+      if ((now.currentSessionPath || null) !== requestSessionPath) return;
+
       const all = (data.skills || []) as Array<{
         name: string; enabled: boolean; hidden?: boolean;
         source?: string; externalLabel?: string | null; managedBy?: string | null;
       }>;
-      useStore.getState().setDeskSkills(
+      now.setDeskSkills(
         all.filter(s => !s.hidden).map(s => ({
           name: s.name,
           enabled: s.enabled,
@@ -55,14 +67,23 @@ export function DeskSkillsSection() {
   }, []);
 
   const toggleSkill = useCallback(async (name: string, enable: boolean) => {
-    const prev = useStore.getState().deskSkills;
-    const agentId = useStore.getState().currentAgentId || '';
+    const snapshot = useStore.getState();
+    const prev = snapshot.deskSkills;
+    const agentId = snapshot.currentAgentId || '';
     if (!agentId) return;
     const target = prev.find(s => s.name === name);
     if (target?.managedBy === 'workspace') return;
 
+    const requestAgentId = agentId;
+    const requestSessionPath = snapshot.currentSessionPath || null;
+    const sessionUnchanged = () => {
+      const now = useStore.getState();
+      return now.currentAgentId === requestAgentId
+        && (now.currentSessionPath || null) === requestSessionPath;
+    };
+
     // 乐观更新
-    useStore.getState().setDeskSkills(
+    snapshot.setDeskSkills(
       prev.map(s => s.name === name ? { ...s, enabled: enable } : s),
     );
 
@@ -72,6 +93,7 @@ export function DeskSkillsSection() {
       const freshRes = await hanaFetch(`/api/skills?agentId=${encodeURIComponent(agentId)}&runtime=1`);
       const freshData = await freshRes.json();
       if (freshData.error) throw new Error(freshData.error);
+      if (!sessionUnchanged()) return;
       const freshSkills = (freshData.skills || []) as Array<{ name: string; enabled: boolean; managedBy?: string | null }>;
       const enabledList = freshSkills
         .map(s => s.name === name ? { ...s, enabled: enable } : s)
@@ -84,7 +106,9 @@ export function DeskSkillsSection() {
         body: JSON.stringify({ enabled: enabledList }),
       });
     } catch {
-      useStore.getState().setDeskSkills(prev);
+      if (sessionUnchanged()) {
+        useStore.getState().setDeskSkills(prev);
+      }
     }
   }, []);
 
