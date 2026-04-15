@@ -839,6 +839,11 @@
     "skills": {
       "title": "スキル",
       "desc": "このエージェントのスキルを有効または無効にできます。有効にすると、会話の中で該当するスキルを自動的に認識して使用します。",
+      "agentConfigTitle": "Agent Skill Configuration",
+      "configureFor": "Configuring:",
+      "userSkillsTitle": "User Skills",
+      "learnedSkillsTitle": "Learned Skills",
+      "learnedEmpty": "This agent hasn't learned any skills yet",
       "user": "ユーザースキル",
       "system": "システムスキル",
       "add": "スキルを追加",
