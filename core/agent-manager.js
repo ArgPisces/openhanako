@@ -345,6 +345,11 @@ export class AgentManager {
       try { fs.rmSync(agentDir, { recursive: true, force: true }); } catch {}
       throw err;
     }
+    const defaultEnabled = this._d.getSkills().computeDefaultEnabledForNewAgent();
+    if (defaultEnabled.length > 0) {
+      ag.updateConfig({ skills: { enabled: defaultEnabled } });
+      this._d.getSkills().syncAgentSkills(ag);
+    }
     this._agents.set(agentId, ag);
 
     // 启动 cron + heartbeat
