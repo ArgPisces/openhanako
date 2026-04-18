@@ -1,18 +1,14 @@
-import type { FileRef, FileKind } from '../../../types/file-ref';
+import type { FileRef } from '../../../types/file-ref';
 
 export interface MediaSource {
   url: string;
   cleanup?: () => void;
 }
 
-function mimeFromKindAndExt(kind: FileKind, ext: string | undefined): string {
+function mimeFromImageOrSvg(kind: 'image' | 'svg', ext: string | undefined): string {
   if (kind === 'svg') return 'image/svg+xml';
-  if (kind === 'image') {
-    const e = (ext || 'png').toLowerCase();
-    return `image/${e === 'jpg' ? 'jpeg' : e}`;
-  }
-  if (kind === 'video') return `video/${ext ?? 'mp4'}`;
-  return 'application/octet-stream';
+  const e = (ext || 'png').toLowerCase();
+  return `image/${e === 'jpg' ? 'jpeg' : e}`;
 }
 
 export async function loadMediaSource(ref: FileRef): Promise<MediaSource> {
@@ -43,7 +39,7 @@ export async function loadMediaSource(ref: FileRef): Promise<MediaSource> {
     if (base64 == null) {
       throw new Error(`读取媒体失败: ${ref.path}`);
     }
-    const mime = ref.mime ?? mimeFromKindAndExt(ref.kind, ref.ext);
+    const mime = ref.mime ?? mimeFromImageOrSvg(ref.kind, ref.ext);
     return { url: `data:${mime};base64,${base64}` };
   }
 

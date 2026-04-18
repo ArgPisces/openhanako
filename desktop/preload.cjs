@@ -5,6 +5,7 @@
  * IPC 仅用于：窗口管理、系统对话框、跨窗口消息转发。
  */
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
+const { pathToFileUrl } = require("./src/shared/path-to-file-url.js");
 
 function resolveTheme() {
   const saved = localStorage.getItem("hana-theme") || "auto";
@@ -41,17 +42,8 @@ contextBridge.exposeInMainWorld("hana", {
   unwatchFile: (filePath) => ipcRenderer.invoke("unwatch-file", filePath),
   onFileChanged: (cb) => ipcRenderer.on("file-changed", (_, filePath) => cb(filePath)),
   readFileBase64: (path) => ipcRenderer.invoke("read-file-base64", path),
-  // 本地路径 → file:// URL（同步，纯字符串转换，无 IPC）。
-  // Windows：C:\Users\foo\bar.mp4 → file:///C:/Users/foo/bar.mp4
-  // POSIX：/home/u/a.mp4          → file:///home/u/a.mp4
-  getFileUrl(filePath) {
-    if (typeof filePath !== "string" || filePath.length === 0) return "";
-    const normalized = filePath.replace(/\\/g, "/");
-    if (/^[A-Za-z]:\//.test(normalized)) {
-      return `file:///${normalized}`;
-    }
-    return `file://${normalized}`;
-  },
+  // 本地路径 → file:// URL（同步，纯字符串转换，无 IPC）。逻辑见 src/shared/path-to-file-url.js
+  getFileUrl: (filePath) => pathToFileUrl(filePath),
   readDocxHtml: (path) => ipcRenderer.invoke("read-docx-html", path),
   readXlsxHtml: (path) => ipcRenderer.invoke("read-xlsx-html", path),
   getFilePath: (file) => webUtils.getPathForFile(file),
