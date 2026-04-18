@@ -1,6 +1,6 @@
 import { useStore } from '../stores';
 import { selectDeskFiles, selectSessionFiles } from '../stores/selectors/file-refs';
-import type { FileRef, FileKind } from '../types/file-ref';
+import type { FileRef, FileKind, FileSource } from '../types/file-ref';
 import { isMediaKind, buildFileRefId } from './file-kind';
 
 interface OpenInput {
@@ -22,7 +22,7 @@ interface OpenInput {
 }
 
 export function openMediaViewerFromContext(input: OpenInput): void {
-  const state = useStore.getState() as any;
+  const state = useStore.getState();
   const origin = input.origin ?? 'desk';
   const sessionPath = input.sessionPath ?? '';
 
@@ -45,10 +45,15 @@ export function openMediaViewerFromContext(input: OpenInput): void {
   const startRef = files.find(f => f.id === startId);
   if (!startRef) {
     // 防御：序列里找不到（外部 ad-hoc / 新文件尚未加载）→ solo 序列
+    const soloSource: FileSource = origin === 'desk'
+      ? 'desk'
+      : input.blockIdx !== undefined
+        ? 'session-block-file'
+        : 'session-attachment';
     const solo: FileRef = {
       id: startId,
       kind: input.kind,
-      source: origin === 'session' ? 'session-attachment' : 'desk',
+      source: soloSource,
       name: input.label,
       path: input.filePath,
       ext: input.ext,
@@ -70,7 +75,7 @@ export function openMediaViewerForRef(ref: FileRef, opts: {
   origin: 'desk' | 'session';
   sessionPath?: string;
 }): void {
-  const state = useStore.getState() as any;
+  const state = useStore.getState();
   const rawFiles: readonly FileRef[] = opts.origin === 'session'
     ? selectSessionFiles(state, opts.sessionPath ?? '')
     : selectDeskFiles(state);
