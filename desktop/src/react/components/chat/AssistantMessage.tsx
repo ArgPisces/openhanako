@@ -17,6 +17,8 @@ import type { ChatMessage, ContentBlock } from '../../stores/chat-types';
 import { useStore } from '../../stores';
 import { hanaFetch, hanaUrl } from '../../hooks/use-hana-fetch';
 import { openFilePreview, openSkillPreview } from '../../utils/file-preview';
+import { openMediaViewerForRef } from '../../utils/open-media-viewer';
+import { buildFileRefId } from '../../utils/file-kind';
 import { openPreview } from '../../stores/artifact-actions';
 import { selectIsStreamingSession, selectSelectedIdsBySession } from '../../stores/session-selectors';
 import styles from './Chat.module.css';
@@ -140,7 +142,15 @@ export const AssistantMessage = memo(function AssistantMessage({ message, showAv
       )}
       <div className={`${styles.message} ${styles.messageAssistant}`}>
         {blocks.map((block, i) => (
-          <ContentBlockView key={`block-${i}`} block={block} agentName={displayName} yuan={displayYuan} />
+          <ContentBlockView
+            key={`block-${i}`}
+            block={block}
+            agentName={displayName}
+            yuan={displayYuan}
+            sessionPath={sessionPath}
+            messageId={message.id}
+            blockIdx={i}
+          />
         ))}
       </div>
       {!readOnly && (
@@ -159,10 +169,13 @@ export const AssistantMessage = memo(function AssistantMessage({ message, showAv
 
 // ── ContentBlock 分发 ──
 
-const ContentBlockView = memo(function ContentBlockView({ block, agentName, yuan }: {
+const ContentBlockView = memo(function ContentBlockView({ block, agentName, yuan, sessionPath, messageId, blockIdx }: {
   block: ContentBlock;
   agentName: string;
   yuan: string;
+  sessionPath: string;
+  messageId: string;
+  blockIdx: number;
 }) {
   switch (block.type) {
     case 'thinking':
@@ -173,6 +186,24 @@ const ContentBlockView = memo(function ContentBlockView({ block, agentName, yuan
       return <ToolGroupBlock tools={block.tools} collapsed={block.collapsed} agentName={agentName} />;
     case 'text':
       return <MarkdownContent html={block.html} />;
+    case 'file':
+      return (
+        <FileBlock
+          block={block}
+          sessionPath={sessionPath}
+          messageId={messageId}
+          blockIdx={blockIdx}
+        />
+      );
+    case 'screenshot':
+      return (
+        <ScreenshotBlock
+          block={block}
+          sessionPath={sessionPath}
+          messageId={messageId}
+          blockIdx={blockIdx}
+        />
+      );
     default: {
       const Renderer = BLOCK_RENDERERS[block.type];
       return Renderer ? <Renderer block={block} /> : null;
@@ -197,14 +228,29 @@ const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp']);
 
 // file / image block
 
-const ImageOutputCard = memo(function ImageOutputCard({ filePath, label, ext }: { filePath: string; label: string; ext: string }) {
+interface FileBlockCtx {
+  sessionPath: string;
+  messageId: string;
+  blockIdx: number;
+}
+
+const ImageOutputCard = memo(function ImageOutputCard({ filePath, label, ext, ctx }: { filePath: string; label: string; ext: string; ctx: FileBlockCtx }) {
   const [failed, setFailed] = useState(false);
   const displayName = label || filePath.split('/').pop() || filePath;
 
-  if (failed) return <FileOutputCard filePath={filePath} label={label} ext={ext} />;
+  if (failed) return <FileOutputCard filePath={filePath} label={label} ext={ext} ctx={ctx} />;
 
   return (
-    <div className={styles.imageOutputCard} onClick={() => openFilePreview(filePath, label, ext)} style={{ cursor: 'pointer' }}>
+    <div
+      className={styles.imageOutputCard}
+      onClick={() => openFilePreview(filePath, label, ext, {
+        origin: 'session',
+        sessionPath: ctx.sessionPath,
+        messageId: ctx.messageId,
+        blockIdx: ctx.blockIdx,
+      })}
+      style={{ cursor: 'pointer' }}
+    >
       <img
         src={filePath.match(/^[A-Za-z]:/) ? `file:///${filePath.replace(/\\/g, '/')}` : `file://${filePath}`}
         alt={displayName}
@@ -216,7 +262,7 @@ const ImageOutputCard = memo(function ImageOutputCard({ filePath, label, ext }: 
   );
 });
 
-const FileOutputCard = memo(function FileOutputCard({ filePath, label, ext }: { filePath: string; label: string; ext: string }) {
+const FileOutputCard = memo(function FileOutputCard({ filePath, label, ext, ctx }: { filePath: string; label: string; ext: string; ctx: FileBlockCtx }) {
   const handleOpen = (e: React.MouseEvent) => {
     e.stopPropagation();
     const p = window.platform;
@@ -227,7 +273,16 @@ const FileOutputCard = memo(function FileOutputCard({ filePath, label, ext }: { 
   const typeLabel = EXT_LABELS[ext] || ext.toUpperCase();
 
   return (
-    <div className={`${styles.fileOutputCard} ${styles.fileOutputPreviewable}`} onClick={() => openFilePreview(filePath, label, ext)} style={{ cursor: 'pointer' }}>
+    <div
+      className={`${styles.fileOutputCard} ${styles.fileOutputPreviewable}`}
+      onClick={() => openFilePreview(filePath, label, ext, {
+        origin: 'session',
+        sessionPath: ctx.sessionPath,
+        messageId: ctx.messageId,
+        blockIdx: ctx.blockIdx,
+      })}
+      style={{ cursor: 'pointer' }}
+    >
       <div className={styles.fileOutputIcon}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -249,10 +304,16 @@ const FileOutputCard = memo(function FileOutputCard({ filePath, label, ext }: { 
   );
 });
 
-const FileBlock = memo(function FileBlock({ block }: { block: any }) {
+const FileBlock = memo(function FileBlock({ block, sessionPath, messageId, blockIdx }: {
+  block: any;
+  sessionPath: string;
+  messageId: string;
+  blockIdx: number;
+}) {
+  const ctx: FileBlockCtx = { sessionPath, messageId, blockIdx };
   return IMAGE_EXTS.has(block.ext)
-    ? <ImageOutputCard filePath={block.filePath} label={block.label} ext={block.ext} />
-    : <FileOutputCard filePath={block.filePath} label={block.label} ext={block.ext} />;
+    ? <ImageOutputCard filePath={block.filePath} label={block.label} ext={block.ext} ctx={ctx} />
+    : <FileOutputCard filePath={block.filePath} label={block.label} ext={block.ext} ctx={ctx} />;
 });
 
 // artifact block
@@ -282,16 +343,31 @@ const PluginCardWrapper = memo(function PluginCardWrapper({ block }: { block: an
 
 // screenshot block
 
-const ScreenshotBlock = memo(function ScreenshotBlock({ block }: { block: any }) {
+const ScreenshotBlock = memo(function ScreenshotBlock({ block, sessionPath, messageId, blockIdx }: {
+  block: any;
+  sessionPath: string;
+  messageId: string;
+  blockIdx: number;
+}) {
+  // screenshot 无 path 但 id 由 buildFileRefId 生成，与 selectSessionFiles 一致，能命中 session 图片序列
   const handleClick = () => {
-    const artifact = {
-      id: `browser-ss-${Date.now()}`,
-      type: 'image',
-      title: window.t('chat.browserScreenshot'),
-      content: block.base64,
-      ext: block.mimeType === 'image/jpeg' ? 'jpg' : 'png',
-    };
-    openPreview(artifact);
+    const id = buildFileRefId({
+      source: 'session-block-screenshot',
+      sessionPath,
+      messageId,
+      blockIdx,
+      path: '',
+    });
+    openMediaViewerForRef({
+      id,
+      kind: 'image',
+      source: 'session-block-screenshot',
+      name: `screenshot-${messageId}-${blockIdx}.png`,
+      path: '',
+      mime: block.mimeType,
+      sessionMessageId: messageId,
+      inlineData: { base64: block.base64, mimeType: block.mimeType },
+    }, { origin: 'session', sessionPath });
   };
 
   return (
@@ -383,12 +459,11 @@ const SettingsConfirmBlock = memo(function SettingsConfirmBlock({ block }: { blo
 });
 
 // ── 注册所有物种 B 渲染器 ──
-
+// 注：`file` 与 `screenshot` 需 session 上下文（sessionPath/messageId/blockIdx），
+// 统一走 ContentBlockView 的 switch 内联分发，不注册到全局表中。
 BLOCK_RENDERERS['subagent'] = SubagentCard;
-BLOCK_RENDERERS['file'] = FileBlock;
 BLOCK_RENDERERS['artifact'] = ArtifactBlock;
 BLOCK_RENDERERS['plugin_card'] = PluginCardWrapper;
-BLOCK_RENDERERS['screenshot'] = ScreenshotBlock;
 BLOCK_RENDERERS['skill'] = SkillBlock;
 BLOCK_RENDERERS['cron_confirm'] = CronConfirmBlock;
 BLOCK_RENDERERS['settings_confirm'] = SettingsConfirmBlock;

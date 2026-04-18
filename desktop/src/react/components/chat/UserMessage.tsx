@@ -10,6 +10,7 @@ const lazyScreenshot = () => import('../../utils/screenshot').then(m => m.takeSc
 import type { ChatMessage, UserAttachment, DeskContext, ContentBlock } from '../../stores/chat-types';
 import { useStore } from '../../stores';
 import { selectIsStreamingSession, selectSelectedIdsBySession } from '../../stores/session-selectors';
+import { openFilePreview } from '../../utils/file-preview';
 import styles from './Chat.module.css';
 import badgeStyles from '../input/SkillBadgeView.module.css';
 
@@ -109,7 +110,12 @@ export const UserMessage = memo(function UserMessage({ message, showAvatar, sess
         </div>
       )}
       {message.attachments && message.attachments.length > 0 && (
-        <UserAttachmentsView attachments={message.attachments} deskContext={message.deskContext} />
+        <UserAttachmentsView
+          attachments={message.attachments}
+          deskContext={message.deskContext}
+          sessionPath={sessionPath}
+          messageId={message.id}
+        />
       )}
       <div className={`${styles.message} ${styles.messageUser}`}>
         {message.skills && message.skills.length > 0 && message.skills.map(skillName => (
@@ -140,9 +146,11 @@ export const UserMessage = memo(function UserMessage({ message, showAvatar, sess
 
 // ── 附件区 ──
 
-const UserAttachmentsView = memo(function UserAttachmentsView({ attachments, deskContext }: {
+const UserAttachmentsView = memo(function UserAttachmentsView({ attachments, deskContext, sessionPath, messageId }: {
   attachments: UserAttachment[];
   deskContext?: DeskContext | null;
+  sessionPath: string;
+  messageId: string;
 }) {
   const isImage = useCallback((att: UserAttachment) => {
     return /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(att.name);
@@ -161,6 +169,16 @@ const UserAttachmentsView = memo(function UserAttachmentsView({ attachments, des
               src={`data:${att.mimeType || 'image/png'};base64,${att.base64Data}`}
               alt={att.name}
               loading="lazy"
+              onClick={(e) => {
+                e.stopPropagation();
+                const ext = att.name.split('.').pop()?.toLowerCase() || '';
+                openFilePreview(att.path, att.name, ext, {
+                  origin: 'session',
+                  sessionPath,
+                  messageId,
+                });
+              }}
+              style={{ cursor: 'pointer' }}
             />
           );
         }
