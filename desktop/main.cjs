@@ -17,6 +17,18 @@ const { pathToFileURL } = require("url");
 const { initAutoUpdater, checkForUpdatesAuto, setMainWindow: setUpdaterMainWindow, setUpdateChannel, getState: getUpdateState } = require("./auto-updater.cjs");
 const { wrapIpcHandler, wrapIpcOn } = require('./ipc-wrapper.cjs');
 
+// preload 缺失时 Electron 会静默忽略，renderer 拿不到 window.hana →
+// onboarding/主窗口白屏且无前端报错。此处硬崩，拒绝以不可用状态启动。
+{
+  const preloadPath = path.join(__dirname, "preload.bundle.cjs");
+  if (!fs.existsSync(preloadPath)) {
+    const msg = `Missing preload bundle:\n${preloadPath}\n\nBuild is incomplete. Run 'npm run build:preload' or rebuild the installer.`;
+    try { dialog.showErrorBox("Hanako failed to start", msg); } catch {}
+    console.error("[desktop] " + msg);
+    process.exit(1);
+  }
+}
+
 // macOS/Linux: Electron 从 Dock/Finder 启动时 PATH 只有系统默认值，
 // Homebrew、npm global 等路径全部丢失。用登录 shell 解析完整 PATH。
 // 异步执行，避免阻塞 Electron 事件循环启动（login shell 可能需要 1~3 秒）。
