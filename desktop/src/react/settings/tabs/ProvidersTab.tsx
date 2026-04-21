@@ -4,7 +4,7 @@ import { hanaFetch } from '../api';
 import { t, PROVIDER_PRESETS } from '../helpers';
 import { loadSettingsConfig } from '../actions';
 import { ProviderDetail } from './providers/ProviderDetail';
-import { AddCustomButton } from './providers/ProviderList';
+import { AddCustomButton, AddProviderOverlay } from './providers/ProviderList';
 import { OtherModelsSection } from './providers/OtherModelsSection';
 import { SettingsSection } from '../components/SettingsSection';
 import styles from '../Settings.module.css';
@@ -98,12 +98,7 @@ export function ProvidersTab() {
             {unregisteredPresets.map(renderUnregistered)}
             {customProviders.map(renderRegistered)}
 
-            <AddCustomButton
-              adding={addingProvider}
-              onToggle={() => setAddingProvider(!addingProvider)}
-              onDone={() => { setAddingProvider(false); loadSummary(); }}
-              onCancel={() => setAddingProvider(false)}
-            />
+            <AddCustomButton onClick={() => setAddingProvider(true)} />
           </div>
 
           {/* ── 右栏：Provider 详情 ── */}
@@ -139,6 +134,14 @@ export function ProvidersTab() {
               </div>
             )}
           </div>
+
+          {/* 新建 overlay 只覆盖白色卡片，不触达外部标题和 OtherModelsSection */}
+          {addingProvider && (
+            <AddProviderOverlay
+              onDone={() => { setAddingProvider(false); loadSummary(); }}
+              onCancel={() => setAddingProvider(false)}
+            />
+          )}
         </div>
       </SettingsSection>
 

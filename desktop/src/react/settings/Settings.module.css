@@ -2618,6 +2618,8 @@ a.about-link:hover {
     border: 1px solid var(--overlay-light);
     border-radius: var(--radius-card, 10px);
     box-shadow: 0 1px 4px var(--shadow);
+    position: relative;
+    overflow: hidden;
 }
 
 .pv-list {
@@ -2732,32 +2734,83 @@ a.about-link:hover {
 
 .pv-add-btn:hover { color: var(--accent); }
 
-.pv-add-popover {
-    position: fixed;
-    width: 360px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card, 10px);
-    box-shadow: 0 8px 24px var(--shadow);
-    z-index: 9999;
-    padding: 12px;
+/* 新建自定义供应商：overlay 限制在 pv-layout 白色卡片内，
+   视觉上就是"卡片内部切换到新建态"，不影响外部标题和底部 section。
+   pv-layout 已声明 position: relative + overflow: hidden。 */
+.pv-add-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-card, var(--bg));
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-md) var(--space-lg) var(--space-lg);
+    overflow-y: auto;
+    animation: pv-add-overlay-in 0.18s var(--ease-out);
+}
+
+@keyframes pv-add-overlay-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.pv-add-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+    flex-shrink: 0;
+}
+
+.pv-add-overlay-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-input, 4px);
+    transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+}
+
+.pv-add-overlay-back:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+
+.pv-add-overlay-title {
+    font-family: "Songti SC", "STSong", serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.04em;
+}
+
+.pv-add-overlay-body {
+    width: 100%;
+    max-width: 100%;
 }
 
 .pv-add-form {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-md);
 }
 
-.pv-add-form .settings-input { font-size: 0.78rem; padding: 4px 8px; }
 .pv-add-form .settings-field { margin-bottom: 0; }
 
 .pv-add-form-actions {
     display: flex;
-    gap: 6px;
+    gap: var(--space-sm);
     justify-content: flex-end;
+    margin-top: var(--space-sm);
 }
 
+/* 通用小按钮：删除确认、模型编辑等紧凑弹窗场景沿用 */
 .pv-add-form-btn {
     font-family: inherit;
     font-size: 0.72rem;
@@ -2775,15 +2828,32 @@ a.about-link:hover {
     border-color: transparent;
 }
 
+/* overlay 里按钮放大：铺满式新建页面需要更大触达面积 */
+.pv-add-overlay .pv-add-form-btn {
+    font-size: 0.85rem;
+    padding: 8px 18px;
+    transition: background 0.15s var(--ease-out), opacity 0.15s var(--ease-out);
+}
+
+.pv-add-overlay .pv-add-form-btn:hover {
+    background: var(--bg-hover);
+}
+
+.pv-add-overlay .pv-add-form-btn.primary:hover {
+    background: var(--accent);
+    opacity: 0.88;
+}
+
 .pv-add-form-field {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 6px;
 }
 
 .pv-add-form-label {
-    font-size: 0.7rem;
+    font-size: 0.82rem;
     color: var(--text-muted);
+    letter-spacing: 0.02em;
 }
 
 /* ── Preset Setup 引导 ── */
@@ -5294,7 +5364,6 @@ a.about-link:hover {
    都必须显式声明 no-drag，否则会出现"能看到但点不到"的死状态。
    新增浮层组件时，把根 class 加进来。
    ============================================================ */
-.pv-add-popover,
 .pv-model-edit-overlay,
 .pv-model-edit-card,
 .pv-model-dropdown-panel,

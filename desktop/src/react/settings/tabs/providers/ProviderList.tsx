@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useSettingsStore } from '../../store';
 import { hanaFetch } from '../../api';
 import { t, API_FORMAT_OPTIONS } from '../../helpers';
@@ -9,54 +9,36 @@ import styles from '../../Settings.module.css';
 
 const platform = window.platform;
 
-export function AddCustomButton({ adding, onToggle, onDone, onCancel }: {
-  adding: boolean;
-  onToggle: () => void;
-  onDone: () => void;
-  onCancel: () => void;
-}) {
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState<React.CSSProperties>({});
-
-  useEffect(() => {
-    if (!adding || !btnRef.current) return;
-    const rect = btnRef.current.getBoundingClientRect();
-    const left = Math.min(rect.left, window.innerWidth - 360 - 8);
-    setStyle({
-      left: Math.max(8, left),
-      bottom: window.innerHeight - rect.top + 4,
-    });
-  }, [adding]);
-
-  useEffect(() => {
-    if (!adding) return;
-    const handler = (e: MouseEvent) => {
-      if (btnRef.current?.contains(e.target as Node)) return;
-      if (popRef.current?.contains(e.target as Node)) return;
-      // SelectWidget 的下拉面板通过 portal 渲染到 body，不在 popRef 内
-      if ((e.target as Element).closest?.('[data-sdw-popup]')) return;
-      onCancel();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [adding, onCancel]);
-
+export function AddCustomButton({ onClick }: { onClick: () => void }) {
   return (
     <div className={styles['pv-add-wrapper']}>
-      <button ref={btnRef} className={styles['pv-add-btn']} onClick={onToggle}>
+      <button className={styles['pv-add-btn']} onClick={onClick}>
         + {t('settings.providers.addCustom')}
       </button>
-      {adding && (
-        <div ref={popRef} className={styles['pv-add-popover']} style={style}>
-          <AddProviderForm onDone={onDone} onCancel={onCancel} />
-        </div>
-      )}
     </div>
   );
 }
 
-function AddProviderForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+export function AddProviderOverlay({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  return (
+    <div className={styles['pv-add-overlay']}>
+      <div className={styles['pv-add-overlay-header']}>
+        <button className={styles['pv-add-overlay-back']} onClick={onCancel} aria-label={t('settings.api.cancel')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span>{t('settings.api.cancel')}</span>
+        </button>
+        <div className={styles['pv-add-overlay-title']}>{t('settings.providers.addCustom')}</div>
+      </div>
+      <div className={styles['pv-add-overlay-body']}>
+        <AddProviderForm onDone={onDone} />
+      </div>
+    </div>
+  );
+}
+
+function AddProviderForm({ onDone }: { onDone: () => void }) {
   const { showToast } = useSettingsStore();
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -106,7 +88,6 @@ function AddProviderForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
         <SelectWidget options={API_FORMAT_OPTIONS} value={api} onChange={setApi} placeholder="API Format" />
       </div>
       <div className={styles['pv-add-form-actions']}>
-        <button className={styles['pv-add-form-btn']} onClick={onCancel}>{t('settings.api.cancel')}</button>
         <button className={`${styles['pv-add-form-btn']} ${styles['primary']}`} onClick={submit}>{t('settings.providers.addBtn')}</button>
       </div>
     </div>
