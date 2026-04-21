@@ -5285,3 +5285,35 @@ a.about-link:hover {
     color: var(--accent);
 }
 
+/* ============================================================
+   Overlay 防 titlebar drag 吞点击
+   ------------------------------------------------------------
+   Electron macOS 下 `-webkit-app-region: drag` 是 native 级处
+   理，HTML 层 z-index 无法压过它。凡是 fixed / absolute 定位、
+   可能几何落在 .settings-header（drag 条）上方的浮层，根节点
+   都必须显式声明 no-drag，否则会出现"能看到但点不到"的死状态。
+   新增浮层组件时，把根 class 加进来。
+   ============================================================ */
+.pv-add-popover,
+.pv-model-edit-overlay,
+.pv-model-edit-card,
+.pv-model-dropdown-panel,
+.pv-confirm-dialog,
+.agent-create-overlay,
+.agent-create-card,
+.agent-delete-overlay,
+.agent-delete-card,
+.crop-overlay,
+.crop-card,
+.memory-viewer-overlay,
+.memory-viewer,
+.memory-confirm-overlay,
+.memory-confirm-card,
+.memory-action-dropdown,
+.memory-more-popup,
+.sdw-popup,
+.cml-combo-dropdown,
+.mdw-popup,
+.settings-toast {
+    -webkit-app-region: no-drag;
+}

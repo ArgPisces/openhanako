@@ -3130,3 +3130,20 @@ html[data-platform="linux"] .onboarding {
     text-align: center;
     white-space: pre-line;
 }
+
+/* ============================================================
+   Overlay 防 titlebar drag 吞点击
+   ------------------------------------------------------------
+   主窗口 .titlebar 是 `-webkit-app-region: drag` 的 native 拖
+   动条，HTML 层 z-index 压不住它。凡是会浮到 y=0~44 区域的
+   fixed / absolute 浮层，根节点都要显式声明 no-drag，避免出现
+   "弹层能看到但点不到"的死状态。新增浮层组件时，把根 class
+   加进来（InputArea 内的浮层已各自在自己的 module 里声明）。
+   ============================================================ */
+.context-menu,
+.hana-toast,
+.float-card,
+.browser-floating-card,
+.drop-overlay {
+    -webkit-app-region: no-drag;
+}
