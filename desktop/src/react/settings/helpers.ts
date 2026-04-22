@@ -4,6 +4,7 @@
 import { useSettingsStore } from './store';
 import { hanaFetch } from './api';
 import knownModels from '../../../../lib/known-models.json';
+import registry from '../../shared/theme-registry.cjs';
 
 const platform = window.platform;
 
@@ -205,4 +206,10 @@ export const OUTPUT_PRESETS = [
   { label: '64K', value: 65536 },
 ];
 
-export const VALID_THEMES = ['warm-paper', 'midnight', 'auto', 'high-contrast', 'grass-aroma', 'contemplation', 'absolutely', 'delve', 'deep-think', 'claude-design'];
+const _ids = registry.getThemeIds();
+export const VALID_THEMES = [
+  _ids[0],                    // warm-paper
+  _ids[1],                    // midnight
+  registry.AUTO_OPTION.id,    // auto (第 3 位，保持原顺序)
+  ..._ids.slice(2),           // high-contrast, grass-aroma, contemplation, absolutely, delve, deep-think, claude-design
+];
