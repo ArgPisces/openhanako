@@ -146,6 +146,25 @@ describe("update-settings-tool", () => {
     });
   });
 
+  describe("theme options 包含 claude-design（此前遗漏，本次补齐）", () => {
+    it("search 'theme' 结果中 options 包含 claude-design", async () => {
+      const { tool } = buildTool();
+      const result = await tool.execute("c9", { action: "search", query: "theme" });
+      const text = result.content[0].text;
+      expect(text).toContain("claude-design");
+    });
+
+    it("search 'theme' 结果中 options 包含全部 10 个选项（9 主题 + auto）", async () => {
+      const { tool } = buildTool();
+      const result = await tool.execute("c10", { action: "search", query: "theme" });
+      const text = result.content[0].text;
+      // 验证原有 8 个主题 + 新增 claude-design + auto 均存在
+      for (const id of ["warm-paper", "midnight", "high-contrast", "grass-aroma", "contemplation", "absolutely", "delve", "deep-think", "claude-design", "auto"]) {
+        expect(text).toContain(id);
+      }
+    });
+  });
+
   describe("confirmation rejected/aborted", () => {
     it("rejected 返回取消消息", async () => {
       const { tool } = buildTool({}, "rejected");
