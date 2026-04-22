@@ -24,7 +24,7 @@ export class PluginManager {
    * pluginsDirs: 多个扫描目录，先内嵌后用户（靠前的优先）
    * 兼容旧签名 { pluginsDir: string } → 自动转为单元素数组
    */
-  constructor({ pluginsDirs, pluginsDir, dataDir, bus, preferencesManager, appVersion, getSessionPath }) {
+  constructor({ pluginsDirs, pluginsDir, dataDir, bus, preferencesManager, appVersion, getSessionPath, slashRegistry }) {
     this._pluginsDirs = pluginsDirs || (pluginsDir ? [pluginsDir] : []);
     this._dataDir = dataDir;
     this._bus = bus;
@@ -47,6 +47,9 @@ export class PluginManager {
     this._extensionFactories = [];
     this._pages = [];
     this._widgets = [];
+
+    // Slash command registry（可选；无则仅保留 palette 路径向后兼容）
+    this._slashRegistry = slashRegistry || null;
   }
 
   scan() {
@@ -294,13 +297,46 @@ export class PluginManager {
       const filePath = path.join(cmdsDir, file);
       try {
         const mod = await freshImport(filePath);
-        if (!mod.name || typeof mod.execute !== "function") continue;
-        this._commands.push({
-          name: `${entry.id}.${mod.name}`,
-          description: mod.description ?? "",
-          execute: mod.execute,
-          _pluginId: entry.id,
-        });
+        if (!mod.name) continue;
+        const hasHandler = typeof mod.handler === "function";
+        const hasExecute = typeof mod.execute === "function";
+        if (!hasHandler && !hasExecute) continue;
+
+        // 纪律 #2：handler 优先。双写时只注册 slash，不进 palette
+        if (hasHandler) {
+          // 纪律 #1：Full-access 闸门。restricted 插件不得注册 slash handler
+          if (entry.accessLevel !== "full-access") {
+            console.warn(
+              `[plugin-manager] "${entry.id}/${file}" declares slash handler but plugin is restricted; skipped. ` +
+              `Requires builtin source or manifest.trust="full-access".`
+            );
+            continue;
+          }
+          if (this._slashRegistry) {
+            this._slashRegistry.registerCommand(
+              {
+                name: mod.name,
+                aliases: Array.isArray(mod.aliases) ? mod.aliases : [],
+                description: mod.description ?? "",
+                scope: mod.scope || "session",
+                // 纪律 #6：permission 缺省默认 owner（最严）
+                permission: mod.permission || "owner",
+                handler: mod.handler,
+                usage: mod.usage,
+              },
+              { source: "plugin", sourceId: entry.id },
+            );
+            // registry 返回 null 表示被保留名闸门（#3）拒绝；已在 registry 内部 warn，此处不再打印
+          }
+        } else {
+          // 仅 execute → palette 路径（向后兼容，保持原有 _commands 行为不变）
+          this._commands.push({
+            name: `${entry.id}.${mod.name}`,
+            description: mod.description ?? "",
+            execute: mod.execute,
+            _pluginId: entry.id,
+          });
+        }
       } catch (err) {
         console.error(`[plugin-manager] command "${file}" in "${entry.id}" failed to load:`, err.message);
       }
@@ -681,6 +717,7 @@ export class PluginManager {
     // 2. 清理静态贡献（文件约定加载的 tools、commands 等）
     this._tools = this._tools.filter(t => t._pluginId !== pluginId);
     this._commands = this._commands.filter(c => c._pluginId !== pluginId);
+    this._slashRegistry?.unregisterBySource("plugin", pluginId);
     this._skillPaths = this._skillPaths.filter(s => s.label !== `plugin:${pluginId}`);
     this._agentTemplates = this._agentTemplates.filter(t => t._pluginId !== pluginId);
     this._providerPlugins = this._providerPlugins.filter(p => p._pluginId !== pluginId);
