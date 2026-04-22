@@ -5,6 +5,7 @@ import os from "os";
 import { extractZip } from "../../lib/extract-zip.js";
 import { resolveAgent } from "../utils/resolve-agent.js";
 import { fromRoot } from "../../shared/hana-root.js";
+import { DEFAULT_THEME } from "../../desktop/src/shared/theme-registry.cjs";
 
 /**
  * 代理分发：将 /plugins/:pluginId/* 的请求转发到对应 plugin 子 app。
@@ -233,7 +234,7 @@ export function createPluginsRoute(engine) {
   });
 
   route.get("/plugins/theme.css", (c) => {
-    const theme = c.req.query("theme") || "warm-paper";
+    const theme = c.req.query("theme") || DEFAULT_THEME;
     // Sanitize theme name to prevent path traversal
     const safeName = path.basename(theme).replace(/[^a-zA-Z0-9_-]/g, "");
     const candidates = [

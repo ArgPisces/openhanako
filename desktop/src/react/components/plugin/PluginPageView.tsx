@@ -3,6 +3,7 @@ import { useStore } from '../../stores';
 import { usePluginIframe } from '../../hooks/use-plugin-iframe';
 import { hanaUrl } from '../../hooks/use-hana-fetch';
 import s from './PluginPageView.module.css';
+import { DEFAULT_THEME } from '../../shared/theme-registry.cjs';
 
 interface Props {
   pluginId: string;
@@ -15,7 +16,7 @@ export function PluginPageView({ pluginId }: Props) {
 
   const iframeSrc = useMemo(() => {
     if (!page?.routeUrl) return null;
-    const theme = document.documentElement.dataset.theme || 'warm-paper';
+    const theme = document.documentElement.dataset.theme || DEFAULT_THEME;
     const cssUrl = hanaUrl(`/api/plugins/theme.css?theme=${encodeURIComponent(theme)}`);
     const fullUrl = hanaUrl(page.routeUrl);
     const sep = fullUrl.includes('?') ? '&' : '?';

@@ -3,6 +3,7 @@ import { hanaUrl } from '../../hooks/use-hana-fetch';
 import { useStore } from '../../stores';
 import type { PluginCardDetails } from '../../types';
 import s from './PluginCardBlock.module.css';
+import { DEFAULT_THEME } from '../../shared/theme-registry.cjs';
 
 interface Props { card: PluginCardDetails; }
 
@@ -34,7 +35,7 @@ export function PluginCardBlock({ card }: Props) {
 
   const src = useMemo(() => {
     if (!isIframe) return '';
-    const theme = document.documentElement.dataset.theme || 'warm-paper';
+    const theme = document.documentElement.dataset.theme || DEFAULT_THEME;
     const cssUrl = hanaUrl(`/api/plugins/theme.css?theme=${encodeURIComponent(theme)}`);
     const base = hanaUrl(`/api/plugins/${card.pluginId}${card.route}`);
     const sep = base.includes('?') ? '&' : '?';
