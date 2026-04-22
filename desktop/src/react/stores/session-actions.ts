@@ -203,7 +203,7 @@ export async function switchSession(path: string): Promise<void> {
       }));
     }
 
-    // 批量更新 store（artifacts/tabs 已按 owner 分区，切 currentSessionPath 即切视图）
+    // 批量更新 store（切 currentSessionPath 切换对话内容；desk/preview 是 user-level，不随 session 切换）
     useStore.setState({
       currentSessionPath: path,
       pendingNewSession: false,
@@ -379,8 +379,6 @@ export async function ensureSession(): Promise<boolean> {
 
     // 刷新模型列表：session 创建后 activeModel 已绑定，需要同步到 UI
     loadModels();
-
-    // updateFolderButton — no-op (React-driven)
 
     // 更新 cwdHistory
     if (justSelected) {
