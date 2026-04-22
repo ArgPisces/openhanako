@@ -1,4 +1,6 @@
 /** @type {import('../slash-command-registry.js').CommandDef[]} */
+// 注意：reply 文案暂硬编码中文，和 session-ops.js 的 "[上下文已压缩]" 一致，
+// 未来统一 slash 命令 i18n 时一并迁移到 t() 接口。
 export const bridgeCommands = [
   {
     name: "stop",

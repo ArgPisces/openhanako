@@ -43,6 +43,9 @@ export function exposeSkillsAsCommands({ registry, engine, agentId }) {
             return { silent: true };
           }
           // bridge kind 或无 promptSession：一期占位，不做跨平台注入
+          // TODO(phase 5+)：__injectAsPrompt 字段当前无 consumer；bridge-manager 需要新增逻辑消费——
+          //   handled=true 且带 __injectAsPrompt 时，把它当 prompt 喂进当前 bridge session
+          //   现阶段 bridge 用户打 /<skillName> 被静默吞掉（不伤系统，但 UX 不完美）
           return { silent: true, __injectAsPrompt: injectedPrompt };
         },
       },

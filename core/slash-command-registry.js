@@ -59,6 +59,12 @@ export class SlashCommandRegistry {
     for (const a of (def.aliases || [])) {
       const an = normalize(a);
       if (!an) continue;
+      // 纪律 #3 扩展：alias 也受 core-reserved 闸门约束，防 plugin/skill 用 aliases 绕过
+      // （不仅依赖启动顺序；未来 hot-reload / test 重排路径下这是唯一保障）
+      if (gateSource !== "core" && SlashCommandRegistry.CORE_RESERVED_NAMES.has(an)) {
+        console.warn(`[slash] rejected alias "${an}" for "${finalName}": core-reserved (source=${gateSource}${sourceId ? `, sourceId=${sourceId}` : ""})`);
+        continue;
+      }
       if (this._byName.has(an)) {
         console.warn(`[slash] alias "${an}" for command "${finalName}" skipped (name already taken)`);
         continue;
@@ -104,6 +110,8 @@ export class SlashCommandRegistry {
 
   list() {
     // 浅克隆，防 caller 篡改 registry 内部存储
+    // 注意：aliases 和主名 map 到同一个 stored 对象引用（line 58），因此 Set 去重依赖的是引用相等。
+    // 未来若改成"每个 alias 独立对象"，此处去重逻辑要同步改。
     return Array.from(new Set(this._byName.values())).map(d => ({ ...d }));
   }
 }

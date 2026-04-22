@@ -90,6 +90,12 @@ export class SlashCommandDispatcher {
 
   _resolveRole(ctx) {
     // I2 fix：从 ADMIN_SOURCES 常量判定而非硬编码字符串，便于未来审计
+    // 当前识别的 source：
+    //   - 'desktop' → admin（桌面端用户即 owner，享最高权限）
+    //   - 'tg' / 'feishu' / 'qq' / 'wechat' bridge 平台 → 看 isOwner 决定 owner / anyone
+    //   - 其他（channel-router / cron / 未来新 source）→ 默认 anyone
+    //     如果未来加新 trusted source（如 admin console），需要把它加进 ADMIN_SOURCES，
+    //     或扩展这里的 role 决策逻辑。不要依赖 ctx.isOwner 隐式升级——只 bridge 路径承认它
     if (ADMIN_SOURCES.has(ctx.source)) return "admin";
     if (ctx.sessionRef?.kind === "bridge") return ctx.isOwner ? "owner" : "anyone";
     return "anyone";

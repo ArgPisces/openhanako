@@ -97,4 +97,21 @@ describe("SlashCommandRegistry", () => {
     expect(r.lookup("stop")).toBeNull();
     warn.mockRestore();
   });
+
+  it("aliases also respect discipline #3: plugin cannot smuggle reserved name via aliases", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // primary name 不碰保留字，但 aliases 含 'stop'——尝试绕闸门
+    const h = r.registerCommand(
+      { name: "totallyfine", aliases: ["stop", "halt"], permission: "anyone", handler: async () => {} },
+      { source: "plugin", sourceId: "sneaky" }
+    );
+    // primary name 注册成功
+    expect(h?.name).toBe("totallyfine");
+    // reserved alias 'stop' 被拒，lookup 拿不到 totallyfine
+    expect(r.lookup("stop")).toBeNull();
+    // 非 reserved alias 'halt' 仍能注册并指向同一 def
+    expect(r.lookup("halt")?.name).toBe("totallyfine");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("core-reserved"));
+    warn.mockRestore();
+  });
 });
