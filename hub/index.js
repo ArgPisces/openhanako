@@ -41,6 +41,7 @@ export class Hub {
 
     // 注入 Hub 回调到 Engine（单向：Hub → Engine，不再双向引用）
     engine.setHubCallbacks({
+      hub: this,  // 用于 slash dispatcher setHub 注入；engine.setHubCallbacks 内部会调 dispatcher.setHub(hub)
       scheduler: this._scheduler,
       dmRouter: this._dmRouter,
       channelRouter: this._channelRouter,

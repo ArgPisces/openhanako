@@ -38,6 +38,7 @@ import { PreferencesManager } from "./preferences-manager.js";
 import { ModelManager } from "./model-manager.js";
 import { SkillManager } from "./skill-manager.js";
 import { BridgeSessionManager } from "./bridge-session-manager.js";
+import { createSlashSystem } from "./slash-commands/index.js";
 import { AgentManager } from "./agent-manager.js";
 import { sanitizeMessagesForModel } from "./message-sanitizer.js";
 import { SessionCoordinator } from "./session-coordinator.js";
@@ -164,6 +165,10 @@ export class HanaEngine {
       buildTools: (cwd, customTools, opts) => this.buildTools(cwd, customTools, opts),
       getHomeCwd: (agentId) => this.getHomeCwd(agentId),
     });
+
+    // ── Slash Command System ──
+    // hub 尚未注入，dispatcher 的 hub 字段先为 null；setHubCallbacks 时通过 setHub() 补齐
+    this._slashSystem = createSlashSystem({ engine: this, hub: null });
 
     // 任务注册表（外部 abort 用）
     this._taskRegistry = new TaskRegistry();
@@ -314,6 +319,9 @@ export class HanaEngine {
   isBridgeSessionStreaming(key) { return this._bridge?.isSessionStreaming(key) ?? false; }
   async abortBridgeSession(key) { return this._bridge?.abortSession(key) ?? false; }
   steerBridgeSession(key, text) { return this._bridge?.steerSession(key, text) ?? false; }
+  get bridgeSessionManager() { return this._bridge; }
+  get slashRegistry() { return this._slashSystem?.registry ?? null; }
+  get slashDispatcher() { return this._slashSystem?.dispatcher ?? null; }
   async closeSession(p) { return this._sessionCoord.closeSession(p); }
   getSessionByPath(p) { return this._sessionCoord.getSessionByPath(p); }
   isSessionStreaming(p) { return this._sessionCoord.isSessionStreaming(p); }
@@ -955,6 +963,8 @@ export class HanaEngine {
    */
   setHubCallbacks(callbacks) {
     this._hubCallbacks = callbacks;
+    // 把 hub 引用补给 slash dispatcher（Phase 3：bridge-manager / WS 入口都靠它路由命令）
+    if (callbacks?.hub) this._slashSystem?.dispatcher?.setHub(callbacks.hub);
   }
 
   setEventBus(bus) {

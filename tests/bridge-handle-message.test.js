@@ -25,6 +25,7 @@ vi.mock("../lib/debug-log.js", () => ({
 
 import os from "os";
 import { BridgeManager } from "../lib/bridge/bridge-manager.js";
+import { createSlashSystem } from "../core/slash-commands/index.js";
 
 // ── Helpers ──
 
@@ -40,12 +41,17 @@ function createMocks() {
 
   const engine = {
     getAgent: vi.fn().mockImplementation((id) => {
-      if (id === "hana") return { agentName: "TestAgent", config: { bridge: { telegram: { owner: "owner123" } } } };
+      if (id === "hana") return { agentName: "TestAgent", config: { bridge: { telegram: { owner: "owner123" } } }, sessionDir: os.tmpdir() };
       return null;
     }),
     isBridgeSessionStreaming: vi.fn().mockReturnValue(false),
     abortBridgeSession: vi.fn().mockResolvedValue(false),
     steerBridgeSession: vi.fn().mockReturnValue(false),
+    bridgeSessionManager: {
+      injectMessage: vi.fn(() => true),
+      readIndex: () => ({}),
+      writeIndex: () => {},
+    },
     agentName: "TestAgent",
     hanakoHome: os.tmpdir(),
     currentAgentId: "hana",
@@ -55,6 +61,11 @@ function createMocks() {
     send: vi.fn().mockResolvedValue("AI response"),
     eventBus: { emit: vi.fn() },
   };
+
+  // 注入真实 slashSystem（Phase 3 接入 bridge-manager 后必需）
+  const slashSystem = createSlashSystem({ engine, hub });
+  engine.slashDispatcher = slashSystem.dispatcher;
+  engine.slashRegistry = slashSystem.registry;
 
   const bm = new BridgeManager({ engine, hub });
   // Inject mock adapter directly (bypass startPlatform) — use composite key
@@ -327,11 +338,11 @@ describe("BridgeManager._handleMessage", () => {
       expect(hub.send).not.toHaveBeenCalled();
     });
 
-    it("non-owner /stop is treated as regular message", async () => {
+    it("non-owner /stop is silently rejected by dispatcher (owner-only command)", async () => {
       const { bm, engine, hub } = createMocks();
       engine.isBridgeSessionStreaming.mockReturnValue(false);
 
-      bm._handleMessage("telegram", {
+      await bm._handleMessage("telegram", {
         sessionKey: "tg_dm_stranger@hana",
         text: "/stop",
         senderName: "Stranger",
@@ -340,14 +351,10 @@ describe("BridgeManager._handleMessage", () => {
         agentId: "hana",
       });
 
-      // non-owner: /stop 不触发 abort，走普通消息路径
+      // 新 spec discipline：owner-only 命令从 non-owner 收到时静默丢弃（不 abort、不进 LLM、不 reply）
       expect(engine.abortBridgeSession).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(2100);
-      expect(hub.send).toHaveBeenCalledOnce();
-      expect(hub.send).toHaveBeenCalledWith(
-        tagged("Stranger: /stop"),
-        expect.objectContaining({ role: "guest" }),
-      );
+      expect(hub.send).not.toHaveBeenCalled();
     });
   });
 
