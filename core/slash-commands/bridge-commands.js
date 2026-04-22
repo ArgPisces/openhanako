@@ -1,3 +1,5 @@
+import { listRecentAgentSessions } from "./list-agent-sessions.js";
+
 /** @type {import('../slash-command-registry.js').CommandDef[]} */
 // 注意：reply 文案暂硬编码中文，和 session-ops.js 的 "[上下文已压缩]" 一致，
 // 未来统一 slash 命令 i18n 时一并迁移到 t() 接口。
@@ -45,6 +47,69 @@ export const bridgeCommands = [
     },
   },
   {
+    name: "rc",
+    description: "接管桌面会话（远程遥控）",
+    scope: "session",
+    permission: "owner",
+    source: "core",
+    handler: async (ctx) => {
+      // Phase 2-B：列出当前 agent 最近 10 个桌面 session，并设 pending-selection 等用户编号输入。
+      // 真正的接管动作（summary + attach）在 bridge-manager 的 pending-handler 里做，
+      // 因为用户输入的是"2"这种纯数字，不是 slash 命令，slash-dispatcher 不会触发。
+      if (ctx.sessionRef?.kind !== "bridge") {
+        return { reply: "/rc 只能在 bridge 会话中使用" };
+      }
+      const rcState = ctx.engine?.rcState;
+      if (!rcState) return { error: "rc 状态存储未初始化" };
+
+      // 已接管：提示先退出再切换（防止一脚踩两个 attachment）
+      if (rcState.isAttached(ctx.sessionRef.sessionKey)) {
+        return { reply: "当前已处于接管态，请先 /exitrc 再执行 /rc 切换" };
+      }
+
+      const sessions = await listRecentAgentSessions(ctx.engine, ctx.sessionRef.agentId, { limit: 10 });
+      if (sessions.length === 0) {
+        return { reply: "当前 agent 没有可接管的桌面会话" };
+      }
+
+      const lines = sessions.map(s => {
+        const titleStr = s.title ? s.title : `未命名 (${_formatShortDate(s.modified)})`;
+        return `${s.index}. ${titleStr}`;
+      });
+      const promptText = "选择要接管的桌面会话（回复编号）：\n"
+        + lines.join("\n")
+        + "\n\n5 分钟内不选则自动取消。/exitrc 退出接管。";
+
+      rcState.setPending(ctx.sessionRef.sessionKey, {
+        type: "rc-select",
+        promptText,
+        options: sessions.map(s => ({ path: s.path, title: s.title })),
+      });
+      return { reply: promptText };
+    },
+  },
+  {
+    name: "exitrc",
+    description: "退出桌面会话接管",
+    scope: "session",
+    permission: "owner",
+    source: "core",
+    handler: async (ctx) => {
+      if (ctx.sessionRef?.kind !== "bridge") {
+        return { reply: "/exitrc 只能在 bridge 会话中使用" };
+      }
+      const rcState = ctx.engine?.rcState;
+      if (!rcState) return { error: "rc 状态存储未初始化" };
+      const wasAttached = rcState.isAttached(ctx.sessionRef.sessionKey);
+      const wasPending = rcState.isPending(ctx.sessionRef.sessionKey);
+      rcState.reset(ctx.sessionRef.sessionKey);
+      if (!wasAttached && !wasPending) {
+        return { reply: "当前未处于接管状态" };
+      }
+      return { reply: "已退出接管桌面会话" };
+    },
+  },
+  {
     name: "compact",
     description: "压缩当前会话上下文",
     scope: "session",
@@ -71,3 +136,17 @@ export const bridgeCommands = [
     },
   },
 ];
+
+/** 列表显示用的短日期：今天则 HH:mm；否则 M/D HH:mm */
+function _formatShortDate(modified) {
+  if (modified == null) return "未知时间";
+  const d = typeof modified === "number" || typeof modified === "string"
+    ? new Date(modified)
+    : (modified instanceof Date ? modified : new Date());
+  if (Number.isNaN(d.getTime())) return "未知时间";
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const isSameDay = d.toDateString() === now.toDateString();
+  if (isSameDay) return `今天 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
