@@ -256,6 +256,25 @@ export function handleServerMessage(msg: any): void {
       }
       break;
 
+    case 'bridge_rc_attached': {
+      // Phase 2-D：bridge 端 /rc 选中了某个桌面 session，前端按 sessionPath 渲染接管横幅
+      const sp = msg.sessionPath;
+      if (sp && msg.sessionKey) {
+        useStore.getState().setRcAttached(sp, {
+          sessionKey: msg.sessionKey,
+          platform: msg.platform || 'bridge',
+          title: msg.title,
+        });
+      }
+      break;
+    }
+
+    case 'bridge_rc_detached': {
+      const sp = msg.sessionPath;
+      if (sp) useStore.getState().clearRcAttached(sp);
+      break;
+    }
+
     case 'plan_mode': {
       const sp = msg.sessionPath;
       if (!sp || sp === useStore.getState().currentSessionPath) {

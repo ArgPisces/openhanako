@@ -15,6 +15,7 @@ function makeEngine({ isStreaming = () => false, agents = {} } = {}) {
     rcState,
     isSessionStreaming: vi.fn(isStreaming),
     getAgent: vi.fn((id) => agents[id] || null),
+    emitEvent: vi.fn(),
   };
 }
 
@@ -157,6 +158,41 @@ describe("handleRcPendingInput — selection success flow", () => {
       engine, agentId: "a1", sessionKey: "k", text: "1", reply,
     });
     expect(reply.mock.calls[1][0]).toBe("已接管对话 未命名会话");
+  });
+
+  it("emits bridge_rc_attached event after successful attach (Phase 2-D)", async () => {
+    // 桌面 UI 依赖此事件渲染接管横幅；后端路径和 UI 路径解耦，事件是合约
+    const engine = makeEngine();
+    prime(engine, "tg_dm_user123@a1", [{ path: "/sess/a.jsonl", title: "架构" }]);
+    summarizeSessionForRc.mockResolvedValueOnce("sum");
+    const reply = vi.fn();
+    await handleRcPendingInput({
+      engine, agentId: "a1", sessionKey: "tg_dm_user123@a1", text: "1", reply,
+    });
+    expect(engine.emitEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "bridge_rc_attached",
+        sessionKey: "tg_dm_user123@a1",
+        sessionPath: "/sess/a.jsonl",
+        title: "架构",
+        platform: "tg",
+      }),
+      "/sess/a.jsonl",
+    );
+  });
+
+  it("event emit failure does not abort the attach flow", async () => {
+    // emit 抛错不能让整个接管流程挂（非关键路径）
+    const engine = makeEngine();
+    engine.emitEvent = vi.fn(() => { throw new Error("bus down"); });
+    prime(engine, "k", [{ path: "/sess/a.jsonl", title: "x" }]);
+    summarizeSessionForRc.mockResolvedValueOnce("s");
+    const reply = vi.fn();
+    const r = await handleRcPendingInput({
+      engine, agentId: "a1", sessionKey: "k", text: "1", reply,
+    });
+    expect(r.handled).toBe(true);
+    expect(engine.rcState.isAttached("k")).toBe(true);
   });
 });
 

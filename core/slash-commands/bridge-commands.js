@@ -110,11 +110,22 @@ export const bridgeCommands = [
       }
       const rcState = ctx.engine?.rcState;
       if (!rcState) return { error: "rc 状态存储未初始化" };
-      const wasAttached = rcState.isAttached(ctx.sessionRef.sessionKey);
+      const priorAttachment = rcState.getAttachment(ctx.sessionRef.sessionKey);
+      const wasAttached = !!priorAttachment;
       const wasPending = rcState.isPending(ctx.sessionRef.sessionKey);
       rcState.reset(ctx.sessionRef.sessionKey);
       if (!wasAttached && !wasPending) {
         return { reply: "当前未处于接管状态" };
+      }
+      // Phase 2-D：广播 detached 让桌面 UI 撤横幅
+      if (wasAttached && priorAttachment?.desktopSessionPath) {
+        try {
+          ctx.engine?.emitEvent?.({
+            type: "bridge_rc_detached",
+            sessionKey: ctx.sessionRef.sessionKey,
+            sessionPath: priorAttachment.desktopSessionPath,
+          }, priorAttachment.desktopSessionPath);
+        } catch {}
       }
       return { reply: "已退出接管桌面会话" };
     },

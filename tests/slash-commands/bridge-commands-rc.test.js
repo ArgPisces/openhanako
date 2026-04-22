@@ -9,6 +9,7 @@ function makeEngine({ sessions = [], rcState } = {}) {
     rcState: rcState || new RcStateStore(),
     listSessions: vi.fn(async () => sessions),
     getAgent: vi.fn(() => ({ id: "a1", config: { models: { chat: { id: "gpt-5", provider: "openai" } } } })),
+    emitEvent: vi.fn(),
   };
 }
 
@@ -139,6 +140,28 @@ describe("/exitrc command", () => {
     const r = await c.handler(ctxBridge({ engine }));
     expect(r.reply).toMatch(/已退出接管/);
     expect(engine.rcState.isAttached("tg_dm_x@a1")).toBe(false);
+  });
+
+  it("emits bridge_rc_detached event when exiting an attached state (Phase 2-D)", async () => {
+    const engine = makeEngine();
+    engine.rcState.attach("tg_dm_x@a1", "/desktop.jsonl");
+    await c.handler(ctxBridge({ engine }));
+    expect(engine.emitEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "bridge_rc_detached",
+        sessionKey: "tg_dm_x@a1",
+        sessionPath: "/desktop.jsonl",
+      }),
+      "/desktop.jsonl",
+    );
+  });
+
+  it("does NOT emit detached event if there was no attachment (only pending)", async () => {
+    // 只清 pending、没真正 attached 过 → 没必要发事件（桌面本来也没挂横幅）
+    const engine = makeEngine();
+    engine.rcState.setPending("tg_dm_x@a1", { type: "rc-select", promptText: "p", options: [] });
+    await c.handler(ctxBridge({ engine }));
+    expect(engine.emitEvent).not.toHaveBeenCalled();
   });
 
   it("clears pending-selection too when user exits during selection", async () => {

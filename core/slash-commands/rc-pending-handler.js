@@ -76,12 +76,35 @@ export async function handleRcPendingInput(ctx) {
   // 建立接管态
   rcState.attach(sessionKey, sessionPath);
 
+  // Phase 2-D：广播 attached 事件，桌面 UI 据此渲染横幅
+  // sessionPath 是第二参数——前端按 sessionPath 路由到对应 session 的 UI 槽
+  try {
+    engine.emitEvent?.({
+      type: "bridge_rc_attached",
+      sessionKey,
+      sessionPath,
+      title,
+      platform: _platformFromSessionKey(sessionKey),
+    }, sessionPath);
+  } catch (err) {
+    console.warn(`[rc] emit attached event failed: ${err.message}`);
+  }
+
   const body = summary
     ? `已接管桌面会话《${title}》\n${summary}`
     : `已接管对话 ${title}`;
   await _safeReply(reply, body);
 
   return { handled: true };
+}
+
+/**
+ * sessionKey 格式 `{platform}_{chatType}_{chatId}@{agentId}`，
+ * 第一段 `_` 前就是 platform。UI 横幅可以显示"正被 TG 远程接管"。
+ */
+function _platformFromSessionKey(sessionKey) {
+  const m = /^([a-z]+)_/i.exec(sessionKey || "");
+  return m ? m[1] : "bridge";
 }
 
 function _parseSelectionNumber(text) {

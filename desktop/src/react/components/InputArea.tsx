@@ -22,6 +22,7 @@ import { SlashCommandMenu } from './input/SlashCommandMenu';
 import { InputStatusBars } from './input/InputStatusBars';
 import { InputContextRow } from './input/InputContextRow';
 import { InputControlBar } from './input/InputControlBar';
+import { RcAttachedBanner } from './input/RcAttachedBanner';
 import { SkillBadge } from './input/extensions/skill-badge';
 import { serializeEditor } from '../utils/editor-serializer';
 import { useSkillSlashItems } from '../hooks/use-slash-items';
@@ -579,6 +580,7 @@ function InputAreaInner() {
             onSelect={handleSlashSelect} onHover={(i) => setSlashSelected(i)} />
         )}
       </div>
+      <RcAttachedBanner />
       <div className={styles['input-wrapper']}>
         <div
           onKeyDown={handleEditorKeyDown}

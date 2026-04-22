@@ -953,3 +953,34 @@
 .input-box :global(.tiptap p) {
     margin: 0;
 }
+
+/* ── RC 接管横幅（Phase 2-D） ──
+   输入框上方，与输入框等宽；accent 减淡作底；圆角；顶替布局（不 absolute） */
+.rc-attached-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.35rem;
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: var(--text);
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-rgb), 0.2);
+    border-radius: var(--radius-md);
+    -webkit-app-region: no-drag;
+}
+
+.rc-attached-banner .rc-attached-icon {
+    display: inline-flex;
+    color: rgba(var(--accent-rgb), 0.8);
+    flex-shrink: 0;
+}
+
+.rc-attached-banner .rc-attached-text {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

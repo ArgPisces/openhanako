@@ -51,4 +51,43 @@ describe('bridge-slice', () => {
     expect(slice.bridgeLatestMessage?.text).toBe('msg');
     expect(slice.bridgeStatusTrigger).toBe(1);
   });
+
+  // ── Phase 2-D: rcAttached 态管理 ──
+
+  it('rcAttached 初始为空对象', () => {
+    expect(slice.rcAttached).toEqual({});
+  });
+
+  it('setRcAttached 按 sessionPath 写入接管信息', () => {
+    slice.setRcAttached('/p/s.jsonl', { sessionKey: 'tg_dm_1@a1', platform: 'tg', title: '架构讨论' });
+    expect(slice.rcAttached['/p/s.jsonl']).toEqual({
+      sessionKey: 'tg_dm_1@a1', platform: 'tg', title: '架构讨论',
+    });
+  });
+
+  it('setRcAttached 覆盖同 sessionPath 的旧条目', () => {
+    slice.setRcAttached('/p/s.jsonl', { sessionKey: 'tg_dm_1@a1', platform: 'tg' });
+    slice.setRcAttached('/p/s.jsonl', { sessionKey: 'feishu_dm_2@a1', platform: 'feishu' });
+    expect(slice.rcAttached['/p/s.jsonl'].platform).toBe('feishu');
+  });
+
+  it('多 sessionPath 独立存在', () => {
+    slice.setRcAttached('/p/a.jsonl', { sessionKey: 'k1', platform: 'tg' });
+    slice.setRcAttached('/p/b.jsonl', { sessionKey: 'k2', platform: 'feishu' });
+    expect(Object.keys(slice.rcAttached)).toEqual(expect.arrayContaining(['/p/a.jsonl', '/p/b.jsonl']));
+  });
+
+  it('clearRcAttached 删除指定 sessionPath', () => {
+    slice.setRcAttached('/p/a.jsonl', { sessionKey: 'k1', platform: 'tg' });
+    slice.setRcAttached('/p/b.jsonl', { sessionKey: 'k2', platform: 'feishu' });
+    slice.clearRcAttached('/p/a.jsonl');
+    expect(slice.rcAttached['/p/a.jsonl']).toBeUndefined();
+    expect(slice.rcAttached['/p/b.jsonl']).toBeDefined();
+  });
+
+  it('clearRcAttached 对不存在的 sessionPath 是 no-op', () => {
+    slice.setRcAttached('/p/a.jsonl', { sessionKey: 'k1', platform: 'tg' });
+    slice.clearRcAttached('/p/nope.jsonl');
+    expect(slice.rcAttached['/p/a.jsonl']).toBeDefined();
+  });
 });
