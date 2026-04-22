@@ -464,6 +464,10 @@ export function createSessionsRoute(engine) {
       const destPath = path.join(archiveDir, fileName);
       await fs.rename(sessionPath, destPath);
 
+      // 将 mtime 置为归档瞬间，使 cleanup 按"归档时间"而非"最后活动时间"判断
+      const nowSec = Date.now() / 1000;
+      await fs.utimes(destPath, nowSec, nowSec);
+
       return c.json({ ok: true });
     } catch (err) {
       return c.json({ error: err.message }, 500);
