@@ -192,45 +192,8 @@ export class BridgeSessionManager {
           settingsManager: this._createSettings(chatModel),
         };
       } else {
-        // owner 模式：完整 agent
-        const prefs = this._deps.getPreferences();
-        const bridgeReadOnly = !!agent.config?.bridge?.readOnly;
-        const bridgeCwd = homeCwd;
-        const { tools: baseTools, customTools: baseCustomTools } = this._deps.buildTools(bridgeCwd, agent.tools, { workspace: homeCwd, agentDir: agent.agentDir });
-
-        const bridgeTools = bridgeReadOnly
-          ? baseTools.filter(t => READ_ONLY_BUILTIN_TOOLS.includes(t.name))
-          : baseTools;
-        const safeCustomNames = ["search_memory", "web_search", "web_fetch", "stage_files"];
-        const bridgeCustomTools = bridgeReadOnly
-          ? (baseCustomTools || []).filter(t => safeCustomNames.includes(t.name))
-          : baseCustomTools;
-
-        // 使用 agent 配置的模型（同上：必须是带 provider 的复合键对象）
-        const ownerRef = agent.config?.models?.chat;
-        const ref = (typeof ownerRef === "object" && ownerRef?.id && ownerRef?.provider) ? ownerRef : null;
-        if (!ref) {
-          throw new Error(t("error.bridgeAgentNoChatModel", { name: agent.agentName }));
-        }
-        const ownerModel = findModel(mm.availableModels, ref.id, ref.provider);
-        if (!ownerModel) {
-          throw new Error(t("error.bridgeAgentModelNotAvailable", { name: agent.agentName, model: `${ref.provider}/${ref.id}` }));
-        }
-
-        // 快照 prompt，隔离于其他 session 的 prompt 变更（与 SessionCoordinator.createSession 一致）
-        const ownerPromptSnapshot = agent.buildSystemPrompt();
-        const ownerResourceLoader = Object.create(this._deps.getResourceLoader(), {
-          getSystemPrompt: { value: () => ownerPromptSnapshot },
-        });
-
-        sessionOpts = {
-          model: ownerModel,
-          thinkingLevel: mm.resolveThinkingLevel(prefs?.thinking_level || "auto"),
-          resourceLoader: ownerResourceLoader,
-          tools: bridgeTools,
-          customTools: bridgeCustomTools,
-          settingsManager: this._createSettings(ownerModel),
-        };
+        // owner 模式：完整 agent。抽出 _buildOwnerSessionOpts 后，compactSession 也能复用同一构造逻辑
+        sessionOpts = this._buildOwnerSessionOpts(agent, mm, homeCwd);
       }
 
       const { session } = await createAgentSession({
@@ -361,6 +324,134 @@ export class BridgeSessionManager {
       console.error(`[bridge-session] injectMessage failed: ${err.message}`);
       return false;
     }
+  }
+
+  /**
+   * 构造 owner 模式 bridge session 的 createAgentSession opts。
+   * 从 executeExternalMessage 的 owner 分支抽出，以便 compactSession 复用同一配置。
+   *
+   * 纯函数（相对于 this._deps）：不写 _activeSessions，不落盘索引。
+   *
+   * @param {object} agent
+   * @param {import('./model-manager.js').ModelManager} mm
+   * @param {string} homeCwd
+   * @returns {object} sessionOpts for createAgentSession
+   */
+  _buildOwnerSessionOpts(agent, mm, homeCwd) {
+    const prefs = this._deps.getPreferences();
+    const bridgeReadOnly = !!agent.config?.bridge?.readOnly;
+    const { tools: baseTools, customTools: baseCustomTools } = this._deps.buildTools(
+      homeCwd, agent.tools,
+      { workspace: homeCwd, agentDir: agent.agentDir },
+    );
+
+    const bridgeTools = bridgeReadOnly
+      ? baseTools.filter(t => READ_ONLY_BUILTIN_TOOLS.includes(t.name))
+      : baseTools;
+    const safeCustomNames = ["search_memory", "web_search", "web_fetch", "stage_files"];
+    const bridgeCustomTools = bridgeReadOnly
+      ? (baseCustomTools || []).filter(t => safeCustomNames.includes(t.name))
+      : baseCustomTools;
+
+    // 使用 agent 配置的模型（必须是带 provider 的复合键对象）
+    const ownerRef = agent.config?.models?.chat;
+    const ref = (typeof ownerRef === "object" && ownerRef?.id && ownerRef?.provider) ? ownerRef : null;
+    if (!ref) {
+      throw new Error(t("error.bridgeAgentNoChatModel", { name: agent.agentName }));
+    }
+    const ownerModel = findModel(mm.availableModels, ref.id, ref.provider);
+    if (!ownerModel) {
+      throw new Error(t("error.bridgeAgentModelNotAvailable", { name: agent.agentName, model: `${ref.provider}/${ref.id}` }));
+    }
+
+    // 快照 prompt，隔离于其他 session 的 prompt 变更（与 SessionCoordinator.createSession 一致）
+    const ownerPromptSnapshot = agent.buildSystemPrompt();
+    const ownerResourceLoader = Object.create(this._deps.getResourceLoader(), {
+      getSystemPrompt: { value: () => ownerPromptSnapshot },
+    });
+
+    return {
+      model: ownerModel,
+      thinkingLevel: mm.resolveThinkingLevel(prefs?.thinking_level || "auto"),
+      resourceLoader: ownerResourceLoader,
+      tools: bridgeTools,
+      customTools: bridgeCustomTools,
+      settingsManager: this._createSettings(ownerModel),
+    };
+  }
+
+  /**
+   * 对指定 bridge session 执行真正的上下文压缩。
+   *
+   * 流程：
+   *   1. 从 index 定位 jsonl 文件
+   *   2. 若当前正 streaming → 抛错（禁止并发压缩+生成）
+   *   3. SessionManager.open + createAgentSession 组装临时 owner session
+   *   4. 读取压缩前 token 占用 → session.compact() → 读取压缩后
+   *   5. 不把临时 session 写入 _activeSessions（它不承担 LLM 生成，isStreaming 语义无关）
+   *
+   * 返回值为结构化对象，上层 /compact handler 负责消息文案。
+   *
+   * @param {string} sessionKey
+   * @param {{ agentId?: string }} opts
+   * @returns {Promise<{ tokensBefore: number|null, tokensAfter: number|null, contextWindow: number|null }>}
+   */
+  async compactSession(sessionKey, opts = {}) {
+    // 1. 定位 agent
+    let agent = opts.agentId ? this._deps.getAgentById?.(opts.agentId) : null;
+    if (!agent) {
+      if (opts.agentId) console.warn(`[bridge-session] compactSession: agentId "${opts.agentId}" not found, falling back to focus agent`);
+      agent = this._deps.getAgent();
+    }
+    if (!agent) throw new Error("bridge compact: agent not found");
+
+    // 2. 并发保护：正在生成回复时禁止压缩（SDK 内部冲突）
+    const active = this._activeSessions.get(sessionKey);
+    if (active?.isStreaming) {
+      throw new Error("bridge compact: session is streaming, try again after the reply completes");
+    }
+
+    // 3. 读索引 → 拿到 jsonl 绝对路径
+    const bridgeDir = path.join(agent.sessionDir, "bridge");
+    const index = this.readIndex(agent);
+    const raw = index[sessionKey];
+    const existingFile = typeof raw === "string" ? raw : raw?.file || null;
+    if (!existingFile) {
+      throw new Error(`bridge compact: session "${sessionKey}" not found or has no history`);
+    }
+    const sessionFilePath = path.join(bridgeDir, existingFile);
+    if (!fs.existsSync(sessionFilePath)) {
+      throw new Error(`bridge compact: session file missing on disk: ${sessionFilePath}`);
+    }
+
+    // 4. 打开 SessionManager + 组装 owner 模式 createAgentSession opts
+    const mm = this._deps.getModelManager();
+    const homeCwd = this._deps.getHomeCwd(agent.id) || process.cwd();
+    const sessionDir = path.dirname(sessionFilePath);
+    const mgr = SessionManager.open(sessionFilePath, sessionDir);
+    const sessionOpts = this._buildOwnerSessionOpts(agent, mm, homeCwd);
+
+    const { session } = await createAgentSession({
+      cwd: homeCwd,
+      sessionManager: mgr,
+      authStorage: mm.authStorage,
+      modelRegistry: mm.modelRegistry,
+      ...sessionOpts,
+    });
+
+    // 5. 读 usage → compact → 读 usage
+    const before = session.getContextUsage?.() ?? null;
+    if (session.isCompacting) {
+      throw new Error("bridge compact: already compacting");
+    }
+    await session.compact();
+    const after = session.getContextUsage?.() ?? null;
+
+    return {
+      tokensBefore: before?.tokens ?? null,
+      tokensAfter: after?.tokens ?? null,
+      contextWindow: after?.contextWindow ?? before?.contextWindow ?? null,
+    };
   }
 
   /** 创建 bridge 专用 settings：compaction 由 SDK 默认触发（contextWindow - 16384） */

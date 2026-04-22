@@ -51,8 +51,23 @@ export const bridgeCommands = [
     permission: "owner",
     source: "core",
     handler: async (ctx) => {
-      await ctx.sessionOps.compact(ctx.sessionRef);
-      return { reply: "已压缩上下文" };
+      // Phase 7：bridge /compact 做真实压缩（session.compact()），并给用户发"进行中"+"完成/失败"两条消息
+      // 让对方在社交平台看到"她在干活"的反馈，不用盯着一个沉默通道
+      // 失败路径也要发一条给用户，否则压缩出错用户只会看到什么都没发生
+      try { await ctx.reply("（正在压缩上下文，请稍候...）"); } catch {}
+      try {
+        const result = await ctx.sessionOps.compact(ctx.sessionRef);
+        const before = result?.tokensBefore;
+        const after = result?.tokensAfter;
+        const msg = (typeof before === "number" && typeof after === "number")
+          ? `（上下文已压缩：${before} → ${after} tokens）`
+          : "（上下文已压缩）";
+        try { await ctx.reply(msg); } catch {}
+      } catch (err) {
+        try { await ctx.reply(`（压缩失败：${err?.message || String(err)}）`); } catch {}
+      }
+      // 已经自己调 reply，走 silent 避免 dispatcher 再回复一次
+      return { silent: true };
     },
   },
 ];

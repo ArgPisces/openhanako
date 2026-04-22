@@ -159,19 +159,32 @@ describe("SessionOps bridge kind", () => {
     expect(engine.bridgeSessionManager.injectMessage).toHaveBeenCalledWith("k", "hi", { agentId: "a1" });
   });
 
-  it("compact injects placeholder message on success", async () => {
+  it("compact delegates to engine.compactBridgeSession and returns usage", async () => {
+    // Phase 7：不再注入 [上下文已压缩] 占位，走真正的 SDK compact 路径
+    engine.compactBridgeSession = vi.fn(async () => ({
+      tokensBefore: 9000, tokensAfter: 3200, contextWindow: 128000,
+    }));
     const ops = createSessionOps({ engine });
-    await ops.compact({ kind: "bridge", sessionKey: "tg_dm_w@a1", agentId: "a1" });
-    expect(engine.bridgeSessionManager.injectMessage).toHaveBeenCalledWith(
-      "tg_dm_w@a1", "[上下文已压缩]", { agentId: "a1" }
-    );
+    const r = await ops.compact({ kind: "bridge", sessionKey: "tg_dm_w@a1", agentId: "a1" });
+    expect(engine.compactBridgeSession).toHaveBeenCalledWith("tg_dm_w@a1", { agentId: "a1" });
+    expect(r).toEqual({ tokensBefore: 9000, tokensAfter: 3200, contextWindow: 128000 });
+    // 不再调 injectMessage
+    expect(engine.bridgeSessionManager.injectMessage).not.toHaveBeenCalled();
   });
 
-  it("compact throws when injectMessage returns false (I3 fix)", async () => {
-    engine.bridgeSessionManager.injectMessage = vi.fn(() => false);
+  it("compact throws when engine.compactBridgeSession is missing", async () => {
+    // 保守防御：engine 版本不匹配时显式报错而非静默失败
+    delete engine.compactBridgeSession;
     const ops = createSessionOps({ engine });
     await expect(ops.compact({ kind: "bridge", sessionKey: "tg_dm_x@a1", agentId: "a1" }))
-      .rejects.toThrow(/injectMessage failed/);
+      .rejects.toThrow(/compactBridgeSession not available/);
+  });
+
+  it("compact propagates errors from engine.compactBridgeSession", async () => {
+    engine.compactBridgeSession = vi.fn(async () => { throw new Error("streaming"); });
+    const ops = createSessionOps({ engine });
+    await expect(ops.compact({ kind: "bridge", sessionKey: "k@a1", agentId: "a1" }))
+      .rejects.toThrow(/streaming/);
   });
 });
 

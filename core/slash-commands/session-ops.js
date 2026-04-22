@@ -42,18 +42,19 @@ export function createSessionOps({ engine }) {
 
     async compact(ref) {
       if (ref.kind === "bridge") {
-        // Phase 1 占位：bridge SDK 默认在 contextWindow-16384 自动压缩；
-        // 手动触发需要 open session + 临时 Agent instance，留 Phase 2+
-        // 注意：消息文案暂硬编码中文，后续 phase 统一 i18n 时迁移到 t()
-        const ok = engine.bridgeSessionManager?.injectMessage(ref.sessionKey, "[上下文已压缩]", { agentId: ref.agentId });
-        // I3 fix：inject 失败时 throw，不静默（ok !== true 同时 cover false 和 undefined——bridgeSessionManager 缺失时）
-        if (ok !== true) throw new Error(`compact: injectMessage failed for bridge session ${ref.sessionKey}`);
-        return;
+        // Phase 7：真正开 owner-mode session + session.compact()，不再注入 [上下文已压缩] 占位
+        // 返回 { tokensBefore, tokensAfter, contextWindow }，由上层 /compact handler 组文案
+        if (typeof engine.compactBridgeSession !== "function") {
+          throw new Error("compact: engine.compactBridgeSession not available");
+        }
+        return await engine.compactBridgeSession(ref.sessionKey, { agentId: ref.agentId });
       }
       const session = engine.getSessionByPath?.(ref.sessionPath);
       if (!session) throw new Error("session not found");
       if (session.isCompacting) throw new Error("Already compacting");
       await session.compact();
+      // desktop 路径不返回 usage（桌面端 slash 菜单已撤，调用方一期没有消费者）
+      return null;
     },
   };
 }

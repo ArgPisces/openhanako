@@ -448,6 +448,8 @@ export class HanaEngine {
   }
   async executeExternalMessage(p, sk, m, o) { return this._bridge.executeExternalMessage(p, sk, m, o); }
   injectBridgeMessage(sk, t) { return this._bridge.injectMessage(sk, t); }
+  /** 对指定 bridge session 执行真正的上下文压缩；返回 { tokensBefore, tokensAfter, contextWindow } */
+  async compactBridgeSession(sessionKey, opts) { return this._bridge.compactSession(sessionKey, opts); }
 
   // ════════════════════════════
   //  Skills（→ SkillManager）

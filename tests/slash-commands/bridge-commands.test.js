@@ -78,16 +78,41 @@ describe("/reset", () => {
 
 describe("/compact", () => {
   const cmd = bridgeCommands.find(c => c.name === "compact");
-  it("calls compact and returns reply", async () => {
-    const ctx = makeCtx();
+
+  it("sends progress reply, calls sessionOps.compact, then sends completion with tokens delta", async () => {
+    // Phase 7：真压缩要给用户发"正在压缩…"和"已压缩：N→M tokens"两条反馈
+    const ctx = makeCtx({
+      sessionOps: {
+        compact: vi.fn(async () => ({ tokensBefore: 9000, tokensAfter: 3200, contextWindow: 128000 })),
+      },
+    });
     const r = await cmd.handler(ctx);
+
     expect(ctx.sessionOps.compact).toHaveBeenCalledWith(ctx.sessionRef);
-    expect(r.reply).toMatch(/已压缩/);
+    expect(ctx.reply).toHaveBeenCalledTimes(2);
+    expect(ctx.reply.mock.calls[0][0]).toMatch(/正在压缩/);
+    expect(ctx.reply.mock.calls[1][0]).toMatch(/9000.*3200.*tokens/);
+    // handler 自己调了 reply，走 silent 避免 dispatcher 再回一遍
+    expect(r?.silent).toBe(true);
   });
-  it("propagates compact exceptions (no silent catch)", async () => {
+
+  it("falls back to generic '已压缩' message when usage unavailable", async () => {
+    const ctx = makeCtx({
+      sessionOps: { compact: vi.fn(async () => null) },
+    });
+    await cmd.handler(ctx);
+    expect(ctx.reply).toHaveBeenCalledTimes(2);
+    expect(ctx.reply.mock.calls[1][0]).toBe("（上下文已压缩）");
+  });
+
+  it("reports failure via reply (no throw) when compact rejects", async () => {
+    // 失败路径不 throw，走 reply → 用户在社交平台能看到"压缩失败：xxx"
     const ctx = makeCtx({
       sessionOps: { compact: vi.fn(async () => { throw new Error("inject failed"); }) },
     });
-    await expect(cmd.handler(ctx)).rejects.toThrow(/inject failed/);
+    const r = await cmd.handler(ctx);
+    expect(ctx.reply).toHaveBeenCalledTimes(2);
+    expect(ctx.reply.mock.calls[1][0]).toMatch(/压缩失败.*inject failed/);
+    expect(r?.silent).toBe(true);
   });
 });

@@ -26,7 +26,7 @@ import { SkillBadge } from './input/extensions/skill-badge';
 import { serializeEditor } from '../utils/editor-serializer';
 import { useSkillSlashItems } from '../hooks/use-slash-items';
 import {
-  XING_PROMPT, executeDiary, executeCompact, executeSlashViaWs, buildSlashCommands, getSlashMatches,
+  XING_PROMPT, executeDiary, executeCompact, buildSlashCommands, getSlashMatches,
   resolveSlashSubmitSelection,
   type SlashItem,
 } from './input/slash-commands';
@@ -209,19 +209,12 @@ function InputAreaInner() {
 
   const skillItems = useSkillSlashItems();
 
-  const slashViaWsFn = useCallback(
-    (cmd: string) => executeSlashViaWs(
-      cmd,
-      setSlashBusy,
-      () => { editor?.commands.clearContent(); },
-      setSlashMenuOpen,
-    ),
-    [editor],
-  );
-
+  // 注：/stop /new /reset 仅走 bridge 平台（TG/Feishu/...）；桌面端有 GUI，菜单不暴露这些命令。
+  // buildSlashCommands 第 5 参留作未来 web/mobile 端需要时再注入。后端 WS 通道 (type:'slash')
+  // 和 REST /api/commands 保留作扩展面，不影响现有桌面 UX。
   const slashCommands = useMemo(
-    () => [...buildSlashCommands(t, diaryFn, xingFn, compactFn, slashViaWsFn), ...skillItems],
-    [diaryFn, xingFn, compactFn, slashViaWsFn, t, skillItems],
+    () => [...buildSlashCommands(t, diaryFn, xingFn, compactFn), ...skillItems],
+    [diaryFn, xingFn, compactFn, t, skillItems],
   );
 
   const filteredCommands = useMemo(() => {
