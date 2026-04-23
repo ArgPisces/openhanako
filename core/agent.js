@@ -686,11 +686,16 @@ export class Agent {
    * @param {boolean} [options.forSubagent] - 为 subagent 构造的轻量 prompt：
    *   跳过记忆三段（规则 + pinned.md + memory.md）和团队 agent 名单。
    *   Subagent 是一次性隔离任务，不需要长期记忆和多 agent 协作上下文。
+   * @param {string} [options.cwdOverride] - 覆盖 prompt 中“书桌”章节展示的 cwd。
+   *   用于新建隔离 session 时，让 prompt 快照和实际执行目录保持一致。
    */
   buildSystemPrompt(options = {}) {
     const forSubagent = !!options.forSubagent;
     const forceMemoryEnabled = Object.prototype.hasOwnProperty.call(options, "forceMemoryEnabled")
       ? options.forceMemoryEnabled
+      : null;
+    const cwdOverride = Object.prototype.hasOwnProperty.call(options, "cwdOverride")
+      ? (typeof options.cwdOverride === "string" ? options.cwdOverride : "")
       : null;
     const memoryEnabled = typeof forceMemoryEnabled === "boolean"
       ? forceMemoryEnabled
@@ -945,7 +950,7 @@ export class Agent {
     }
 
     // 书桌 = 当前工作目录（注入实际路径）
-    const cwdPath = this._cb?.getCwd?.() || "";
+    const cwdPath = cwdOverride !== null ? cwdOverride : (this._cb?.getCwd?.() || "");
     parts.push(isZh
       ? `\n## 书桌\n\n` +
         `用户所说的「书桌」「工作空间」指的是你当前的工作目录（cwd），不是系统桌面（~/Desktop）。` +

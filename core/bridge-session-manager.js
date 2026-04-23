@@ -408,7 +408,7 @@ export class BridgeSessionManager {
     }
 
     // 快照 prompt，隔离于其他 session 的 prompt 变更（与 SessionCoordinator.createSession 一致）
-    const ownerPromptSnapshot = agent.buildSystemPrompt();
+    const ownerPromptSnapshot = agent.buildSystemPrompt({ cwdOverride: homeCwd });
     const ownerResourceLoader = Object.create(this._deps.getResourceLoader(), {
       getSystemPrompt: { value: () => ownerPromptSnapshot },
     });

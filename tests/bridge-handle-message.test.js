@@ -319,6 +319,39 @@ describe("BridgeManager._handleMessage", () => {
         }),
       );
     });
+
+    it("reads wechat text file attachments through the platform-specific file downloader", async () => {
+      const { bm, hub } = createMocks();
+      const wechatAdapter = {
+        sendReply: vi.fn().mockResolvedValue(),
+        sendBlockReply: vi.fn().mockResolvedValue(),
+        stop: vi.fn(),
+        downloadFileByRef: vi.fn().mockResolvedValue(Buffer.from("hello from wechat txt", "utf-8")),
+      };
+      bm._platforms.set("wechat:hana", { adapter: wechatAdapter, status: "connected", agentId: "hana", platform: "wechat" });
+
+      bm._handleMessage("wechat", {
+        sessionKey: "wx_dm_owner123@hana",
+        text: "",
+        userId: "owner123",
+        chatId: "wx_123",
+        agentId: "hana",
+        attachments: [{
+          type: "file",
+          filename: "notes.txt",
+          platformRef: "{\"encrypt_query_param\":\"abc\",\"aes_key\":\"def\"}",
+          size: 21,
+        }],
+      });
+
+      await vi.advanceTimersByTimeAsync(2100);
+
+      expect(wechatAdapter.downloadFileByRef).toHaveBeenCalledWith("{\"encrypt_query_param\":\"abc\",\"aes_key\":\"def\"}");
+      expect(hub.send).toHaveBeenCalledWith(
+        expect.stringContaining("hello from wechat txt"),
+        expect.objectContaining({ sessionKey: "wx_dm_owner123@hana" }),
+      );
+    });
   });
 
   // ── Abort ──

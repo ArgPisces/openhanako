@@ -115,6 +115,33 @@ describe("BridgeSessionManager teardown", () => {
     expect(manager.activeSessions.has("bridge-k1")).toBe(false);
   });
 
+  it("owner bridge session prompt snapshot uses the same home cwd as execution", async () => {
+    const agent = makeAgent(rootDir);
+    agent.buildSystemPrompt = vi.fn(({ cwdOverride } = {}) => `system prompt @ ${cwdOverride ?? "missing"}`);
+    const mgrPath = path.join(agent.sessionDir, "bridge", "owner", "s-home.jsonl");
+    const manager = new BridgeSessionManager(makeDeps(agent));
+    sessionManagerCreateMock.mockReturnValue({ getSessionFile: () => mgrPath });
+
+    const session = {
+      model: { input: ["text"] },
+      prompt: vi.fn(async () => {}),
+      subscribe: vi.fn(() => () => {}),
+      dispose: vi.fn(),
+      sessionManager: { getSessionFile: () => mgrPath },
+      extensionRunner: {
+        hasHandlers: vi.fn(() => false),
+      },
+    };
+    createAgentSessionMock.mockResolvedValue({ session });
+
+    await manager.executeExternalMessage("hello", "bridge-k-home", null, { agentId: "agent-a" });
+
+    expect(agent.buildSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({ cwdOverride: rootCwd }));
+    const createArgs = createAgentSessionMock.mock.calls.at(-1)[0];
+    expect(createArgs.cwd).toBe(rootCwd);
+    expect(createArgs.resourceLoader.getSystemPrompt()).toBe(`system prompt @ ${rootCwd}`);
+  });
+
   it("compactSession 的临时 owner session 结束后也会 shutdown + dispose", async () => {
     const agent = makeAgent(rootDir);
     const manager = new BridgeSessionManager(makeDeps(agent));

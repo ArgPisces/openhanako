@@ -143,7 +143,7 @@ export async function initApp(): Promise<void> {
   try {
     const res = await hanaFetch('/api/bridge/status');
     const data = await res.json();
-    const anyConnected = data.telegram?.status === 'connected' || data.feishu?.status === 'connected' || data.qq?.status === 'connected' || data.whatsapp?.status === 'connected';
+    const anyConnected = data.telegram?.status === 'connected' || data.feishu?.status === 'connected' || data.qq?.status === 'connected' || data.wechat?.status === 'connected' || data.whatsapp?.status === 'connected';
     useStore.setState({ bridgeDotConnected: anyConnected });
   } catch { /* ignore */ }
 
