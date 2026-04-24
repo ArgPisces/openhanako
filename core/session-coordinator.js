@@ -442,7 +442,10 @@ After dispatching subagent or other background tasks:
         if (oldSp) {
           const oldEntry = this._sessions.get(oldSp);
           const oldAgent = oldEntry ? this._d.getAgentById(oldEntry.agentId) : this._d.getAgent();
-          await oldAgent?._memoryTicker?.notifySessionEnd(oldSp).catch((err) =>
+          // fire-and-forget：memory flush 不阻塞 switch。memory.md 由 onCompiled 回调
+          // 刷到 agent._systemPrompt，只影响下次新建 session；老 session 用自己创建时的
+          // 快照，对后台异步刷新完全透明。
+          oldAgent?._memoryTicker?.notifySessionEnd(oldSp).catch((err) =>
             log.warn(`switchSession ${path.basename(oldSp)}: notifySessionEnd failed: ${err.message}`),
           );
         }
@@ -454,13 +457,13 @@ After dispatching subagent or other background tasks:
       return existing.session;
     }
 
-    // 不在 map 中，先 flush 当前再新建
+    // 不在 map 中，先触发旧 session 的 memory flush（后台跑），再新建
     if (this._session) {
       const oldSp = this._session.sessionManager?.getSessionFile?.();
       if (oldSp) {
         const oldEntry = this._sessions.get(oldSp);
         const oldAgent = oldEntry ? this._d.getAgentById(oldEntry.agentId) : this._d.getAgent();
-        await oldAgent?._memoryTicker?.notifySessionEnd(oldSp).catch((err) =>
+        oldAgent?._memoryTicker?.notifySessionEnd(oldSp).catch((err) =>
           log.warn(`switchSession ${path.basename(oldSp)}: notifySessionEnd failed: ${err.message}`),
         );
       }

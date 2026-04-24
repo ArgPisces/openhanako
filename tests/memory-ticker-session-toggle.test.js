@@ -100,4 +100,43 @@ describe("memory ticker respects session-level memory toggle", () => {
     expect(compileToday).toHaveBeenCalled();
     expect(assemble).toHaveBeenCalled();
   });
+
+  it("notifySessionEnd 是 fire-and-forget：即使 rollingSummary 永不 resolve，caller 也能立即继续", async () => {
+    const summaryManager = {
+      rollingSummary: vi.fn(() => new Promise(() => {})), // 永不 resolve
+      getSummary: vi.fn().mockReturnValue(null),
+    };
+    const ticker = createMemoryTicker({
+      summaryManager,
+      configPath: path.join(tmpDir, "config.yaml"),
+      factStore: {},
+      getResolvedMemoryModel: () => ({ model: "m", provider: "p", api: "openai-completions", api_key: "k", base_url: "http://x" }),
+      getMemoryMasterEnabled: () => true,
+      isSessionMemoryEnabled: () => true,
+      onCompiled: vi.fn(),
+      sessionDir: path.join(tmpDir, "sessions"),
+      memoryMdPath: path.join(tmpDir, "memory.md"),
+      todayMdPath: path.join(tmpDir, "today.md"),
+      weekMdPath: path.join(tmpDir, "week.md"),
+      longtermMdPath: path.join(tmpDir, "longterm.md"),
+      factsMdPath: path.join(tmpDir, "facts.md"),
+    });
+
+    ticker.notifyTurn(sessionPath);
+    // 不 await：caller 必须能立即继续而不被挂起
+    const pending = ticker.notifySessionEnd(sessionPath);
+    // 同步断言：返回值是 Promise，但调用方这一行不应被 LLM 挡住
+    expect(pending).toBeInstanceOf(Promise);
+    // rollingSummary 已经在后台启动（同步触发 Promise 构造）
+    expect(summaryManager.rollingSummary).toHaveBeenCalledOnce();
+    // 关键：不 await pending，测试仍能走到下一行 —— 证明 fire-and-forget
+  });
+
+  it("没有新轮次（count===0）时跳过，返回 resolved Promise", async () => {
+    const { ticker, summaryManager } = makeTicker(tmpDir, () => true);
+    // 不调 notifyTurn，count 保持 0
+    await ticker.notifySessionEnd(sessionPath);
+    expect(summaryManager.rollingSummary).not.toHaveBeenCalled();
+    expect(compileToday).not.toHaveBeenCalled();
+  });
 });

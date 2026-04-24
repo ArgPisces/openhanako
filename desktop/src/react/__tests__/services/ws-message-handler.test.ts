@@ -35,7 +35,48 @@ vi.mock('../../services/stream-resume', () => ({
 }));
 
 import { useStore } from '../../stores';
-import { handleServerMessage } from '../../services/ws-message-handler';
+import { applyStreamingStatus, handleServerMessage } from '../../services/ws-message-handler';
+
+describe('ws-message-handler applyStreamingStatus', () => {
+  beforeEach(() => {
+    useStore.setState({
+      currentSessionPath: '/focused.jsonl',
+      pendingNewSession: false,
+      sessions: [],
+      streamingSessions: [],
+      inlineErrors: {},
+    } as never);
+  });
+
+  it('isStreaming=true 对传入的 path 做 addStreamingSession（即使不是焦点 session）', () => {
+    applyStreamingStatus(true, '/other.jsonl');
+    expect(useStore.getState().streamingSessions).toEqual(['/other.jsonl']);
+  });
+
+  it('isStreaming=false 对传入的 path 做 removeStreamingSession（非焦点 session 也必须清）', () => {
+    useStore.setState({ streamingSessions: ['/focused.jsonl', '/other.jsonl'] } as never);
+    applyStreamingStatus(false, '/other.jsonl');
+    expect(useStore.getState().streamingSessions).toEqual(['/focused.jsonl']);
+  });
+
+  it('stream_resume 场景：服务端返回 isStreaming=false，前端把焦点 session 从 streamingSessions 移除', () => {
+    useStore.setState({ streamingSessions: ['/focused.jsonl'] } as never);
+    applyStreamingStatus(false, '/focused.jsonl');
+    expect(useStore.getState().streamingSessions).toEqual([]);
+  });
+
+  it('isStreaming=true 时重复调用不会产生重复 path', () => {
+    applyStreamingStatus(true, '/focused.jsonl');
+    applyStreamingStatus(true, '/focused.jsonl');
+    expect(useStore.getState().streamingSessions).toEqual(['/focused.jsonl']);
+  });
+
+  it('sessionPath 为 null 不抛错（防御调用方漏传）', () => {
+    useStore.setState({ streamingSessions: ['/focused.jsonl'] } as never);
+    expect(() => applyStreamingStatus(false, null)).not.toThrow();
+    expect(useStore.getState().streamingSessions).toEqual(['/focused.jsonl']);
+  });
+});
 
 describe('ws-message-handler session-scoped desktop events', () => {
   beforeEach(() => {

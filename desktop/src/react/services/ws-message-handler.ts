@@ -69,15 +69,32 @@ function hasOptimisticCurrentSession(): boolean {
   return !!state.sessions.find((s: any) => s.path === sessionPath && s._optimistic);
 }
 
-export function applyStreamingStatus(isStreaming: boolean): void {
-  // isStreaming 已由 streamingSessions 派生，不再写全局布尔值
+export function applyStreamingStatus(isStreaming: boolean, sessionPath: string | null): void {
+  // 元数据层：把 isStreaming 视为 sessionPath 维度的权威信号，统一写回 streamingSessions。
+  // 这一层不分焦点，任何来源（普通 status、stream_resume 恢复）都必须到达这里，
+  // 否则重连后服务端说「已结束」前端却留着旧的 streaming 标记，UI 会卡在"思考中"。
+  if (sessionPath) {
+    if (isStreaming) {
+      useStore.setState(s => ({
+        streamingSessions: s.streamingSessions.includes(sessionPath)
+          ? s.streamingSessions
+          : [...s.streamingSessions, sessionPath],
+      }));
+      useStore.getState().clearInlineError(sessionPath);
+    } else {
+      useStore.setState(s => ({
+        streamingSessions: s.streamingSessions.filter((p: string) => p !== sessionPath),
+      }));
+    }
+  }
+
+  // 渲染层：只有焦点 session 才影响 UI 占位 / sessions 列表。
+  const focused = useStore.getState().currentSessionPath;
+  if (sessionPath && sessionPath !== focused) return;
   if (isStreaming) {
     ensureCurrentSessionVisible();
-  } else {
-    // React 模式：消息完成由 StreamBuffer turn_end 处理
-    if (hasOptimisticCurrentSession()) {
-      loadSessionsAction().catch(err => console.warn('[ws] loadSessions failed:', err));
-    }
+  } else if (hasOptimisticCurrentSession()) {
+    loadSessionsAction().catch(err => console.warn('[ws] loadSessions failed:', err));
   }
 }
 
@@ -401,24 +418,8 @@ export function handleServerMessage(msg: any): void {
     }
 
     case 'status': {
-      // 元数据层：维护所有 session 的 streaming 状态（用 functional setState 防止 stale closure）
-      const sp = msg.sessionPath;
-      if (sp) {
-        if (msg.isStreaming) {
-          useStore.setState(s => ({
-            streamingSessions: s.streamingSessions.includes(sp) ? s.streamingSessions : [...s.streamingSessions, sp],
-          }));
-          useStore.getState().clearInlineError(sp);
-        } else {
-          useStore.setState(s => ({
-            streamingSessions: s.streamingSessions.filter((p: string) => p !== sp),
-          }));
-        }
-      }
-      // 渲染层：只有焦点 session 才影响 UI
-      if (!sp || sp === state.currentSessionPath) {
-        applyStreamingStatus(msg.isStreaming);
-      }
+      // streamingSessions 维护 + 焦点 UI 占位一并由 applyStreamingStatus 处理
+      applyStreamingStatus(msg.isStreaming, msg.sessionPath || null);
       break;
     }
   }

@@ -15,11 +15,11 @@ import { loadMessages } from '../stores/session-actions';
 
 // 延迟导入，打破循环依赖
 let _handleServerMessage: ((msg: any) => void) | null = null;
-let _applyStreamingStatus: ((isStreaming: boolean) => void) | null = null;
+let _applyStreamingStatus: ((isStreaming: boolean, sessionPath: string | null) => void) | null = null;
 
 export function injectHandlers(
   handleServerMessage: (msg: any) => void,
-  applyStreamingStatus: (isStreaming: boolean) => void,
+  applyStreamingStatus: (isStreaming: boolean, sessionPath: string | null) => void,
 ): void {
   _handleServerMessage = handleServerMessage;
   _applyStreamingStatus = applyStreamingStatus;
@@ -121,7 +121,7 @@ async function rebuildCurrentSessionFromResume(msg: any): Promise<void> {
       });
     }
 
-    _applyStreamingStatus?.(msg.isStreaming);
+    _applyStreamingStatus?.(msg.isStreaming, sessionPath);
 
     const ws = getWebSocket();
     if (useStore.getState().currentSessionPath === sessionPath && ws?.readyState === WebSocket.OPEN && msg.isStreaming) {
@@ -166,5 +166,5 @@ export function replayStreamResume(msg: any): void {
     });
   }
 
-  _applyStreamingStatus?.(msg.isStreaming);
+  _applyStreamingStatus?.(msg.isStreaming, sessionPath);
 }
