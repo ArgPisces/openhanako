@@ -298,8 +298,8 @@ describe("模型选择无 fallback", () => {
         },
         {},
       );
-      expect(result.utility).toBe("util-model");
-      expect(result.utility_large).toBe("large-model");
+      expect(result.utility).toMatchObject({ id: "util-model", provider: "test-provider" });
+      expect(result.utility_large).toMatchObject({ id: "large-model", provider: "test-provider" });
       expect(result.api_key).toBe("sk-test");
       expect(result.api).toBe("openai-completions");
     });

@@ -1,5 +1,6 @@
 import { AppError } from '../shared/errors.js';
 import { errorBus } from '../shared/error-bus.js';
+import { normalizeProviderPayload } from './provider-compat.js';
 
 /**
  * core/llm-client.js — 统一的非流式 LLM 调用入口
@@ -12,6 +13,9 @@ import { errorBus } from '../shared/error-bus.js';
  *   - openai-completions:  baseUrl + "/chat/completions"
  *   - anthropic-messages:  baseUrl + "/v1/messages"
  *   - openai-responses:    baseUrl + "/responses"
+ *
+ * Provider 兼容化：fetch 前统一调 normalizeProviderPayload(body, model, { mode: "utility" })，
+ * 与 chat 路径（engine.js 的 Pi SDK extension）共享同一个 provider-compat 模块。
  */
 
 /**
@@ -21,8 +25,8 @@ import { errorBus } from '../shared/error-bus.js';
  * @param {string} opts.api            API 协议
  * @param {string} opts.apiKey         API key（本地模型可省略）
  * @param {string} opts.baseUrl        Provider base URL
- * @param {string} opts.model          模型 ID
- * @param {string} [opts.provider]     Provider ID
+ * @param {string|object} opts.model   模型：完整对象 {id, provider, reasoning, maxTokens, ...}
+ *                                     或裸 id 字符串（旧调用方过渡期，会丢失 normalize 决策信息）
  * @param {string[]} [opts.quirks]     Provider quirk flags (e.g. ["enable_thinking"])
  * @param {string} [opts.systemPrompt] System prompt
  * @param {Array}  [opts.messages]     消息数组 [{ role, content }]
@@ -37,7 +41,6 @@ export async function callText({
   apiKey,
   baseUrl,
   model,
-  provider = "custom",
   quirks = [],
   systemPrompt = "",
   messages = [],
@@ -46,6 +49,10 @@ export async function callText({
   timeoutMs = 60_000,
   signal,
 }) {
+  // 同时接受完整 model 对象和裸 id。modelObj 用于 provider-compat 决策；modelId 入 payload。
+  const modelObj = typeof model === "object" && model !== null ? model : null;
+  const modelId = modelObj ? modelObj.id : String(model || "");
+  const provider = modelObj?.provider || "custom";
   // ── 1. 消息归一化：提取 system 消息合并到 systemPrompt ──
   let mergedSystem = systemPrompt || "";
   const normalizedMessages = [];
@@ -82,7 +89,7 @@ export async function callText({
     const anthropicMessages = normalizedMessages.filter(m => m.role === "user" || m.role === "assistant");
     if (anthropicMessages.length === 0) anthropicMessages.push({ role: "user", content: "" });
     body = {
-      model, temperature, max_tokens: maxTokens,
+      model: modelId, temperature, max_tokens: maxTokens,
       ...(mergedSystem && { system: mergedSystem }),
       messages: anthropicMessages,
     };
@@ -92,7 +99,7 @@ export async function callText({
     headers = { "Content-Type": "application/json" };
     if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
     body = {
-      model, temperature, max_output_tokens: maxTokens,
+      model: modelId, temperature, max_output_tokens: maxTokens,
       ...(mergedSystem && { instructions: mergedSystem }),
       input: normalizedMessages,
     };
@@ -106,17 +113,20 @@ export async function callText({
     if (mergedSystem) allMessages.push({ role: "system", content: mergedSystem });
     allMessages.push(...normalizedMessages);
     body = {
-      model, temperature, max_tokens: maxTokens,
+      model: modelId, temperature, max_tokens: maxTokens,
       messages: allMessages,
       ...(quirks.includes("enable_thinking") && { enable_thinking: false }),
     };
   }
 
+  // Provider 兼容化（与 chat 路径共享 provider-compat）
+  body = normalizeProviderPayload(body, modelObj, { mode: "utility" });
+
   // ── 4. 发送请求 ──
   const SLOW_THRESHOLD_MS = 15_000;
   const slowTimer = setTimeout(() => {
     errorBus.report(new AppError('LLM_SLOW_RESPONSE', {
-      context: { model, provider, elapsed: SLOW_THRESHOLD_MS },
+      context: { model: modelId, provider, elapsed: SLOW_THRESHOLD_MS },
     }));
   }, SLOW_THRESHOLD_MS);
 
@@ -128,7 +138,7 @@ export async function callText({
   }).catch(err => {
     clearTimeout(slowTimer);
     if (err.name === "AbortError" || err.name === "TimeoutError") {
-      throw new AppError('LLM_TIMEOUT', { context: { model }, cause: err });
+      throw new AppError('LLM_TIMEOUT', { context: { model: modelId }, cause: err });
     }
     throw err;
   });
@@ -146,12 +156,12 @@ export async function callText({
   if (!res.ok) {
     const message = data?.error?.message || data?.message || rawText || `HTTP ${res.status}`;
     if (res.status === 401 || res.status === 403) {
-      throw new AppError('LLM_AUTH_FAILED', { context: { model, status: res.status } });
+      throw new AppError('LLM_AUTH_FAILED', { context: { model: modelId, status: res.status } });
     }
     if (res.status === 429) {
-      throw new AppError('LLM_RATE_LIMITED', { context: { model } });
+      throw new AppError('LLM_RATE_LIMITED', { context: { model: modelId } });
     }
-    throw new AppError('UNKNOWN', { message, context: { model, status: res.status } });
+    throw new AppError('UNKNOWN', { message, context: { model: modelId, status: res.status } });
   }
 
   // ── 6. 提取文本 ──
@@ -180,9 +190,9 @@ export async function callText({
 
   if (!text) {
     if (combinedSignal.aborted) {
-      throw new AppError('LLM_TIMEOUT', { context: { model } });
+      throw new AppError('LLM_TIMEOUT', { context: { model: modelId } });
     }
-    throw new AppError('LLM_EMPTY_RESPONSE', { context: { model } });
+    throw new AppError('LLM_EMPTY_RESPONSE', { context: { model: modelId } });
   }
 
   return text;

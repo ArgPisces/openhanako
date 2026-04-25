@@ -1,3 +1,18 @@
+/**
+ * core/provider-compat.js — LLM HTTP payload 兼容层（唯一根）
+ *
+ * 所有 provider-specific 的 payload 调整集中在这里。两条调用路径共享：
+ *   - core/llm-client.js 的 callText（非流式 / utility 路径）
+ *   - core/engine.js 的 Pi SDK before_provider_request 扩展（流式 / chat 路径）
+ *
+ * 末端分叉只发生在 fetch 层本身（流式 SSE vs 非流式 POST），跟 provider 兼容性无关。
+ *
+ * mode 区分：
+ *   - "chat"：保留思考链。chat 路径默认。
+ *   - "utility"：短文本调用，DeepSeek reasoning 模型主动 disableThinking
+ *     （utility 是 50~500 token 输出，思考链既无意义也耗光预算）。
+ */
+
 const DEEPSEEK_HIGH_THINKING_BUDGET = 32768;
 const DEEPSEEK_HIGH_SAFE_MAX_TOKENS = 65536;
 const DEEPSEEK_MAX_SAFE_MAX_TOKENS = 131072;
@@ -13,10 +28,7 @@ function positiveInteger(value) {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 }
 
-function isKnownThinkingModelId(id) {
-  const normalized = lower(id);
-  return normalized === "deepseek-reasoner" || normalized.startsWith("deepseek-v4-");
-}
+// ── Provider 鉴别 ──
 
 export function isDeepSeekModel(model) {
   if (!model || typeof model !== "object") return false;
@@ -24,6 +36,18 @@ export function isDeepSeekModel(model) {
   const baseUrl = lower(model.baseUrl || model.base_url);
   return provider === "deepseek" || baseUrl.includes("api.deepseek.com");
 }
+
+export function isAnthropicModel(model) {
+  if (!model || typeof model !== "object") return false;
+  return lower(model.provider) === "anthropic";
+}
+
+function isKnownThinkingModelId(id) {
+  const normalized = lower(id);
+  return normalized === "deepseek-reasoner" || normalized.startsWith("deepseek-v4-");
+}
+
+// ── DeepSeek 专用处理 ──
 
 function shouldUseThinking(payload, model) {
   if (payload.thinking?.type === "disabled") return false;
@@ -60,8 +84,10 @@ function stripReasoningContent(messages) {
 function disableThinking(payload) {
   delete payload.reasoning_effort;
   payload.thinking = { type: "disabled" };
-  const stripped = stripReasoningContent(payload.messages);
-  if (stripped !== payload.messages) payload.messages = stripped;
+  if (Array.isArray(payload.messages)) {
+    const stripped = stripReasoningContent(payload.messages);
+    if (stripped !== payload.messages) payload.messages = stripped;
+  }
 }
 
 function normalizeMaxTokenField(payload) {
@@ -90,10 +116,8 @@ function ensureThinkingTokenBudget(payload, model) {
   payload.max_tokens = target;
 }
 
-export function normalizeDeepSeekChatPayload(payload, model) {
-  if (!isDeepSeekModel(model) || !payload || typeof payload !== "object" || !Array.isArray(payload.messages)) {
-    return payload;
-  }
+function applyDeepSeekCompat(payload, model, mode) {
+  if (!Array.isArray(payload.messages)) return payload;
 
   let next = payload;
   const editable = () => {
@@ -107,6 +131,11 @@ export function normalizeDeepSeekChatPayload(payload, model) {
 
   if (!shouldUseThinking(next, model)) return next;
 
+  if (mode === "utility") {
+    disableThinking(editable());
+    return next;
+  }
+
   if (Array.isArray(next.tools) && next.tools.length > 0) {
     disableThinking(editable());
     return next;
@@ -116,4 +145,47 @@ export function normalizeDeepSeekChatPayload(payload, model) {
   normalizeReasoningEffort(p);
   ensureThinkingTokenBudget(p, model);
   return next;
+}
+
+// ── 通用 payload 处理 ──
+
+function stripEmptyTools(payload) {
+  if (Array.isArray(payload.tools) && payload.tools.length === 0) {
+    const { tools, ...rest } = payload;
+    return rest;
+  }
+  return payload;
+}
+
+function stripIncompatibleThinking(payload, model) {
+  if (!payload.thinking) return payload;
+  // thinking 字段只有 anthropic-messages / deepseek 协议接受。其他 provider 收到会 400。
+  // 没有 model 信息时保守保留（旧降级路径），避免误删 anthropic 调用。
+  if (!model) return payload;
+  if (isAnthropicModel(model) || isDeepSeekModel(model)) return payload;
+  const { thinking, ...rest } = payload;
+  return rest;
+}
+
+/**
+ * Provider payload 兼容化的唯一入口。
+ *
+ * @param {object} payload — 即将发送的 HTTP body（OpenAI / Anthropic 风格）
+ * @param {object|null|undefined} model — 完整 model 对象 {id, provider, baseUrl, reasoning, maxTokens, ...}
+ * @param {{ mode?: "chat" | "utility" }} [options]
+ * @returns {object} 处理后的 payload
+ */
+export function normalizeProviderPayload(payload, model, options = {}) {
+  if (!payload || typeof payload !== "object") return payload;
+  const mode = options.mode || "chat";
+
+  let result = payload;
+  result = stripEmptyTools(result);
+  result = stripIncompatibleThinking(result, model);
+
+  if (isDeepSeekModel(model)) {
+    result = applyDeepSeekCompat(result, model, mode);
+  }
+
+  return result;
 }

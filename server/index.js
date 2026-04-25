@@ -105,7 +105,7 @@ dlog.header(appVersion, {
   model: engine.currentModel?.name || "(none)",
   agent: engine.agentName,
   agentId: engine.currentAgentId, // @ui-focus-ok: startup log
-  utilityModel: (() => { try { return engine.resolveUtilityConfig?.()?.utility; } catch { return "(none)"; } })(),
+  utilityModel: (() => { try { return engine.resolveUtilityConfig?.()?.utility?.id || "(none)"; } catch { return "(none)"; } })(),
   channelsDir: engine.channelsDir,
 });
 

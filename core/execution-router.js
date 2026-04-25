@@ -99,13 +99,22 @@ export class ExecutionRouter {
   }
 
   /**
-   * 向后兼容的 resolveUtilityConfig 接口
-   * 现有 6 处消费方（hub/channel-router, install-skill, llm-utils 等）都调这个
-   * 返回结构与原 ModelManager.resolveUtilityConfig() 完全一致
+   * resolveUtilityConfig：解析 utility / utility_large 模型 + 凭证。
+   *
+   * 返回值的 utility / utility_large 字段是**完整 model 对象**（不再是裸 id 字符串）。
+   * 所有 callText 调用方解构出 model 后直接传给 callText，由 callText 内部走 provider-compat。
+   *
+   * 显示用途（如 server banner）取 .id 字段：utilConfig.utility?.id。
    *
    * @param {object} agentConfig
-   * @param {{ utility?: string, utility_large?: string, summarizer?: string, compiler?: string }} sharedModels
+   * @param {{ utility?: string|object, utility_large?: string|object, summarizer?: string, compiler?: string }} sharedModels
    * @param {{ provider?: string, api_key?: string, base_url?: string }} utilApiOverride
+   * @returns {{
+   *   utility: object,
+   *   utility_large: object,
+   *   api_key: string, base_url: string, api: string,
+   *   large_api_key: string, large_base_url: string, large_api: string,
+   * }}
    */
   resolveUtilityConfig(agentConfig, sharedModels, utilApiOverride) {
     const cfg = agentConfig || {};
@@ -169,8 +178,8 @@ export class ExecutionRouter {
     }
 
     return {
-      utility: utilModel.id,
-      utility_large: largeModel.id,
+      utility: utilModel,
+      utility_large: largeModel,
       api_key: apiKey,
       base_url: baseUrl,
       api,

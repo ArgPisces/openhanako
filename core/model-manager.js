@@ -228,9 +228,12 @@ export class ModelManager {
 
   /**
    * 统一解析：模型引用 -> { model, provider, api, api_key, base_url }
-   * 返回 snake_case 格式（兼容 callProviderText / diary-writer / compile 等消费方）
+   *
+   * model 字段是**完整 model 对象**（不再是裸 id 字符串）。所有 callText 消费方
+   * 解构出 model 后直接传给 callText，由 callText 内部走 provider-compat。
+   *
    * @param {string|object} modelRef
-   * @returns {{ model: string, provider: string, api: string, api_key: string, base_url: string }}
+   * @returns {{ model: object, provider: string, api: string, api_key: string, base_url: string }}
    */
   resolveModelWithCredentials(modelRef) {
     const entry = this.resolveExecutionModel(modelRef);
@@ -246,7 +249,7 @@ export class ModelManager {
       throw new Error(t("error.providerMissingCreds", { provider }));
     }
     return {
-      model: entry.id,
+      model: entry,
       provider,
       api: creds.api,
       api_key: creds.api_key,

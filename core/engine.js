@@ -41,7 +41,7 @@ import { BridgeSessionManager } from "./bridge-session-manager.js";
 import { createSlashSystem } from "./slash-commands/index.js";
 import { AgentManager } from "./agent-manager.js";
 import { sanitizeMessagesForModel } from "./message-sanitizer.js";
-import { isDeepSeekModel, normalizeDeepSeekChatPayload } from "./deepseek-payload-compat.js";
+import { normalizeProviderPayload } from "./provider-compat.js";
 import { SessionCoordinator } from "./session-coordinator.js";
 import { ConfigCoordinator, SHARED_MODEL_KEYS } from "./config-coordinator.js";
 import { ChannelManager } from "./channel-manager.js";
@@ -731,29 +731,22 @@ export class HanaEngine {
       noThemes: true,
       additionalSkillPaths: [skillsDir],
       extensionFactories: this._extensionFactories = [
-        /** 兼容性修正：剥离第三方 anthropic-messages 供应商不支持的字段 */
+        /**
+         * Provider payload 兼容化（chat 路径）。与 callText 共享 core/provider-compat.js，
+         * 是两条调用路径唯一的 normalize 入口——末端只在"流式 vs 非流式 fetch"分叉。
+         *
+         * ctx.model 是 Pi SDK 标准入参，正常 chat session 都会带；少数 edge case
+         * （子 session / 工具内调）下偏 SDK 实现可能不带，此时按 payload.model 在
+         * availableModels 里找一次兜底，避免 DeepSeek 兼容意外失效。
+         */
         (pi) => {
           pi.on("before_provider_request", (event, ctx) => {
-            let p = event.payload;
+            const p = event.payload;
             if (!p) return p;
             const requestModel = ctx?.model
-              || this._models.availableModels.find(m => m.provider === "deepseek" && m.id === p.model)
+              || this._models.availableModels.find(m => m.id === p.model)
               || null;
-            // 剥离空 tools 数组 — dashscope / volcengine 不接受 tools: []
-            if (Array.isArray(p.tools) && p.tools.length === 0) {
-              delete p.tools;
-            }
-            // 剥离 thinking — minimax / kimi-coding 等 anthropic 兼容层不支持。
-            // payload.model 是裸 id 字符串，无 provider 信息；保守判断：
-            // 只要 _availableModels 里同 id 的所有 provider 都不是 "anthropic"，就剥。
-            // 任一匹配到 anthropic（多 provider 同 id 的少见场景）则保留，避免误删。
-            if (p.thinking && !isDeepSeekModel(requestModel)) {
-              const matches = this._models.availableModels.filter(m => m.id === p.model);
-              const hasAnthropic = matches.some(m => m.provider === "anthropic");
-              if (matches.length > 0 && !hasAnthropic) delete p.thinking;
-            }
-            p = normalizeDeepSeekChatPayload(p, requestModel);
-            return p;
+            return normalizeProviderPayload(p, requestModel, { mode: "chat" });
           });
         },
         /**

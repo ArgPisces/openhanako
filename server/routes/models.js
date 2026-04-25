@@ -69,15 +69,16 @@ export function createModelsRoute(engine) {
       const base = resolved.base_url.replace(/\/+$/, "");
       let endpoint, headers, reqBody;
 
+      const modelIdForApi = resolved.model.id;
       if (resolved.api === "anthropic-messages") {
         endpoint = `${base}/v1/messages`;
         headers = { "Content-Type": "application/json", "anthropic-version": "2023-06-01" };
         if (resolved.api_key) headers["x-api-key"] = resolved.api_key;
-        reqBody = { model: resolved.model, max_tokens: 2, messages: [{ role: "user", content: "." }] };
+        reqBody = { model: modelIdForApi, max_tokens: 2, messages: [{ role: "user", content: "." }] };
       } else {
         endpoint = `${base}/chat/completions`;
         headers = buildProviderAuthHeaders(resolved.api, resolved.api_key, { allowMissingApiKey: true });
-        reqBody = { model: resolved.model, max_tokens: 2, messages: [{ role: "user", content: "." }] };
+        reqBody = { model: modelIdForApi, max_tokens: 2, messages: [{ role: "user", content: "." }] };
       }
 
       const res = await fetch(endpoint, {
