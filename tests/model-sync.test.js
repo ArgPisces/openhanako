@@ -21,6 +21,12 @@ const KNOWN_MODELS = {
     "gpt-4o": { name: "GPT-4o", context: 128000, maxOutput: 16384, image: true },
     "gpt-image-1": { name: "GPT Image 1", type: "image" },
   },
+  "kimi-coding": {
+    "kimi-k2.6": { name: "Kimi K2.6", context: 262144, maxOutput: 98304, image: true, reasoning: true },
+  },
+  minimax: {
+    "MiniMax-M2.7": { name: "MiniMax M2.7", context: 204800, maxOutput: 131072, reasoning: true },
+  },
   // 兼容读验证：legacy-vision 模型词典里用旧字段 vision，model-sync 应当识别并投影为 input
   legacy: {
     "legacy-vision-model": { name: "Legacy Vision Model", context: 32000, vision: true },
@@ -163,6 +169,58 @@ describe("syncModels", () => {
     expect(model.vision).toBeUndefined();
     expect(model.reasoning).toBe(true);
     expect(model.quirks).toEqual(["enable_thinking"]);
+    expect(model.compat.thinkingFormat).toBe("qwen");
+  });
+
+  it("marks Anthropic-compatible reasoning models with anthropic thinking format", async () => {
+    const syncModels = await loadSync();
+
+    const providers = {
+      "kimi-coding": {
+        base_url: "https://api.kimi.com/coding/",
+        api: "anthropic-messages",
+        api_key: "sk-test",
+        models: ["kimi-k2.6"],
+      },
+      minimax: {
+        base_url: "https://api.minimaxi.com/anthropic",
+        api: "anthropic-messages",
+        api_key: "sk-test",
+        models: ["MiniMax-M2.7"],
+      },
+    };
+
+    syncModels(providers, { modelsJsonPath });
+
+    const result = JSON.parse(fs.readFileSync(modelsJsonPath, "utf-8"));
+    expect(result.providers["kimi-coding"].models[0].compat).toMatchObject({
+      supportsDeveloperRole: false,
+      thinkingFormat: "anthropic",
+    });
+    expect(result.providers.minimax.models[0].compat).toMatchObject({
+      supportsDeveloperRole: false,
+      thinkingFormat: "anthropic",
+    });
+  });
+
+  it("does not infer thinkingFormat from Anthropic protocol without reasoning capability", async () => {
+    const syncModels = await loadSync();
+
+    const providers = {
+      "custom-anthropic-proxy": {
+        base_url: "https://example.test/anthropic",
+        api: "anthropic-messages",
+        api_key: "sk-test",
+        models: [{ id: "plain-chat", reasoning: false }],
+      },
+    };
+
+    syncModels(providers, { modelsJsonPath });
+
+    const result = JSON.parse(fs.readFileSync(modelsJsonPath, "utf-8"));
+    expect(result.providers["custom-anthropic-proxy"].models[0].compat).toEqual({
+      supportsDeveloperRole: false,
+    });
   });
 
   it("sets input: ['text'] for models without image modality (no vision field on Model)", async () => {

@@ -3,6 +3,7 @@ import {
   normalizeProviderPayload,
   isDeepSeekModel,
   isAnthropicModel,
+  getThinkingFormat,
 } from "../core/provider-compat.js";
 
 describe("isDeepSeekModel", () => {
@@ -20,6 +21,41 @@ describe("isAnthropicModel", () => {
   });
 });
 
+describe("getThinkingFormat", () => {
+  it("优先读取模型显式 thinkingFormat 声明", () => {
+    expect(getThinkingFormat({
+      provider: "kimi-coding",
+      api: "anthropic-messages",
+      reasoning: true,
+      compat: { thinkingFormat: "anthropic" },
+    })).toBe("anthropic");
+    expect(getThinkingFormat({
+      provider: "dashscope",
+      api: "openai-completions",
+      reasoning: true,
+      compat: { thinkingFormat: "qwen" },
+    })).toBe("qwen");
+  });
+
+  it("仅 api=anthropic-messages 但无 reasoning/format 声明时不猜 thinking 格式", () => {
+    expect(getThinkingFormat({
+      provider: "custom-anthropic-proxy",
+      api: "anthropic-messages",
+      reasoning: false,
+      compat: { supportsDeveloperRole: false },
+    })).toBe(null);
+  });
+
+  it("兼容旧 models.json：reasoning + anthropic-messages 可读时派生 anthropic 格式", () => {
+    expect(getThinkingFormat({
+      provider: "kimi-coding",
+      api: "anthropic-messages",
+      reasoning: true,
+      compat: { supportsDeveloperRole: false },
+    })).toBe("anthropic");
+  });
+});
+
 describe("normalizeProviderPayload — 通用层", () => {
   it("剥离空 tools 数组（dashscope/volcengine 兼容）", () => {
     const payload = {
@@ -31,14 +67,49 @@ describe("normalizeProviderPayload — 通用层", () => {
     expect(result).not.toHaveProperty("tools");
   });
 
-  it("剥离不兼容 provider 的 thinking 字段", () => {
+  it("剥离未声明 thinking 格式的 provider thinking 字段", () => {
     const payload = {
-      model: "kimi-k2.6",
+      model: "custom-chat",
       messages: [{ role: "user", content: "hi" }],
       thinking: { type: "enabled" },
     };
-    const result = normalizeProviderPayload(payload, { provider: "kimi-coding" });
+    const result = normalizeProviderPayload(payload, {
+      provider: "custom-anthropic-proxy",
+      api: "anthropic-messages",
+      reasoning: false,
+      compat: { supportsDeveloperRole: false },
+    });
     expect(result).not.toHaveProperty("thinking");
+  });
+
+  it("Kimi Coding 这类 Anthropic-compatible reasoning 模型保留 thinking", () => {
+    const payload = {
+      model: "kimi-k2.6",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: { type: "enabled", budget_tokens: 8192 },
+    };
+    const result = normalizeProviderPayload(payload, {
+      provider: "kimi-coding",
+      api: "anthropic-messages",
+      reasoning: true,
+      compat: { supportsDeveloperRole: false, thinkingFormat: "anthropic" },
+    });
+    expect(result.thinking).toEqual({ type: "enabled", budget_tokens: 8192 });
+  });
+
+  it("MiniMax Anthropic-compatible reasoning 模型保留 thinking", () => {
+    const payload = {
+      model: "MiniMax-M2.7",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: { type: "enabled", budget_tokens: 4096 },
+    };
+    const result = normalizeProviderPayload(payload, {
+      provider: "minimax",
+      api: "anthropic-messages",
+      reasoning: true,
+      compat: { supportsDeveloperRole: false, thinkingFormat: "anthropic" },
+    });
+    expect(result.thinking).toEqual({ type: "enabled", budget_tokens: 4096 });
   });
 
   it("anthropic 模型保留 thinking", () => {

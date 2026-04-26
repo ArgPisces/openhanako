@@ -8,6 +8,7 @@
 import fs from "fs";
 import { isLocalBaseUrl } from "../shared/net-utils.js";
 import { lookupKnown } from "../shared/known-models.js";
+import { withThinkingFormatCompat } from "../shared/model-capabilities.js";
 
 const DEFAULT_CONTEXT_WINDOW = 128_000;
 
@@ -37,7 +38,7 @@ function extractApiKey(entry) {
  * @param {string|{id:string, name?:string, context?:number, maxOutput?:number}} modelEntry
  * @param {string} provider - provider 名称（查词典用）
  */
-function buildModelEntry(modelEntry, provider, baseUrl = "") {
+function buildModelEntry(modelEntry, provider, baseUrl = "", api = "openai-completions") {
   const isObj = typeof modelEntry === "object" && modelEntry !== null;
   const id = isObj ? modelEntry.id : modelEntry;
   const known = lookupKnown(provider, id);
@@ -62,20 +63,17 @@ function buildModelEntry(modelEntry, provider, baseUrl = "") {
 
   // Pi SDK compat 覆盖：
   // 1. 非 OpenAI provider 不发 developer role（dashscope 等不支持）— 与 reasoning 无关
-  // 2. 推理模型 + enable_thinking quirk → qwen thinkingFormat
+  // 2. thinkingFormat 由 shared/model-capabilities.js 统一派生，避免请求层按 provider 猜
   // 3. Gemini OpenAI 兼容层（/v1beta/openai）严格校验，不识别 store 字段会 400
   if (provider !== "openai") {
     const compat = { supportsDeveloperRole: false };
-    if (entry.reasoning && entry.quirks?.includes("enable_thinking")) {
-      compat.thinkingFormat = "qwen";
-    }
     if (provider === "gemini" || baseUrl.includes("generativelanguage.googleapis.com")) {
       compat.supportsStore = false;
     }
     entry.compat = compat;
   }
 
-  return entry;
+  return withThinkingFormatCompat(entry, { provider, api });
 }
 
 /**
@@ -137,7 +135,7 @@ export function syncModels(providers, opts = {}) {
         const known = lookupKnown(name, id);
         const type = (isObj && m.type) || known?.type || "chat";
         return type === "chat";
-      }).map(m => buildModelEntry(m, name, p.base_url)),
+      }).map(m => buildModelEntry(m, name, p.base_url, p.api || "openai-completions")),
     };
   }
 

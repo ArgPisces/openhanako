@@ -11,7 +11,7 @@
  * 本文件只保留：
  *   1. dispatcher（按 matches 分发到子模块，first-match-wins）
  *   2. 与 provider 无关的通用补丁（stripEmptyTools, stripIncompatibleThinking）
- *   3. 鉴别函数（isDeepSeekModel, isAnthropicModel）— 供其他 hana 模块复用
+ *   3. 协议鉴别函数（isDeepSeekModel, isAnthropicModel, getThinkingFormat）— 供其他 hana 模块复用
  *
  * 不允许在本文件加任何 provider-specific 实现细节；新 provider 一律开
  * core/provider-compat/<name>.js 子模块。
@@ -19,6 +19,7 @@
 
 import * as deepseek from "./provider-compat/deepseek.js";
 import * as qwen from "./provider-compat/qwen.js";
+import { getThinkingFormat as getDeclaredThinkingFormat } from "../shared/model-capabilities.js";
 
 /**
  * 子模块注册表。顺序敏感：first-match-wins。
@@ -41,13 +42,20 @@ export function isDeepSeekModel(model) {
 }
 
 /**
- * 判断 model 是否走 Anthropic 兼容路径。
- * Anthropic 没有专门的子模块（pi-ai SDK 已直接兼容），仅供本文件 stripIncompatibleThinking 与
- * 其他 hana 模块的鉴别需求复用。
+ * 判断 model 是否走 Anthropic thinking 兼容路径。
+ * Anthropic 没有专门的子模块（pi-ai SDK 已直接兼容），这里消费
+ * model.compat.thinkingFormat，不按 provider 名猜测第三方兼容服务。
  */
 export function isAnthropicModel(model) {
   if (!model || typeof model !== "object") return false;
-  return lower(model.provider) === "anthropic";
+  return lower(model.provider) === "anthropic" || getThinkingFormat(model) === "anthropic";
+}
+
+export function getThinkingFormat(model) {
+  const declared = getDeclaredThinkingFormat(model);
+  if (declared) return declared;
+  if (isDeepSeekModel(model)) return "deepseek";
+  return null;
 }
 
 // ── 通用 payload 处理（与 provider 无关）──
@@ -62,10 +70,12 @@ function stripEmptyTools(payload) {
 
 function stripIncompatibleThinking(payload, model) {
   if (!payload.thinking) return payload;
-  // thinking 字段只有 anthropic-messages / deepseek 协议接受。其他 provider 收到会 400。
+  // payload.thinking 只对 Anthropic-style / DeepSeek-style 请求体有效。
+  // Qwen/openrouter 等格式即使支持 reasoning，也不接收这个字段。
   // 没有 model 信息时保守保留（旧降级路径），避免误删 anthropic 调用。
   if (!model) return payload;
-  if (isAnthropicModel(model) || isDeepSeekModel(model)) return payload;
+  const thinkingFormat = getThinkingFormat(model);
+  if (thinkingFormat === "anthropic" || thinkingFormat === "deepseek") return payload;
   const { thinking, ...rest } = payload;
   return rest;
 }

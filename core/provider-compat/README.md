@@ -6,7 +6,7 @@
 ## 核心纪律
 
 1. **唯一对外入口**：所有出站 payload 兼容必须经过 [`core/provider-compat.js`](../provider-compat.js) 的 `normalizeProviderPayload(payload, model, options)`。chat 路径（`engine.js` 注册的 `before_provider_request` 钩子）和 utility 路径（`llm-client.js` 的 `callText`）共享这一个入口。
-2. **通用补丁留主入口**：与 provider 无关的处理（空 tools 数组剥离、不兼容 provider 的 thinking 字段剥离）写在 `provider-compat.js` 主入口。
+2. **通用补丁留主入口**：与 provider 无关的处理（空 tools 数组剥离、按 `compat.thinkingFormat` 剥离不兼容的 `thinking` 字段）写在 `provider-compat.js` 主入口。
 3. **Provider-specific 补丁拆子文件**：每个 provider 一个 `core/provider-compat/<name>.js`，互不串扰。
 4. **接口契约**：每个子文件 export `matches(model) → boolean`（必须容忍 `model = null/undefined`，不抛错）和 `apply(payload, model, options) → payload`（不可 mutate 输入 payload）。
 5. **dispatch 单调性**：dispatcher 按数组顺序遍历，第一个 `matches` 返回 true 的子模块负责处理（first-match-wins）。一个 model 只匹配一个子模块。新 provider 默认加在数组末尾；只有当模块的 `matches` 是另一模块的子集（更具体的规则）时才前置，避免被通用规则吞掉。
@@ -45,7 +45,7 @@
  *
  * 实现要求：
  *   - 纯函数，无副作用
- *   - 优先用 provider / baseUrl / quirks 等数据声明字段，避免按 model.id 字符串硬匹配
+ *   - 优先用 provider / baseUrl / quirks / compat.thinkingFormat 等数据声明字段，避免按 model.id 字符串硬匹配
  *   - 必须容忍字段缺失：遇到 model = null/undefined 或目标字段不存在时返回 false，
  *     不抛错（dispatcher 不能因为某个子模块的 matches 崩溃影响其他模块）
  *   - 不可依赖 `this`：dispatcher 通过 `import * as mod` 的 namespace object 调用，
@@ -68,6 +68,21 @@ export function matches(model) { ... }
  */
 export function apply(payload, model, options) { ... }
 ```
+
+## Thinking 格式声明
+
+`reasoning` 只表示模型具备思考能力，不表示请求体该使用哪种字段。
+请求侧思考控制统一由 `model.compat.thinkingFormat` 表示：
+
+| 值 | 请求体格式 | 例子 |
+|---|---|---|
+| `anthropic` | `thinking: { type, budget_tokens }` | Anthropic、Kimi Coding、MiniMax Anthropic API |
+| `qwen` | `enable_thinking: boolean` | DashScope / SiliconFlow / ModelScope 上的 Qwen-style 模型 |
+| `deepseek` | DeepSeek 子模块统一转换 | DeepSeek V4 / reasoner |
+
+`core/model-sync.js` 会在投影 `models.json` 时把已知模型能力补成显式
+`compat.thinkingFormat`。`shared/model-capabilities.js` 保留旧 `models.json`
+的读时兼容，避免升级后必须重新保存 provider 才恢复思考。
 
 ## 已知子模块
 
