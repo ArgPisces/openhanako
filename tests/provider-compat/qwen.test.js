@@ -105,4 +105,14 @@ describe("provider-compat/qwen — apply", () => {
     qwen.apply(payload, qwenModel, { mode: "utility" });
     expect(Object.prototype.hasOwnProperty.call(payload, "enable_thinking")).toBe(false);
   });
+
+  it("utility mode 强制覆盖既有 enable_thinking: true → false（协议铁律）", () => {
+    const payload = {
+      model: "qwen3.5-plus",
+      messages: [{ role: "user", content: "hi" }],
+      enable_thinking: true,  // 模拟调用方误传
+    };
+    const result = qwen.apply(payload, qwenModel, { mode: "utility" });
+    expect(result.enable_thinking).toBe(false);
+  });
 });

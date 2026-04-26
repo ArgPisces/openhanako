@@ -15,6 +15,8 @@
  *   - dashscope 协议改成 reasoning_effort（不再用 enable_thinking 字段）
  *   - 或 hana 的 quirks 系统重构（known-models.json 数据格式变更）
  *
+ * 不可变契约：chat mode 返回 input 同一引用；utility mode 返回新对象（浅拷贝 + 强制覆盖 enable_thinking）。
+ *
  * 接口契约：见 ./README.md
  */
 
