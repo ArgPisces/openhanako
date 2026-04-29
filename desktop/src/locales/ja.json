@@ -507,6 +507,7 @@
     "save": "保存",
     "saved": "保存しました ✿",
     "saveFailed": "保存に失敗しました",
+    "fileChangedOnDisk": "ファイルが外部で変更されたため、古い保存をスキップしました",
     "noChanges": "変更はありません",
     "autoSaved": "自動保存しました ✿",
     "tabs": {

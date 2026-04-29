@@ -33,12 +33,14 @@
 
     // 文件 I/O → server HTTP
     readFile: (p) => apiFetch(`/api/fs/read?path=${encodeURIComponent(p)}`).then(r => r.ok ? r.text() : null),
+    readFileSnapshot: async () => null,
     readFileBase64: (p) => apiFetch(`/api/fs/read-base64?path=${encodeURIComponent(p)}`).then(r => r.ok ? r.text() : null),
     readDocxHtml: (p) => apiFetch(`/api/fs/docx-html?path=${encodeURIComponent(p)}`).then(r => r.ok ? r.text() : null),
     readXlsxHtml: (p) => apiFetch(`/api/fs/xlsx-html?path=${encodeURIComponent(p)}`).then(r => r.ok ? r.text() : null),
 
     // 文件写入 / 监听 / 派生 viewer 窗口 → Web 不支持
     writeFile: async () => false,
+    writeFileIfUnchanged: async () => ({ ok: false }),
     watchFile: async () => false,
     unwatchFile: async () => false,
     onFileChanged: () => {},

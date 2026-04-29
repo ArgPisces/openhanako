@@ -514,6 +514,7 @@
     "save": "保存",
     "saved": "保存成功 ✿",
     "saveFailed": "保存失败",
+    "fileChangedOnDisk": "文件已被外部修改，已跳过旧版本保存",
     "noChanges": "没有需要保存的更改",
     "autoSaved": "已自动保存 ✿",
     "tabs": {

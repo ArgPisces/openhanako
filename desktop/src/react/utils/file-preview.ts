@@ -29,19 +29,42 @@ export const PREVIEWABLE_EXTS: Record<string, string> = {
 
 export const BINARY_PREVIEW_TYPES = new Set(['pdf']);
 
+interface PreviewReadResult {
+  content: string;
+  fileVersion?: Artifact['fileVersion'];
+}
+
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export async function readFileForPreview(filePath: string, ext: string): Promise<string | null> {
+async function readFileForPreviewWithVersion(filePath: string, ext: string): Promise<PreviewReadResult | null> {
   const previewType = PREVIEWABLE_EXTS[ext];
   if (!previewType) return null;
   const p = window.platform;
   if (!p) return null;
-  if (previewType === 'docx') return p.readDocxHtml?.(filePath) ?? null;
-  if (previewType === 'xlsx') return p.readXlsxHtml?.(filePath) ?? null;
-  if (BINARY_PREVIEW_TYPES.has(previewType)) return p.readFileBase64?.(filePath) ?? null;
-  return p.readFile?.(filePath) ?? null;
+  if (previewType === 'docx') {
+    const content = await p.readDocxHtml?.(filePath);
+    return content == null ? null : { content };
+  }
+  if (previewType === 'xlsx') {
+    const content = await p.readXlsxHtml?.(filePath);
+    return content == null ? null : { content };
+  }
+  if (BINARY_PREVIEW_TYPES.has(previewType)) {
+    const content = await p.readFileBase64?.(filePath);
+    return content == null ? null : { content };
+  }
+
+  const snapshot = await p.readFileSnapshot?.(filePath);
+  if (snapshot) return { content: snapshot.content, fileVersion: snapshot.version };
+
+  const content = await p.readFile?.(filePath);
+  return content == null ? null : { content };
+}
+
+export async function readFileForPreview(filePath: string, ext: string): Promise<string | null> {
+  return (await readFileForPreviewWithVersion(filePath, ext))?.content ?? null;
 }
 
 /**
@@ -102,16 +125,17 @@ export async function openFilePreview(
 
     const canPreview = ext in PREVIEWABLE_EXTS;
     if (canPreview) {
-      const content = await readFileForPreview(filePath, ext);
-      if (content != null) {
+      const readResult = await readFileForPreviewWithVersion(filePath, ext);
+      if (readResult != null) {
         const previewType = PREVIEWABLE_EXTS[ext];
         const artifact: Artifact = {
           id: `file-${filePath}`,
           type: previewType,
           title: fileName,
-          content,
+          content: readResult.content,
           filePath,
           ext,
+          fileVersion: readResult.fileVersion,
           language: previewType === 'code' ? ext : undefined,
         };
         openPreview(artifact);

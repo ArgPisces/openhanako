@@ -507,6 +507,7 @@
     "save": "儲存",
     "saved": "儲存成功 ✿",
     "saveFailed": "儲存失敗",
+    "fileChangedOnDisk": "檔案已被外部修改，已略過舊版本儲存",
     "noChanges": "沒有需要儲存的變更",
     "autoSaved": "已自動儲存 ✿",
     "tabs": {

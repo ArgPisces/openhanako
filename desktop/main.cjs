@@ -16,6 +16,7 @@ const fs = require("fs");
 const { pathToFileURL } = require("url");
 const { initAutoUpdater, checkForUpdatesAuto, setMainWindow: setUpdaterMainWindow, setUpdateChannel, getState: getUpdateState, installDownloadedUpdate } = require("./auto-updater.cjs");
 const { createFileWatchRegistry } = require("./file-watch-registry.cjs");
+const { readTextFileSnapshot, writeTextFileIfUnchanged } = require("./file-text-io.cjs");
 const { wrapIpcHandler, wrapIpcBestEffortHandler, wrapIpcOn } = require('./ipc-wrapper.cjs');
 const themeRegistry = require('./src/shared/theme-registry.cjs');
 const {
@@ -2486,11 +2487,14 @@ wrapIpcBestEffortHandler("open-external", (_event, url) => {
 wrapIpcHandler("read-file", (_event, filePath) => {
   if (!filePath || !path.isAbsolute(filePath)) return null;
   try {
-    const stat = fs.statSync(filePath);
-    if (!stat.isFile()) return null;
-    // 限制 5MB，防止读大文件卡死
-    if (stat.size > 5 * 1024 * 1024) return null;
-    return fs.readFileSync(filePath, "utf-8");
+    return readTextFileSnapshot(filePath)?.content ?? null;
+  } catch { return null; }
+});
+
+wrapIpcHandler("read-file-snapshot", (_event, filePath) => {
+  if (!filePath || !path.isAbsolute(filePath)) return null;
+  try {
+    return readTextFileSnapshot(filePath);
   } catch { return null; }
 });
 
@@ -2501,6 +2505,15 @@ wrapIpcBestEffortHandler("write-file", (_event, filePath, content) => {
     fs.writeFileSync(filePath, content, "utf-8");
     return true;
   } catch { return false; }
+});
+
+wrapIpcBestEffortHandler("write-file-if-unchanged", (_event, filePath, content, expectedVersion) => {
+  if (!filePath || !path.isAbsolute(filePath)) return { ok: false };
+  try {
+    return writeTextFileIfUnchanged(filePath, content, expectedVersion || null);
+  } catch {
+    return { ok: false };
+  }
 });
 
 // 写入二进制文件（截图用）— 支持 ~ 开头路径

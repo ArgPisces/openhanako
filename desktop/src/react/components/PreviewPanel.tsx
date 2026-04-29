@@ -54,9 +54,13 @@ export function PreviewPanel() {
     setMarkdownPreviewActive(artifact.id, !markdownPreviewActive);
   }, [artifact, markdownPreviewActive]);
 
-  const handleEditorContentChange = useCallback((content: string) => {
+  const handleEditorContentChange = useCallback((content: string, fileVersion?: Artifact['fileVersion']) => {
     if (!artifact) return;
-    upsertArtifact({ ...artifact, content });
+    upsertArtifact({
+      ...artifact,
+      content,
+      fileVersion: fileVersion === undefined ? artifact.fileVersion : fileVersion,
+    });
   }, [artifact]);
 
   // DOM 模式选区捕获（非编辑模式下 mouseup 时检测选中文本）
@@ -92,6 +96,7 @@ export function PreviewPanel() {
               <ArtifactEditor
                 content={artifact.content}
                 filePath={artifact.filePath}
+                fileVersion={artifact.fileVersion}
                 mode={getEditorMode(artifact)}
                 language={artifact.language}
                 onSelectionChange={(view) => {

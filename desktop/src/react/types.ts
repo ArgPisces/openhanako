@@ -98,6 +98,7 @@ export interface Artifact {
   language?: string | null;
   filePath?: string;
   ext?: string;
+  fileVersion?: FileVersion | null;
 }
 
 export interface DeskFile {
@@ -118,6 +119,23 @@ export interface TodoItem {
 // ── 浮动面板类型 ──
 export type ActivePanel = 'activity' | 'automation' | 'bridge' | null;
 export type TabType = 'chat' | 'channels' | `plugin:${string}`;
+
+export interface FileVersion {
+  mtimeMs: number;
+  size: number;
+  sha256?: string;
+}
+
+export interface TextFileSnapshot {
+  content: string;
+  version: FileVersion;
+}
+
+export interface VersionedWriteResult {
+  ok: boolean;
+  conflict?: boolean;
+  version?: FileVersion | null;
+}
 
 // ── Plugin Card Protocol ──
 
@@ -159,6 +177,8 @@ export interface PlatformApi {
   selectPlugin?(): Promise<string | null>;
   readFile(path: string): Promise<string | null>;
   writeFile(filePath: string, content: string): Promise<boolean>;
+  readFileSnapshot?(path: string): Promise<TextFileSnapshot | null>;
+  writeFileIfUnchanged?(filePath: string, content: string, expectedVersion?: FileVersion | null): Promise<VersionedWriteResult>;
   watchFile(filePath: string): Promise<boolean>;
   unwatchFile(filePath: string): Promise<boolean>;
   onFileChanged(callback: (filePath: string) => void): void;

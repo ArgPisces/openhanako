@@ -17,7 +17,7 @@ import {
   EditorView, keymap, highlightActiveLine, drawSelection,
   lineNumbers,
 } from '@codemirror/view';
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorState, Compartment, Transaction } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import {
   syntaxHighlighting, bracketMatching,
@@ -31,6 +31,7 @@ import { linkClickHandler } from '../editor/link-handler';
 import { tableDecoField } from '../editor/table-field';
 import { csvTableField } from '../editor/csv-field';
 import { requestUserEditCheckpoint, type UserEditCheckpointReason } from '../utils/checkpoints';
+import type { FileVersion } from '../types';
 
 /* ── Types ── */
 
@@ -42,10 +43,11 @@ export interface ArtifactEditorHandle {
 export interface ArtifactEditorProps {
   content: string;
   filePath?: string;
+  fileVersion?: FileVersion | null;
   mode: 'markdown' | 'code' | 'csv' | 'text';
   language?: string | null;
   onSelectionChange?: (view: EditorView) => void;
-  onContentChange?: (content: string) => void;
+  onContentChange?: (content: string, fileVersion?: FileVersion | null) => void;
   /**
    * 只读模式：禁用编辑、不挂 autosave listener、不挂 file watch。
    * 调用方（如派生 viewer 窗口）自己管 watchFile → setContent 即可。
@@ -83,12 +85,14 @@ function setupFileChangeListener() {
 /* ── Editor Component ── */
 
 export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorProps>(
-  function ArtifactEditor({ content, filePath, mode, language, onSelectionChange, onContentChange, readOnly = false }, ref) {
+  function ArtifactEditor({ content, filePath, fileVersion, mode, language, onSelectionChange, onContentChange, readOnly = false }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSavedContentRef = useRef<string>(content);
     const selfWriteContentsRef = useRef<Set<string>>(new Set());
+    const diskVersionRef = useRef<FileVersion | null>(fileVersion ?? null);
+    const docRevisionRef = useRef(0);
     const lastCheckpointAtRef = useRef<number>(0);
     const filePathRef = useRef(filePath);
     filePathRef.current = filePath;
@@ -96,6 +100,12 @@ export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorPro
     selectionCbRef.current = onSelectionChange;
     const contentCbRef = useRef(onContentChange);
     contentCbRef.current = onContentChange;
+
+    useEffect(() => {
+      if (fileVersion !== undefined) {
+        diskVersionRef.current = fileVersion;
+      }
+    }, [fileVersion]);
 
     // Per-instance compartments for dynamic reconfiguration
     const cRef = useRef({
@@ -127,23 +137,44 @@ export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorPro
       }
     }, []);
 
-    const saveToFile = useCallback((text: string) => {
+    const rememberSelfWrite = useCallback((text: string) => {
+      selfWriteContentsRef.current.add(text);
+      window.setTimeout(() => {
+        selfWriteContentsRef.current.delete(text);
+      }, 5000);
+    }, []);
+
+    const saveToFile = useCallback((text: string, revision: number = docRevisionRef.current) => {
       const fp = filePathRef.current;
       if (!fp) return;
+      const expectedVersion = diskVersionRef.current;
       void (async () => {
         await createCheckpointIfDue(fp);
-        selfWriteContentsRef.current.add(text);
-        window.setTimeout(() => {
-          selfWriteContentsRef.current.delete(text);
-        }, 5000);
-        const ok = await window.platform?.writeFile(fp, text);
-        if (ok === false) throw new Error('write-file returned false');
+        if (revision !== docRevisionRef.current || fp !== filePathRef.current) return;
+
+        if (window.platform?.writeFileIfUnchanged) {
+          const result = await window.platform.writeFileIfUnchanged(fp, text, expectedVersion);
+          if (!result?.ok) {
+            if (result?.conflict) {
+              const tFn = window.t ?? ((p: string) => p);
+              throw new Error(tFn('settings.fileChangedOnDisk'));
+            }
+            throw new Error('write-file-if-unchanged returned false');
+          }
+          if (result.version) diskVersionRef.current = result.version;
+          rememberSelfWrite(text);
+          contentCbRef.current?.(text, result.version ?? null);
+        } else {
+          rememberSelfWrite(text);
+          const ok = await window.platform?.writeFile(fp, text);
+          if (ok === false) throw new Error('write-file returned false');
+        }
         lastSavedContentRef.current = text;
       })().catch((err) => {
         console.warn('[ArtifactEditor] write failed:', err);
         showSaveError('settings.saveFailed', err);
       });
-    }, [createCheckpointIfDue]);
+    }, [createCheckpointIfDue, rememberSelfWrite]);
 
     // Create editor
     useEffect(() => {
@@ -164,12 +195,15 @@ export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorPro
           : [
               EditorView.updateListener.of((update) => {
                 if (!update.docChanged) return;
+                if (update.transactions.some((tr) => tr.annotation(Transaction.remote))) return;
                 const text = update.state.doc.toString();
+                docRevisionRef.current += 1;
+                const revision = docRevisionRef.current;
                 contentCbRef.current?.(text);
                 if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
                 saveTimerRef.current = setTimeout(() => {
                   saveTimerRef.current = null;
-                  saveToFile(text);
+                  saveToFile(text, revision);
                 }, SAVE_DELAY);
               }),
             ]),
@@ -204,7 +238,7 @@ export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorPro
         if (saveTimerRef.current) {
           clearTimeout(saveTimerRef.current);
           saveTimerRef.current = null;
-          saveToFile(view.state.doc.toString());
+          saveToFile(view.state.doc.toString(), docRevisionRef.current);
         }
         view.destroy();
         viewRef.current = null;
@@ -217,8 +251,14 @@ export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorPro
       if (!view) return;
       const current = view.state.doc.toString();
       if (current !== content) {
+        docRevisionRef.current += 1;
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
         view.dispatch({
           changes: { from: 0, to: current.length, insert: content },
+          annotations: Transaction.remote.of(true),
         });
       }
     }, [content]);
@@ -232,7 +272,12 @@ export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorPro
       const handler = (e: Event) => {
         const changedPath = (e as CustomEvent).detail;
         if (changedPath !== filePath) return;
-        void window.platform?.readFile(filePath)
+        void (async () => {
+          const snapshot = await window.platform?.readFileSnapshot?.(filePath);
+          const newContent = snapshot?.content ?? await window.platform?.readFile(filePath);
+          if (snapshot?.version) diskVersionRef.current = snapshot.version;
+          return newContent;
+        })()
           .then((newContent) => {
             if (newContent == null) return;
             // Content comparison: same as last write → self-write, ignore
@@ -244,11 +289,17 @@ export const ArtifactEditor = forwardRef<ArtifactEditorHandle, ArtifactEditorPro
             if (!view) return;
             const current = view.state.doc.toString();
             if (current === newContent) return;
+            docRevisionRef.current += 1;
+            if (saveTimerRef.current) {
+              clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = null;
+            }
             lastSavedContentRef.current = newContent;
             view.dispatch({
               changes: { from: 0, to: current.length, insert: newContent },
+              annotations: Transaction.remote.of(true),
             });
-            contentCbRef.current?.(newContent);
+            contentCbRef.current?.(newContent, diskVersionRef.current);
           })
           .catch((err) => {
             console.warn('[ArtifactEditor] reload watched file failed:', err);

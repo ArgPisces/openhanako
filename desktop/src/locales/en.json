@@ -509,6 +509,7 @@
     "save": "Save",
     "saved": "Saved ✿",
     "saveFailed": "Failed to save",
+    "fileChangedOnDisk": "The file changed on disk, so the stale save was skipped",
     "noChanges": "Nothing to save",
     "autoSaved": "Auto-saved ✿",
     "tabs": {

@@ -507,6 +507,7 @@
     "save": "저장",
     "saved": "저장됨 ✿",
     "saveFailed": "저장 실패",
+    "fileChangedOnDisk": "파일이 외부에서 변경되어 오래된 저장을 건너뛰었습니다",
     "noChanges": "저장할 내용이 없어요",
     "autoSaved": "자동 저장됨 ✿",
     "tabs": {
