@@ -13,7 +13,16 @@ interface CronJob {
   label?: string;
   prompt?: string;
   schedule: string | number;
-  model?: string;
+  model?: string | ModelRef;
+}
+
+interface ModelRef {
+  id: string;
+  provider: string;
+}
+
+interface ModelOption extends ModelRef {
+  name?: string;
 }
 
 export function AutomationPanel() {
@@ -23,7 +32,7 @@ export function AutomationPanel() {
   const currentAgentId = useStore(s => s.currentAgentId);
 
   const [jobs, setJobs] = useState<CronJob[]>([]);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
 
   const loadData = useCallback(async () => {
     try {
@@ -32,13 +41,19 @@ export function AutomationPanel() {
         hanaFetch('/api/models'),
       ]);
       const cronData = await cronRes.json();
-      let modelIds: string[] = [];
+      let modelOptions: ModelOption[] = [];
       try {
         const modelsData = await modelsRes.json();
-        modelIds = (modelsData.models || []).map((m: { id: string }) => m.id);
+        modelOptions = (modelsData.models || [])
+          .filter((m: { id?: string; provider?: string }) => m.id && m.provider)
+          .map((m: { id: string; provider: string; name?: string }) => ({
+            id: m.id,
+            provider: m.provider,
+            name: m.name,
+          }));
       } catch {}
       setJobs(cronData.jobs || []);
-      setAvailableModels(modelIds);
+      setAvailableModels(modelOptions);
       updateBadge(cronData.jobs || []);
     } catch (err) {
       console.error('[automation] load failed:', err);
@@ -131,6 +146,23 @@ function updateBadge(jobs: CronJob[]) {
   useStore.setState({ automationCount: jobs.length });
 }
 
+function parseCronJobModel(model?: CronJob['model']): { id: string; provider?: string } | null {
+  if (!model) return null;
+  if (typeof model === 'object') {
+    const id = String((model as { id?: string }).id || '').trim();
+    const provider = String((model as { provider?: string }).provider || '').trim();
+    if (!id) return null;
+    return provider ? { id, provider } : { id };
+  }
+  const value = model.trim();
+  if (!value) return null;
+  const slashIdx = value.indexOf('/');
+  if (slashIdx > 0 && slashIdx < value.length - 1) {
+    return { provider: value.slice(0, slashIdx), id: value.slice(slashIdx + 1) };
+  }
+  return { id: value };
+}
+
 function AutomationItem({
   job,
   availableModels,
@@ -143,7 +175,7 @@ function AutomationItem({
   onUpdate,
 }: {
   job: CronJob;
-  availableModels: string[];
+  availableModels: ModelOption[];
   agentAvatarUrl: string | null;
   agentName: string;
   agentYuan: string;
@@ -185,16 +217,17 @@ function AutomationItem({
   const avatarSrc = agentAvatarUrl || yuanFallbackAvatar(agentYuan);
 
   // 构建模型选项
-  const jobModelId = typeof job.model === 'object' && job.model !== null
-    ? (job.model as unknown as { id: string }).id
-    : (job.model || '');
+  const jobModelRef = parseCronJobModel(job.model);
+  const jobModelId = jobModelRef?.id || '';
   const modelOptions = useMemo(() => {
-    const opts: string[] = [];
-    const modelSet = new Set(availableModels);
-    if (jobModelId && !modelSet.has(jobModelId)) opts.push(jobModelId);
+    const opts: ModelOption[] = [];
+    const modelSet = new Set(availableModels.map(m => `${m.provider}/${m.id}`));
+    if (jobModelRef?.provider && !modelSet.has(`${jobModelRef.provider}/${jobModelRef.id}`)) {
+      opts.push({ id: jobModelRef.id, provider: jobModelRef.provider });
+    }
     opts.push(...availableModels);
     return opts;
-  }, [availableModels, jobModelId]);
+  }, [availableModels, jobModelRef?.id, jobModelRef?.provider]);
 
   // 模型下拉：计算 fixed 位置（向下呼出），避免被父卡片 overflow:hidden 截断
   useEffect(() => {
@@ -285,13 +318,13 @@ function AutomationItem({
                   >
                     {(window.t ?? ((p: string) => p))('automation.defaultModel')}
                   </button>
-                  {modelOptions.map(mid => (
+                  {modelOptions.map(model => (
                     <button
-                      key={mid}
-                      className={`${fp.autoModelOption}${mid === jobModelId ? ` ${fp.autoModelOptionActive}` : ''}`}
-                      onClick={() => { onUpdate(job.id, { model: mid }); setModelOpen(false); }}
+                      key={`${model.provider}/${model.id}`}
+                      className={`${fp.autoModelOption}${jobModelRef && model.id === jobModelRef.id && model.provider === jobModelRef.provider ? ` ${fp.autoModelOptionActive}` : ''}`}
+                      onClick={() => { onUpdate(job.id, { model: { id: model.id, provider: model.provider } }); setModelOpen(false); }}
                     >
-                      {mid}
+                      {model.name || model.id}
                     </button>
                   ))}
                 </div>,

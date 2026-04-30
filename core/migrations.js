@@ -45,6 +45,8 @@ const migrations = {
   9: migrateBridgeReadOnlyToGlobal,
   // summarizer / compiler 角色从未接通业务，删除 preferences 与 agent config 里的残留字段
   10: cleanupSummarizerCompilerRemnants,
+  // cron job 的 model 字段补齐为 {id, provider}，修复旧任务只保存裸 id 的问题
+  11: repairCronJobModelRefs,
 };
 
 // ── Runner ──────────────────────────────────────────────────────────────────
@@ -906,6 +908,109 @@ function migrateVisionToImage(ctx) {
   }
 
   log(`[migrations] #7: vision→image renamed (added-models.yaml=${ymlCount}, agent overrides=${overrideCount})`);
+}
+
+function buildModelProviderIndex(providerRegistry) {
+  const idToProvider = new Map();
+  const providerModelIds = new Map();
+  const rawProviders = providerRegistry.getAllProvidersRaw?.() || {};
+
+  for (const [providerId, provider] of Object.entries(rawProviders || {})) {
+    const ids = new Set();
+    for (const m of provider?.models || []) {
+      const id = typeof m === "object" ? m.id : m;
+      if (!id) continue;
+      ids.add(id);
+      if (!idToProvider.has(id)) idToProvider.set(id, providerId);
+    }
+    providerModelIds.set(providerId, ids);
+  }
+
+  return { idToProvider, providerModelIds };
+}
+
+function normalizeCronModelRefForMigration(ref, index) {
+  if (!ref) return { value: "", changed: ref !== "" };
+
+  if (typeof ref === "object") {
+    if (!ref.id) return { value: ref, changed: false };
+    if (ref.provider) return { value: ref, changed: false };
+    const provider = index.idToProvider.get(ref.id);
+    if (provider) return { value: { id: ref.id, provider }, changed: true };
+    return { value: ref, changed: false };
+  }
+
+  if (typeof ref !== "string") return { value: ref, changed: false };
+
+  const s = ref.trim();
+  if (!s) return { value: "", changed: ref !== "" };
+
+  // 先按完整 id 查，避免把 openrouter 这类包含 "/" 的裸模型 id 误拆成 provider/id。
+  const exactProvider = index.idToProvider.get(s);
+  if (exactProvider) return { value: { id: s, provider: exactProvider }, changed: true };
+
+  const slashIdx = s.indexOf("/");
+  if (slashIdx > 0 && slashIdx < s.length - 1) {
+    const provider = s.slice(0, slashIdx);
+    const id = s.slice(slashIdx + 1);
+    const knownIds = index.providerModelIds.get(provider);
+    if (knownIds?.has(id) || index.providerModelIds.has(provider)) {
+      return { value: { id, provider }, changed: true };
+    }
+  }
+
+  return { value: ref, changed: false };
+}
+
+/**
+ * #11 — cron job 的 model 字段迁移为复合键对象
+ *
+ * v0.11x 的模型复合键重构要求运行期模型引用必须带 provider，但 cron 任务
+ * 仍把 UI 选择的模型保存为裸 id，导致后台执行时偶发 "找不到模型"。
+ */
+function repairCronJobModelRefs(ctx) {
+  const { agentsDir, providerRegistry, log } = ctx;
+  const index = buildModelProviderIndex(providerRegistry);
+
+  let agentDirs;
+  try {
+    agentDirs = fs.readdirSync(agentsDir, { withFileTypes: true }).filter(d => d.isDirectory());
+  } catch {
+    return;
+  }
+
+  let patched = 0;
+  for (const dir of agentDirs) {
+    const jobsPath = path.join(agentsDir, dir.name, "desk", "cron-jobs.json");
+    if (!fs.existsSync(jobsPath)) continue;
+
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(jobsPath, "utf-8"));
+    } catch (err) {
+      log(`[migrations] #11 ${dir.name}: skipped invalid cron-jobs.json (${err.message})`);
+      continue;
+    }
+    if (!Array.isArray(data.jobs)) continue;
+
+    let changed = false;
+    for (const job of data.jobs) {
+      const { value, changed: modelChanged } = normalizeCronModelRefForMigration(job.model, index);
+      if (!modelChanged) continue;
+      job.model = value;
+      changed = true;
+      patched++;
+    }
+
+    if (changed) {
+      const tmp = jobsPath + ".tmp";
+      fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", "utf-8");
+      fs.renameSync(tmp, jobsPath);
+      log(`[migrations] #11 ${dir.name}: repaired cron model refs`);
+    }
+  }
+
+  log(`[migrations] #11: cron model refs repaired (${patched})`);
 }
 
 /**

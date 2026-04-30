@@ -287,7 +287,7 @@ ${c.bold}${t("cli.helpTitle")}${c.reset}
           }
           console.log(`\n${c.bold}${t("cli.availableModels")}${c.reset}`);
           models.forEach((m, i) => {
-            const current = m.name === data.current ? ` ${c.green}${t("cli.currentModel")}${c.reset}` : "";
+            const current = m.isCurrent ? ` ${c.green}${t("cli.currentModel")}${c.reset}` : "";
             console.log(`  ${c.dim}${i + 1}.${c.reset} ${m.name}${current}`);
           });
           process.stdout.write(`\n${t("cli.selectModel")}`);
@@ -296,7 +296,7 @@ ${c.bold}${t("cli.helpTitle")}${c.reset}
             if (idx >= 0 && idx < models.length) {
               await api("/api/models/set", {
                 method: "POST",
-                body: { modelId: models[idx].name },
+                body: { modelId: models[idx].id, provider: models[idx].provider },
               });
               console.log(`${c.green}${t("cli.modelSwitched", { name: models[idx].name })}${c.reset}`);
             } else {

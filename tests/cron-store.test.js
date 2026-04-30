@@ -249,6 +249,25 @@ describe("CronStore addJob 输入验证", () => {
 // ════════════════════════════════════════════
 
 describe("CronStore updateJob 字段白名单", () => {
+  it("addJob / updateJob 保留完整模型复合键", () => {
+    const store = makeTmpStore();
+    const firstModel = { id: "MiniMax-M2.7", provider: "minimax" };
+    const secondModel = { id: "gpt-4o", provider: "openai" };
+
+    const job = store.addJob({
+      type: "every",
+      schedule: 3600000,
+      prompt: "test",
+      model: firstModel,
+    });
+
+    expect(job.model).toEqual(firstModel);
+
+    const updated = store.updateJob(job.id, { model: secondModel });
+    expect(updated.model).toEqual(secondModel);
+    expect(store.getJob(job.id).model).toEqual(secondModel);
+  });
+
   it("nextRunAt / id / createdAt 不可被覆盖", () => {
     const store = makeTmpStore();
     const job = store.addJob({

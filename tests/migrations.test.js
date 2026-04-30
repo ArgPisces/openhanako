@@ -10,6 +10,8 @@ import { runMigrations } from "../core/migrations.js";
 
 // ── 测试工具 ────────────────────────────────────────────────────────────────
 
+const LATEST_DATA_VERSION = 11;
+
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "hana-migrations-"));
 }
@@ -125,6 +127,63 @@ describe("runMigrations runner", () => {
     // config 不应被修改（ghost-provider 应原样保留）
     const config = readAgentConfig(agentsDir, "hana");
     expect(config.api.provider).toBe("ghost-provider");
+  });
+});
+
+describe("migration #11: repairCronJobModelRefs", () => {
+  let tmpDir, agentsDir, userDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    agentsDir = path.join(tmpDir, "agents");
+    userDir = path.join(tmpDir, "user");
+    fs.mkdirSync(agentsDir, { recursive: true });
+  });
+
+  afterEach(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+  function writeCronJobs(agentId, jobs) {
+    const deskDir = path.join(agentsDir, agentId, "desk");
+    fs.mkdirSync(deskDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(deskDir, "cron-jobs.json"),
+      JSON.stringify({ jobs, nextNum: jobs.length + 1 }, null, 2) + "\n",
+      "utf-8",
+    );
+  }
+
+  function readCronJobs(agentId) {
+    return JSON.parse(fs.readFileSync(path.join(agentsDir, agentId, "desk", "cron-jobs.json"), "utf-8")).jobs;
+  }
+
+  it("把 cron-jobs.json 里的裸 id / provider-id 字符串迁移为 {id, provider}", () => {
+    const prefs = makePrefs(userDir);
+    prefs.savePreferences({ _dataVersion: 10 });
+    writeAgentConfig(agentsDir, "hana", { agent: { name: "Hana" } });
+    writeCronJobs("hana", [
+      { id: "job_22", type: "cron", schedule: "0 3 * * *", prompt: "a", enabled: true, model: "MiniMax-M2.7" },
+      { id: "job_23", type: "cron", schedule: "0 3 * * *", prompt: "b", enabled: true, model: { id: "MiniMax-M2.7" } },
+      { id: "job_24", type: "cron", schedule: "0 3 * * *", prompt: "c", enabled: true, model: "openai/gpt-4o" },
+      { id: "job_25", type: "cron", schedule: "0 3 * * *", prompt: "d", enabled: true, model: "unknown-model" },
+    ]);
+
+    runMigrations({
+      hanakoHome: tmpDir,
+      agentsDir,
+      prefs,
+      providerRegistry: makeRegistryWithModels({
+        minimax: { models: ["MiniMax-M2.7"] },
+        openai: { models: ["gpt-4o"] },
+      }),
+      log: () => {},
+    });
+
+    const jobs = readCronJobs("hana");
+    expect(jobs[0].model).toEqual({ id: "MiniMax-M2.7", provider: "minimax" });
+    expect(jobs[1].model).toEqual({ id: "MiniMax-M2.7", provider: "minimax" });
+    expect(jobs[2].model).toEqual({ id: "gpt-4o", provider: "openai" });
+    expect(jobs[3].model).toBe("unknown-model");
+    expect(prefs.getPreferences()._dataVersion).toBe(11);
   });
 });
 
@@ -504,7 +563,7 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
 
     const p = prefs.getPreferences();
     expect(p.home_folder).toBeUndefined();
-    expect(p._dataVersion).toBe(10);
+    expect(p._dataVersion).toBe(LATEST_DATA_VERSION);
   });
 
   it("skips when home_folder is empty", () => {
@@ -516,7 +575,7 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
 
     const config = readAgentConfig(agentsDir, "hana");
     expect(config.desk).toBeUndefined();
-    expect(prefs.getPreferences()._dataVersion).toBe(10);
+    expect(prefs.getPreferences()._dataVersion).toBe(LATEST_DATA_VERSION);
   });
 
   it("falls back to first agent when primaryAgent not found", () => {
@@ -581,7 +640,7 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
     });
 
     runMigration3(prefs);
-    expect(prefs.getPreferences()._dataVersion).toBe(10);
+    expect(prefs.getPreferences()._dataVersion).toBe(LATEST_DATA_VERSION);
 
     // Manually reset _dataVersion to 2 to simulate forced rerun
     const p2 = prefs.getPreferences();
@@ -590,7 +649,7 @@ describe("migration #3 — migrateWorkspaceToPerAgent", () => {
     runMigration3(prefs);
 
     // home_folder is gone from prefs, so migration skips cleanly
-    expect(prefs.getPreferences()._dataVersion).toBe(10);
+    expect(prefs.getPreferences()._dataVersion).toBe(LATEST_DATA_VERSION);
     const config = readAgentConfig(agentsDir, "hana");
     expect(config.desk.home_folder).toBe("/workspace");
   });
@@ -885,7 +944,7 @@ describe("#7 migrateVisionToImage", () => {
     expect(models[0].vision).toBeUndefined();
     expect(models[1]).toEqual({ id: "qwen-plus", image: false });
     expect(models[2]).toBe("qwen-turbo");
-    expect(prefs.getPreferences()._dataVersion).toBe(10);
+    expect(prefs.getPreferences()._dataVersion).toBe(LATEST_DATA_VERSION);
   });
 
   it("幂等：已迁移过的 added-models.yaml 重跑不改写", () => {
@@ -944,7 +1003,7 @@ describe("#7 migrateVisionToImage", () => {
 
     runMigration7(prefs);
 
-    expect(prefs.getPreferences()._dataVersion).toBe(10);
+    expect(prefs.getPreferences()._dataVersion).toBe(LATEST_DATA_VERSION);
   });
 });
 
@@ -982,7 +1041,7 @@ describe("migration #8 — repairPostMigrationModelRefs", () => {
 
     const cfg = readAgentConfig(agentsDir, "hana");
     expect(cfg.models.chat).toEqual({ id: "qwen3.6-flash", provider: "dashscope" });
-    expect(prefs.getPreferences()._dataVersion).toBe(10);
+    expect(prefs.getPreferences()._dataVersion).toBe(LATEST_DATA_VERSION);
   });
 });
 
@@ -1065,6 +1124,6 @@ describe("migration #10 — cleanupSummarizerCompilerRemnants", () => {
       log: () => {},
     });
 
-    expect(prefs.getPreferences()._dataVersion).toBe(10);
+    expect(prefs.getPreferences()._dataVersion).toBe(LATEST_DATA_VERSION);
   });
 });
