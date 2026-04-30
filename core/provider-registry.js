@@ -16,6 +16,10 @@ import YAML from "js-yaml";
 import { safeReadYAMLSync } from "../shared/safe-fs.js";
 import { fromRoot } from "../shared/hana-root.js";
 import { lookupKnown } from "../shared/known-models.js";
+import {
+  normalizeProviderAuthType,
+  providerCredentialAllowsMissingApiKey,
+} from "../shared/provider-auth.js";
 
 const _defaultModels = JSON.parse(
   fs.readFileSync(fromRoot("lib", "default-models.json"), "utf-8"),
@@ -97,7 +101,7 @@ const BUILTIN_PLUGINS = [
  * @typedef {object} ProviderPlugin
  * @property {string} id
  * @property {string} displayName
- * @property {"api-key"|"oauth"|"none"} authType
+ * @property {"api-key"|"oauth"|"none"|"optional"} authType
  * @property {string} defaultBaseUrl
  * @property {string} defaultApi
  * @property {string} [authJsonKey] - OAuth provider 在 auth.json 中的 key（不同于 id 时）
@@ -107,7 +111,7 @@ const BUILTIN_PLUGINS = [
  * @typedef {object} ProviderEntry
  * @property {string} id
  * @property {string} displayName
- * @property {"api-key"|"oauth"|"none"} authType
+ * @property {"api-key"|"oauth"|"none"|"optional"} authType
  * @property {string} baseUrl        - 生效的 base URL（用户覆盖 > 插件默认）
  * @property {string} api            - 生效的 API 协议
  * @property {string} [authJsonKey]
@@ -292,7 +296,7 @@ export class ProviderRegistry {
       const syntheticPlugin = {
         id,
         displayName: uc.display_name || id,
-        authType: uc.auth_type || "api-key",
+        authType: normalizeProviderAuthType(uc.auth_type),
         defaultBaseUrl: uc.base_url || "",
         defaultApi: uc.api || "openai-completions",
       };
@@ -308,7 +312,7 @@ export class ProviderRegistry {
     return {
       id: plugin.id,
       displayName: userConfig.display_name || plugin.displayName,
-      authType: userConfig.auth_type || plugin.authType,
+      authType: normalizeProviderAuthType(userConfig.auth_type || plugin.authType),
       baseUrl: userConfig.base_url || plugin.defaultBaseUrl,
       api: userConfig.api || plugin.defaultApi,
       authJsonKey: plugin.authJsonKey || plugin.id,
@@ -429,6 +433,29 @@ export class ProviderRegistry {
    */
   isOAuth(providerId) {
     return this.get(providerId)?.authType === "oauth";
+  }
+
+  /**
+   * 获取 provider 的标准化认证类型。
+   * 旧 YAML 没有 auth_type 时，从内置/插件声明推导；未知 provider 默认 api-key。
+   * @param {string} providerId
+   * @returns {"api-key"|"oauth"|"none"|"optional"}
+   */
+  getAuthType(providerId) {
+    return normalizeProviderAuthType(this.get(providerId)?.authType);
+  }
+
+  /**
+   * 判断 provider 是否允许缺省 API key。
+   * provider 契约优先，loopback 放行只作为旧本地配置兼容。
+   * @param {string} providerId
+   * @param {string} [baseUrl]
+   */
+  allowsMissingApiKey(providerId, baseUrl = "") {
+    return providerCredentialAllowsMissingApiKey({
+      authType: this.getAuthType(providerId),
+      baseUrl,
+    });
   }
 
   // ── credential read + model CRUD ──────────────────────────────────────────

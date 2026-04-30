@@ -108,6 +108,7 @@ export function ProvidersTab() {
               const preset = PROVIDER_PRESETS.find(p => p.value === selected);
               const summary: ProviderSummary = existing || {
                 type: 'api-key' as const,
+                auth_type: 'api-key' as const,
                 display_name: preset?.label || selected,
                 base_url: preset?.url || '',
                 api: preset?.api || '',

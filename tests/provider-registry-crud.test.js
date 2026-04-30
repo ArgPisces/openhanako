@@ -187,6 +187,40 @@ describe("getCredentials", () => {
   });
 });
 
+// ── auth policy ──────────────────────────────────────────────────────────────
+
+describe("auth policy", () => {
+  it("从内置 Ollama 声明推导无 key 策略，兼容旧 YAML 没有 auth_type 的数据", () => {
+    writeAddedModels({
+      ollama: {
+        base_url: "http://192.168.1.20:11434/v1",
+        api: "openai-completions",
+        models: ["llama3"],
+      },
+    });
+
+    const reg = new ProviderRegistry(tmpDir);
+
+    expect(reg.getAuthType("ollama")).toBe("none");
+    expect(reg.allowsMissingApiKey("ollama", "http://192.168.1.20:11434/v1")).toBe(true);
+  });
+
+  it("api-key provider 在远程地址仍然要求 key", () => {
+    writeAddedModels({
+      "test-provider": {
+        base_url: "https://api.test.com/v1",
+        api: "openai-completions",
+        models: ["model-a"],
+      },
+    });
+
+    const reg = makeRegistry();
+
+    expect(reg.getAuthType("test-provider")).toBe("api-key");
+    expect(reg.allowsMissingApiKey("test-provider", "https://api.test.com/v1")).toBe(false);
+  });
+});
+
 // ── getProviderModels ────────────────────────────────────────────────────────
 
 describe("getProviderModels", () => {

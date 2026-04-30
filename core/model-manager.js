@@ -127,6 +127,7 @@ export class ModelManager {
         ...raw,
         base_url: raw.base_url || entry?.baseUrl || "",
         api: raw.api || entry?.api || "openai-completions",
+        auth_type: raw.auth_type || entry?.authType || "api-key",
       };
     }
     const changed = syncModels(providers, {
@@ -249,7 +250,9 @@ export class ModelManager {
     if (!creds.api) {
       throw new Error(t("error.providerMissingApi", { provider }));
     }
-    if (!creds.base_url || (!creds.api_key && !isLocalBaseUrl(creds.base_url))) {
+    const allowsMissingApiKey = this.providerRegistry?.allowsMissingApiKey?.(provider, creds.base_url)
+      ?? isLocalBaseUrl(creds.base_url);
+    if (!creds.base_url || (!creds.api_key && !allowsMissingApiKey)) {
       throw new Error(t("error.providerMissingCreds", { provider }));
     }
     return {

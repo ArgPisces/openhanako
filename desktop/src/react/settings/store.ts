@@ -27,6 +27,7 @@ export interface SkillInfo {
 
 export interface ProviderSummary {
   type: 'api-key' | 'oauth';
+  auth_type: 'api-key' | 'oauth' | 'none' | 'optional';
   display_name: string;
   base_url: string;
   api: string;

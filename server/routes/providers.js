@@ -92,20 +92,23 @@ export function createProvidersRoute(engine) {
     // 先处理 added-models.yaml 中的 provider（保持顺序）
     for (const [name, p] of Object.entries(providers)) {
       const isOAuth = provRegistry.isOAuth(name);
+      const authType = provRegistry.getAuthType?.(name) || (isOAuth ? "oauth" : "api-key");
       const oauthInfo = getOAuthLoginInfo(name);
       // added-models.yaml 是模型列表的唯一信源
       const rawModels = p.models || [];
       const customModels = oauthCustom[name] || [];
+      const allowsMissingApiKey = !!p.base_url && provRegistry.allowsMissingApiKey?.(name, p.base_url);
 
       result[name] = {
         type: isOAuth ? "oauth" : "api-key",
+        auth_type: authType,
         display_name: oauthInfo?.name || name,
         base_url: p.base_url || "",
         api: p.api || "",
         api_key: p.api_key || "",
         models: rawModels,
         custom_models: customModels,
-        has_credentials: !!(p.api_key || (isOAuth && oauthInfo?.loggedIn)),
+        has_credentials: !!(p.api_key || (isOAuth && oauthInfo?.loggedIn) || (!isOAuth && allowsMissingApiKey)),
         logged_in: isOAuth ? !!oauthInfo?.loggedIn : undefined,
         supports_oauth: isOAuth,
         is_coding_plan: name.endsWith("-coding"),
@@ -123,6 +126,7 @@ export function createProvidersRoute(engine) {
       const customModels = oauthCustom[authKey] || oauthCustom[oauthId] || [];
       result[oauthId] = {
         type: "oauth",
+        auth_type: "oauth",
         display_name: loginInfo.name || oauthId,
         base_url: "",
         api: "",
@@ -145,6 +149,7 @@ export function createProvidersRoute(engine) {
         if (entry.authType === "oauth") continue; // OAuth provider 走上面的白名单逻辑
         result[id] = {
           type: "api-key",
+          auth_type: entry.authType,
           display_name: entry.displayName || id,
           base_url: entry.baseUrl || "",
           api: entry.api || "",

@@ -81,7 +81,7 @@ export class ExecutionRouter {
     if (!cred.api) {
       throw new Error(t("error.providerMissingApi", { provider: model.provider }));
     }
-    if (!cred.baseUrl || (!cred.apiKey && !isLocalBaseUrl(cred.baseUrl))) {
+    if (!cred.baseUrl || (!cred.apiKey && !this._allowsMissingApiKey(model.provider, cred.baseUrl))) {
       throw new Error(t("error.providerMissingCreds", { provider: model.provider }));
     }
 
@@ -146,13 +146,13 @@ export class ExecutionRouter {
       apiKey = utilApiOverride.api_key || "";
       baseUrl = utilApiOverride.base_url || "";
       if (!api) throw new Error(t("error.providerMissingApi", { provider: utilModel.provider }));
-      if (!baseUrl || (!apiKey && !isLocalBaseUrl(baseUrl))) {
+      if (!baseUrl || (!apiKey && !this._allowsMissingApiKey(utilModel.provider, baseUrl))) {
         throw new Error(t("error.utilityApiMissingCreds", { provider: utilModel.provider }));
       }
     } else {
       const cred = this._providerRegistry.getCredentials(utilModel.provider);
       if (!cred?.api) throw new Error(t("error.providerMissingApi", { provider: utilModel.provider }));
-      if (!cred.baseUrl || (!cred.apiKey && !isLocalBaseUrl(cred.baseUrl))) {
+      if (!cred.baseUrl || (!cred.apiKey && !this._allowsMissingApiKey(utilModel.provider, cred.baseUrl))) {
         throw new Error(t("error.providerMissingCreds", { provider: utilModel.provider }));
       }
       apiKey = cred.apiKey;
@@ -165,7 +165,7 @@ export class ExecutionRouter {
     if (largeModel.provider !== utilModel.provider) {
       const largeCred = this._providerRegistry.getCredentials(largeModel.provider);
       if (!largeCred?.api) throw new Error(t("error.providerMissingApi", { provider: largeModel.provider }));
-      if (!largeCred.baseUrl || (!largeCred.apiKey && !isLocalBaseUrl(largeCred.baseUrl))) {
+      if (!largeCred.baseUrl || (!largeCred.apiKey && !this._allowsMissingApiKey(largeModel.provider, largeCred.baseUrl))) {
         throw new Error(t("error.providerMissingCreds", { provider: largeModel.provider }));
       }
       large_api_key = largeCred.apiKey;
@@ -206,5 +206,10 @@ export class ExecutionRouter {
         // 不是内置角色名，当作模型引用直接用
         return roleOrRef;
     }
+  }
+
+  _allowsMissingApiKey(provider, baseUrl) {
+    return this._providerRegistry?.allowsMissingApiKey?.(provider, baseUrl)
+      ?? isLocalBaseUrl(baseUrl);
   }
 }

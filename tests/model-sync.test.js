@@ -440,6 +440,55 @@ describe("syncModels", () => {
     expect(result.providers.ollama.models[0].id).toBe("llama3");
   });
 
+  it("allows no-auth providers without api_key on remote base URLs", async () => {
+    const syncModels = await loadSync();
+
+    const providers = {
+      ollama: {
+        base_url: "http://192.168.1.20:11434/v1",
+        api: "openai-completions",
+        auth_type: "none",
+        models: ["llama3"],
+      },
+    };
+
+    const changed = syncModels(providers, { modelsJsonPath });
+
+    expect(changed).toBe(true);
+    const result = JSON.parse(fs.readFileSync(modelsJsonPath, "utf-8"));
+    expect(result.providers.ollama).toBeDefined();
+    expect(result.providers.ollama.apiKey).toBe("local");
+    expect(result.providers.ollama.models[0].id).toBe("llama3");
+  });
+
+  it("derives no-auth policy from ProviderRegistry for existing Ollama configs", async () => {
+    const { ModelManager } = await import("../core/model-manager.js");
+    fs.writeFileSync(path.join(tmpDir, "added-models.yaml"), [
+      "providers:",
+      "  ollama:",
+      "    base_url: http://192.168.1.20:11434/v1",
+      "    api: openai-completions",
+      "    models:",
+      "      - llama3",
+      "",
+    ].join("\n"), "utf-8");
+
+    const mm = new ModelManager({ hanakoHome: tmpDir });
+    mm._modelRegistry = {
+      refresh: vi.fn(),
+      getAvailable: vi.fn().mockResolvedValue([{ id: "llama3", provider: "ollama" }]),
+    };
+
+    const changed = await mm.syncAndRefresh();
+
+    expect(changed).toBe(true);
+    const result = JSON.parse(fs.readFileSync(modelsJsonPath, "utf-8"));
+    expect(result.providers.ollama).toBeDefined();
+    expect(result.providers.ollama.apiKey).toBe("local");
+    expect(mm._modelRegistry.refresh).toHaveBeenCalledTimes(1);
+    expect(mm.availableModels).toEqual([{ id: "llama3", provider: "ollama" }]);
+  });
+
   it("handles multiple providers in one call", async () => {
     const syncModels = await loadSync();
 

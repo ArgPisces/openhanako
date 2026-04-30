@@ -541,6 +541,56 @@ describe("model sync related routes", () => {
     expect(data.models[0].id).toBe("gpt-5.4");
   });
 
+  it("providers summary treats no-auth providers as credential-ready without api_key", async () => {
+    const { createProvidersRoute } = await import("../server/routes/providers.js");
+    const app = new Hono();
+    const allowsMissingApiKey = vi.fn(() => true);
+    const engine = {
+      providerRegistry: {
+        getAllProvidersRaw: vi.fn(() => ({
+          ollama: {
+            base_url: "http://192.168.1.20:11434/v1",
+            api: "openai-completions",
+            models: ["llama3"],
+          },
+        })),
+        get: vi.fn(() => ({
+          authType: "none",
+          baseUrl: "http://localhost:11434/v1",
+          api: "openai-completions",
+          displayName: "Ollama",
+        })),
+        isOAuth: vi.fn(() => false),
+        getAuthType: vi.fn(() => "none"),
+        allowsMissingApiKey,
+        getAuthJsonKey: (id) => id,
+        getOAuthProviderIds: () => [],
+        getAll: () => new Map(),
+      },
+      preferences: {
+        getOAuthCustomModels: () => ({}),
+      },
+      hanakoHome: "/tmp",
+    };
+
+    app.route("/api", createProvidersRoute(engine));
+
+    const res = await app.request("/api/providers/summary");
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.providers.ollama).toMatchObject({
+      auth_type: "none",
+      has_credentials: true,
+      api_key: "",
+      models: ["llama3"],
+    });
+    expect(allowsMissingApiKey).toHaveBeenCalledWith(
+      "ollama",
+      "http://192.168.1.20:11434/v1",
+    );
+  });
+
   it("oauth provider with empty registry falls back to defaults", async () => {
     const { createProvidersRoute } = await import("../server/routes/providers.js");
     const app = new Hono();

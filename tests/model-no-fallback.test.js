@@ -275,6 +275,42 @@ describe("模型选择无 fallback", () => {
       expect(result.model).toBe(fullModel);
       expect(result.model.input).toEqual(["text", "image"]);
     });
+
+    it("provider 声明无须 key 时，远程 baseUrl 也能解析执行凭证", () => {
+      const mm = new ModelManager({ hanakoHome: tempDir });
+      const fullModel = {
+        id: "llama3",
+        provider: "ollama",
+        input: ["text"],
+      };
+      const allowsMissingApiKey = vi.fn(() => true);
+      mm._availableModels = [fullModel];
+      mm.providerRegistry = {
+        getCredentials: vi.fn((provider) => (
+          provider === "ollama"
+            ? {
+                api: "openai-completions",
+                apiKey: "",
+                baseUrl: "http://192.168.1.20:11434/v1",
+              }
+            : null
+        )),
+        allowsMissingApiKey,
+      };
+
+      const result = mm.resolveModelWithCredentials({
+        id: "llama3",
+        provider: "ollama",
+      });
+
+      expect(result.model).toBe(fullModel);
+      expect(result.api_key).toBe("");
+      expect(result.base_url).toBe("http://192.168.1.20:11434/v1");
+      expect(allowsMissingApiKey).toHaveBeenCalledWith(
+        "ollama",
+        "http://192.168.1.20:11434/v1",
+      );
+    });
   });
 
   describe("resolveUtilityConfig", () => {
@@ -299,11 +335,17 @@ describe("模型选择无 fallback", () => {
           }
           return null;
         },
-        { getCredentials: (provider) => {
-          const model = mm._availableModels.find((m) => m.provider === provider);
-          if (!model?._cred) return null;
-          return model._cred;
-        } },
+        {
+          getCredentials: (provider) => {
+            const model = mm._availableModels.find((m) => m.provider === provider);
+            if (!model?._cred) return null;
+            return model._cred;
+          },
+          allowsMissingApiKey: (provider) => {
+            const model = mm._availableModels.find((m) => m.provider === provider);
+            return model?._allowMissingApiKey === true;
+          },
+        },
       );
     }
 
@@ -341,6 +383,47 @@ describe("模型选择无 fallback", () => {
       expect(result.utility_large).toMatchObject({ id: "large-model", provider: "test-provider" });
       expect(result.api_key).toBe("sk-test");
       expect(result.api).toBe("openai-completions");
+    });
+
+    it("provider 声明无须 key 时，utility 远程 baseUrl 可不填 apiKey", () => {
+      const mm = new ModelManager({ hanakoHome: tempDir });
+      mm._availableModels = [
+        {
+          id: "util-model",
+          provider: "ollama",
+          _allowMissingApiKey: true,
+          _cred: {
+            api: "openai-completions",
+            apiKey: "",
+            baseUrl: "http://192.168.1.20:11434/v1",
+          },
+        },
+        {
+          id: "large-model",
+          provider: "ollama",
+          _allowMissingApiKey: true,
+          _cred: {
+            api: "openai-completions",
+            apiKey: "",
+            baseUrl: "http://192.168.1.20:11434/v1",
+          },
+        },
+      ];
+      setupRouter(mm);
+
+      const result = mm.resolveUtilityConfig(
+        {},
+        {
+          utility: { id: "util-model", provider: "ollama" },
+          utility_large: { id: "large-model", provider: "ollama" },
+        },
+        {},
+      );
+
+      expect(result.utility).toMatchObject({ id: "util-model", provider: "ollama" });
+      expect(result.utility_large).toMatchObject({ id: "large-model", provider: "ollama" });
+      expect(result.api_key).toBe("");
+      expect(result.base_url).toBe("http://192.168.1.20:11434/v1");
     });
 
     it("utility_api 与模型 provider 不一致时直接报错", () => {
