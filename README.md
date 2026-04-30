@@ -30,7 +30,7 @@ As a tool, it is powerful: it remembers everything you've said, operates your co
 
 **Personality** — Not a generic "AI assistant". Each agent has its own voice and behavior through personality templates. Agents are self-contained folders, easy to back up and manage.
 
-**Tools** — Read/write files, run terminal commands, browse the web, search the internet, take screenshots, draw on a canvas, execute JavaScript. Covers the vast majority of daily work scenarios.
+**Tools** — Read/write files, run terminal commands, browse the web, search the internet through browser-backed or API providers, take screenshots, preview media, and inspect pages. Covers the vast majority of daily work scenarios.
 
 **Skills** — Built-in compatibility with the community Skills ecosystem. Agents can also install skills from GitHub or write their own. Strict safety review enabled by default.
 
@@ -44,7 +44,7 @@ As a tool, it is powerful: it remembers everything you've said, operates your co
 
 **Sandbox** — Two-layer isolation: application-level PathGuard with four access tiers + OS-level sandboxing (macOS Seatbelt / Linux Bubblewrap).
 
-**Plugins** — Extensible plugin system with a convention-first architecture. Install community plugins by drag-and-drop. Plugins can contribute tools, skills, commands, agent templates, HTTP routes, event hooks, and LLM providers. Routes have direct access to core services (PluginContext injection) and can interact with agent sessions via the Session Bus (send messages, get history, list sessions). Two-level permission model (restricted / full-access) keeps things safe.
+**Plugins** — Extensible plugin system with a convention-first architecture. Install community plugins by drag-and-drop. Plugins can contribute tools, skills, commands, agent templates, HTTP routes, event hooks, LLM providers, pages, widgets, configuration schemas, and background tasks. Routes have direct access to core services (PluginContext injection) and can interact with agent sessions via the Session Bus. Two-level permission model (restricted / full-access) keeps things safe.
 
 **Multi-Platform Bridge** — A single agent can connect to Telegram, Feishu, QQ, and WeChat bots simultaneously. Chat from any platform and remotely operate your computer.
 
@@ -72,7 +72,7 @@ Linux builds are planned.
 
 ### First Run
 
-On first launch, an onboarding wizard will guide you through setup: choose a language, enter your name, connect a model provider (API key + base URL), and select three models — a **chat model** (main conversation), a **utility model** (lightweight tasks like summarization), and a **utility large model** (memory compilation and deep analysis). Hanako uses the OpenAI-compatible protocol, so any provider that supports it will work (OpenAI, DeepSeek, Qwen, local models via Ollama, etc.).
+On first launch, an onboarding wizard will guide you through setup: choose a language, enter your name, connect a model provider (API key + base URL), and select three models — a **chat model** (main conversation), a **utility model** (lightweight tasks), and a **utility large model** (memory compilation and deep analysis). In settings you can also choose a **vision model** that lets text-only chat models work with image attachments through Vision Bridge. Hanako supports OpenAI-compatible providers, Anthropic-style providers, OAuth providers, and local models via Ollama.
 
 ## Architecture
 
@@ -92,6 +92,7 @@ tests/          Vitest test suite
 The engine layer coordinates multiple managers (Agent, Session, Model, Preferences, Skill, Channel, BridgeSession, Plugin, etc.) and exposes them through a unified facade. The Hub handles background tasks (heartbeat, cron, channel routing, agent messaging, DM routing) independently of the active chat session.
 
 The server runs as a standalone Node.js process (spawned by Electron or independently), bundled via Vite with @vercel/nft for dependency tracing. It communicates with the Electron renderer through WebSocket.
+User data is rooted at `HANA_HOME` (`~/.hanako` in production, `~/.hanako-dev` in development). The Pi SDK's own data is isolated under `${HANA_HOME}/.pi/`.
 
 ## Tech Stack
 

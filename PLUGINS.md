@@ -37,7 +37,7 @@ export async function execute(input) {
 
 - **拖拽安装**：将插件文件夹或 .zip 拖入设置 → 插件页面的安装区
 - **文件选择器**：点击安装区，通过文件选择器选择插件文件夹或 .zip
-- **手动安装**：将插件目录放到 `~/.hanako/plugins/`（开发环境为 `~/.hanako-dev/plugins/`）
+- **手动安装**：将插件目录放到 `${HANA_HOME}/plugins/`。实际目录可在设置 → 插件页面或 `/api/plugins/settings` 的 `plugins_dir` 查看
 
 ### 管理操作
 
@@ -45,11 +45,11 @@ export async function execute(input) {
 
 - **启用/禁用**：每个插件有独立开关
 - **删除**：移除插件代码，插件数据（`plugin-data/{pluginId}/`）保留
-- **升级**：拖入同名新版本会自动替换旧版，需要重启一次以加载新代码
+- **升级**：拖入同名新版本会自动 unload 旧版并加载新版；生命周期资源由 `onunload` / disposables 清理
 
 ### 插件数据
 
-插件私有数据自动存放在 `~/.hanako/plugin-data/{pluginId}/`（开发环境 `~/.hanako-dev/plugin-data/{pluginId}/`）。删除插件时此目录保留，重新安装后配置还在。
+插件私有数据自动存放在 `${HANA_HOME}/plugin-data/{pluginId}/`。删除插件时此目录保留，重新安装后配置还在。
 
 ## 目录结构
 

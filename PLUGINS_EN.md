@@ -37,7 +37,7 @@ export async function execute(input) {
 
 - **Drag-and-drop**: Drag a plugin folder or .zip into Settings → Plugins install area
 - **File picker**: Click the install area and select a plugin folder or .zip via the file picker
-- **Manual**: Place the plugin directory in `~/.hanako/plugins/` (dev environment: `~/.hanako-dev/plugins/`)
+- **Manual**: Place the plugin directory in `${HANA_HOME}/plugins/`. The actual path is shown in Settings → Plugins or via `/api/plugins/settings` as `plugins_dir`
 
 ### Management
 
@@ -45,11 +45,11 @@ All operations take effect immediately, no restart required:
 
 - **Enable/Disable**: Each plugin has its own toggle
 - **Delete**: Removes plugin code; plugin data (`plugin-data/{pluginId}/`) is preserved
-- **Upgrade**: Dragging in a new version with the same name automatically replaces the old one (requires one restart to load new code)
+- **Upgrade**: Dragging in a new version with the same name unloads the old plugin and loads the new one; lifecycle resources should be cleaned up via `onunload` / disposables
 
 ### Plugin Data
 
-Plugin private data is stored in `~/.hanako/plugin-data/{pluginId}/` (dev: `~/.hanako-dev/plugin-data/{pluginId}/`). This directory is preserved when the plugin is deleted, so config persists across reinstalls.
+Plugin private data is stored in `${HANA_HOME}/plugin-data/{pluginId}/`. This directory is preserved when the plugin is deleted, so config persists across reinstalls.
 
 ## Directory Structure
 
@@ -515,6 +515,46 @@ this.register(this.ctx.registerTool({
 ```
 
 Tool names are auto-prefixed with `pluginId_` and auto-removed on unload via `register()`.
+
+### Background Tasks ⚡ full-access
+
+Plugins can register background tasks so Hanako can track and abort them. Runtime lifecycle is managed by `TaskRegistry`.
+
+**Register a task type handler** once in `onload()`:
+
+```js
+await this.ctx.bus.request("task:register-handler", {
+  type: "my-task-type",
+  abort: (taskId) => {
+    // cancel polling, abort a request, stop a worker, etc.
+  },
+});
+
+this.register(() => {
+  this.ctx.bus.request("task:unregister-handler", { type: "my-task-type" }).catch(() => {});
+});
+```
+
+**Register a task instance** every time a background task starts:
+
+```js
+await this.ctx.bus.request("task:register", {
+  taskId: "my-task-123",
+  type: "my-task-type",
+  parentSessionPath: sessionPath,
+  meta: { type: "my-task", prompt: "..." },
+});
+```
+
+**Remove the task when complete**:
+
+```js
+await this.ctx.bus.request("task:remove", { taskId: "my-task-123" });
+```
+
+**Result delivery** usually combines `task:*` with `deferred:*`: `task:*` tracks runtime lifecycle, while `deferred:*` tracks result delivery back to the parent session. A long task commonly calls `deferred:register` and `task:register` at start, then `deferred:resolve` and `task:remove` at completion.
+
+`TaskRegistry` is runtime-only and not persisted. If a plugin wants restart recovery, it must restore pending jobs from its own storage in `onload()` and call `task:register` again.
 
 ## Forward Compatibility
 
