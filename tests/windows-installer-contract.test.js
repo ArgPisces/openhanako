@@ -24,4 +24,16 @@ describe("Windows NSIS installer contract", () => {
 
     expect(source).toContain('RMDir /r "$INSTDIR\\resources\\server"');
   });
+
+  it("overrides app-running detection to close Hanako and its bundled server explicitly", () => {
+    const source = fs.readFileSync(path.join(root, "build", "installer.nsh"), "utf-8");
+    const macro = extractMacro(source, "customCheckAppRunning");
+
+    expect(macro).toContain("Hanako.exe");
+    expect(macro).toContain("hana-server.exe");
+    expect(macro).toContain("appCannotBeClosed");
+    expect(macro).toContain("MB_RETRYCANCEL");
+    expect(macro).toContain("DetailPrint");
+    expect(macro).not.toContain("StartsWith('$INSTDIR'");
+  });
 });
