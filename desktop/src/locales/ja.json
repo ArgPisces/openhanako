@@ -158,6 +158,8 @@
     "accessModeLocked": "現在アクセスモードを変更できません",
     "deskContext": "デスクのコンテキスト付き",
     "pastedImage": "貼り付け画像",
+    "textModelImageBlocked": "現在のモデルはテキスト専用のため、画像を直接送信できません。設定でモデル能力を調整するか、補助ビジョンを設定して有効にしてください。",
+    "openModelSettings": "モデル設定を開く",
     "attachFiles": "ファイルを追加",
     "commandMenu": "コマンドメニュー",
     "docContext": "ドキュメント付き",

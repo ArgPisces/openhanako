@@ -159,6 +159,8 @@
     "accessModeLocked": "Access mode cannot be changed right now",
     "deskContext": "With desk context",
     "pastedImage": "Pasted image",
+    "textModelImageBlocked": "The current model is text-only and cannot send images directly. Adjust the model capability in settings, or configure and enable auxiliary vision.",
+    "openModelSettings": "Open model settings",
     "attachFiles": "Add files",
     "commandMenu": "Command menu",
     "docContext": "With document",

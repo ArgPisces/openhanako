@@ -30,6 +30,11 @@ import { serializeEditor } from '../utils/editor-serializer';
 import { useSkillSlashItems } from '../hooks/use-slash-items';
 import { notifyPasteUploadFailure } from '../utils/paste-upload-feedback';
 import {
+  evaluateChatImageSendPreflight,
+  notifyTextModelImageBlocked,
+} from '../utils/chat-image-send-preflight';
+import { openProviderModelSettings } from '../utils/model-settings-navigation';
+import {
   XING_PROMPT, executeDiary, executeCompact, buildSlashCommands, getSlashMatches,
   resolveSlashSubmitSelection,
   type SlashItem,
@@ -363,6 +368,15 @@ function InputAreaInner({ cardRef }: InputAreaInnerProps) {
     || (editor?.getJSON().content?.some(n => n.type === 'skillBadge') ?? false);
   const canSend = hasContent && connected && !isStreaming && !modelSwitching;
 
+  const loadVisionAuxiliaryConfig = useCallback(async () => {
+    const res = await hanaFetch('/api/preferences/models');
+    const data = await res.json();
+    return {
+      enabled: data?.models?.vision_enabled === true,
+      model: data?.models?.vision || null,
+    };
+  }, []);
+
   // ── Paste image ──
   // 与拖拽对齐：剪贴板图片同样落盘到 uploads 目录，入 store 的形态和拖拽完全一致
   // （只有 path/name/isDirectory，没有 base64Data）。是否走 vision 桥由发送阶段的
@@ -478,6 +492,20 @@ function InputAreaInner({ cardRef }: InputAreaInnerProps) {
       const imageFiles = hasFiles ? attachedFiles.filter(f => !f.isDirectory && isImageFile(f.name)) : [];
       const otherFiles = hasFiles ? attachedFiles.filter(f => f.isDirectory || !isImageFile(f.name)) : [];
 
+      const imagePreflight = await evaluateChatImageSendPreflight({
+        attachments: attachedFiles,
+        model: currentModelInfo,
+        loadVisionAuxiliaryConfig,
+      });
+      if (!imagePreflight.ok) {
+        notifyTextModelImageBlocked({
+          t,
+          addToast: useStore.getState().addToast,
+          openSettings: () => openProviderModelSettings(currentModelInfo?.provider),
+        });
+        return;
+      }
+
       let finalText = text;
       if (otherFiles.length > 0) {
         const fileBlock = otherFiles.map(f => f.isDirectory ? `[目录] ${f.path}` : `[附件] ${f.path}`).join('\n');
@@ -566,7 +594,7 @@ function InputAreaInner({ cardRef }: InputAreaInnerProps) {
     } finally {
       setSending(false);
     }
-  }, [editor, attachedFiles, docContextAttached, connected, isStreaming, sending, pendingNewSession, currentDoc, clearAttachedFiles, clearDraft, currentSessionPath, setDocContextAttached, slashCommands, slashSelected, handleSlashSelect, supportsVision]);
+  }, [editor, attachedFiles, docContextAttached, connected, isStreaming, sending, pendingNewSession, currentDoc, clearAttachedFiles, clearDraft, currentSessionPath, setDocContextAttached, slashCommands, slashSelected, handleSlashSelect, supportsVision, currentModelInfo, loadVisionAuxiliaryConfig, t]);
 
   // ── Steer ──
   const handleSteer = useCallback(async () => {

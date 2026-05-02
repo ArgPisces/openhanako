@@ -158,6 +158,8 @@
     "accessModeLocked": "目前無法更改權限模式",
     "deskContext": "看著書桌說",
     "pastedImage": "貼上圖片",
+    "textModelImageBlocked": "目前模型是文字模型，不能直接傳送圖片。請在設定中調整模型能力，或設定並啟用輔助視覺。",
+    "openModelSettings": "開啟模型設定",
     "attachFiles": "新增檔案",
     "commandMenu": "命令選單",
     "docContext": "看著文件說",

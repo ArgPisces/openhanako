@@ -158,6 +158,8 @@
     "accessModeLocked": "지금은 접근 모드를 변경할 수 없습니다",
     "deskContext": "책상 컨텍스트 포함",
     "pastedImage": "붙여넣은 이미지",
+    "textModelImageBlocked": "현재 모델은 텍스트 전용이라 이미지를 직접 보낼 수 없습니다. 설정에서 모델 기능을 조정하거나 보조 시각을 설정하고 켜 주세요.",
+    "openModelSettings": "모델 설정 열기",
     "attachFiles": "파일 추가",
     "commandMenu": "명령 메뉴",
     "docContext": "문서 포함",
