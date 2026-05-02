@@ -1,7 +1,9 @@
 /**
  * auto-updater.cjs — electron-updater 集成
  *
- * 行为：启动时静默检查 → 静默下载 → renderer 展示状态 → 页内触发或 app quit 安装。
+ * 行为：启动时静默检查 → 静默下载 → renderer 展示状态 → 页内触发安装。
+ * Windows 安装时由 NSIS installer 负责关闭旧进程和覆盖安装；这里不等待 server
+ * graceful shutdown，避免“重启更新”点击后长时间无反馈。
  * 频道：Stable（allowPrerelease=false）/ Preview（allowPrerelease=true）。
  */
 const { ipcMain, app, BrowserWindow } = require("electron");
@@ -12,7 +14,6 @@ const fs = require("fs");
 const CHECK_INTERVAL = 4 * 60 * 60 * 1000; // 4 小时
 
 let _mainWindow = null;
-let _shutdownServer = null; // 由 main.cjs 注入
 let _setIsUpdating = null;  // 由 main.cjs 注入
 let _hanakoHome = null;     // 由 main.cjs 注入
 let _checkTimer = null;
@@ -108,7 +109,8 @@ async function installDownloadedUpdate(source = "manual") {
     setState({ status: "installing", version, progress: null, error: null });
 
     try {
-      if (_shutdownServer) await _shutdownServer();
+      // Keep update install immediate. The NSIS installer owns process cleanup
+      // by install-root, including the bundled server, before overlaying files.
       autoUpdater.quitAndInstall(true, true);
       return true;
     } catch (err) {
@@ -355,10 +357,9 @@ function startPolling() {
 // ── 公共 API ──
 
 function initAutoUpdater(mainWindow, {
-  shutdownServer, setIsUpdating, hanakoHome,
+  setIsUpdating, hanakoHome,
 } = {}) {
   _mainWindow = mainWindow;
-  _shutdownServer = shutdownServer;
   _setIsUpdating = setIsUpdating;
   _hanakoHome = hanakoHome;
 

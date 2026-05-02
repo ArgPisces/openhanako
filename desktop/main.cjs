@@ -925,7 +925,6 @@ function createMainWindow() {
   // auto-updater 是进程级服务：初始化只做一次，窗口重建时只更新目标 window 引用。
   if (!_autoUpdaterInitialized) {
     initAutoUpdater(mainWindow, {
-      shutdownServer,
       setIsUpdating: (v) => { _isUpdating = v; },
       hanakoHome,
     });

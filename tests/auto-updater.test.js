@@ -188,8 +188,8 @@ describe("auto-updater", () => {
     expect(win2.webContents.send).toHaveBeenCalledWith("auto-update-state", expect.objectContaining({ status: "latest" }));
   });
 
-  it("installDownloadedUpdate enters installing state and delegates to quitAndInstall", async () => {
-    const shutdownServer = vi.fn().mockResolvedValue(undefined);
+  it("installDownloadedUpdate enters installing state and delegates to quitAndInstall immediately", async () => {
+    const shutdownServer = vi.fn(() => new Promise(() => {}));
     const setIsUpdating = vi.fn();
     const win = initWithMockWindow({ shutdownServer, setIsUpdating });
 
@@ -197,28 +197,30 @@ describe("auto-updater", () => {
       handlers["update-downloaded"]({ version: "2.0.0" });
     }
 
-    const ok = await mod.installDownloadedUpdate("manual");
+    const installPromise = mod.installDownloadedUpdate("manual");
+    await Promise.resolve();
 
-    expect(ok).toBe(true);
     expect(setIsUpdating).toHaveBeenCalledWith(true);
-    expect(shutdownServer).toHaveBeenCalledTimes(1);
+    expect(shutdownServer).not.toHaveBeenCalled();
     expect(mockAutoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true);
     expect(mod.getState()).toEqual(expect.objectContaining({ status: "installing", version: "2.0.0" }));
     expect(win.webContents.send).toHaveBeenCalledWith("auto-update-state", expect.objectContaining({ status: "installing" }));
+    await expect(installPromise).resolves.toBe(true);
   });
 
-  it("manual install IPC uses the same install path as app quit", async () => {
-    const shutdownServer = vi.fn().mockResolvedValue(undefined);
+  it("manual install IPC uses the same immediate install path", async () => {
+    const shutdownServer = vi.fn(() => new Promise(() => {}));
     initWithMockWindow({ shutdownServer });
 
     if (handlers["update-downloaded"]) {
       handlers["update-downloaded"]({ version: "2.0.0" });
     }
 
-    const ok = await ipcHandlers["auto-update-install"]();
+    const installPromise = ipcHandlers["auto-update-install"]();
+    await Promise.resolve();
 
-    expect(ok).toBe(true);
-    expect(shutdownServer).toHaveBeenCalledTimes(1);
+    expect(shutdownServer).not.toHaveBeenCalled();
     expect(mockAutoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true);
+    await expect(installPromise).resolves.toBe(true);
   });
 });
