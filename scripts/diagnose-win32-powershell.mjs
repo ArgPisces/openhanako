@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 import { buildWin32SandboxHelperArgs } from "../lib/sandbox/win32-sandbox-helper.ts";
 
@@ -154,7 +155,7 @@ export function run(argv = process.argv.slice(2)) {
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   run().catch((error) => {
     console.error(error?.stack || error?.message || String(error));
     process.exit(1);
