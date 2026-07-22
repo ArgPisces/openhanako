@@ -5,7 +5,7 @@
 // 在 write-restricted token 沙盒下，逐一隔离 shell / TEMP 重定向 / 桌面模式 /
 // stdin 处理这四个维度，跑一个小矩阵，观察哪一格挂起、哪一格正常退出。
 // 只在 Windows 上有意义：非 Windows 平台可以做语法检查，但 spawn 会立即失败。
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -27,6 +27,29 @@ export function argValue(flag, argv = process.argv.slice(2)) {
   const index = argv.indexOf(flag);
   if (index === -1 || index + 1 >= argv.length) return null;
   return argv[index + 1];
+}
+
+// helper 的 CreateProcessAsUserW 把 executable 直接当 lpApplicationName，不做
+// PATH 搜索（desktop/native/HanaWindowsSandboxHelper/main.cpp:1841）。生产链路
+// (lib/sandbox/win32-exec.ts:631 firstPathResult / :847 resolvePowerShellExecutable)
+// 在 Node 侧先用 `where` 解析出绝对路径再传给 helper；此脚本此前直接传裸的
+// "powershell.exe"/"pwsh.exe"，导致每一格都在 CreateProcessAsUserW 阶段就以
+// ERROR_FILE_NOT_FOUND 失败，矩阵从未进入真实实验。这里与生产语义对齐。
+export function resolveShellAbsolutePath(commandName) {
+  try {
+    const result = spawnSync("where.exe", [commandName], {
+      encoding: "utf-8",
+      timeout: 5000,
+      windowsHide: true,
+    });
+    if (result.status === 0 && result.stdout) {
+      return result.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean) || null;
+    }
+  } catch {}
+  return null;
 }
 
 // spawn 一格：按 stdinMode 决定 stdin 处理方式，计时，收集 stdout/stderr，
@@ -112,7 +135,7 @@ async function runCell({ helperPath, writableRoot, cwd, cell }) {
     timeoutMs: HELPER_TIMEOUT_MS,
     desktopMode: cell.desktopMode,
     grants: { writePaths: [writableRoot] },
-    executable: cell.shell,
+    executable: cell.resolvedPath,
     args: PS_ARGS,
   });
 
@@ -123,12 +146,19 @@ export async function runMatrix({ helperPath, cwd = process.cwd() } = {}) {
   if (!helperPath) throw new Error("diagnose-win32-powershell requires --helper <path>");
   const writableRoot = mkdtempSync(path.join(tmpdir(), "hana-ps-diag-"));
 
+  const resolvedShells = new Map(SHELLS.map((shell) => [shell, resolveShellAbsolutePath(shell)]));
+
   const results = [];
   for (const shell of SHELLS) {
+    const resolvedPath = resolvedShells.get(shell) || null;
     for (const tempMode of TEMP_MODES) {
       for (const desktopMode of DESKTOP_MODES) {
         for (const stdinMode of STDIN_MODES) {
-          const cell = { shell, tempMode, desktopMode, stdinMode };
+          const cell = { shell, tempMode, desktopMode, stdinMode, resolvedPath };
+          if (!resolvedPath) {
+            results.push({ cell, status: "shell-not-found" });
+            continue;
+          }
           // eslint-disable-next-line no-await-in-loop -- 矩阵格必须串行跑，避免互相争抢私有桌面/受限令牌资源
           const result = await runCell({ helperPath, writableRoot, cwd, cell });
           results.push(result);
