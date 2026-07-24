@@ -107,7 +107,7 @@ describe("built-in tool permission/category coverage (full snapshot)", () => {
     const { agentsDir, productDir, userDir, channelsDir } = bootstrapAgent(root);
     const agent = new Agent({ id: "hana", agentsDir, productDir, userDir, channelsDir } as any);
     agent.setCallbacks({
-      getLearnSkills: () => ({}),
+      getLearnSkills: () => ({ enabled: true }),
       isChannelsEnabled: () => true,
     });
 

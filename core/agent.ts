@@ -883,6 +883,13 @@ export class Agent {
     const computerUseTools = this._isComputerUseCandidateForThisAgent()
       ? [this._getComputerUseTool()]
       : [];
+    const channelTools = (this._cb?.isChannelsEnabled?.() ?? false)
+      ? [this._channelTool]
+      : [];
+    const learnCfg = this._cb?.getLearnSkills?.() || this._config?.capabilities?.learn_skills || {};
+    const installSkillTools = learnCfg.enabled === true
+      ? [this._installSkillTool]
+      : [];
     return [
       ...memTools,
       ...experienceTools,
@@ -892,10 +899,10 @@ export class Agent {
       this._automationTool,
       this._stageFilesTool,
       this._fileTool,
-      this._channelTool,
+      ...channelTools,
       this._browserTool,
       ...computerUseTools,
-      this._installSkillTool,
+      ...installSkillTools,
       this._notifyTool,
       this._stopTaskTool,
       this._updateSettingsTool,
