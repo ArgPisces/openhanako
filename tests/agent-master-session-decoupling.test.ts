@@ -202,10 +202,10 @@ describe("agent.systemPrompt: master / per-session 解耦", { timeout: AGENT_INI
 
     const prompt = agent.buildSystemPrompt({ forceMemoryEnabled: false });
 
-    expect(prompt).toContain("## Tool Use For Files And Commands");
-    expect(prompt).toContain("Use read/grep/find/ls to inspect files.");
-    expect(prompt).toContain("Use edit for source-code changes and write for new complete files; do not use shell redirection to modify source files.");
-    expect(prompt).toContain("Use shell for builds, tests, package scripts, generators, and command-line tools.");
+    expect(prompt).toContain("## Tool Usage Discipline");
+    expect(prompt).toContain("Use read/grep/find/ls to inspect files and directories");
+    expect(prompt).toContain("use edit for source-code changes and write for new or fully replaced files");
+    expect(prompt).toContain("do not use shell redirection to modify source files.");
 
     await agent.dispose();
   });
@@ -238,10 +238,9 @@ describe("agent.systemPrompt: master / per-session 解耦", { timeout: AGENT_INI
 
     const prompt = agent.buildSystemPrompt({ forceMemoryEnabled: false });
 
-    expect(prompt).toContain("## 文件与命令工具使用");
-    expect(prompt).toContain("查看文件和目录时优先用 read/grep/find/ls。");
+    expect(prompt).toContain("## 工具使用纪律");
+    expect(prompt).toContain("查看文件和目录用 read/grep/find/ls");
     expect(prompt).toContain("改已有源码用 edit、新建或全量替换用 write，不要用 shell 重定向改源码。");
-    expect(prompt).toContain("运行测试、构建、包脚本、生成器和命令行工具时用 shell。");
 
     await agent.dispose();
   });

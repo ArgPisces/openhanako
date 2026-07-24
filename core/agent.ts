@@ -1292,14 +1292,16 @@ export class Agent {
     // 分支末尾追加一份 formatSkillsForPrompt(skills)。这里再追加一次会重复（#399）。
     // 显示路径（GET /system-prompt）会自行拼接 skills 以保持开发者视图一致。
 
-    // 工具使用纪律（轻量优先）
+    // 工具使用纪律（轻量优先；并入原「文件与命令工具使用」段的文件工具指引）
     parts.push(isZh
       ? "\n## 工具使用纪律\n\n" +
-        "当多个工具能完成同一件事时，优先用成本最低、干扰最小的那个，不要在简单工具够用时启动重型工具。\n\n" +
-        "短命令、构建、测试、环境探测优先用 exec_command；需要长时间运行或交互式进程时，用 exec_command 的 tty=true，再用 write_stdin 继续输入。需要 POSIX 兼容 shell 时，用 exec_command 的 shell=\"bash\" 显式声明。Windows 下 exec_command 默认是 PowerShell，不要把 Linux heredoc、sed/awk 管道或 POSIX 路径习惯直接搬过去。"
+        "多个工具能完成同一件事时，优先用成本最低、干扰最小的那个，不要在简单工具够用时启动重型工具。\n" +
+        "查看文件和目录用 read/grep/find/ls；改已有源码用 edit、新建或全量替换用 write，不要用 shell 重定向改源码。\n" +
+        "短命令、构建、测试、包脚本和环境探测用 exec_command；需要长时间运行或交互式进程时，用 exec_command 的 tty=true，再用 write_stdin 继续输入；需要 POSIX 兼容 shell 时显式声明 shell=\"bash\"。Windows 下 exec_command 默认是 PowerShell，不要把 Linux heredoc、sed/awk 管道或 POSIX 路径习惯直接搬过去。"
       : "\n## Tool Usage Discipline\n\n" +
-        "When multiple tools can accomplish the same task, prefer the lowest-cost, least-disruptive one; do not reach for heavy tools when simpler ones suffice.\n\n" +
-        "Prefer exec_command for short commands, builds, tests, and environment probes; use exec_command with tty=true for long-running or interactive processes, then continue input with write_stdin. Use exec_command with shell=\"bash\" only when POSIX-shell compatibility is specifically needed. On Windows, exec_command defaults to PowerShell, so do not carry over Linux heredocs, sed/awk pipelines, or POSIX path habits directly."
+        "When multiple tools can accomplish the same task, prefer the lowest-cost, least-disruptive one; do not reach for heavy tools when simpler ones suffice.\n" +
+        "Use read/grep/find/ls to inspect files and directories; use edit for source-code changes and write for new or fully replaced files — do not use shell redirection to modify source files.\n" +
+        "Prefer exec_command for short commands, builds, tests, package scripts, and environment probes; use tty=true plus write_stdin for long-running or interactive processes; declare shell=\"bash\" only when POSIX-shell compatibility is specifically needed. On Windows, exec_command defaults to PowerShell, so do not carry over Linux heredocs, sed/awk pipelines, or POSIX path habits."
     );
 
     parts.push(isZh
@@ -1448,8 +1450,14 @@ export class Agent {
       userProfileLines.join("\n")
     ));
 
+    // 记忆规则 + 置顶记忆 + 记忆（动态，后台 compile 会更新；按 session 快照）
+    if (memoryBlock) {
+      parts.push(...memoryBlock);
+    }
+
     // ishiki（identity + yuan + ishiki 模板，含 {{userName}} 等替换）
-    // 放在用户档案之后：先建立"用户是谁"的语境，再讲"你是谁、你和用户什么关系"。
+    // 放在用户档案和记忆之后、靠近 prompt 尾部：先建立"用户是谁"和"关于用户的记忆"语境，
+    // 再讲"你是谁、你和用户什么关系"。
     parts.push(ishiki);
 
     if (!forSubagent && this._canInjectAppearancePrompt(targetModel)) {
@@ -1458,22 +1466,6 @@ export class Agent {
         ? formatAgentAppearancePrompt(appearance.summary, this._config.locale || "")
         : "";
       if (appearancePrompt) parts.push(appearancePrompt);
-    }
-
-    parts.push(isZh
-      ? "\n## 文件与命令工具使用\n\n" +
-        "查看文件和目录时优先用 read/grep/find/ls。\n" +
-        "改已有源码用 edit、新建或全量替换用 write，不要用 shell 重定向改源码。\n" +
-        "运行测试、构建、包脚本、生成器和命令行工具时用 shell。"
-      : "\n## Tool Use For Files And Commands\n\n" +
-        "Use read/grep/find/ls to inspect files.\n" +
-        "Use edit for source-code changes and write for new complete files; do not use shell redirection to modify source files.\n" +
-        "Use shell for builds, tests, package scripts, generators, and command-line tools."
-    );
-
-    // 记忆规则 + 置顶记忆 + 记忆（动态，后台 compile 会更新；按 session 快照）
-    if (memoryBlock) {
-      parts.push(...memoryBlock);
     }
 
     // 日期时间（尊重用户时区偏好，fallback 到系统时区）
