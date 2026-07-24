@@ -44,7 +44,7 @@ export function createMobileWorkbenchRoute(engine) {
       thinkingLevel: engine.getThinkingLevel?.() || "medium",
       editor: engine.config?.editor || {},
       avatars: readAvatarAvailability(engine),
-      agents: typeof engine.listAgents === "function" ? sanitizeAgents(engine.listAgents()) : [],
+      agents: typeof engine.listAgents === "function" ? sanitizeAgents(engine.listAgents(), engine) : [],
       appearance: engine.getAppearance?.() || {},
     });
   });
@@ -170,7 +170,7 @@ function readAvatarAvailability(engine) {
   return avatars;
 }
 
-function sanitizeAgents(agents) {
+function sanitizeAgents(agents, engine) {
   if (!Array.isArray(agents)) return [];
   return agents.map((agent) => ({
     id: agent.id,
@@ -181,6 +181,7 @@ function sanitizeAgents(agents) {
     hasAvatar: !!agent.hasAvatar,
     chatModel: agent.chatModel || null,
     homeFolder: agent.homeFolder || null,
+    effectiveHomeFolder: engine.getHomeCwd?.(agent.id) || agent.homeFolder || null,
     memoryMasterEnabled: agent.memoryMasterEnabled !== false,
   }));
 }

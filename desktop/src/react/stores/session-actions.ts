@@ -24,6 +24,7 @@ import { renderMarkdown } from '../utils/markdown';
 import type { ChatMessage, ContentBlock } from './chat-types';
 import { readMessageLiveVersion } from './message-live-version';
 import type { SessionMetaRecoveryStatus, SessionPermissionMode } from '../types';
+import { findPrimaryAgent, resolveAgentWorkspace } from '../utils/agent-workspace';
 
 // ── 防竞争计数器 ──
 
@@ -805,6 +806,9 @@ export async function switchSession(path: string): Promise<void> {
       agentPatch.agentName = data.agentName || ag?.name || data.agentId;
       agentPatch.agentYuan = ag?.yuan || 'hanako';
       agentPatch.agentAvatarUrl = ag?.hasAvatar ? hanaUrl(`/api/agents/${data.agentId}/avatar?t=${Date.now()}`) : null;
+      agentPatch.homeFolder = typeof ag?.homeFolder === 'string' && ag.homeFolder.trim()
+        ? ag.homeFolder.trim()
+        : null;
     }
 
     // 保存当前 session 的附件到 keyed store
@@ -1144,10 +1148,15 @@ export async function createNewSession(options: CreateNewSessionOptions = {}): P
   }
 
   const s = useStore.getState();
+  const primaryAgent = findPrimaryAgent(s.agents);
+  const primaryWorkspace = resolveAgentWorkspace(primaryAgent);
   const requestedFolder = typeof options.cwd === 'string' && options.cwd.trim() ? options.cwd.trim() : null;
-  const defaultWorkspaceMountId = requestedFolder ? null : (s.deskWorkspaceMountId || null);
-  const defaultWorkspaceLabel = defaultWorkspaceMountId ? (s.deskWorkspaceLabel || null) : null;
-  const defaultFolder = requestedFolder || s.homeFolder || (defaultWorkspaceMountId ? null : s.deskBasePath) || null;
+  const defaultWorkspaceMountId = null;
+  const defaultWorkspaceLabel = null;
+  const defaultFolder = requestedFolder || primaryWorkspace || (!primaryAgent ? s.homeFolder : null) || null;
+  const selectedPrimaryAgentId = primaryAgent && primaryAgent.id !== s.currentAgentId
+    ? primaryAgent.id
+    : null;
   const pendingProjectId = typeof options.projectId === 'string' && options.projectId.trim()
     ? options.projectId.trim()
     : null;
@@ -1157,13 +1166,13 @@ export async function createNewSession(options: CreateNewSessionOptions = {}): P
     currentSessionPath: null,
     currentSessionId: null,
     pendingSessionSwitchPath: null,
-    // 有显式 Agent home 时以 home 为准；没有绑定 workspace 的 agent
-    // 以当前 session cwd 延续工作流，不从其他 agent 的 home_folder 推导。
+    // 全局新建始终回到 Primary Agent。显式项目 cwd 只覆盖本次工作目录；
+    // 普通新建使用 Primary Agent 的有效工作区（显式 home 或服务端默认工作区）。
     selectedFolder: defaultFolder,
     selectedWorkspaceMountId: defaultWorkspaceMountId,
     selectedWorkspaceLabel: defaultWorkspaceLabel,
     workspaceFolders: [],
-    selectedAgentId: null,
+    selectedAgentId: selectedPrimaryAgentId,
     ...pendingNewSessionIdentityPatch(),
     pendingProjectId,
     pendingNewSessionThinkingLevel: null,

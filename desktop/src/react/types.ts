@@ -238,6 +238,8 @@ export interface Agent {
   hasAvatar?: boolean;
   avatarRevision?: string | null;
   chatModel?: { id: string; provider?: string | null } | null;
+  /** 显式 homeFolder 或服务端默认工作区解析后的有效新会话目录。 */
+  effectiveHomeFolder?: string | null;
   homeFolder?: string | null;
   memoryMasterEnabled?: boolean;
 }

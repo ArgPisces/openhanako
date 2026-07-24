@@ -222,7 +222,7 @@ export function createAgentsRoute(engine) {
       if (fresh === "1" || fresh === "true") {
         engine.invalidateAgentListCache?.();
       }
-      return c.json({ agents: engine.listAgents() });
+      return c.json({ agents: withEffectiveHomeFolders(engine.listAgents(), engine) });
     } catch (err) {
       return c.json({ error: err.message }, 500);
     }
@@ -896,4 +896,11 @@ export function createAgentsRoute(engine) {
   });
 
   return route;
+}
+
+function withEffectiveHomeFolders(agents, engine) {
+  return agents.map((agent) => ({
+    ...agent,
+    effectiveHomeFolder: engine.getHomeCwd?.(agent.id) || agent.homeFolder || null,
+  }));
 }

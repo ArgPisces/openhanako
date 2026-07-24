@@ -194,9 +194,10 @@ describe("mobile workbench route", () => {
         yuan: "hanako",
         isPrimary: true,
         hasAvatar: false,
-        homeFolder: workspace,
+        homeFolder: null,
         chatModel: { id: "deepseek-chat", provider: "deepseek" },
       }],
+      getHomeCwd: (agentId) => agentId === "hana" ? workspace : null,
       getAppearance: () => ({ theme: "warm-paper", serif: true }),
     });
 
@@ -225,7 +226,8 @@ describe("mobile workbench route", () => {
         isCurrent: false,
         hasAvatar: false,
         chatModel: { id: "deepseek-chat", provider: "deepseek" },
-        homeFolder: workspace,
+        homeFolder: null,
+        effectiveHomeFolder: workspace,
         memoryMasterEnabled: true,
       },
     ]);

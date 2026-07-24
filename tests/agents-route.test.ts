@@ -31,6 +31,44 @@ describe("agents route", () => {
     fs.mkdirSync(tempRoot, { recursive: true });
   });
 
+  it("returns each agent's effective home folder without replacing the explicit homeFolder field", async () => {
+    const { createAgentsRoute } = await import("../server/routes/agents.ts");
+    const app = new Hono();
+    const engine = {
+      gcWorkspacePersistence: vi.fn(),
+      listAgents: vi.fn(() => [
+        { id: "hana", name: "Hana", homeFolder: "/workspace/hana" },
+        { id: "mio", name: "Mio", homeFolder: null },
+      ]),
+      getHomeCwd: vi.fn((agentId) => agentId === "hana"
+        ? "/workspace/hana"
+        : "/home/test/Desktop/OH-WorkSpace"),
+    };
+    app.route("/api", createAgentsRoute(engine));
+
+    const res = await app.request("/api/agents");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      agents: [
+        {
+          id: "hana",
+          name: "Hana",
+          homeFolder: "/workspace/hana",
+          effectiveHomeFolder: "/workspace/hana",
+        },
+        {
+          id: "mio",
+          name: "Mio",
+          homeFolder: null,
+          effectiveHomeFolder: "/home/test/Desktop/OH-WorkSpace",
+        },
+      ],
+    });
+    expect(engine.getHomeCwd).toHaveBeenCalledWith("hana");
+    expect(engine.getHomeCwd).toHaveBeenCalledWith("mio");
+  });
+
   it("emits agent-created after creating an agent", async () => {
     const { createAgentsRoute } = await import("../server/routes/agents.ts");
     const app = new Hono();
@@ -215,7 +253,12 @@ describe("agents route", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
-    expect(data.agents).toEqual([{ id: "hana", name: "Hana", isCurrent: true }]);
+    expect(data.agents).toEqual([{
+      id: "hana",
+      name: "Hana",
+      isCurrent: true,
+      effectiveHomeFolder: null,
+    }]);
     expect(engine.invalidateAgentListCache).toHaveBeenCalledTimes(1);
     expect(engine.invalidateAgentListCache.mock.invocationCallOrder[0])
       .toBeLessThan(engine.listAgents.mock.invocationCallOrder[0]);
