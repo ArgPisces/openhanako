@@ -33,7 +33,7 @@ export function createNotifyTool({ onNotify }) {
   return {
     name: "notify",
     label: "Notification",
-    description: "Send a notification to the user. Choose desktop popup, Bridge owner chat, or the default channel according to the task; pass bridgePlatforms when delivery must go to one or more explicit Bridge platforms such as WeChat, Feishu, DingTalk, Telegram, or QQ.\nUse cases:\n- The user says 'remind me about xxx', 'notify me when...', 'don't let me forget xxx'\n- A scheduled task prompt explicitly includes notification intent or asks to send it through Bridge/WeChat\n- A monitoring/scheduled task discovers something requiring user attention\nIf everything is normal with no issues, do not call this tool. Successful Bridge notifications can be appended to that conversation context according to contextPolicy.",
+    description: "Send a notification to the user via desktop popup, Bridge owner chat, or the default channel; pass bridgePlatforms when delivery must target one or more explicit Bridge platforms such as WeChat, Feishu, DingTalk, Telegram, or QQ. Call it when the user asked to be reminded or notified, or when a scheduled or monitoring task finds something that needs their attention; if everything is normal, do not call it. Successful Bridge notifications can be appended to that conversation context according to contextPolicy.",
     sessionPermission: {
       resolveInvocation: (params: any = {}) => {
         if (typeof params.title !== "string" || typeof params.body !== "string") return null;

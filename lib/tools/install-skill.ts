@@ -264,7 +264,7 @@ export function createInstallSkillTool({ getUserSkillsDir, getConfig, resolveUti
   return {
     name: "install_skill",
     label: "Install Skill",
-    description: "Install a complete skill package into the shared skill pool, enabled only for the current Agent by default. Provide github_url for a GitHub repo, local_path for a package path visible to the current Hana server, fileId for an uploaded SessionFile package, or source as a typed FileRef such as { type: 'path', path } / { type: 'session_file', fileId }. The full package directory is installed so references/scripts/assets are preserved. Do not provide raw skill_content or a single SKILL.md file. If the safety review returns requiresRiskConfirmation, explain the risk to the user and call again with risk_accepted=true plus the returned risk_confirmation_token only after explicit user confirmation.",
+    description: "Install a complete skill package into the shared skill pool, enabled only for the current Agent by default. Pass exactly one source: github_url (GitHub repo), local_path (path visible to the current Hana server), fileId (uploaded SessionFile package), or source as a typed FileRef such as { type: 'path', path } or { type: 'session_file', fileId }. The whole package directory is installed — never pass raw skill_content or a lone SKILL.md. If the safety review returns requiresRiskConfirmation, explain the risk to the user and, only after explicit confirmation, call again with risk_accepted=true plus the returned risk_confirmation_token.",
     sessionPermission: {
       resolveInvocation: () => ({
         action: "install",
