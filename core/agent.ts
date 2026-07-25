@@ -1264,9 +1264,15 @@ export class Agent {
 
     // Prompt 拼接遵循「静态前缀在前、动态尾部在后」原则，最大化跨 session 的 prefix
     // cache 命中率（KV cache / Anthropic prompt cache 都按严格前缀匹配）。
-    // 顺序：平台 → 环境 → 行为指南（任务/经验/工具/安全/网页/设置/技能/团队）
+    // 顺序：平台 → 环境 → 用户档案 → ishiki（依赖 userName）→ 样貌
+    //      → 行为指南（任务/经验/工具/安全/网页/设置/技能/团队）
     //      ── cache 分界线 ──
-    //      用户档案 → ishiki（依赖 userName）→ 记忆规则/置顶/记忆 → 当前时间
+    //      记忆规则/置顶/记忆 → 当前时间
+    //
+    // 用户档案和人格段放进静态前缀：userName 已统一走「显式覆盖 → 全局 preferences →
+    // 语言兜底」解析，人格文件也改成惰性物化，这两段只在用户自己改档案或换人格时才变，
+    // 属于事件驱动的稳定段，放在尾部只会白白撑大动态区。记忆会被后台 compile 推动、
+    // 时间每次构建都在走，这两段才是真正的自动漂移源，继续留在 cache 分界线之后。
     //
     // ishiki 放在用户档案之后：模板里有「你和{userName}是认识很久的人」这类引用，
     // 叙事顺序上先告诉模型"用户是谁"，再告诉它"你是谁、你和用户什么关系"。
@@ -1282,6 +1288,40 @@ export class Agent {
         platformPrompt
       ));
     }
+
+    // 用户档案（user.md）
+    // 名字走 resolveUserName()：显式覆盖 → 全局 preferences → 语言兜底。
+    // 因为末端有兜底值，这一行现在总会出现；没配过名字时给出的是"用户"/"User"
+    // 这种中性称呼，与 prompt 其它位置对用户的称呼保持一致。
+    const resolvedUserName = this.resolveUserName();
+    const userProfileLines = [
+      isZh
+        ? "以下是用户的自我描述。"
+        : "The following is the user's self-description.",
+      isZh
+        ? `用户的名字叫：${resolvedUserName}`
+        : `The user's name is: ${resolvedUserName}`,
+    ];
+    if (userMd) {
+      userProfileLines.push("", userMd);
+    }
+    parts.push(...section(
+      isZh ? "# 用户档案" : "# User Profile",
+      userProfileLines.join("\n")
+    ));
+
+    // ishiki（identity + yuan + ishiki 模板，含 {{userName}} 等替换）
+    // 放在用户档案之后：先建立"用户是谁"的语境，再讲"你是谁、你和用户什么关系"。
+    parts.push(ishiki);
+
+    if (!forSubagent && this._canInjectAppearancePrompt(targetModel)) {
+      const appearance = readAgentAppearanceProfileResource(this.agentDir);
+      const appearancePrompt = appearance
+        ? formatAgentAppearancePrompt(appearance.summary, this.resolveLocale())
+        : "";
+      if (appearancePrompt) parts.push(appearancePrompt);
+    }
+
     parts.push(isZh
       ? "\n你的所有文本输出都会直接展示给用户。每次回复都必须包含面向用户的正文内容，不允许只产生内部思考就结束回复。"
       : "\nAll your text output is displayed directly to the user. Every response must contain user-facing content; do not end a response with only internal thinking."
@@ -1474,46 +1514,12 @@ export class Agent {
     }
 
     // ── cache 分界线 ──
-    // 以下内容会在不同 session 之间变化（用户档案编辑、记忆更新、时间戳推进），
+    // 以下内容会自动漂移（后台 compile 更新记忆、时间戳每次构建都在走），
     // 统一放在 prompt 末尾以保护前面静态前缀的 cache 命中率。
-
-    // 用户档案（user.md）
-    // 名字走 resolveUserName()：显式覆盖 → 全局 preferences → 语言兜底。
-    // 因为末端有兜底值，这一行现在总会出现；没配过名字时给出的是"用户"/"User"
-    // 这种中性称呼，与 prompt 其它位置对用户的称呼保持一致。
-    const resolvedUserName = this.resolveUserName();
-    const userProfileLines = [
-      isZh
-        ? "以下是用户的自我描述。"
-        : "The following is the user's self-description.",
-      isZh
-        ? `用户的名字叫：${resolvedUserName}`
-        : `The user's name is: ${resolvedUserName}`,
-    ];
-    if (userMd) {
-      userProfileLines.push("", userMd);
-    }
-    parts.push(...section(
-      isZh ? "# 用户档案" : "# User Profile",
-      userProfileLines.join("\n")
-    ));
 
     // 记忆规则 + 置顶记忆 + 记忆（动态，后台 compile 会更新；按 session 快照）
     if (memoryBlock) {
       parts.push(...memoryBlock);
-    }
-
-    // ishiki（identity + yuan + ishiki 模板，含 {{userName}} 等替换）
-    // 放在用户档案和记忆之后、靠近 prompt 尾部：先建立"用户是谁"和"关于用户的记忆"语境，
-    // 再讲"你是谁、你和用户什么关系"。
-    parts.push(ishiki);
-
-    if (!forSubagent && this._canInjectAppearancePrompt(targetModel)) {
-      const appearance = readAgentAppearanceProfileResource(this.agentDir);
-      const appearancePrompt = appearance
-        ? formatAgentAppearancePrompt(appearance.summary, this.resolveLocale())
-        : "";
-      if (appearancePrompt) parts.push(appearancePrompt);
     }
 
     // 日期时间（尊重用户时区偏好，fallback 到系统时区）
