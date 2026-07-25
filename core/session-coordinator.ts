@@ -134,7 +134,8 @@ const SESSION_META_PAYLOAD_FIELDS = ["promptSnapshot", "memoryReflectionSnapshot
 // payload 字段一律外置为 sidecar 文件，索引文件只承载小标量，防止快照全文把共享索引撑大
 const SESSION_META_PAYLOAD_INLINE_LIMIT_BYTES = 0;
 const SESSION_META_INDEX_MAX_BYTES = 1024 * 1024;
-const REMINDER_HEADER_RE = /^\[hana_reminder at \d{4}-\d{2}-\d{2} \d{2}:\d{2}\]$/;
+// 当前块头是静态的；`at <时间戳>` 是历史 JSONL 里的旧块头，剥离端必须继续认
+const REMINDER_HEADER_RE = /^\[hana_reminder(?: at \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\]$/;
 const SESSION_MODEL_UNAVAILABLE_API = "hana-unavailable-model";
 
 type SessionModelAvailability = {
@@ -215,7 +216,8 @@ function createUnavailableSessionModel(models: any, provider: string, modelId: s
 /** 巡检/定时任务默认工具白名单（"*" = 与 chat 一致，全部放行） */
 export const PATROL_TOOLS_DEFAULT = "*";
 function splitLeadingSessionReminder(text: any) {
-  if (typeof text !== "string" || !text.startsWith(`${REMINDER_BLOCK_PREFIX} at `)) return null;
+  // 粗筛只看前缀，精确匹配交给下面的整行 REMINDER_HEADER_RE
+  if (typeof text !== "string" || !text.startsWith(REMINDER_BLOCK_PREFIX)) return null;
   const firstNewline = text.indexOf("\n");
   if (firstNewline < 0 || !REMINDER_HEADER_RE.test(text.slice(0, firstNewline).replace(/\r$/, ""))) return null;
   const closingMarker = `\n${REMINDER_BLOCK_END}`;

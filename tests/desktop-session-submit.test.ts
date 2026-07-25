@@ -1197,7 +1197,7 @@ describe("submitDesktopSessionMessage", () => {
 });
 
 describe("session reminder block injection", () => {
-  const reminderBlock = "[hana_reminder at 2026-07-05 14:05]\n- 当前时间：2026-07-05 14:05\n[/hana_reminder]";
+  const reminderBlock = "[hana_reminder]\n- 当前时间：2026-07-05 14:05\n[/hana_reminder]";
   const receipt = Object.freeze({
     observedAt: 1783231500000,
     throughSeq: 7,

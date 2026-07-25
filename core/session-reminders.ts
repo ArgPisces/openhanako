@@ -18,7 +18,8 @@ export const REMINDER_BLOCK_PREFIX = "[hana_reminder";
 export const REMINDER_BLOCK_END = "[/hana_reminder]";
 export const TIME_STALENESS_MS = 3 * 60 * 60 * 1000;
 
-const REMINDER_HEADER_LINE_RE = /^\[hana_reminder at \d{4}-\d{2}-\d{2} \d{2}:\d{2}\]$/;
+// 当前块头是静态的；`at <时间戳>` 是历史 JSONL 里的旧块头，剥离端必须继续认
+const REMINDER_HEADER_LINE_RE = /^\[hana_reminder(?: at \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\]$/;
 
 const BLOCK_BODY_CHAR_LIMIT = 300;
 
@@ -95,6 +96,8 @@ export interface SessionReminderReceipt {
   readonly unavailableToolNames: readonly string[];
   readonly baseUnavailableRevision: number;
   readonly consumeBlockState: boolean;
+  /** 本次渲染是否真的投递了当前时间行；只有它为真才算模型观测到了时间 */
+  readonly timeLineRendered: boolean;
 }
 
 export interface RenderedSessionReminderBlock {
@@ -243,8 +246,8 @@ export function collectReminderBlock({
   }
 
   const lastTimeObservedAt = sessionEntry.lastTimeObservedAt;
-  const isTimeStale = lastTimeObservedAt == null || (now - lastTimeObservedAt) > TIME_STALENESS_MS;
-  if (isTimeStale) lines.push(`- ${formatTimeLine(now, timeZone, isZh)}`);
+  const timeLineRendered = lastTimeObservedAt == null || (now - lastTimeObservedAt) > TIME_STALENESS_MS;
+  if (timeLineRendered) lines.push(`- ${formatTimeLine(now, timeZone, isZh)}`);
   if (lines.length === 0 && !availabilityTransition) return null;
 
   let body = lines.join("\n");
@@ -268,10 +271,12 @@ export function collectReminderBlock({
     unavailableToolNames: Object.freeze([...nextAcceptedUnavailableToolNames]),
     baseUnavailableRevision: unavailableRevision,
     consumeBlockState: lines.length > 0,
+    timeLineRendered,
   });
   return Object.freeze({
+    // 块头不带时间戳：时间只经显式时间行投递，由 staleness 策略单独把关
     block: lines.length > 0
-      ? `${REMINDER_BLOCK_PREFIX} at ${formatTimestamp(now, timeZone)}]\n${body}\n${REMINDER_BLOCK_END}`
+      ? `${REMINDER_BLOCK_PREFIX}]\n${body}\n${REMINDER_BLOCK_END}`
       : "",
     receipt,
   });
@@ -293,6 +298,7 @@ export function applyReminderConsumption({
     || !Array.isArray(receipt.unavailableToolNames)
     || !Number.isFinite(receipt.baseUnavailableRevision)
     || typeof receipt.consumeBlockState !== "boolean"
+    || typeof receipt.timeLineRendered !== "boolean"
   ) {
     throw new TypeError("applyReminderConsumption requires a valid reminder receipt");
   }
@@ -307,6 +313,10 @@ export function applyReminderConsumption({
       nonNegativeInteger(sessionEntry.reminderConsumedCompactionRevision),
       Math.min(nonNegativeInteger(receipt.compactionRevision), currentRevision),
     );
+  }
+
+  // 时间观测只由"这次确实渲染了时间行"推进，消费其它提醒不再顺带刷新
+  if (receipt.timeLineRendered) {
     noteTimeObservedForSession(sessionEntry, receipt.observedAt);
   }
 

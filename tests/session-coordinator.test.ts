@@ -5698,6 +5698,32 @@ describe("SessionCoordinator session reminders", () => {
     const extension = createAgentSessionMock.mock.calls[0][0]
       .resourceLoader.getExtensions().extensions[0];
     const handler = extension.handlers.get("context")[0];
+    const reminder = "[hana_reminder]\n- Current time: 2026-07-05 14:05\n[/hana_reminder]";
+
+    const result = await handler({
+      messages: [{ role: "user", content: `${reminder}\n\nhello` }],
+    });
+    const content = result.messages[0].content;
+
+    expect(content.startsWith(reminder)).toBe(true);
+    expect(content.indexOf("[Hana turn context: before_user]")).toBeGreaterThan(reminder.length);
+    expect(content.indexOf("world lore")).toBeLessThan(content.indexOf("hello"));
+  });
+
+  it("keeps a legacy timestamped reminder ahead of provider-only beforeUser context", async () => {
+    const ledger = new EnvChangeLedger();
+    const agent = makeAgent();
+    const sessionPath = path.join(agent.sessionDir, "context.jsonl");
+    mockSessionAt(sessionPath);
+    const coordinator = makeCoordinator(agent, ledger);
+    await coordinator.createSession(null, "/tmp/workspace", false);
+    coordinator._setRuntimeValueForPath(coordinator._turnContextBySession, sessionPath, {
+      beforeUser: "world lore",
+      metadata: { pluginId: "tavern" },
+    });
+    const extension = createAgentSessionMock.mock.calls[0][0]
+      .resourceLoader.getExtensions().extensions[0];
+    const handler = extension.handlers.get("context")[0];
     const reminder = "[hana_reminder at 2026-07-05 14:05]\n- Current time: 2026-07-05 14:05\n[/hana_reminder]";
 
     const result = await handler({

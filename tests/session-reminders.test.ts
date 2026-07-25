@@ -111,11 +111,27 @@ describe("collectReminderBlock", () => {
     expect(REMINDER_BLOCK_PREFIX).toBe("[hana_reminder");
     expect(REMINDER_BLOCK_END).toBe("[/hana_reminder]");
     expect(result?.block).toBe(
-      "[hana_reminder at 2026-07-05 14:05]\n"
+      "[hana_reminder]\n"
       + "- New memory facts recorded: likes tea; lives in Kyoto\n"
       + "- Current time: 2026-07-05 14:05\n"
       + "[/hana_reminder]",
     );
+  });
+
+  it("never exposes wall-clock time through the block header", () => {
+    const ledger = new EnvChangeLedger();
+    ledger.append({
+      type: "memory_facts",
+      scope: { kind: "agent", agentId: "agent-a" },
+      payload: { addedLines: ["likes tea"] },
+    });
+    const now = new Date("2026-07-05T14:05:00Z").getTime();
+
+    const result = render(freshSessionEntry({ lastTimeObservedAt: now }), ledger, now, false);
+
+    expect(result?.block.split("\n")[0]).toBe("[hana_reminder]");
+    expect(result?.block).not.toContain("2026-07-05");
+    expect(result?.block).not.toContain("14:05");
   });
 
   it("delivers memory facts only to their owning agent", () => {
@@ -207,7 +223,7 @@ describe("collectReminderBlock", () => {
       payload: { addedLines: ["x".repeat(500)] },
     });
     const result = render(freshSessionEntry(), ledger, new Date("2026-07-05T14:05:00Z").getTime());
-    const header = `${REMINDER_BLOCK_PREFIX} at 2026-07-05 14:05]\n`;
+    const header = `${REMINDER_BLOCK_PREFIX}]\n`;
     const body = result!.block.slice(header.length, -(`\n${REMINDER_BLOCK_END}`.length));
 
     expect(body.endsWith("…")).toBe(true);
@@ -218,7 +234,36 @@ describe("collectReminderBlock", () => {
 });
 
 describe("stripSessionReminderBlocks", () => {
-  it("removes every internal reminder block while preserving user text", () => {
+  it("removes static-header reminder blocks while preserving user text", () => {
+    const visible = stripSessionReminderBlocks(
+      "[hana_reminder]\n"
+      + "- Current time: 2026-07-05 14:05\n"
+      + "[/hana_reminder]\n\n"
+      + "hello\n"
+      + "[hana_reminder]\n"
+      + "- Plugin secret loaded\n"
+      + "[/hana_reminder]\n"
+      + "world",
+    );
+
+    expect(visible).toBe("hello\nworld");
+    expect(visible).not.toContain("hana_reminder");
+    expect(visible).not.toContain("Plugin secret");
+  });
+
+  it("fails closed for a static reminder header without a closing tag", () => {
+    expect(stripSessionReminderBlocks(
+      "visible\n[hana_reminder]\n- internal only",
+    )).toBe("visible");
+  });
+
+  it("keeps a header-shaped line that is not an exact reminder header", () => {
+    expect(stripSessionReminderBlocks(
+      "[hana_reminder sometime]\n- internal only\n[/hana_reminder]",
+    )).toBe("[hana_reminder sometime]\n- internal only\n[/hana_reminder]");
+  });
+
+  it("still removes legacy timestamped reminder blocks from historical transcripts", () => {
     const visible = stripSessionReminderBlocks(
       "[hana_reminder at 2026-07-05 14:05]\n"
       + "- Current time: 2026-07-05 14:05\n"
@@ -235,7 +280,7 @@ describe("stripSessionReminderBlocks", () => {
     expect(visible).not.toContain("Plugin secret");
   });
 
-  it("fails closed for an exact reminder header without a closing tag", () => {
+  it("fails closed for a legacy timestamped reminder header without a closing tag", () => {
     expect(stripSessionReminderBlocks(
       "visible\n[hana_reminder at 2026-07-05 14:05]\n- internal only",
     )).toBe("visible");
@@ -243,6 +288,56 @@ describe("stripSessionReminderBlocks", () => {
 });
 
 describe("reminder receipt consumption", () => {
+  it("does not mark time observed when the block carried no time line", () => {
+    const ledger = new EnvChangeLedger();
+    ledger.append({
+      type: "memory_facts",
+      scope: { kind: "agent", agentId: "agent-a" },
+      payload: { addedLines: ["likes tea"] },
+    });
+    const now = Date.now();
+    const observedAt = now - 1000;
+    const entry = freshSessionEntry({ lastTimeObservedAt: observedAt });
+
+    const rendered = render(entry, ledger, now)!;
+    expect(rendered.block).toContain("likes tea");
+    expect(rendered.block).not.toContain("当前时间");
+    expect(rendered.receipt.timeLineRendered).toBe(false);
+
+    applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
+
+    expect(entry.lastTimeObservedAt).toBe(observedAt);
+    expect(entry.reminderEnvCursor).toBe(1);
+  });
+
+  it("marks time observed only when the time line was actually rendered", () => {
+    const ledger = new EnvChangeLedger();
+    const now = Date.now();
+    const entry = freshSessionEntry({ lastTimeObservedAt: now - TIME_STALENESS_MS - 1 });
+
+    const rendered = render(entry, ledger, now)!;
+    expect(rendered.block).toContain("当前时间");
+    expect(rendered.receipt.timeLineRendered).toBe(true);
+
+    applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
+
+    expect(entry.lastTimeObservedAt).toBe(rendered.receipt.observedAt);
+  });
+
+  it("rejects a receipt without a timeLineRendered flag", () => {
+    const ledger = new EnvChangeLedger();
+    const now = Date.now();
+    const entry = freshSessionEntry({ lastTimeObservedAt: now });
+    const rendered = render(entry, ledger, now, true, "agent-a", ["mcp_calendar"])!;
+    const { timeLineRendered, ...withoutFlag } = rendered.receipt as any;
+
+    expect(timeLineRendered).toBe(false);
+    expect(() => applyReminderConsumption({
+      sessionEntry: entry,
+      receipt: withoutFlag,
+    })).toThrow(/valid reminder receipt/);
+  });
+
   it("does not consume a ledger event appended after render", () => {
     const ledger = new EnvChangeLedger();
     ledger.append({
@@ -395,6 +490,7 @@ describe("reminder receipt consumption", () => {
     const recovered = render(entry, ledger, now + 1, true, "agent-a", []);
     expect(recovered?.block).toBe("");
     expect(recovered?.receipt.consumeBlockState).toBe(false);
+    expect(recovered?.receipt.timeLineRendered).toBe(false);
     applyReminderConsumption({ sessionEntry: entry, receipt: recovered!.receipt });
 
     expect(entry).toMatchObject({
