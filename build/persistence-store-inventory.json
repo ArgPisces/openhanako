@@ -8092,25 +8092,7 @@
     },
     {
       "sourceFile": "server/routes/config.ts",
-      "line": 443,
-      "kind": "write-file",
-      "excerpt": "fs.writeFile(ishikiPath, content, \"utf-8\")",
-      "reason": "Reads, repairs, removes, or edits agent/user profile material.",
-      "storeId": "agent-profile",
-      "exemptionId": null
-    },
-    {
-      "sourceFile": "server/routes/config.ts",
-      "line": 477,
-      "kind": "write-file",
-      "excerpt": "fs.writeFile(identityPath, content, \"utf-8\")",
-      "reason": "Reads, repairs, removes, or edits agent/user profile material.",
-      "storeId": "agent-profile",
-      "exemptionId": null
-    },
-    {
-      "sourceFile": "server/routes/config.ts",
-      "line": 570,
+      "line": 502,
       "kind": "persistent-store-constructor",
       "excerpt": "new FactStore(dbPath)",
       "reason": "Constructs or migrates a FactStore.",

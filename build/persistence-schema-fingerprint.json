@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:d04812775e018c30b96fbef0db51424dfd2b8cc1d24d83728ec8c34a1f286143",
+  "payloadFingerprint": "sha256:6a2f3f7d92eec29d6a0cfe5d46e88c6644b08e5ad31bf02da2cccec369438a75",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Lazy persona materialization (identity.md/ishiki.md no longer seeded at agent creation) shifted line numbers of existing fs persistence sites in core/agent-manager.ts, core/first-run.ts, server/routes/agents.ts, server/routes/settings-snapshot.ts, and lib/character-cards/service.ts; no store, schema, or DDL changes. (server/routes/config.ts's legacy identity/ishiki routes are left as-is here and removed in the following commit.)",
-    "payloadFingerprint": "sha256:d04812775e018c30b96fbef0db51424dfd2b8cc1d24d83728ec8c34a1f286143"
+    "compatibilityReason": "Removed the bare GET/PUT /api/identity and /api/ishiki routes from server/routes/config.ts (dead legacy handlers with no first-party or historical caller); their fs write sites are gone and the agent-profile store's siteRule for config.ts is narrowed to drop it, since config.ts no longer performs any direct fs write for that store. No store, schema, or DDL changes.",
+    "payloadFingerprint": "sha256:6a2f3f7d92eec29d6a0cfe5d46e88c6644b08e5ad31bf02da2cccec369438a75"
   },
   "schemas": [
     {
@@ -8571,24 +8571,8 @@
     },
     {
       "exemptionId": null,
-      "kind": "write-file",
-      "line": 443,
-      "reason": "Reads, repairs, removes, or edits agent/user profile material.",
-      "sourceFile": "server/routes/config.ts",
-      "storeId": "agent-profile"
-    },
-    {
-      "exemptionId": null,
-      "kind": "write-file",
-      "line": 477,
-      "reason": "Reads, repairs, removes, or edits agent/user profile material.",
-      "sourceFile": "server/routes/config.ts",
-      "storeId": "agent-profile"
-    },
-    {
-      "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 570,
+      "line": 502,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "server/routes/config.ts",
       "storeId": "agent-facts-sqlite"

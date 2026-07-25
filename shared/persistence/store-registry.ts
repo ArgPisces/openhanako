@@ -478,7 +478,11 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     identityContract: "agentId owns the profile; each filename has a fixed semantic role.",
     siteRules: [
       ...rules(["core/agent-manager.ts"], "Creates, rolls back, or edits agent profile material.", ["write-file", "copy-file", "mkdir", "remove-path"]),
-      ...rules(["lib/agent-appearance-summary.ts", "lib/compat/checks/config-yaml.ts", "server/routes/agents.ts", "server/routes/avatar.ts", "server/routes/config.ts"], "Reads, repairs, removes, or edits agent/user profile material.", ["write-file", "copy-file", "rename", "mkdir", "remove-path", "atomic-write"]),
+      // server/routes/config.ts removed from this rule: its only fs write sites were the bare
+      // GET/PUT /api/identity and /api/ishiki handlers, deleted as dead legacy routes; the file
+      // now only reads agent profile material directly (writes for /pinned and /user-profile go
+      // through library helpers, not literal fs calls in this file).
+      ...rules(["lib/agent-appearance-summary.ts", "lib/compat/checks/config-yaml.ts", "server/routes/agents.ts", "server/routes/avatar.ts"], "Reads, repairs, removes, or edits agent/user profile material.", ["write-file", "copy-file", "rename", "mkdir", "remove-path", "atomic-write"]),
     ],
   }),
   defineStore({
