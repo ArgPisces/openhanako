@@ -8,7 +8,7 @@ import { emitAppEvent } from "../app-events.ts";
 import { safeJson } from "../hono-helpers.ts";
 import { t } from "../../lib/i18n.ts";
 import { debugLog } from "../../lib/debug-log.ts";
-import { getRawConfig, clearConfigCache } from "../../lib/memory/config-loader.ts";
+import { clearConfigCache } from "../../lib/memory/config-loader.ts";
 import { FactStore } from "../../lib/memory/fact-store.ts";
 import {
   clearCompiledMemoryArtifacts,
@@ -36,7 +36,6 @@ import {
   normalizeWorkspacePath,
   removeWorkspaceHistoryEntries,
 } from "../../shared/workspace-history.ts";
-import { pruneMissingWorkspaceConfig } from "../../shared/workspace-persistence-gc.ts";
 import {
   collectProviderHeaderSecretPatchPathsFromConfig,
   maskProviderHeaders,
@@ -44,11 +43,7 @@ import {
 } from "../../shared/provider-auth.ts";
 import { isSearchApiProvider, normalizeSearchApiKeys } from "../../shared/search-providers.ts";
 import { resolveAgentStrict, AgentNotFoundError } from "../utils/resolve-agent.ts";
-import {
-  buildInlineProviderCredentialUpdate,
-  clearInlineProviderCredentialFields,
-  hasInlineProviderCredentialPatch,
-} from "./provider-credentials.ts";
+import { hasInlineProviderCredentialPatch } from "./provider-credentials.ts";
 import {
   collectSecretPatchPaths,
   isMaskedSecretValue,
@@ -74,16 +69,11 @@ function getGlobalValue(globalFields: any[], key: string) {
   return globalFields.find((field) => field.key === key)?.value;
 }
 
-function emitConfigAppEvents(engine: any, { globalFields, agentPartial, providersChanged }: any) {
-  const agentId = engine.currentAgentId || null;
-  if (
-    providersChanged
-    || hasOwn(agentPartial, "api")
-    || hasOwn(agentPartial, "embedding_api")
-    || hasOwn(agentPartial, "utility_api")
-    || hasOwn(agentPartial, "models")
-  ) {
-    emitAppEvent(engine, "models-changed", { agentId });
+function emitConfigAppEvents(engine: any, { globalFields, providersChanged }: any) {
+  if (providersChanged) {
+    // 供应商目录是全局的，改一次每个 agent 的模型列表都会跟着变，没有"属于
+    // 哪个 agent"可言，所以这里不填 agent 身份，而不是随手填上此刻聚焦的那个。
+    emitAppEvent(engine, "models-changed", { agentId: null });
   }
 
   const locale = getGlobalValue(globalFields, "locale");
@@ -193,19 +183,13 @@ function buildMemoryHealth(agent: any) {
 export function createConfigRoute(engine: any) {
   const route = new Hono();
 
-  // 读取配置（脱敏：隐藏 API key，附带 _raw 原始结构 + providers）
+  // 读取全局设置：跨 agent 共享的偏好 + 供应商目录（脱敏：隐藏 API key）。
+  //
+  // 这条路径不带 agent 身份，所以答不了"哪个 agent 的配置"——某个 agent 自己的
+  // 字段（名字、书桌目录、记忆开关、api 区块等）一律走 GET /api/agents/:id/config。
   route.get("/config", async (c) => {
     try {
-      await gcConfigWorkspacePersistence(engine);
-      const config = { ...engine.config };
-      const raw = getRawConfig(engine.configPath) || {};
-
-      // 附带原始配置结构（未经 fallback 解析，让前端知道用户显式设了什么）
-      config._raw = {
-        api: { provider: raw.api?.provider || "", base_url: raw.api?.base_url || "" },
-        embedding_api: { provider: raw.embedding_api?.provider || "", base_url: raw.embedding_api?.base_url || "" },
-        utility_api: { provider: raw.utility_api?.provider || "", base_url: raw.utility_api?.base_url || "" },
-      };
+      const config: Record<string, any> = {};
 
       // 供应商列表（附带 model_count）
       const rawProviders = engine.providerRegistry.getAllProvidersRaw();
@@ -284,7 +268,12 @@ export function createConfigRoute(engine: any) {
     }
   });
 
-  // 更新配置
+  // 更新全局设置：跨 agent 共享的偏好 + 供应商目录。
+  //
+  // 收到某个 agent 自己的字段一律 400 退回并指路 per-agent 路由——这条路径不带
+  // agent 身份，写下去只会落到"服务端此刻碰巧聚焦的那个 agent"，桌面和手机各开
+  // 一个 agent 时就会写错人。校验放在任何写动作之前：宁可整条请求退回，也不要
+  // 出现"全局的存了、agent 的丢了"这种一半成功。
   route.put("/config", async (c) => {
     try {
       const partial = await safeJson(c);
@@ -305,6 +294,15 @@ export function createConfigRoute(engine: any) {
       if (secretDenied) return secretDenied;
       // ── schema-driven 全局字段分流 ──
       const { global: globalFields, agent: agentPartial } = splitByScope(partial) as { global: any[], agent: Record<string, any> };
+
+      const agentOwnedKeys = Object.keys(agentPartial).filter((key) => key !== "providers");
+      if (agentOwnedKeys.length > 0) {
+        return c.json({
+          error: `${agentOwnedKeys.join(", ")} belong to a specific agent; `
+            + "send them to PUT /api/agents/{agentId}/config instead",
+        }, 400);
+      }
+
       for (const { setter, value } of globalFields) {
         engine[setter](value);
       }
@@ -335,56 +333,15 @@ export function createConfigRoute(engine: any) {
         providersChanged = true;
       }
 
-      // 内联 API 凭证 → 全局 added-models.yaml 对应条目
-      const rawConfig = getRawConfig(engine.configPath) || {};
-      for (const blockName of ["api", "embedding_api", "utility_api"]) {
-        const block = agentPartial[blockName];
-        if (hasInlineProviderCredentialPatch(block)) {
-          const { provider: provName, update: provUpdate } = buildInlineProviderCredentialUpdate(
-            block,
-            rawConfig?.[blockName]?.provider || "",
-            (provider) => engine.providerRegistry?.getAllProvidersRaw?.()?.[provider] || {},
-          );
-          if (!provName) {
-            return c.json({ error: `${blockName}.provider is required when saving credentials` }, 400);
-          }
-          engine.providerRegistry.saveProvider(provName, provUpdate);
-          clearInlineProviderCredentialFields(block);
-          providersChanged = true;
-        }
-      }
-
       // providers 变更后确保运行时刷新
       if (providersChanged) {
         await engine.onProviderChanged();
         debugLog()?.log("api", `onProviderChanged OK after provider change (${engine.availableModels?.length ?? 0} models)`);
-      }
-
-      if (providersChanged && Object.keys(agentPartial).length === 0) {
         clearConfigCache(undefined as any);
         await engine.updateConfig({});
-        emitConfigAppEvents(engine, { globalFields, agentPartial, providersChanged });
-        recordSecurityAuditEvent(c, engine, {
-          action: "settings.config.update",
-          target: "config",
-          secretFields,
-        } as any);
-        return c.json({ ok: true });
       }
 
-      if (Object.keys(agentPartial).length === 0) {
-        emitConfigAppEvents(engine, { globalFields, agentPartial, providersChanged });
-        recordSecurityAuditEvent(c, engine, {
-          action: "settings.config.update",
-          target: "config",
-          secretFields,
-        } as any);
-        return c.json({ ok: true });
-      }
-      debugLog()?.log("api", `PUT /api/config keys=[${Object.keys(agentPartial).join(",")}]`);
-      if (providersChanged) clearConfigCache(undefined as any);
-      await engine.updateConfig(agentPartial);
-      emitConfigAppEvents(engine, { globalFields, agentPartial, providersChanged });
+      emitConfigAppEvents(engine, { globalFields, providersChanged });
       recordSecurityAuditEvent(c, engine, {
         action: "settings.config.update",
         target: "config",
@@ -740,15 +697,4 @@ export function createConfigRoute(engine: any) {
   });
 
   return route;
-}
-
-async function gcConfigWorkspacePersistence(engine: any) {
-  if (typeof engine.gcWorkspacePersistence === "function") {
-    await engine.gcWorkspacePersistence({ agentId: engine.currentAgentId || undefined });
-    return;
-  }
-  const result = pruneMissingWorkspaceConfig(engine.config || {});
-  if (result.changed && typeof engine.updateConfig === "function") {
-    await engine.updateConfig(result.patch);
-  }
 }

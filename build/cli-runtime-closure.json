@@ -111822,14 +111822,9 @@
           "root": "server-bootstrap",
           "from": "core/config-coordinator.ts",
           "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "server/routes/config.ts",
-          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/preferences-manager.ts (import-statement); core/config-coordinator.ts (import-statement); server/routes/config.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/preferences-manager.ts (import-statement); core/config-coordinator.ts (import-statement)."
     },
     {
       "path": "shared/workspace-scope.ts",

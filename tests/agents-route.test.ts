@@ -779,14 +779,21 @@ describe("agents route", () => {
     const agentId = "hana";
     const agentDir = path.join(tempRoot, agentId);
     fs.mkdirSync(agentDir, { recursive: true });
-    fs.writeFileSync(path.join(agentDir, "config.yaml"), "agent:\n  name: Hana\n", "utf-8");
+    fs.writeFileSync(path.join(agentDir, "config.yaml"), "agent:\n  name: Hana\ncwd_history:\n  - /gone\n  - /still-there\n", "utf-8");
 
     const { createAgentsRoute } = await import("../server/routes/agents.ts");
     const app = new Hono();
     const engine = {
       agentsDir: tempRoot,
       currentAgentId: "someone-else",
-      gcWorkspacePersistence: vi.fn(),
+      // Stand in for the engine's real cleanup: rewrite this agent's config on disk.
+      gcWorkspacePersistence: vi.fn(() => {
+        fs.writeFileSync(
+          path.join(agentDir, "config.yaml"),
+          "agent:\n  name: Hana\ncwd_history:\n  - /still-there\n",
+          "utf-8",
+        );
+      }),
       providerRegistry: {
         getAllProvidersRaw: vi.fn(() => ({})),
         get: vi.fn(() => null),
@@ -798,11 +805,13 @@ describe("agents route", () => {
     app.route("/api", createAgentsRoute(engine));
 
     const res = await app.request(`/api/agents/${agentId}/config`);
+    const data = await res.json();
 
     expect(res.status).toBe(200);
-    // The bare config route prunes workspace history that no longer exists on
-    // disk before answering. The per-agent front door must do the same for its
-    // own agent, so callers get the same answer whichever door they use.
+    // Workspace history that no longer exists on disk has to be dropped before
+    // answering, and the answer has to reflect the cleanup — not the file as it
+    // was a moment earlier.
     expect(engine.gcWorkspacePersistence).toHaveBeenCalledWith({ agentId });
+    expect(data.cwd_history).toEqual(["/still-there"]);
   });
 });

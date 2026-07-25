@@ -8,10 +8,24 @@ const clearConfigCache = vi.fn();
 const callText = vi.fn();
 const probeProvider = vi.fn();
 
+const saveConfig = vi.fn();
+
 vi.mock("../lib/memory/config-loader.js", () => ({
   clearConfigCache,
+  saveConfig,
   getRawConfig: () => ({}),
 }));
+
+/** Write a throwaway agent directory so the per-agent config route has a real file to read. */
+const agentTempRoots: string[] = [];
+function makeAgentDir(agentId: string, configYaml: string) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-model-sync-agents-"));
+  agentTempRoots.push(root);
+  const dir = path.join(root, agentId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "config.yaml"), configYaml, "utf-8");
+  return dir;
+}
 
 vi.mock("../core/llm-client.js", () => ({
   callText,
@@ -53,6 +67,9 @@ describe("model sync related routes", () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    while (agentTempRoots.length) {
+      fs.rmSync(agentTempRoots.pop() as string, { recursive: true, force: true });
+    }
   });
 
   it("provider-only config updates trigger model registry sync", async () => {
@@ -98,7 +115,9 @@ describe("model sync related routes", () => {
     expect(clearConfigCache).toHaveBeenCalledTimes(1);
     expect(engine.updateConfig).toHaveBeenCalledWith({});
     expect(engine.onProviderChanged).toHaveBeenCalledTimes(1);
-    expectAppEvent(engine.emitEvent, "models-changed", { agentId: "hana" });
+    // The provider catalog is global: every agent's model list changes, so the
+    // event names no agent rather than naming whichever one was focused.
+    expectAppEvent(engine.emitEvent, "models-changed", { agentId: null });
   });
 
   it("provider-only config updates return an error and emit no event when provider refresh fails", async () => {
@@ -362,11 +381,11 @@ describe("model sync related routes", () => {
   });
 
   it("inline 凭证缺少显式 provider 时返回 400", async () => {
-    const { createConfigRoute } = await import("../server/routes/config.ts");
+    const { createAgentsRoute } = await import("../server/routes/agents.ts");
     const app = new Hono();
+    const agentDir = makeAgentDir("hana", "agent:\n  name: Hana\n");
     const engine = {
-      config: {},
-      configPath: "/tmp/test-config.yaml",
+      agentsDir: path.dirname(agentDir),
       setHomeFolder: vi.fn(),
       updateConfig: vi.fn().mockResolvedValue(undefined),
       syncModelsAndRefresh: vi.fn().mockResolvedValue(true),
@@ -376,12 +395,14 @@ describe("model sync related routes", () => {
       getLocale: vi.fn(() => "zh-CN"),
       getTimezone: vi.fn(() => "Asia/Shanghai"),
       getLearnSkills: vi.fn(() => false),
+      invalidateAgentListCache: vi.fn(),
+      listAgents: vi.fn(() => []),
       emitEvent: vi.fn(),
     };
 
-    app.route("/api", createConfigRoute(engine));
+    app.route("/api", createAgentsRoute(engine));
 
-    const res = await app.request("/api/config", {
+    const res = await app.request("/api/agents/hana/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -398,18 +419,19 @@ describe("model sync related routes", () => {
   });
 
   it("inline 空 api_key 也会同步到 provider 配置，用于真正清空凭证", async () => {
-    const { createConfigRoute } = await import("../server/routes/config.ts");
+    const { createAgentsRoute } = await import("../server/routes/agents.ts");
     const app = new Hono();
     const saveProvider = vi.fn();
+    const agentDir = makeAgentDir("hana", "agent:\n  name: Hana\napi:\n  provider: openai\n");
     const engine = {
-      config: {},
-      configPath: "/tmp/test-config.yaml",
+      agentsDir: path.dirname(agentDir),
       setHomeFolder: vi.fn(),
       updateConfig: vi.fn().mockResolvedValue(undefined),
       onProviderChanged: vi.fn().mockResolvedValue(undefined),
       providerRegistry: {
         saveProvider,
         removeProvider: vi.fn(),
+        getAllProvidersRaw: vi.fn(() => ({})),
       },
       getHomeFolder: vi.fn(() => null),
       getThinkingLevel: vi.fn(() => "medium"),
@@ -417,13 +439,15 @@ describe("model sync related routes", () => {
       getLocale: vi.fn(() => "zh-CN"),
       getTimezone: vi.fn(() => "Asia/Shanghai"),
       getLearnSkills: vi.fn(() => false),
+      invalidateAgentListCache: vi.fn(),
+      listAgents: vi.fn(() => []),
       currentAgentId: "hana",
       emitEvent: vi.fn(),
     };
 
-    app.route("/api", createConfigRoute(engine));
+    app.route("/api", createAgentsRoute(engine));
 
-    const res = await app.request("/api/config", {
+    const res = await app.request("/api/agents/hana/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
