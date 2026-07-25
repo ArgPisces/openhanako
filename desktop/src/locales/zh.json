@@ -531,7 +531,7 @@
         "avatar": "Ming.png"
       },
       "kong": {
-        "label": "模型原本的样子",
+        "label": "无发散思考模块（如 MOOD），和别的 Agent 一致体验。",
         "avatar": "Kong.png"
       }
     },
