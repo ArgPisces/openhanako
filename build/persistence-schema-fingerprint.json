@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:6a2f3f7d92eec29d6a0cfe5d46e88c6644b08e5ad31bf02da2cccec369438a75",
+  "payloadFingerprint": "sha256:d5606b6a0e30f6d4f1d905012495b65f32c946c30417122b0d5d9bba478654f1",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Removed the bare GET/PUT /api/identity and /api/ishiki routes from server/routes/config.ts (dead legacy handlers with no first-party or historical caller); their fs write sites are gone and the agent-profile store's siteRule for config.ts is narrowed to drop it, since config.ts no longer performs any direct fs write for that store. No store, schema, or DDL changes.",
-    "payloadFingerprint": "sha256:6a2f3f7d92eec29d6a0cfe5d46e88c6644b08e5ad31bf02da2cccec369438a75"
+    "compatibilityReason": "Removed two REST handlers from server/routes/config.ts; the only persistence effect is a line-number shift of the existing FactStore construction site. No store, schema, or DDL changed.",
+    "payloadFingerprint": "sha256:d5606b6a0e30f6d4f1d905012495b65f32c946c30417122b0d5d9bba478654f1"
   },
   "schemas": [
     {
@@ -8572,7 +8572,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 502,
+      "line": 452,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "server/routes/config.ts",
       "storeId": "agent-facts-sqlite"

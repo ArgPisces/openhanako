@@ -26,10 +26,6 @@ import {
   writeWeekDayEntry,
 } from "../../lib/memory/compile.ts";
 import {
-  readPinnedMemoryItems,
-  replacePinnedMemoryItems,
-} from "../../lib/memory/pinned-memory-store.ts";
-import {
   ensureDefaultWorkspace,
   resolveDefaultWorkspacePath,
 } from "../../shared/default-workspace.ts";
@@ -47,8 +43,7 @@ import {
   resolveProviderHeadersPatch,
 } from "../../shared/provider-auth.ts";
 import { isSearchApiProvider, normalizeSearchApiKeys } from "../../shared/search-providers.ts";
-import { resolveAgent, resolveAgentStrict, AgentNotFoundError } from "../utils/resolve-agent.ts";
-import { formatSkillsForPrompt } from "../../lib/pi-sdk/index.ts";
+import { resolveAgentStrict, AgentNotFoundError } from "../utils/resolve-agent.ts";
 import {
   buildInlineProviderCredentialUpdate,
   clearInlineProviderCredentialFields,
@@ -274,6 +269,9 @@ export function createConfigRoute(engine: any) {
     }
   });
 
+  // 默认工作区是一台机器上的一个固定目录（用户主目录下的桌面文件夹），
+  // 跟 agent 无关：换 agent 不会换出另一个默认工作区。所以这两条路由没有
+  // agentId 参数，也不该被要求加上。
   route.get("/config/default-workspace", async (c) => {
     return c.json({ path: resolveDefaultWorkspacePath() });
   });
@@ -399,25 +397,11 @@ export function createConfigRoute(engine: any) {
     }
   });
 
-  // ── System Prompt（只读，供 DevTools 查看）──
-  // 注意：agent.systemPrompt 不含 skills 块（#399 修复后由 SDK 内部统一注入），
-  // 这里手动拼接以保持开发者视图与 SDK 实际发送给 LLM 的 prompt 一致。
-
-  route.get("/system-prompt", async (c) => {
-    try {
-      const agent = resolveAgent(engine, c);
-      let content = agent.systemPrompt || "";
-      const enabledSkills = agent.enabledSkills || [];
-      if (enabledSkills.length > 0) {
-        content += formatSkillsForPrompt(enabledSkills);
-      }
-      return c.json({ content });
-    } catch (err) {
-      return c.json({ error: err.message }, 500);
-    }
-  });
-
   // ── 用户档案（user.md）──
+  //
+  // user.md 属于使用者本人，不属于任何一个 agent：它存在 engine.userDir，所有
+  // agent 共用同一份。所以这两条路由没有 agentId 参数，也不该被要求加上——
+  // 这里没有"归属哪个 agent"的问题需要回答。
 
   // 读取 user.md 内容
   route.get("/user-profile", async (c) => {
@@ -443,40 +427,6 @@ export function createConfigRoute(engine: any) {
       return c.json({ ok: true });
     } catch (err) {
       debugLog()?.error("api", `PUT /api/user-profile failed: ${err.message}`);
-      return c.json({ error: err.message }, 500);
-    }
-  });
-
-  // ── 置顶记忆（pinned.md）──
-
-  // 读取 pinned.md，解析为逐条数组
-  route.get("/pinned", async (c) => {
-    try {
-      const pins = readPinnedMemoryItems(resolveAgent(engine, c).agentDir)
-        .map(item => item.content);
-      return c.json({ pins });
-    } catch (err) {
-      return c.json({ error: err.message }, 500);
-    }
-  });
-
-  // 保存 pinned.md（覆盖写入），触发 system prompt 重建
-  route.put("/pinned", async (c) => {
-    try {
-      const body = await safeJson(c);
-      const { pins } = body;
-      if (!Array.isArray(pins)) {
-        return c.json({ error: "pins must be an array" }, 400);
-      }
-      const agent = resolveAgentStrict(engine, c);
-      replacePinnedMemoryItems(agent.agentDir, pins.filter(p => typeof p === "string"));
-      debugLog()?.log("api", `PUT /api/pinned (${pins.length} items)`);
-      // 触发 system prompt 重建（updateConfig 内部会重新读取 pinned.md）
-      await engine.updateConfig({}, { agentId: agent.id });
-      return c.json({ ok: true });
-    } catch (err) {
-      if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
-      debugLog()?.error("api", `PUT /api/pinned failed: ${err.message}`);
       return c.json({ error: err.message }, 500);
     }
   });

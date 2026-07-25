@@ -6206,11 +6206,6 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "server/routes/config.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "server/routes/agents.ts",
           "kind": "import-statement"
         },
@@ -6220,7 +6215,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/tools/pinned-memory.ts (import-statement); server/routes/config.ts (import-statement); server/routes/agents.ts (import-statement); +1 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/tools/pinned-memory.ts (import-statement); server/routes/agents.ts (import-statement); server/routes/settings-snapshot.ts (import-statement)."
     },
     {
       "path": "lib/memory/prompts/compile.ts",
@@ -6655,11 +6650,6 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "server/routes/config.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "server/routes/auth.ts",
           "kind": "import-statement"
         },
@@ -6684,7 +6674,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/session-snapshot-side-task-runner.ts (import-statement); core/session-compactor.ts (import-statement); +47 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/session-snapshot-side-task-runner.ts (import-statement); core/session-compactor.ts (import-statement); +46 more importer(s)."
     },
     {
       "path": "lib/pi-sdk/search-tools.ts",

@@ -8092,7 +8092,7 @@
     },
     {
       "sourceFile": "server/routes/config.ts",
-      "line": 502,
+      "line": 452,
       "kind": "persistent-store-constructor",
       "excerpt": "new FactStore(dbPath)",
       "reason": "Constructs or migrates a FactStore.",
