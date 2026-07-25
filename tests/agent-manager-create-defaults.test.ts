@@ -62,6 +62,7 @@ vi.mock("../core/llm-utils.js", () => ({
 
 // Import AFTER vi.mock calls so the mocks take effect.
 import { AgentManager } from "../core/agent-manager.ts";
+import { resolvePersonaSource } from "../core/persona-source.ts";
 
 // ── Test suite ─────────────────────────────────────────────────
 describe("AgentManager.createAgent default skills.enabled", () => {
@@ -232,20 +233,49 @@ describe("AgentManager.createAgent default skills.enabled", () => {
     expect(cfg.models.chat).toEqual({ id: "test-model", provider: "test-provider" });
   });
 
-  it("keeps identity template placeholders for newly created agents", async () => {
+  it("does not seed identity.md/ishiki.md to disk for newly created agents (lazy materialization)", async () => {
     fs.mkdirSync(path.join(productDir, "identity-templates"), { recursive: true });
     fs.writeFileSync(
       path.join(productDir, "identity-templates", "hanako.md"),
       "# {{agentName}}\n\n{{userName}}的个人助手。\n",
       "utf-8",
     );
+    fs.mkdirSync(path.join(productDir, "ishiki-templates"), { recursive: true });
+    fs.writeFileSync(
+      path.join(productDir, "ishiki-templates", "hanako.md"),
+      "Ishiki template\n",
+      "utf-8",
+    );
 
     const { id: newId } = await mgr.createAgent({ name: "TemplateAgent", yuan: "hanako" });
 
-    const identity = fs.readFileSync(path.join(agentsDir, newId, "identity.md"), "utf-8");
+    // identity.md / ishiki.md 不再在创建时落盘：未定制人格靠运行时回落到
+    // lib 模板（core/persona-source.ts），不是靠此刻就把模板拷进 agentDir。
+    expect(fs.existsSync(path.join(agentsDir, newId, "identity.md"))).toBe(false);
+    expect(fs.existsSync(path.join(agentsDir, newId, "ishiki.md"))).toBe(false);
+
+    // 运行时回落链仍必须解析到同一份模板内容（带原始占位符，留给
+    // system-prompt 组装阶段渲染，不在这里提前替换）。
+    const { content: identity, fromTemplate: identityFromTemplate } = resolvePersonaSource({
+      agentDir: path.join(agentsDir, newId),
+      productDir,
+      yuanType: "hanako",
+      locale: "zh-CN",
+      kind: "identity",
+    });
+    expect(identityFromTemplate).toBe(true);
     expect(identity).toContain("# {{agentName}}");
     expect(identity).toContain("{{userName}}的个人助手");
-    expect(identity).not.toContain("TemplateAgent的个人助手");
+
+    const { content: ishiki, fromTemplate: ishikiFromTemplate } = resolvePersonaSource({
+      agentDir: path.join(agentsDir, newId),
+      productDir,
+      yuanType: "hanako",
+      locale: "zh-CN",
+      kind: "ishiki",
+    });
+    expect(ishikiFromTemplate).toBe(true);
+    expect(ishiki).toContain("Ishiki template");
   });
 
   it("defaults patrol to disabled with a 31 minute interval for newly created agents", async () => {
@@ -338,6 +368,30 @@ describe("AgentManager.createAgent default skills.enabled", () => {
     expect(agents.find(a => a.id === "memory-off").memoryMasterEnabled).toBe(false);
     expect(agents.find(a => a.id === "memory-on").memoryMasterEnabled).toBe(true);
     expect(agents.find(a => a.id === "memory-on").avatarRevision).toBeNull();
+  });
+
+  it("falls back to the template identity summary in the agent list when identity.md is not seeded", async () => {
+    fs.mkdirSync(path.join(productDir, "identity-templates"), { recursive: true });
+    fs.writeFileSync(
+      path.join(productDir, "identity-templates", "hanako.md"),
+      "# {{agentName}}\n\nA quiet template summary line.\n",
+      "utf-8",
+    );
+    // 惰性材料化后新建 agent 不会有 identity.md 落盘；花名册摘要必须走同一条
+    // 回落链解析出模板内容，不能因为 fs.readFileSync 抛 ENOENT 就留空。
+    fs.mkdirSync(path.join(agentsDir, "no-identity-file"), { recursive: true });
+    fs.writeFileSync(
+      path.join(agentsDir, "no-identity-file", "config.yaml"),
+      "agent:\n  name: NoIdentityFile\n  yuan: hanako\n",
+      "utf-8",
+    );
+    expect(fs.existsSync(path.join(agentsDir, "no-identity-file", "identity.md"))).toBe(false);
+
+    const agents = mgr.listAgents();
+    const entry = agents.find(a => a.id === "no-identity-file");
+
+    expect(entry.identity).not.toBe("");
+    expect(entry.identity).toContain("A quiet template summary line.");
   });
 
   it("returns a stable avatar revision and changes it only when avatar metadata changes", () => {

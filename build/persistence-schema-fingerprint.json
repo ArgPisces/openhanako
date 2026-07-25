@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:fb0529cfcb51045f4517beae3b365a6298e933ae0ac628f636594e69e1ff6df0",
+  "payloadFingerprint": "sha256:d04812775e018c30b96fbef0db51424dfd2b8cc1d24d83728ec8c34a1f286143",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Locale-resolution fix in core/agent.ts, core/agent-manager.ts, and core/first-run.ts shifted line numbers of existing fs persistence sites; no store, schema, or DDL changes.",
-    "payloadFingerprint": "sha256:fb0529cfcb51045f4517beae3b365a6298e933ae0ac628f636594e69e1ff6df0"
+    "compatibilityReason": "Lazy persona materialization (identity.md/ishiki.md no longer seeded at agent creation) shifted line numbers of existing fs persistence sites in core/agent-manager.ts, core/first-run.ts, server/routes/agents.ts, server/routes/settings-snapshot.ts, and lib/character-cards/service.ts; no store, schema, or DDL changes. (server/routes/config.ts's legacy identity/ishiki routes are left as-is here and removed in the following commit.)",
+    "payloadFingerprint": "sha256:d04812775e018c30b96fbef0db51424dfd2b8cc1d24d83728ec8c34a1f286143"
   },
   "schemas": [
     {
@@ -2961,7 +2961,7 @@
       "contract": "agent config and authored Markdown/image profile protocol",
       "kind": "directory-contract",
       "module": "core/agent-manager.ts",
-      "sourceHash": "sha256:85b686ecd955ced45455b26e9a500143631030997aaf3c17c935ff8328aaaa29",
+      "sourceHash": "sha256:aad94aacf245a3ff571d1dd137d01f32c5f16dcabde217f35a35f7724c5910f9",
       "storeId": "agent-profile"
     },
     {
@@ -2975,7 +2975,7 @@
       "contract": "token-scoped import plan/package and export package protocol",
       "kind": "directory-contract",
       "module": "lib/character-cards/service.ts",
-      "sourceHash": "sha256:fd28f9801d4185a1258a1b72ded6042c12d7adaa1d71eb7988a183560d43f5ae",
+      "sourceHash": "sha256:e6027268bf69979f71c410a457793863fad7780a5af29454ab7f0075476d173c",
       "storeId": "character-card-staging"
     },
     {
@@ -3420,7 +3420,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 247,
+      "line": 248,
       "reason": "Constructs an ActivityStore for an agent.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "desk-activity"
@@ -3428,7 +3428,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 568,
+      "line": 578,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3436,7 +3436,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 584,
+      "line": 594,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3444,7 +3444,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 606,
+      "line": 616,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3452,7 +3452,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 607,
+      "line": 617,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3460,7 +3460,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 608,
+      "line": 618,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3468,7 +3468,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 609,
+      "line": 619,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3476,7 +3476,15 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 645,
+      "line": 655,
+      "reason": "Creates, rolls back, or edits agent profile material.",
+      "sourceFile": "core/agent-manager.ts",
+      "storeId": "agent-profile"
+    },
+    {
+      "exemptionId": null,
+      "kind": "copy-file",
+      "line": 679,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3484,22 +3492,6 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 671,
-      "reason": "Creates, rolls back, or edits agent profile material.",
-      "sourceFile": "core/agent-manager.ts",
-      "storeId": "agent-profile"
-    },
-    {
-      "exemptionId": null,
-      "kind": "copy-file",
-      "line": 681,
-      "reason": "Creates, rolls back, or edits agent profile material.",
-      "sourceFile": "core/agent-manager.ts",
-      "storeId": "agent-profile"
-    },
-    {
-      "exemptionId": null,
-      "kind": "copy-file",
       "line": 690,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
@@ -3507,16 +3499,8 @@
     },
     {
       "exemptionId": null,
-      "kind": "write-file",
-      "line": 701,
-      "reason": "Creates, rolls back, or edits agent profile material.",
-      "sourceFile": "core/agent-manager.ts",
-      "storeId": "agent-profile"
-    },
-    {
-      "exemptionId": null,
       "kind": "copy-file",
-      "line": 714,
+      "line": 703,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3524,7 +3508,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 722,
+      "line": 711,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3532,7 +3516,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 944,
+      "line": 933,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3540,7 +3524,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 335,
+      "line": 336,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3548,7 +3532,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 336,
+      "line": 337,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-facts-sqlite"
@@ -3556,7 +3540,7 @@
     {
       "exemptionId": null,
       "kind": "database-open",
-      "line": 346,
+      "line": 347,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-facts-sqlite"
@@ -3564,7 +3548,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 361,
+      "line": 362,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3572,7 +3556,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 365,
+      "line": 366,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3580,7 +3564,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 494,
+      "line": 495,
       "reason": "Constructs an agent or studio CronStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "cron-automation"
@@ -4067,24 +4051,8 @@
     },
     {
       "exemptionId": "cross-store-first-run-bootstrap",
-      "kind": "write-file",
-      "line": 234,
-      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
-      "sourceFile": "core/first-run.ts",
-      "storeId": null
-    },
-    {
-      "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "copy-file",
-      "line": 246,
-      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
-      "sourceFile": "core/first-run.ts",
-      "storeId": null
-    },
-    {
-      "exemptionId": "cross-store-first-run-bootstrap",
-      "kind": "copy-file",
-      "line": 255,
+      "line": 240,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4092,7 +4060,7 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "mkdir",
-      "line": 266,
+      "line": 251,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -6428,7 +6396,7 @@
     {
       "exemptionId": "character-card-copy-helper",
       "kind": "mkdir",
-      "line": 454,
+      "line": 455,
       "reason": "The file-local copy helper is flow-dependent: callers target either token-scoped card staging or an explicitly registered skill destination.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": null
@@ -6436,7 +6404,7 @@
     {
       "exemptionId": "character-card-copy-helper",
       "kind": "copy-file",
-      "line": 455,
+      "line": 456,
       "reason": "The file-local copy helper is flow-dependent: callers target either token-scoped card staging or an explicitly registered skill destination.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": null
@@ -6444,7 +6412,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 527,
+      "line": 528,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6452,7 +6420,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 561,
+      "line": 562,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "agent-facts-sqlite"
@@ -6460,7 +6428,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 604,
+      "line": 605,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6468,7 +6436,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 610,
+      "line": 611,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6476,7 +6444,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 615,
+      "line": 616,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6484,7 +6452,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 636,
+      "line": 637,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6492,7 +6460,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 643,
+      "line": 644,
       "reason": "Installs, rolls back, or renames a skill imported from a character card.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "skill-state"
@@ -6500,7 +6468,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 657,
+      "line": 658,
       "reason": "Installs, rolls back, or renames a skill imported from a character card.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "skill-state"
@@ -6508,7 +6476,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 670,
+      "line": 671,
       "reason": "Installs, rolls back, or renames a skill imported from a character card.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "skill-state"
@@ -6516,7 +6484,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 906,
+      "line": 913,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6524,7 +6492,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 908,
+      "line": 915,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6532,7 +6500,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 921,
+      "line": 928,
       "reason": "Writes or removes a token-scoped character-card import/export plan or package.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "character-card-staging"
@@ -6540,7 +6508,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 938,
+      "line": 945,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "lib/character-cards/service.ts",
       "storeId": "agent-facts-sqlite"
@@ -8492,7 +8460,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 418,
+      "line": 442,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8500,7 +8468,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 420,
+      "line": 444,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8508,7 +8476,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 422,
+      "line": 446,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8516,7 +8484,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 435,
+      "line": 459,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8524,7 +8492,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 700,
+      "line": 723,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8532,7 +8500,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 739,
+      "line": 761,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8540,7 +8508,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 777,
+      "line": 799,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"

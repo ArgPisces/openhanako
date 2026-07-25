@@ -27,6 +27,7 @@ import { relativePathInsideBase } from "./message-utils.ts";
 import { detachAgentFromBundles } from "../lib/skill-bundles/store.ts";
 import { assertKnownYuan, getAgentConfigRepairState } from "./yuan-registry.ts";
 import { assertValidAgentId, isValidAgentId } from "../shared/agent-id.ts";
+import { resolvePersonaLocale, resolvePersonaSource } from "./persona-source.ts";
 
 const log = createModuleLogger("agent-mgr");
 const DELETED_AGENT_TOMBSTONE = ".deleted-agent.json";
@@ -495,7 +496,16 @@ export class AgentManager {
         const cfg = safeReadYAMLSync(configPath, {}, YAML);
         let identity = "";
         try {
-          const idMd = fs.readFileSync(path.join(this._d.agentsDir, entry.name, "identity.md"), "utf-8");
+          // identity.md 不再保证落盘（惰性材料化）：没有活跃 Agent 实例可用时，
+          // 直接用 core/persona-source.ts 的同一条回落链现读，未定制 agent 在
+          // 花名册里必须显示其实际生效的模板摘要，不能空白。
+          const { content: idMd } = resolvePersonaSource({
+            agentDir: path.join(this._d.agentsDir, entry.name),
+            productDir: this._d.productDir,
+            yuanType: cfg.agent?.yuan || "hanako",
+            locale: resolvePersonaLocale(cfg.locale, globalLocale),
+            kind: "identity",
+          });
           const renderedIdMd = renderIdentityTemplateForList(idMd, cfg, entry.name, globalLocale);
           const lines = renderedIdMd.split("\n").filter(l => l.trim() && !l.startsWith("#"));
           identity = lines[0]?.trim() || "";
@@ -648,38 +658,17 @@ export class AgentManager {
       "utf-8",
     );
 
-    // 与 personality/buildSystemPrompt 的 fallback 链保持一致：
-    // yuan 专属（locale 细分） → yuan 专属（通用语言） → 通用 example。
-    // 保证选不同 yuan 时写入的是该 yuan 的默认内容，而不是通用兜底。
-    // currentAgent 存在时走它的 resolveLocale()（config → 全局 prefs → "en"）；
-    // 没有活跃 agent 实例时直接查一次全局 prefs，读不到就落 "en"，与
-    // resolveLocale 末端语义保持一致。
+    // identity.md / ishiki.md 不再在创建 agent 时播种落盘（惰性材料化）：
+    // 缺失时运行时按 agent.resolveLocale() 现选 lib 模板（core/persona-source.ts
+    // 的 resolvePersonaSource，与 core/agent.ts personality getter 同一条回落
+    // 链），用户日后改语言，未定制人格自动跟着换。文件只在用户于设置页编辑
+    // 保存时才落盘。public-ishiki.md 的消费侧（Agent._readPublicIshiki）本来
+    // 就有独立回落链，不受此改动影响，这里继续按原策略播种。
     const isZh = String(
       currentAgent?.resolveLocale?.() || this._d.getEngine?.()?.getLocale?.() || "en"
     ).startsWith("zh");
     const langDir = isZh ? "" : "en/";
     const firstExisting = (paths) => paths.find((p) => fs.existsSync(p));
-
-    // identity.md
-    const identitySrc = firstExisting([
-      path.join(this._d.productDir, "identity-templates", `${langDir}${yuanType}.md`),
-      path.join(this._d.productDir, "identity-templates", `${yuanType}.md`),
-      path.join(this._d.productDir, "identity.example.md"),
-    ]);
-    if (identitySrc) {
-      const tmpl = fs.readFileSync(identitySrc, "utf-8");
-      fs.writeFileSync(path.join(agentDir, "identity.md"), tmpl, "utf-8");
-    }
-
-    // ishiki.md
-    const ishikiSrc = firstExisting([
-      path.join(this._d.productDir, "ishiki-templates", `${langDir}${yuanType}.md`),
-      path.join(this._d.productDir, "ishiki-templates", `${yuanType}.md`),
-      path.join(this._d.productDir, "ishiki.example.md"),
-    ]);
-    if (ishikiSrc) {
-      fs.copyFileSync(ishikiSrc, path.join(agentDir, "ishiki.md"));
-    }
 
     // public-ishiki.md（对外意识模板）
     const publicIshikiSrc = firstExisting([

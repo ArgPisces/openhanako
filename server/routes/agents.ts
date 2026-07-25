@@ -10,10 +10,10 @@
  * POST   /api/agents/:id/avatar   — 上传指定助手的头像
  * GET    /api/agents/:id/config   — 读取指定助手的 config
  * PUT    /api/agents/:id/config   — 写入指定助手的 config
- * GET    /api/agents/:id/identity — 读取 identity.md
- * PUT    /api/agents/:id/identity — 写入 identity.md
- * GET    /api/agents/:id/ishiki   — 读取 ishiki.md
- * PUT    /api/agents/:id/ishiki   — 写入 ishiki.md
+ * GET    /api/agents/:id/identity — 读取 identity.md（缺失时回落模板，附 fromTemplate）
+ * PUT    /api/agents/:id/identity — 写入 identity.md（用户显式定制才落盘）
+ * GET    /api/agents/:id/ishiki   — 读取 ishiki.md（缺失时回落模板，附 fromTemplate）
+ * PUT    /api/agents/:id/ishiki   — 写入 ishiki.md（用户显式定制才落盘）
  * GET    /api/agents/:id/pinned   — 读取 pinned.md
  * PUT    /api/agents/:id/pinned   — 写入 pinned.md
  * GET    /api/agents/:id/experience — 读取经验（合并）
@@ -66,6 +66,7 @@ function hideDisabledGlobalToolsForSettings(toolNames, engine) {
 import { assertAgentConfigPatchYuan } from "../../core/yuan-registry.ts";
 import { createModuleLogger } from "../../lib/debug-log.ts";
 import { assertValidAgentId } from "../../shared/agent-id.ts";
+import { resolvePersonaLocale, resolvePersonaSource } from "../../core/persona-source.ts";
 
 const log = createModuleLogger("agents");
 
@@ -73,6 +74,29 @@ const log = createModuleLogger("agents");
 
 function agentDir(engine, id) {
   return path.join(engine.agentsDir, id);
+}
+
+/**
+ * 读取 identity.md / ishiki.md 的实际生效内容（agentDir 落盘文件优先，缺失
+ * 时按 yuan + locale 回落到 lib 模板）。优先走已加载的 Agent 实例（复用
+ * agent.resolveLocale()）；非焦点 agent 可能尚未加载进 engine 内存，退化为
+ * 直接读 config.yaml + 全局 locale，与 core/agent-manager.ts _scanAgentList
+ * 的降级路径同一条链条，绝不因为 agent 未加载而抛错或返回空串。
+ */
+function readAgentPersonaSource(engine, id, kind) {
+  const agent = typeof engine.getAgent === "function" ? engine.getAgent(id) : null;
+  if (agent) {
+    return kind === "identity" ? agent.readIdentitySource() : agent.readIshikiSource();
+  }
+  const cfgPath = path.join(agentDir(engine, id), "config.yaml");
+  const cfg = YAML.load(fsSync.readFileSync(cfgPath, "utf-8")) || {};
+  return resolvePersonaSource({
+    agentDir: agentDir(engine, id),
+    productDir: engine.productDir,
+    yuanType: cfg.agent?.yuan || "hanako",
+    locale: resolvePersonaLocale(cfg.locale, engine.getLocale?.()),
+    kind,
+  });
 }
 
 function hasOwn(value, key) {
@@ -678,10 +702,9 @@ export function createAgentsRoute(engine) {
       return c.json({ error: "agent not found" }, 404);
     }
     try {
-      const content = await fs.readFile(path.join(agentDir(engine, id), "identity.md"), "utf-8");
-      return c.json({ content });
+      const { content, fromTemplate } = readAgentPersonaSource(engine, id, "identity");
+      return c.json({ content, fromTemplate });
     } catch (err) {
-      if (err.code === "ENOENT") return c.json({ content: "" });
       return c.json({ error: err.message }, 500);
     }
   });
@@ -717,10 +740,9 @@ export function createAgentsRoute(engine) {
       return c.json({ error: "agent not found" }, 404);
     }
     try {
-      const content = await fs.readFile(path.join(agentDir(engine, id), "ishiki.md"), "utf-8");
-      return c.json({ content });
+      const { content, fromTemplate } = readAgentPersonaSource(engine, id, "ishiki");
+      return c.json({ content, fromTemplate });
     } catch (err) {
-      if (err.code === "ENOENT") return c.json({ content: "" });
       return c.json({ error: err.message }, 500);
     }
   });

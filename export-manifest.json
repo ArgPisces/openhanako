@@ -82,6 +82,7 @@
     "core/model-sync.ts",
     "core/mount-aware-file-service.ts",
     "core/output-length-contract.ts",
+    "core/persona-source.ts",
     "core/platform-prompt.ts",
     "core/plugin-asset-session-service.ts",
     "core/plugin-config.ts",

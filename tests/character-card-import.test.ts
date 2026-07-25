@@ -44,14 +44,17 @@ describe("character-card import service", () => {
     packageDir = path.join(tempDir, "package");
     skillsDir = path.join(tempDir, "skills");
     agentsDir = path.join(tempDir, "agents");
+    const productDir = path.join(tempDir, "product");
     fs.mkdirSync(packageDir, { recursive: true });
     fs.mkdirSync(skillsDir, { recursive: true });
     fs.mkdirSync(agentsDir, { recursive: true });
+    fs.mkdirSync(productDir, { recursive: true });
 
     factStore = { importAll: vi.fn() };
     engine = {
       hanakoHome: tempDir,
       agentsDir,
+      productDir,
       userSkillsDir: skillsDir,
       skillsDir,
       cwd: tempDir,
@@ -459,6 +462,40 @@ describe("character-card import service", () => {
     expect(fs.readFileSync(path.join(outDir, "skills/writer/SKILL.md"), "utf-8")).toContain("exported skill");
     expect(fs.existsSync(path.join(outDir, "assets/avatar.png"))).toBe(true);
     expect(fs.existsSync(path.join(outDir, "assets/card-back.png"))).toBe(true);
+  });
+
+  it("exports the template-resolved identity/ishiki content when the agent has never customized them (lazy materialization)", async () => {
+    const agentDir = path.join(agentsDir, "hana");
+    fs.mkdirSync(path.join(agentDir, "memory"), { recursive: true });
+    fs.writeFileSync(path.join(agentDir, "config.yaml"), [
+      "agent:",
+      "  name: Hana",
+      "  yuan: hanako",
+    ].join("\n"), "utf-8");
+    // identity.md / ishiki.md 故意不写：agent 从未定制过人格，惰性材料化后
+    // agentDir 下本来就不会有这两个文件。
+    expect(fs.existsSync(path.join(agentDir, "identity.md"))).toBe(false);
+    expect(fs.existsSync(path.join(agentDir, "ishiki.md"))).toBe(false);
+    fs.mkdirSync(path.join(engine.productDir, "identity-templates"), { recursive: true });
+    fs.writeFileSync(path.join(engine.productDir, "identity-templates", "hanako.md"), "Template identity content", "utf-8");
+    fs.mkdirSync(path.join(engine.productDir, "ishiki-templates"), { recursive: true });
+    fs.writeFileSync(path.join(engine.productDir, "ishiki-templates", "hanako.md"), "Template ishiki content", "utf-8");
+    engine.getAgent = vi.fn((id) => id === "hana"
+      ? { id: "hana", agentDir, factStore: { exportAll: vi.fn(() => []) } }
+      : null);
+
+    const service = createCharacterCardService(engine);
+    const exported = await service.exportAgentPackage("hana", { targetDir: tempDir });
+
+    const outDir = path.join(tempDir, "unzipped-lazy-export");
+    fs.mkdirSync(outDir);
+    await extractZip(exported.filePath, outDir);
+    const card = JSON.parse(fs.readFileSync(path.join(outDir, "card.json"), "utf-8"));
+
+    // 导出必须捕捉 agent 此刻实际生效的人格（回落到模板），空字符串会让导出
+    // 的角色卡本身失真。
+    expect(card.prompts.identity).toBe("Template identity content");
+    expect(card.prompts.ishiki).toBe("Template ishiki content");
   });
 
   it("defaults export output to the assistant desk directory and avoids overwriting existing cards", async () => {

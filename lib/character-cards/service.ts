@@ -20,6 +20,7 @@ import { relativePathInsideBase } from "../../core/message-utils.ts";
 import { fromRoot } from "../../shared/hana-root.ts";
 import { loadSkillBundleStore, recordSkillBundle } from "../skill-bundles/store.ts";
 import { isValidAgentId } from "../../shared/agent-id.ts";
+import { resolvePersonaLocale, resolvePersonaSource } from "../../core/persona-source.ts";
 
 const VALID_YUAN = new Set(["hanako", "butter", "ming", "kong"]);
 const CARD_FILE_NAMES = [
@@ -687,8 +688,14 @@ export function createCharacterCardService(engine) {
     const config = YAML.load(fs.readFileSync(configPath, "utf-8")) || {};
     const yuan = VALID_YUAN.has(config?.agent?.yuan) ? config.agent.yuan : "hanako";
     const name = trimString(config?.agent?.name) || agent?.agentName || agentId;
-    const identity = readOptionalText(path.join(agentDir, "identity.md"));
-    const ishiki = readOptionalText(path.join(agentDir, "ishiki.md"));
+    // identity.md / ishiki.md 惰性材料化后可能没有落盘文件；导出必须捕捉
+    // agent 此刻实际生效的人格（回落到模板，见 core/persona-source.ts），
+    // 空字符串会让导出的角色卡本身失真。locale 优先走已加载 Agent 实例的
+    // resolveLocale()，agent 未加载进内存时退化为同一条链（config.locale →
+    // 全局 prefs → "en"）。
+    const locale = agent?.resolveLocale?.() ?? resolvePersonaLocale(config?.locale, engine.getLocale?.());
+    const identity = resolvePersonaSource({ agentDir, productDir: engine.productDir, yuanType: yuan, locale, kind: "identity" }).content;
+    const ishiki = resolvePersonaSource({ agentDir, productDir: engine.productDir, yuanType: yuan, locale, kind: "ishiki" }).content;
     const publicIshiki = readOptionalText(path.join(agentDir, "public-ishiki.md"));
     const description = readOptionalDescription(agentDir);
     const memoryFacts = exportMemoryFactsForAgent(agent, agentDir);

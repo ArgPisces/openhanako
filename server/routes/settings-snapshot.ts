@@ -20,6 +20,7 @@ import { agentExists, validateId } from "../utils/validation.ts";
 import { readAuthPrincipal } from "../http/capability-guard.ts";
 import { isLocalOwnerPrincipal } from "../http/route-security.ts";
 import { readUserProfile } from "../../lib/user-profile-store.ts";
+import { resolvePersonaLocale, resolvePersonaSource } from "../../core/persona-source.ts";
 
 function agentDir(engine: any, id: string) {
   return path.join(engine.agentsDir, id);
@@ -208,11 +209,21 @@ export function createSettingsSnapshotRoute(engine: any, options: Record<string,
       const snapshotAgent = runtimeAgent?.config
         ? runtimeAgent
         : { ...(runtimeAgent || {}), id: agentId, config };
-      const [identity, ishiki, publicIshiki] = await Promise.all([
-        readTextFile(path.join(baseDir, "identity.md")),
-        readTextFile(path.join(baseDir, "ishiki.md")),
-        readTextFile(path.join(baseDir, "public-ishiki.md")),
-      ]);
+      // identity.md / ishiki.md 惰性材料化后可能没有落盘文件；快照必须反映
+      // agent 此刻实际生效的内容（回落到模板，见 core/persona-source.ts），
+      // 而不是空字符串。locale 优先走已加载 Agent 实例的 resolveLocale()，
+      // 未加载时退化为同一条链（config.locale → 全局 prefs → "en"）。
+      const configRecord = config as Record<string, any>;
+      const personaLocale = runtimeAgent?.resolveLocale?.()
+        ?? resolvePersonaLocale(configRecord.locale, engine.getLocale?.());
+      const personaYuanType = configRecord.agent?.yuan || "hanako";
+      const identity = resolvePersonaSource({
+        agentDir: baseDir, productDir: engine.productDir, yuanType: personaYuanType, locale: personaLocale, kind: "identity",
+      }).content;
+      const ishiki = resolvePersonaSource({
+        agentDir: baseDir, productDir: engine.productDir, yuanType: personaYuanType, locale: personaLocale, kind: "ishiki",
+      }).content;
+      const publicIshiki = await readTextFile(path.join(baseDir, "public-ishiki.md"));
       const canSeeLocalPaths = isLocalOwnerPrincipal(readAuthPrincipal(c));
       return c.json({
         agentId,

@@ -223,30 +223,15 @@ function seedDefaultAgent(agentsDir, productDir, userDir) {
   const langDir = isZh ? "" : "en/";
   const firstExisting = (paths) => paths.find((p) => fs.existsSync(p));
 
-  // identity.md 保留动态占位符，在 system prompt 组装时按当前 config 渲染。
-  const identitySrc = firstExisting([
-    path.join(productDir, "identity-templates", `${langDir}${agentId}.md`),
-    path.join(productDir, "identity-templates", `${agentId}.md`),
-    path.join(productDir, "identity.example.md"),
-  ]);
-  if (identitySrc) {
-    const tmpl = fs.readFileSync(identitySrc, "utf-8");
-    fs.writeFileSync(path.join(agentDir, "identity.md"), tmpl, "utf-8");
-  }
+  // identity.md / ishiki.md 不再在首启播种时落盘（惰性材料化）：缺失时运行时
+  // 按 agent.resolveLocale() 现选 lib 模板（core/persona-source.ts 的
+  // resolvePersonaSource，与 core/agent.ts personality getter 同一条回落
+  // 链），用户日后改语言，未定制人格自动跟着换。文件只在用户于设置页编辑
+  // 保存时才落盘。yuan 由 buildSystemPrompt 实时从 lib/yuan/ 读取，同样无需
+  // 复制。
 
-  // yuan 由 buildSystemPrompt 实时从 lib/yuan/ 读取，无需复制
-
-  // ishiki.md
-  const ishikiSrc = firstExisting([
-    path.join(productDir, "ishiki-templates", `${langDir}${agentId}.md`),
-    path.join(productDir, "ishiki-templates", `${agentId}.md`),
-    path.join(productDir, "ishiki.example.md"),
-  ]);
-  if (ishikiSrc) {
-    fs.copyFileSync(ishikiSrc, path.join(agentDir, "ishiki.md"));
-  }
-
-  // public-ishiki.md（对外意识模板）
+  // public-ishiki.md（对外意识模板）：消费侧 Agent._readPublicIshiki 本来就
+  // 有独立回落链，不受此改动影响，这里继续按原策略播种。
   const publicIshikiSrc = firstExisting([
     path.join(productDir, "public-ishiki-templates", `${langDir}${agentId}.md`),
     path.join(productDir, "public-ishiki-templates", `${agentId}.md`),

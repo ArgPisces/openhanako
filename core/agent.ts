@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { loadConfig, saveConfig } from "../lib/memory/config-loader.ts";
 import { safeReadFile, safeReadJSON } from "../shared/safe-fs.ts";
+import { resolvePersonaSource } from "./persona-source.ts";
 import { FactStore } from "../lib/memory/fact-store.ts";
 import { SessionSummaryManager } from "../lib/memory/session-summary.ts";
 import { createMemoryTicker } from "../lib/memory/memory-ticker.ts";
@@ -1080,46 +1081,54 @@ export class Agent {
   //  System Prompt 组装
   // ════════════════════════════
 
+  /**
+   * 读取 identity.md 的实际生效内容：agentDir 落盘文件（用户定制）优先，
+   * 缺失时按当前 yuan + locale 回落到 lib 模板。identity.md 不再在创建
+   * agent 时播种落盘，这是唯一的解析入口——personality getter、
+   * descriptionSource getter、以及 server 路由都必须消费它，不许各自复制
+   * 回落顺序。
+   */
+  readIdentitySource() {
+    return resolvePersonaSource({
+      agentDir: this.agentDir,
+      productDir: this.productDir,
+      yuanType: this._config?.agent?.yuan || "hanako",
+      locale: this.resolveLocale(),
+      kind: "identity",
+    });
+  }
+
+  /** 读取 ishiki.md 的实际生效内容，回落规则同 readIdentitySource()。 */
+  readIshikiSource() {
+    return resolvePersonaSource({
+      agentDir: this.agentDir,
+      productDir: this.productDir,
+      yuanType: this._config?.agent?.yuan || "hanako",
+      locale: this.resolveLocale(),
+      kind: "ishiki",
+    });
+  }
+
   /** 返回纯人格 prompt（identity + yuan + ishiki），不含记忆、用户档案等 */
   get personality() {
-    const isZh = String(this.resolveLocale()).startsWith("zh");
     const fill = (text) => text
       .replace(/\{\{userName\}\}/g, this.userName)
       .replace(/\{\{agentName\}\}/g, this.agentName)
       .replace(/\{\{agentId\}\}/g, this.id);
-    const readFile = (p) => safeReadFile(p, "");
-    const langDir = isZh ? "" : "en/";
-    const yuanType = this._config?.agent?.yuan || "hanako";
-    const identityMd = readFile(path.join(this.agentDir, "identity.md"))
-      || readFile(path.join(this.productDir, "identity-templates", `${langDir}${yuanType}.md`))
-      || readFile(path.join(this.productDir, "identity-templates", `${yuanType}.md`))
-      || readFile(path.join(this.productDir, "identity.example.md"));
+    const identityMd = this.readIdentitySource().content;
     const yuanMd = this._readYuan();
-    const ishikiMd = readFile(path.join(this.agentDir, "ishiki.md"))
-      || readFile(path.join(this.productDir, "ishiki-templates", `${langDir}${yuanType}.md`))
-      || readFile(path.join(this.productDir, "ishiki-templates", `${yuanType}.md`))
-      || readFile(path.join(this.productDir, "ishiki.example.md"));
+    const ishikiMd = this.readIshikiSource().content;
     return fill(identityMd) + "\n\n" + fill(yuanMd || "") + "\n\n" + fill(ishikiMd);
   }
 
   /** 返回花名册描述生成用的人格来源，不包含 yuan 输出协议。 */
   get descriptionSource() {
-    const isZh = String(this.resolveLocale()).startsWith("zh");
     const fill = (text) => text
       .replace(/\{\{userName\}\}/g, this.userName)
       .replace(/\{\{agentName\}\}/g, this.agentName)
       .replace(/\{\{agentId\}\}/g, this.id);
-    const readFile = (p) => safeReadFile(p, "");
-    const langDir = isZh ? "" : "en/";
-    const yuanType = this._config?.agent?.yuan || "hanako";
-    const identityMd = readFile(path.join(this.agentDir, "identity.md"))
-      || readFile(path.join(this.productDir, "identity-templates", `${langDir}${yuanType}.md`))
-      || readFile(path.join(this.productDir, "identity-templates", `${yuanType}.md`))
-      || readFile(path.join(this.productDir, "identity.example.md"));
-    const ishikiMd = readFile(path.join(this.agentDir, "ishiki.md"))
-      || readFile(path.join(this.productDir, "ishiki-templates", `${langDir}${yuanType}.md`))
-      || readFile(path.join(this.productDir, "ishiki-templates", `${yuanType}.md`))
-      || readFile(path.join(this.productDir, "ishiki.example.md"));
+    const identityMd = this.readIdentitySource().content;
+    const ishikiMd = this.readIshikiSource().content;
     return fill(identityMd) + "\n\n" + fill(ishikiMd);
   }
 
