@@ -261,6 +261,26 @@ export class Agent {
    * @param {(bareId: string, agentConfig: object) => object} [resolveModel] - 统一模型解析回调
    */
   /**
+   * 解析这个 agent 的 prompt 语言：config.locale（显式手工覆盖）→ 全局 prefs
+   * 的 locale → "en"。agent 的 config.yaml 没有任何代码会写 locale 字段，缺失
+   * 是常态而非异常；不写回 config，否则会把用户日后在设置里切换的全局语言
+   * 锁死在这个 agent 身上。两级都缺时落 "en"：没有任何信号时给更保守的默认，
+   * 而不是猜中文。
+   *
+   * 返回原始 locale 字符串（如 "zh-CN"、"ja"），不做归一化——各读点仍用
+   * `.startsWith("zh")` 做模板二分：locale 以 "zh" 开头（zh-CN/zh-TW/zh-HK 等
+   * 简繁体）→ zh 模板，其余一切语言（ja、ko、en……）→ en 模板。第三语言 UI
+   * 用户拿到英文 prompt 模板是有意的设计取舍，不是 bug。
+   */
+  resolveLocale() {
+    const explicit = typeof this._config?.locale === "string" ? this._config.locale.trim() : "";
+    if (explicit) return explicit;
+    const global_ = typeof this._cb?.getLocale === "function" ? String(this._cb.getLocale() || "").trim() : "";
+    if (global_) return global_;
+    return "en";
+  }
+
+  /**
    * 仅加载 config + 身份字段，不碰 FactStore/memoryTicker/tools/runCompatChecks。
    * 供 init() 失败时的 fallback 使用，保证即使完整初始化失败，
    * agent.config.models.chat 仍能被下游正确读取（模型解析 / session 创建）。
@@ -268,7 +288,7 @@ export class Agent {
    */
   loadConfigOnly() {
     this._config = loadConfig(this.configPath);
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     this.userName = this._config.user?.name || (isZh ? "用户" : "User");
     this.agentName = this._config.agent?.name || "Hanako";
     this._memoryMasterEnabled = this._config.memory?.enabled !== false;
@@ -297,7 +317,7 @@ export class Agent {
     log(`  [agent] 1. loadConfig 完成`);
 
     // 2. 身份 + 记忆总开关
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     this.userName = this._config.user?.name || (isZh ? "用户" : "User");
     this.agentName = this._config.agent?.name || "Hanako";
     this._memoryMasterEnabled = this._config.memory?.enabled !== false;
@@ -1018,7 +1038,7 @@ export class Agent {
     }
 
     // 更新身份
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     if (partial.agent?.name) this.agentName = this._config.agent?.name || "Hanako";
     if (partial.user?.name) this.userName = this._config.user?.name || (isZh ? "用户" : "User");
 
@@ -1062,7 +1082,7 @@ export class Agent {
 
   /** 返回纯人格 prompt（identity + yuan + ishiki），不含记忆、用户档案等 */
   get personality() {
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     const fill = (text) => text
       .replace(/\{\{userName\}\}/g, this.userName)
       .replace(/\{\{agentName\}\}/g, this.agentName)
@@ -1084,7 +1104,7 @@ export class Agent {
 
   /** 返回花名册描述生成用的人格来源，不包含 yuan 输出协议。 */
   get descriptionSource() {
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     const fill = (text) => text
       .replace(/\{\{userName\}\}/g, this.userName)
       .replace(/\{\{agentName\}\}/g, this.agentName)
@@ -1106,7 +1126,7 @@ export class Agent {
   /** 读取 yuan 模板（能力定义） */
   _readYuan() {
     const yuanType = this._config?.agent?.yuan || "hanako";
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     const langDir = isZh ? "" : "en/";
     return safeReadFile(path.join(this.productDir, "yuan", `${langDir}${yuanType}.md`), "")
       || safeReadFile(path.join(this.productDir, "yuan", `${yuanType}.md`), "");
@@ -1120,7 +1140,7 @@ export class Agent {
       .replace(/\{\{agentName\}\}/g, this.agentName)
       .replace(/\{\{agentId\}\}/g, this.id);
     const yuanType = this._config?.agent?.yuan || "hanako";
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     const langDir = isZh ? "" : "en/";
     const raw = readFile(path.join(this.agentDir, "public-ishiki.md"))
       || readFile(path.join(this.productDir, "public-ishiki-templates", `${langDir}${yuanType}.md`))
@@ -1152,7 +1172,7 @@ export class Agent {
     const memoryEnabled = typeof forceMemoryEnabled === "boolean"
       ? forceMemoryEnabled
       : this.memoryEnabled;
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
     const readFile = (filePath) => safeReadFile(filePath, "");
 
     const pinnedMd = readFile(path.join(this.agentDir, "pinned.md")).trim();
@@ -1171,7 +1191,7 @@ export class Agent {
 
     return {
       version: 1,
-      locale: this._config.locale || "",
+      locale: this.resolveLocale(),
       agentId: this.id,
       agentName: this.agentName,
       userName: this.userName,
@@ -1201,7 +1221,7 @@ export class Agent {
     const memoryEnabled = typeof forceMemoryEnabled === "boolean"
       ? forceMemoryEnabled
       : this.memoryEnabled;
-    const isZh = String(this._config.locale || "").startsWith("zh");
+    const isZh = String(this.resolveLocale()).startsWith("zh");
 
     const readFile = (filePath) => safeReadFile(filePath, "");
 
@@ -1470,7 +1490,7 @@ export class Agent {
     if (!forSubagent && this._canInjectAppearancePrompt(targetModel)) {
       const appearance = readAgentAppearanceProfileResource(this.agentDir);
       const appearancePrompt = appearance
-        ? formatAgentAppearancePrompt(appearance.summary, this._config.locale || "")
+        ? formatAgentAppearancePrompt(appearance.summary, this.resolveLocale())
         : "";
       if (appearancePrompt) parts.push(appearancePrompt);
     }

@@ -2296,7 +2296,7 @@
   "discoveredSites": [
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 243,
+      "line": 247,
       "kind": "persistent-store-constructor",
       "excerpt": "new ActivityStore( path.join(agDir, \"desk\", \"activities.json\"), path.join(agDir, \"activity\"), )",
       "reason": "Constructs an ActivityStore for an agent.",
@@ -2305,7 +2305,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 561,
+      "line": 568,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(descPath, `<!-- sourceHash: ${hash} -->\\n${desc}`, \"utf-8\")",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2314,7 +2314,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 577,
+      "line": 584,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(agentDir, { recursive: true, force: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2323,7 +2323,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 599,
+      "line": 606,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(agentDir, { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2332,7 +2332,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 600,
+      "line": 607,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"memory\"), { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2341,7 +2341,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 601,
+      "line": 608,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"sessions\"), { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2350,7 +2350,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 602,
+      "line": 609,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"avatars\"), { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2359,7 +2359,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 638,
+      "line": 645,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( path.join(agentDir, \"config.yaml\"), YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '\"' }), \"utf-8\", )",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2368,7 +2368,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 659,
+      "line": 671,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(path.join(agentDir, \"identity.md\"), tmpl, \"utf-8\")",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2377,7 +2377,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 669,
+      "line": 681,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(ishikiSrc, path.join(agentDir, \"ishiki.md\"))",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2386,7 +2386,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 678,
+      "line": 690,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(publicIshikiSrc, path.join(agentDir, \"public-ishiki.md\"))",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2395,7 +2395,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 689,
+      "line": 701,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(path.join(agentDir, fileName), initialFiles[key], \"utf-8\")",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2404,7 +2404,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 702,
+      "line": 714,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(avatarPath, path.join(agentDir, \"avatars\", `agent${avatarExt}`))",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2413,7 +2413,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 710,
+      "line": 722,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(p, '', 'utf-8')",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2422,7 +2422,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 932,
+      "line": 944,
       "kind": "write-file",
       "excerpt": "fsp.writeFile( this._deletedAgentTombstonePath(agentId), JSON.stringify(tombstone, null, 2), \"utf-8\", )",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2431,7 +2431,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 315,
+      "line": 335,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(this.agentDir, \"memory\", \"summaries\"), { recursive: true })",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2440,7 +2440,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 316,
+      "line": 336,
       "kind": "persistent-store-constructor",
       "excerpt": "new FactStore(this.factsDbPath)",
       "reason": "Constructs or migrates a FactStore.",
@@ -2449,7 +2449,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 326,
+      "line": 346,
       "kind": "database-open",
       "excerpt": "new Database(oldMemoriesPath, { readonly: true })",
       "reason": "Constructs or migrates a FactStore.",
@@ -2458,7 +2458,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 341,
+      "line": 361,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(migrationDone, new Date().toISOString())",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2467,7 +2467,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 345,
+      "line": 365,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(migrationDone, `failed: ${err.message}`)",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2476,7 +2476,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 474,
+      "line": 494,
       "kind": "persistent-store-constructor",
       "excerpt": "new CronStore( path.join(this.deskDir, \"cron-jobs.json\"), path.join(this.deskDir, \"cron-runs\"), )",
       "reason": "Constructs an agent or studio CronStore.",
@@ -2908,7 +2908,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 54,
+      "line": 55,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(hanakoHome, \"agents\"), { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2917,16 +2917,16 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 55,
+      "line": 56,
       "kind": "mkdir",
-      "excerpt": "fs.mkdirSync(path.join(hanakoHome, \"user\"), { recursive: true })",
+      "excerpt": "fs.mkdirSync(userDir, { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "storeId": null,
       "exemptionId": "cross-store-first-run-bootstrap"
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 107,
+      "line": 108,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDst, { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2935,7 +2935,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 114,
+      "line": 115,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(p, '', 'utf-8')",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2944,7 +2944,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 123,
+      "line": 124,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( prefsPath, JSON.stringify({ primaryAgent: \"hanako\", }, null, 2) + \"\\n\", \"utf-8\", )",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2953,7 +2953,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 160,
+      "line": 161,
       "kind": "rename",
       "excerpt": "fs.renameSync(cfgPath, backupPath)",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2962,7 +2962,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 172,
+      "line": 173,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(agentDir, { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2971,7 +2971,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 173,
+      "line": 174,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"memory\"), { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2980,7 +2980,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 174,
+      "line": 175,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"sessions\"), { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2989,7 +2989,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 175,
+      "line": 176,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"avatars\"), { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -2998,7 +2998,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 176,
+      "line": 177,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"desk\"), { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -3007,7 +3007,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 184,
+      "line": 185,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(configSrc, cfgDest)",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -3016,7 +3016,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 197,
+      "line": 198,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(cfgDest, YAML.dump(raw, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '\"' }), \"utf-8\")",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -3025,7 +3025,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 220,
+      "line": 234,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(path.join(agentDir, \"identity.md\"), tmpl, \"utf-8\")",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -3034,7 +3034,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 232,
+      "line": 246,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(ishikiSrc, path.join(agentDir, \"ishiki.md\"))",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -3043,7 +3043,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 241,
+      "line": 255,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(publicIshikiSrc, path.join(agentDir, \"public-ishiki.md\"))",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
@@ -3052,7 +3052,7 @@
     },
     {
       "sourceFile": "core/first-run.ts",
-      "line": 252,
+      "line": 266,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(dstDir, { recursive: true })",
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",

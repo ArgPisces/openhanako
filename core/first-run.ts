@@ -51,8 +51,9 @@ export interface FirstRunReport {
  */
 export function ensureFirstRun(hanakoHome, productDir): FirstRunReport {
   // 1. 确保目录结构存在
+  const userDir = path.join(hanakoHome, "user");
   fs.mkdirSync(path.join(hanakoHome, "agents"), { recursive: true });
-  fs.mkdirSync(path.join(hanakoHome, "user"), { recursive: true });
+  fs.mkdirSync(userDir, { recursive: true });
 
   // 2. 分类每个 agent 目录；没有任何可用 agent → 播种默认 agent
   const agentsDir = path.join(hanakoHome, "agents");
@@ -96,7 +97,7 @@ export function ensureFirstRun(hanakoHome, productDir): FirstRunReport {
       log.warn(`默认助手 config.yaml 无法解析，已备份到 ${defaultConfigBackupPath}`);
     }
     log.log(needsDefaultAgentRepair ? "默认助手数据不完整，正在补齐..." : "首次启动，正在创建默认助手...");
-    seedDefaultAgent(agentsDir, productDir);
+    seedDefaultAgent(agentsDir, productDir, userDir);
     repairedDefaultAgent = true;
     validAgentIds.add(DEFAULT_AGENT_ID);
   }
@@ -164,7 +165,7 @@ function backupUnreadableDefaultConfig(agentsDir): string {
 /**
  * 从模板播种默认 agent（与 engine.createAgent 相同逻辑，但纯同步、无依赖）
  */
-function seedDefaultAgent(agentsDir, productDir) {
+function seedDefaultAgent(agentsDir, productDir, userDir) {
   const agentId = "hanako";
   const agentDir = path.join(agentsDir, agentId);
 
@@ -198,14 +199,27 @@ function seedDefaultAgent(agentsDir, productDir) {
 
 
   // 与 createAgent 同策略：按 yuan（= agentId）+ locale 优先，通用 example 兜底。
-  // 首次播种读刚写入的 config.yaml 拿 locale。
-  let isZh = true;
+  // 与 Agent.resolveLocale() 同一条链条：先读刚写入的 config.yaml 的 locale，
+  // 缺失时落全局 prefs 的 locale（修复损坏默认 agent 时 preferences.json 往往
+  // 已存在；全新安装时它还没被第 5 步创建，读不到属于正常情况），两级都缺才落
+  // "en"。
+  let locale = "";
   try {
     if (fs.existsSync(cfgDest)) {
       const raw = YAML.load(fs.readFileSync(cfgDest, "utf-8")) || {};
-      isZh = String(raw.locale || "zh").startsWith("zh");
+      locale = typeof raw.locale === "string" ? raw.locale : "";
     }
   } catch {}
+  if (!locale) {
+    try {
+      const prefsPath = path.join(userDir, "preferences.json");
+      if (fs.existsSync(prefsPath)) {
+        const prefs = JSON.parse(fs.readFileSync(prefsPath, "utf-8"));
+        locale = typeof prefs?.locale === "string" ? prefs.locale : "";
+      }
+    } catch {}
+  }
+  const isZh = String(locale || "en").startsWith("zh");
   const langDir = isZh ? "" : "en/";
   const firstExisting = (paths) => paths.find((p) => fs.existsSync(p));
 

@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:4c9498cfbb60dbbaa1ba468056486b3bba318785d5ebf1fc787d1b6b93897993",
+  "payloadFingerprint": "sha256:fb0529cfcb51045f4517beae3b365a6298e933ae0ac628f636594e69e1ff6df0",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Added SessionCoordinator._metaQuarantines (in-memory runtime bookkeeping) plus listMetaQuarantines(), HanaEngine.getSessionMetadataRecoveryStatus() (read-only aggregation over existing store recovery state, coordinator quarantine list, and legacy-migration scan ledger), and an additive sessionStore field on the /api/health response; no store schema, file layout, or protocol changed, only scanned excerpt line numbers shifted in core/session-coordinator.ts, core/engine.ts, and server/index.ts.",
-    "payloadFingerprint": "sha256:4c9498cfbb60dbbaa1ba468056486b3bba318785d5ebf1fc787d1b6b93897993"
+    "compatibilityReason": "Locale-resolution fix in core/agent.ts, core/agent-manager.ts, and core/first-run.ts shifted line numbers of existing fs persistence sites; no store, schema, or DDL changes.",
+    "payloadFingerprint": "sha256:fb0529cfcb51045f4517beae3b365a6298e933ae0ac628f636594e69e1ff6df0"
   },
   "schemas": [
     {
@@ -2961,7 +2961,7 @@
       "contract": "agent config and authored Markdown/image profile protocol",
       "kind": "directory-contract",
       "module": "core/agent-manager.ts",
-      "sourceHash": "sha256:5bc801f69605b845f30844874d7d8eead3078964572e0af2117a9c7dfea4cc60",
+      "sourceHash": "sha256:85b686ecd955ced45455b26e9a500143631030997aaf3c17c935ff8328aaaa29",
       "storeId": "agent-profile"
     },
     {
@@ -3420,7 +3420,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 243,
+      "line": 247,
       "reason": "Constructs an ActivityStore for an agent.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "desk-activity"
@@ -3428,7 +3428,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 561,
+      "line": 568,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3436,7 +3436,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 577,
+      "line": 584,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3444,7 +3444,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 599,
+      "line": 606,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3452,7 +3452,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 600,
+      "line": 607,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3460,7 +3460,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 601,
+      "line": 608,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3468,7 +3468,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 602,
+      "line": 609,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3476,7 +3476,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 638,
+      "line": 645,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3484,7 +3484,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 659,
+      "line": 671,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3492,7 +3492,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 669,
+      "line": 681,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3500,7 +3500,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 678,
+      "line": 690,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3508,7 +3508,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 689,
+      "line": 701,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3516,7 +3516,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 702,
+      "line": 714,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3524,7 +3524,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 710,
+      "line": 722,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3532,7 +3532,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 932,
+      "line": 944,
       "reason": "Creates, rolls back, or edits agent profile material.",
       "sourceFile": "core/agent-manager.ts",
       "storeId": "agent-profile"
@@ -3540,7 +3540,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 315,
+      "line": 335,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3548,7 +3548,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 316,
+      "line": 336,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-facts-sqlite"
@@ -3556,7 +3556,7 @@
     {
       "exemptionId": null,
       "kind": "database-open",
-      "line": 326,
+      "line": 346,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-facts-sqlite"
@@ -3564,7 +3564,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 341,
+      "line": 361,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3572,7 +3572,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 345,
+      "line": 365,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3580,7 +3580,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 474,
+      "line": 494,
       "reason": "Constructs an agent or studio CronStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "cron-automation"
@@ -3964,14 +3964,6 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "mkdir",
-      "line": 54,
-      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
-      "sourceFile": "core/first-run.ts",
-      "storeId": null
-    },
-    {
-      "exemptionId": "cross-store-first-run-bootstrap",
-      "kind": "mkdir",
       "line": 55,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
@@ -3980,31 +3972,7 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "mkdir",
-      "line": 107,
-      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
-      "sourceFile": "core/first-run.ts",
-      "storeId": null
-    },
-    {
-      "exemptionId": "cross-store-first-run-bootstrap",
-      "kind": "write-file",
-      "line": 114,
-      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
-      "sourceFile": "core/first-run.ts",
-      "storeId": null
-    },
-    {
-      "exemptionId": "cross-store-first-run-bootstrap",
-      "kind": "write-file",
-      "line": 123,
-      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
-      "sourceFile": "core/first-run.ts",
-      "storeId": null
-    },
-    {
-      "exemptionId": "cross-store-first-run-bootstrap",
-      "kind": "rename",
-      "line": 160,
+      "line": 56,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4012,7 +3980,31 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "mkdir",
-      "line": 172,
+      "line": 108,
+      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
+      "sourceFile": "core/first-run.ts",
+      "storeId": null
+    },
+    {
+      "exemptionId": "cross-store-first-run-bootstrap",
+      "kind": "write-file",
+      "line": 115,
+      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
+      "sourceFile": "core/first-run.ts",
+      "storeId": null
+    },
+    {
+      "exemptionId": "cross-store-first-run-bootstrap",
+      "kind": "write-file",
+      "line": 124,
+      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
+      "sourceFile": "core/first-run.ts",
+      "storeId": null
+    },
+    {
+      "exemptionId": "cross-store-first-run-bootstrap",
+      "kind": "rename",
+      "line": 161,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4051,8 +4043,16 @@
     },
     {
       "exemptionId": "cross-store-first-run-bootstrap",
+      "kind": "mkdir",
+      "line": 177,
+      "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
+      "sourceFile": "core/first-run.ts",
+      "storeId": null
+    },
+    {
+      "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "copy-file",
-      "line": 184,
+      "line": 185,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4060,7 +4060,7 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "write-file",
-      "line": 197,
+      "line": 198,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4068,7 +4068,7 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "write-file",
-      "line": 220,
+      "line": 234,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4076,7 +4076,7 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "copy-file",
-      "line": 232,
+      "line": 246,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4084,7 +4084,7 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "copy-file",
-      "line": 241,
+      "line": 255,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null
@@ -4092,7 +4092,7 @@
     {
       "exemptionId": "cross-store-first-run-bootstrap",
       "kind": "mkdir",
-      "line": 252,
+      "line": 266,
       "reason": "First-run seeds several registered stores from packaged templates. Flow-sensitive attribution moves into the future coordinator; this exact composition file is not ignored by directory.",
       "sourceFile": "core/first-run.ts",
       "storeId": null

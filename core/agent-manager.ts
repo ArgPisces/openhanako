@@ -102,13 +102,17 @@ function agentMatchesListOptions(agent, options: any = {}) {
   return true;
 }
 
-function fallbackUserNameForLocale(locale) {
-  return String(locale || "zh").startsWith("zh") ? "用户" : "User";
+// 与 Agent.resolveLocale() 同一条链条：config.locale（显式覆盖）→ 全局 prefs
+// 的 locale → "en"。这里没有 Agent 实例，globalLocale 由调用方（_scanAgentList）
+// 传入 engine.getLocale() 的结果，读不到时按 resolveLocale 的末端语义落 "en"。
+function fallbackUserNameForLocale(locale, globalLocale = "") {
+  const effective = locale || globalLocale || "en";
+  return String(effective).startsWith("zh") ? "用户" : "User";
 }
 
-function renderIdentityTemplateForList(identityMd, cfg, agentId) {
+function renderIdentityTemplateForList(identityMd, cfg, agentId, globalLocale = "") {
   const agentName = cfg?.agent?.name || agentId;
-  const userName = cfg?.user?.name || fallbackUserNameForLocale(cfg?.locale);
+  const userName = cfg?.user?.name || fallbackUserNameForLocale(cfg?.locale, globalLocale);
   return String(identityMd || "")
     .replace(/\{\{userName\}\}/g, userName)
     .replace(/\{\{agentName\}\}/g, agentName)
@@ -478,6 +482,9 @@ export class AgentManager {
   /** 扫盘读取所有 agent 元数据（I/O 密集，由缓存保护） */
   _scanAgentList() {
     const entries = readDirectoryLikeDirentsSync(this._d.agentsDir);
+    // 每个 agent 都可能没有 config.locale，统一在扫描开始时读一次全局 prefs 的
+    // locale 作为兜底，而不是每个 agent 各查一次。
+    const globalLocale = this._d.getEngine?.()?.getLocale?.() || "";
     const agents = [];
     for (const entry of entries) {
       if (!this._acceptDiscoveredAgentId(entry.name)) continue;
@@ -489,7 +496,7 @@ export class AgentManager {
         let identity = "";
         try {
           const idMd = fs.readFileSync(path.join(this._d.agentsDir, entry.name, "identity.md"), "utf-8");
-          const renderedIdMd = renderIdentityTemplateForList(idMd, cfg, entry.name);
+          const renderedIdMd = renderIdentityTemplateForList(idMd, cfg, entry.name, globalLocale);
           const lines = renderedIdMd.split("\n").filter(l => l.trim() && !l.startsWith("#"));
           identity = lines[0]?.trim() || "";
         } catch {}
@@ -551,7 +558,7 @@ export class AgentManager {
       } catch {} // 文件不存在，继续生成
 
       const utilConfig = await this._d.resolveUtilityConfigFresh({ agentId });
-      const locale = ag.config?.locale || "zh";
+      const locale = ag.resolveLocale();
       const desc = await generateDescription(utilConfig, source, locale);
       if (!desc) {
         log.log(`[description] ${agentId}: 生成跳过（LLM 不可用或返回空）`);
@@ -644,7 +651,12 @@ export class AgentManager {
     // 与 personality/buildSystemPrompt 的 fallback 链保持一致：
     // yuan 专属（locale 细分） → yuan 专属（通用语言） → 通用 example。
     // 保证选不同 yuan 时写入的是该 yuan 的默认内容，而不是通用兜底。
-    const isZh = String(currentAgent?.config?.locale || "zh").startsWith("zh");
+    // currentAgent 存在时走它的 resolveLocale()（config → 全局 prefs → "en"）；
+    // 没有活跃 agent 实例时直接查一次全局 prefs，读不到就落 "en"，与
+    // resolveLocale 末端语义保持一致。
+    const isZh = String(
+      currentAgent?.resolveLocale?.() || this._d.getEngine?.()?.getLocale?.() || "en"
+    ).startsWith("zh");
     const langDir = isZh ? "" : "en/";
     const firstExisting = (paths) => paths.find((p) => fs.existsSync(p));
 
@@ -1147,6 +1159,7 @@ export class AgentManager {
       resolveUtilityConfigFresh: (options) => getEngine()?.resolveUtilityConfigFresh?.({ ...(options || {}), agentId: ag.id }),
       getCwd:               () => getEngine()?.cwd ?? "",
       getTimezone:          () => getEngine()?.getTimezone?.() ?? "",
+      getLocale:            () => getEngine()?.getLocale?.() ?? "",
       scheduleMemoryMaintenance: (agentId, reason) =>
         this.scheduleAgentMemoryMaintenance(agentId, reason, ag),
       getEngine,  // update-settings-tool 仍需要完整 engine
