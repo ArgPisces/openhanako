@@ -86,6 +86,14 @@ export function pickCliAgent(agents) {
     || null;
 }
 
+/**
+ * 判断 /api/agents 返回的某一条是不是"当前"这个 agent。标记在每个条目自己身上，
+ * 返回体没有顶层的 currentAgentId 字段可读。
+ */
+export function isCurrentCliAgent(agent) {
+  return agent?.isCurrent === true;
+}
+
 export function startCLI({ port, token, agentName, userName }) {
   const wsUrl = `ws://127.0.0.1:${port}/ws?token=${token}`;
   const apiBase = `http://127.0.0.1:${port}`;
@@ -467,7 +475,7 @@ ${c.bold}${t("cli.helpTitle")}${c.reset}
           const data = await api("/api/agents");
           console.log(`\n${c.bold}${t("cli.agentList")}${c.reset}`);
           for (const a of data.agents || []) {
-            const current = a.id === data.currentAgentId ? ` ${c.green}${t("cli.currentModel")}${c.reset}` : "";
+            const current = isCurrentCliAgent(a) ? ` ${c.green}${t("cli.currentModel")}${c.reset}` : "";
             console.log(`  ${c.dim}${a.id}${c.reset}  ${a.name}${current}`);
           }
           console.log();
