@@ -534,10 +534,10 @@ export function createConfigRoute(engine: any) {
     }
   });
 
-  // 读取编译后的 memory.md
+  // 读取编译后的 memory.md。显式 agentId 是状态归属边界。
   route.get("/memories/compiled", async (c) => {
     try {
-      const agent = resolveAgent(engine, c);
+      const agent = resolveAgentStrict(engine, c);
       const memDir = path.dirname(agent.memoryMdPath);
       // 幂等：即使该 agent 从未跑起过 memoryTicker（未配置记忆模型），
       // 首次读取也会把遗留的 editable-facts.md 并入规范的 facts.md。
@@ -550,6 +550,7 @@ export function createConfigRoute(engine: any) {
       // 字段保留是为了不破坏前端既有契约（CompiledMemoryViewer 仍读取此字段）。
       return c.json({ content, editableFactsEnabled: true, sections });
     } catch (err) {
+      if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
       return c.json({ error: err.message }, 500);
     }
   });
@@ -622,10 +623,10 @@ export function createConfigRoute(engine: any) {
     }
   });
 
-  // 读取按天的 week 日记条目，供编辑 UI 按天分行展示
+  // 读取按天的 week 日记条目，供编辑 UI 按天分行展示。显式 agentId 是状态归属边界。
   route.get("/memories/compiled/week/days", async (c) => {
     try {
-      const agent = resolveAgent(engine, c);
+      const agent = resolveAgentStrict(engine, c);
       const memDir = path.dirname(agent.memoryMdPath);
       const days = listWeekDayEntries(memDir);
       return c.json({ days });
