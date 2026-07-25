@@ -111,9 +111,11 @@ function fallbackUserNameForLocale(locale, globalLocale = "") {
   return String(effective).startsWith("zh") ? "用户" : "User";
 }
 
-function renderIdentityTemplateForList(identityMd, cfg, agentId, globalLocale = "") {
+function renderIdentityTemplateForList(identityMd, cfg, agentId, globalLocale = "", globalUserName = "") {
   const agentName = cfg?.agent?.name || agentId;
-  const userName = cfg?.user?.name || fallbackUserNameForLocale(cfg?.locale, globalLocale);
+  // 与 Agent.resolveUserName() 同一条链条：config.user.name（显式覆盖）→
+  // 全局 prefs 的 userName → 按语言兜底。
+  const userName = cfg?.user?.name || globalUserName || fallbackUserNameForLocale(cfg?.locale, globalLocale);
   return String(identityMd || "")
     .replace(/\{\{userName\}\}/g, userName)
     .replace(/\{\{agentName\}\}/g, agentName)
@@ -175,6 +177,26 @@ export class AgentManager {
 
   /** 清除 listAgents 缓存（agent 增删改时调用） */
   invalidateAgentListCache() { this._agentListCache = null; }
+
+  /**
+   * 用户改名后让所有在内存里的 agent 立刻改口（全局 userName 变更时调用）。
+   *
+   * 名字的正源在全局 preferences，但每个 Agent 实例把解析结果缓存在
+   * agent.userName 上（prompt、MOOD 模板、花名册都读它）。只写 prefs 不刷新，
+   * 已加载的 agent 会一直用旧称呼直到重启。持有显式覆盖的 agent 重新解析后
+   * 仍然拿到自己的覆盖值，不受影响。
+   */
+  refreshResolvedUserNames() {
+    for (const [id, agent] of this._agents) {
+      try {
+        agent.userName = agent.resolveUserName();
+      } catch (err) {
+        log.warn(`refresh userName for ${id} failed: ${err?.message || err}`);
+      }
+    }
+    this.invalidateAgentListCache();
+    this._rebuildAllAgentSystemPrompts();
+  }
 
   /** 重建所有已初始化 agent 的 _systemPrompt（花名册变更时调用） */
   _rebuildAllAgentSystemPrompts() {
@@ -486,6 +508,8 @@ export class AgentManager {
     // 每个 agent 都可能没有 config.locale，统一在扫描开始时读一次全局 prefs 的
     // locale 作为兜底，而不是每个 agent 各查一次。
     const globalLocale = this._d.getEngine?.()?.getLocale?.() || "";
+    // 用户名同理：正源在全局 prefs，扫描开始时读一次给所有 agent 兜底。
+    const globalUserName = this._d.getEngine?.()?.getUserName?.() || "";
     const agents = [];
     for (const entry of entries) {
       if (!this._acceptDiscoveredAgentId(entry.name)) continue;
@@ -506,7 +530,7 @@ export class AgentManager {
             locale: resolvePersonaLocale(cfg.locale, globalLocale),
             kind: "identity",
           });
-          const renderedIdMd = renderIdentityTemplateForList(idMd, cfg, entry.name, globalLocale);
+          const renderedIdMd = renderIdentityTemplateForList(idMd, cfg, entry.name, globalLocale, globalUserName);
           const lines = renderedIdMd.split("\n").filter(l => l.trim() && !l.startsWith("#"));
           identity = lines[0]?.trim() || "";
         } catch {}
@@ -621,7 +645,6 @@ export class AgentManager {
     // 从模板复制 config.yaml
     const templateConfig = fs.readFileSync(path.join(this._d.productDir, "config.example.yaml"), "utf-8");
     const currentAgent = this.agent;
-    const userName = currentAgent?.userName || "";
     const configSeed = YAML.load(templateConfig);
     if (!configSeed || typeof configSeed !== "object" || Array.isArray(configSeed)) {
       throw new Error("Invalid config.example.yaml");
@@ -637,9 +660,9 @@ export class AgentManager {
       heartbeat_enabled: false,
       heartbeat_interval: DEFAULT_HEARTBEAT_INTERVAL_MINUTES,
     };
-    if (userName) {
-      config.user = { ...(config.user || {}), name: userName };
-    }
+    // 不往新 agent 的 config 里抄用户名：名字的正源是全局 preferences，
+    // 每个 agent 各存一份就会在用户改名后留下一堆对不上的旧副本。
+    delete config.user;
     // migration #5 之后 models.chat 的唯一合法持久化格式是 {id, provider}。
     // 新建 agent 时必须直接写完整复合键，不能再把旧字符串格式重新带回磁盘。
     const chatRef = parseModelRef(currentAgent?.config?.models?.chat);
@@ -1149,6 +1172,7 @@ export class AgentManager {
       getCwd:               () => getEngine()?.cwd ?? "",
       getTimezone:          () => getEngine()?.getTimezone?.() ?? "",
       getLocale:            () => getEngine()?.getLocale?.() ?? "",
+      getUserName:          () => getEngine()?.getUserName?.() ?? "",
       scheduleMemoryMaintenance: (agentId, reason) =>
         this.scheduleAgentMemoryMaintenance(agentId, reason, ag),
       getEngine,  // update-settings-tool 仍需要完整 engine

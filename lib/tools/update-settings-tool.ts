@@ -279,15 +279,13 @@ const SETTINGS_REGISTRY = {
       agent.updateConfig({ agent: { name: v } });
     },
   },
+  // 用户的名字描述的是使用者本人，不是某个 agent 的属性：改一次，所有 agent
+  // 都跟着改口。所以这里写全局 preferences，而不是当前 agent 的 config。
   "user.name": {
     type: "text",
     get label() { return t("toolDef.updateSettings.userName"); },
-    scope: "agent",
-    get: (engine, agent) => agent?.userName || null,
-    apply: (engine, agent, v) => {
-      if (!agent) throw new Error("no active agent");
-      agent.updateConfig({ user: { name: v } });
-    },
+    get: (engine, agent) => agent?.userName || engine.getUserName?.() || null,
+    apply: (engine, _agent, v) => engine.setUserName(v),
   },
   home_folder: {
     type: "text",

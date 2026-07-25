@@ -416,8 +416,9 @@ ${c.bold}${t("cli.helpTitle")}${c.reset}
       }
 
       case "config": {
-        // Locale 是全局偏好；名字、缘、用户名、模型都写在某个 agent 自己的
-        // 配置里，所以先问清楚这个终端在哪个 agent 上，再点名去要它的配置。
+        // Locale 和用户名是全局偏好；agent 的名字、缘、模型写在某个 agent
+        // 自己的配置里，所以先问清楚这个终端在哪个 agent 上，再点名去要它的
+        // 配置。用户名由 per-agent 读接口按全局值注入，这里跟着一起拿。
         const [globalConfig, agentList] = await Promise.all([
           api("/api/config"),
           api("/api/agents"),

@@ -1767,6 +1767,13 @@ export class HanaEngine {
   setLearnSkills(p) { this._prefs.setLearnSkills(p); }
   getLocale() { return this._prefs.getLocale(); }
   setLocale(l) { this._prefs.setLocale(l); }
+  getUserName() { return this._prefs.getUserName(); }
+  setUserName(n) {
+    this._prefs.setUserName(n);
+    // 名字是全局的：改一次，所有已经加载的 agent 都要立刻改口，
+    // 而不是等到进程重启才生效。
+    this._agentMgr?.refreshResolvedUserNames?.();
+  }
   getSetupComplete() { return this._prefs.getSetupComplete(); }
   markSetupComplete() { return this._prefs.markSetupComplete(); }
   getEditor() { return this._prefs.getEditor(); }

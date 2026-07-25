@@ -40,11 +40,10 @@ export function MeTab() {
 
       const requests: Promise<Response>[] = [];
       if (Object.keys(partial).length) {
-        // user.name lives in the agent's own config, so it has to be saved
-        // against the agent this settings window is showing.
-        const agentId = store.getSettingsAgentId();
-        if (!agentId) throw new Error('no settings agent selected');
-        requests.push(hanaFetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
+        // The name describes the person using Hana, not any one agent, so it is
+        // stored globally and saved through the global config route. Every agent
+        // reads the same value.
+        requests.push(hanaFetch('/api/config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(partial),

@@ -2296,7 +2296,7 @@
   "discoveredSites": [
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 248,
+      "line": 270,
       "kind": "persistent-store-constructor",
       "excerpt": "new ActivityStore( path.join(agDir, \"desk\", \"activities.json\"), path.join(agDir, \"activity\"), )",
       "reason": "Constructs an ActivityStore for an agent.",
@@ -2305,7 +2305,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 578,
+      "line": 602,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(descPath, `<!-- sourceHash: ${hash} -->\\n${desc}`, \"utf-8\")",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2314,7 +2314,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 594,
+      "line": 618,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(agentDir, { recursive: true, force: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2323,7 +2323,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 616,
+      "line": 640,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(agentDir, { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2332,7 +2332,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 617,
+      "line": 641,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"memory\"), { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2341,7 +2341,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 618,
+      "line": 642,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"sessions\"), { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2350,7 +2350,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 619,
+      "line": 643,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(agentDir, \"avatars\"), { recursive: true })",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2359,7 +2359,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 655,
+      "line": 678,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( path.join(agentDir, \"config.yaml\"), YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '\"' }), \"utf-8\", )",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2368,7 +2368,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 679,
+      "line": 702,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(publicIshikiSrc, path.join(agentDir, \"public-ishiki.md\"))",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2377,7 +2377,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 690,
+      "line": 713,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(path.join(agentDir, fileName), initialFiles[key], \"utf-8\")",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2386,7 +2386,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 703,
+      "line": 726,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(avatarPath, path.join(agentDir, \"avatars\", `agent${avatarExt}`))",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2395,7 +2395,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 711,
+      "line": 734,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(p, '', 'utf-8')",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2404,7 +2404,7 @@
     },
     {
       "sourceFile": "core/agent-manager.ts",
-      "line": 933,
+      "line": 956,
       "kind": "write-file",
       "excerpt": "fsp.writeFile( this._deletedAgentTombstonePath(agentId), JSON.stringify(tombstone, null, 2), \"utf-8\", )",
       "reason": "Creates, rolls back, or edits agent profile material.",
@@ -2413,7 +2413,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 336,
+      "line": 352,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(this.agentDir, \"memory\", \"summaries\"), { recursive: true })",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2422,7 +2422,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 337,
+      "line": 353,
       "kind": "persistent-store-constructor",
       "excerpt": "new FactStore(this.factsDbPath)",
       "reason": "Constructs or migrates a FactStore.",
@@ -2431,7 +2431,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 347,
+      "line": 363,
       "kind": "database-open",
       "excerpt": "new Database(oldMemoriesPath, { readonly: true })",
       "reason": "Constructs or migrates a FactStore.",
@@ -2440,7 +2440,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 362,
+      "line": 378,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(migrationDone, new Date().toISOString())",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2449,7 +2449,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 366,
+      "line": 382,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(migrationDone, `failed: ${err.message}`)",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2458,7 +2458,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 495,
+      "line": 511,
       "kind": "persistent-store-constructor",
       "excerpt": "new CronStore( path.join(this.deskDir, \"cron-jobs.json\"), path.join(this.deskDir, \"cron-runs\"), )",
       "reason": "Constructs an agent or studio CronStore.",
@@ -2827,7 +2827,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2212,
+      "line": 2219,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates the user skill root.",
@@ -2836,7 +2836,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2394,
+      "line": 2401,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
@@ -2845,7 +2845,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2448,
+      "line": 2455,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(pluginDevSourcesDir, { recursive: true })",
       "reason": "Creates the plugin development source root.",
@@ -3340,7 +3340,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 370,
+      "line": 372,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '\"' }), \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3349,7 +3349,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 371,
+      "line": 373,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, cfgPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3358,7 +3358,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 623,
+      "line": 625,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(sessionFile, outputLines.join(\"\\n\") + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3367,7 +3367,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 675,
+      "line": 677,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(metaPath), { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3376,7 +3376,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 676,
+      "line": 678,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2) + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3385,7 +3385,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 698,
+      "line": 700,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(deferredTasksPath), { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3394,7 +3394,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 699,
+      "line": 701,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(deferredTasksPath, JSON.stringify(deferredTasks, null, 2) + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3403,7 +3403,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 880,
+      "line": 882,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '\"' }), \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3412,7 +3412,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 881,
+      "line": 883,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, cfgPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3421,7 +3421,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 942,
+      "line": 944,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '\"' }), \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3430,7 +3430,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 943,
+      "line": 945,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, cfgPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3439,7 +3439,25 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1199,
+      "line": 1041,
+      "kind": "write-file",
+      "excerpt": "fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '\"' }), \"utf-8\")",
+      "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
+      "storeId": null,
+      "exemptionId": "cross-store-legacy-migrations"
+    },
+    {
+      "sourceFile": "core/migrations.ts",
+      "line": 1042,
+      "kind": "rename",
+      "excerpt": "fs.renameSync(tmp, cfgPath)",
+      "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
+      "storeId": null,
+      "exemptionId": "cross-store-legacy-migrations"
+    },
+    {
+      "sourceFile": "core/migrations.ts",
+      "line": 1276,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(ymlPath, yamlStr)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3448,7 +3466,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1257,
+      "line": 1334,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, yamlStr, \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3457,7 +3475,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1258,
+      "line": 1335,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, ymlPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3466,7 +3484,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1286,
+      "line": 1363,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( tmp, YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\" }), \"utf-8\" )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3475,7 +3493,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1291,
+      "line": 1368,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, cfgPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3484,7 +3502,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1392,
+      "line": 1469,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3493,7 +3511,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1393,
+      "line": 1470,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, jobsPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3502,7 +3520,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1457,
+      "line": 1534,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(jobsPath, JSON.stringify({ ...data, jobs }, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3511,7 +3529,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1946,
+      "line": 2023,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(backupRoot, { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3520,7 +3538,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1949,
+      "line": 2026,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(store.catalogPath, backupPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3529,7 +3547,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 1957,
+      "line": 2034,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync( path.join(backupDir, \"migration-report.json\"), JSON.stringify(report, null, 2) + \"\\n\", )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3538,7 +3556,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2061,
+      "line": 2138,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(backupRoot, { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3547,7 +3565,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2064,
+      "line": 2141,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(store.catalogPath, backupPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3556,7 +3574,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2072,
+      "line": 2149,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync( path.join(backupDir, \"migration-report.json\"), JSON.stringify(report, null, 2) + \"\\n\", )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3565,7 +3583,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2222,
+      "line": 2299,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync( configPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", }), )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3574,7 +3592,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2306,
+      "line": 2383,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync( configPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", }), )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3583,7 +3601,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2354,
+      "line": 2431,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(configPath, JSON.stringify(config, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3592,7 +3610,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2500,
+      "line": 2577,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(tasksPath, JSON.stringify(tasks, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3601,7 +3619,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2516,
+      "line": 2593,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(configPath, JSON.stringify(config, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3610,7 +3628,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2740,
+      "line": 2817,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(jobsPath, JSON.stringify({ ...data, jobs }, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3619,7 +3637,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2837,
+      "line": 2914,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(dstDir), { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3628,7 +3646,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2840,
+      "line": 2917,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(tmpDir, { recursive: true, force: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3637,7 +3655,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2841,
+      "line": 2918,
       "kind": "copy-file",
       "excerpt": "fs.cpSync(srcDir, tmpDir, { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3646,7 +3664,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2842,
+      "line": 2919,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( path.join(tmpDir, \"SKILL.md\"), rewriteSkillContentForGlobalPool(content, skillName), \"utf-8\", )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3655,7 +3673,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2847,
+      "line": 2924,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmpDir, dstDir)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3664,7 +3682,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2849,
+      "line": 2926,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(tmpDir, { recursive: true, force: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3673,7 +3691,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2883,
+      "line": 2960,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3682,7 +3700,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2933,
+      "line": 3010,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(learnedDir, { recursive: true, force: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3691,7 +3709,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 2998,
+      "line": 3075,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(projectionPath, nextProjection)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3700,7 +3718,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3008,
+      "line": 3085,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(runtimeDir, { recursive: true })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3709,7 +3727,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3031,
+      "line": 3108,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(runtimePath, JSON.stringify(nextRuntime, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3718,7 +3736,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3089,
+      "line": 3166,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\" }), \"utf-8\" )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3727,7 +3745,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3094,
+      "line": 3171,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, cfgPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3736,7 +3754,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3270,
+      "line": 3347,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, yamlStr, \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3745,7 +3763,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3271,
+      "line": 3348,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, ymlPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3754,7 +3772,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3432,
+      "line": 3509,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, JSON.stringify(index, null, 2) + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3763,7 +3781,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3433,
+      "line": 3510,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, indexPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3772,7 +3790,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3484,
+      "line": 3561,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, JSON.stringify(raw, null, 4) + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3781,7 +3799,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3485,
+      "line": 3562,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, modelsJsonPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3790,7 +3808,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3593,
+      "line": 3670,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( tmp, YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\" }), \"utf-8\", )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3799,7 +3817,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3598,
+      "line": 3675,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, cfgPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3808,7 +3826,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3607,
+      "line": 3684,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( tmp, header + YAML.dump(raw, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", forceQuotes: false, }), \"utf-8\", )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3817,7 +3835,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3618,
+      "line": 3695,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, ymlPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3826,7 +3844,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3714,
+      "line": 3791,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, JSON.stringify(meta, null, 2) + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3835,7 +3853,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3715,
+      "line": 3792,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, metaPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3844,7 +3862,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3733,
+      "line": 3810,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(backupPath, raw, { encoding: \"utf-8\", flag: \"wx\" })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3853,7 +3871,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3783,
+      "line": 3860,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(identityPath, repaired)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3862,7 +3880,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3797,
+      "line": 3874,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(backupPath, raw, { encoding: \"utf-8\", flag: \"wx\" })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3871,7 +3889,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3838,
+      "line": 3915,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, JSON.stringify(meta, null, 2) + \"\\n\", \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3880,7 +3898,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3839,
+      "line": 3916,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, metaPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3889,7 +3907,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3885,
+      "line": 3962,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(backupPath, raw, { encoding: \"utf-8\", flag: \"wx\" })",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3898,7 +3916,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3941,
+      "line": 4018,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( tmp, header + YAML.dump(raw, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", forceQuotes: false, }), \"utf-8\", )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3907,7 +3925,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3952,
+      "line": 4029,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, ymlPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3916,7 +3934,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3983,
+      "line": 4060,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync( tmp, YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\" }), \"utf-8\", )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3925,7 +3943,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 3988,
+      "line": 4065,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, cfgPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3934,7 +3952,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4228,
+      "line": 4305,
       "kind": "persistent-store-constructor",
       "excerpt": "new SubagentRunStore(path.join(hanakoHome, \"subagent-runs.json\"))",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3943,7 +3961,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4321,
+      "line": 4398,
       "kind": "persistent-store-constructor",
       "excerpt": "new SubagentThreadStore(path.join(hanakoHome, \"subagent-threads.json\"))",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3952,7 +3970,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4322,
+      "line": 4399,
       "kind": "persistent-store-constructor",
       "excerpt": "new SubagentRunStore(path.join(hanakoHome, \"subagent-runs.json\"))",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3961,7 +3979,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4418,
+      "line": 4495,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(threadsPath, JSON.stringify(rawThreads, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3970,7 +3988,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4433,
+      "line": 4510,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(runsPath, JSON.stringify(rawRuns, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3979,7 +3997,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4461,
+      "line": 4538,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, next, \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3988,7 +4006,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4462,
+      "line": 4539,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, filePath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -3997,7 +4015,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4479,
+      "line": 4556,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, next, \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -4006,7 +4024,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4480,
+      "line": 4557,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, filePath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -4015,7 +4033,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4526,
+      "line": 4603,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, next, \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -4024,7 +4042,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4527,
+      "line": 4604,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, filePath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -4033,7 +4051,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4550,
+      "line": 4627,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmp, next, \"utf-8\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
@@ -4042,7 +4060,7 @@
     },
     {
       "sourceFile": "core/migrations.ts",
-      "line": 4551,
+      "line": 4628,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, filePath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",

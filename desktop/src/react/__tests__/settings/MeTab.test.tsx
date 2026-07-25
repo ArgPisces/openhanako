@@ -47,7 +47,7 @@ describe('MeTab', () => {
     cleanup();
   });
 
-  it('saves the user name through the settings agent front door, not an agent-implicit path', async () => {
+  it('saves the user name globally, not against whichever agent settings is showing', async () => {
     render(<MeTab />);
 
     const nameInput = screen.getByDisplayValue('Old Name');
@@ -58,9 +58,9 @@ describe('MeTab', () => {
 
     const configCalls = hanaFetchMock.mock.calls.filter(([url]) => url.includes('/config'));
     expect(configCalls).toHaveLength(1);
-    expect(configCalls[0][0]).toBe('/api/agents/mio/config');
+    expect(configCalls[0][0]).toBe('/api/config');
     expect(JSON.parse(String(configCalls[0][1]?.body))).toEqual({ user: { name: 'New Name' } });
-    expect(hanaFetchMock.mock.calls.some(([url]) => url === '/api/config')).toBe(false);
+    expect(hanaFetchMock.mock.calls.some(([url]) => url.startsWith('/api/agents/'))).toBe(false);
   });
 
   it('still saves the user profile through the user-level route', async () => {

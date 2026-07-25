@@ -170,6 +170,18 @@ describe("AgentManager.createAgent default skills.enabled", () => {
     expect(cfg.skills.enabled).toEqual(["pdf", "docx"]);
   });
 
+  it("does not copy the user's name into the new agent's config", async () => {
+    // 名字的正源是全局 preferences。新 agent 抄一份下来，用户改名后就会留下
+    // 一个对不上的旧副本，而副本还会盖过全局值。
+    mgr._agents.set("hana", { id: "hana", userName: "阿黎" });
+    mgr._activeAgentId = "hana";
+
+    const { id: newId } = await mgr.createAgent({ name: "TestAgent", yuan: "hanako" });
+
+    const cfg = YAML.load(fs.readFileSync(path.join(agentsDir, newId, "config.yaml"), "utf-8"));
+    expect(cfg.user).toBeUndefined();
+  });
+
   it.each([
     "明",
     "agent😀",

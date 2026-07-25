@@ -282,6 +282,24 @@ export class Agent {
   }
 
   /**
+   * 解析用户的名字：config.user.name（显式覆盖）→ 全局 prefs 的 userName →
+   * 按语言兜底（中文 "用户"，其余 "User"）。链条与 resolveLocale() 同构。
+   *
+   * 名字描述的是使用者本人，不是这个 agent 的属性，所以正源在全局 preferences：
+   * 用户在设置里改一次名字，所有 agent 都得跟着改口，不该出现 A 叫得对、B 还
+   * 用旧称呼的情况。agent config 里的 user.name 保留为显式覆盖的逃生门（目前
+   * 没有任何 UI 会写它），留给将来"某个 agent 用别的称呼叫我"的场景；不写回
+   * config，否则会把用户日后在设置里改的名字锁死在这个 agent 身上。
+   */
+  resolveUserName() {
+    const explicit = typeof this._config?.user?.name === "string" ? this._config.user.name.trim() : "";
+    if (explicit) return explicit;
+    const global_ = typeof this._cb?.getUserName === "function" ? String(this._cb.getUserName() || "").trim() : "";
+    if (global_) return global_;
+    return String(this.resolveLocale()).startsWith("zh") ? "用户" : "User";
+  }
+
+  /**
    * 仅加载 config + 身份字段，不碰 FactStore/memoryTicker/tools/runCompatChecks。
    * 供 init() 失败时的 fallback 使用，保证即使完整初始化失败，
    * agent.config.models.chat 仍能被下游正确读取（模型解析 / session 创建）。
@@ -289,8 +307,7 @@ export class Agent {
    */
   loadConfigOnly() {
     this._config = loadConfig(this.configPath);
-    const isZh = String(this.resolveLocale()).startsWith("zh");
-    this.userName = this._config.user?.name || (isZh ? "用户" : "User");
+    this.userName = this.resolveUserName();
     this.agentName = this._config.agent?.name || "Hanako";
     this._memoryMasterEnabled = this._config.memory?.enabled !== false;
     this._experienceEnabled = this._config.experience?.enabled === true;
@@ -318,8 +335,7 @@ export class Agent {
     log(`  [agent] 1. loadConfig 完成`);
 
     // 2. 身份 + 记忆总开关
-    const isZh = String(this.resolveLocale()).startsWith("zh");
-    this.userName = this._config.user?.name || (isZh ? "用户" : "User");
+    this.userName = this.resolveUserName();
     this.agentName = this._config.agent?.name || "Hanako";
     this._memoryMasterEnabled = this._config.memory?.enabled !== false;
     this._experienceEnabled = this._config.experience?.enabled === true;
@@ -1039,9 +1055,8 @@ export class Agent {
     }
 
     // 更新身份
-    const isZh = String(this.resolveLocale()).startsWith("zh");
     if (partial.agent?.name) this.agentName = this._config.agent?.name || "Hanako";
-    if (partial.user?.name) this.userName = this._config.user?.name || (isZh ? "用户" : "User");
+    if (partial.user?.name) this.userName = this.resolveUserName();
 
     // yuan 切换只需更新 config，buildSystemPrompt 会实时读模板
     if (partial.agent?.yuan) {
@@ -1463,21 +1478,18 @@ export class Agent {
     // 统一放在 prompt 末尾以保护前面静态前缀的 cache 命中率。
 
     // 用户档案（user.md）
-    const configuredUserName = typeof this._config?.user?.name === "string"
-      ? this._config.user.name.trim()
-      : "";
+    // 名字走 resolveUserName()：显式覆盖 → 全局 preferences → 语言兜底。
+    // 因为末端有兜底值，这一行现在总会出现；没配过名字时给出的是"用户"/"User"
+    // 这种中性称呼，与 prompt 其它位置对用户的称呼保持一致。
+    const resolvedUserName = this.resolveUserName();
     const userProfileLines = [
       isZh
         ? "以下是用户的自我描述。"
         : "The following is the user's self-description.",
+      isZh
+        ? `用户的名字叫：${resolvedUserName}`
+        : `The user's name is: ${resolvedUserName}`,
     ];
-    if (configuredUserName) {
-      userProfileLines.push(
-        isZh
-          ? `用户的名字叫：${configuredUserName}`
-          : `The user's name is: ${configuredUserName}`
-      );
-    }
     if (userMd) {
       userProfileLines.push("", userMd);
     }

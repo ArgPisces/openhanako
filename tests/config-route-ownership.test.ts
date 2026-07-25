@@ -67,6 +67,7 @@ function makeGlobalEngine(overrides: Record<string, any> = {}): Record<string, a
     configPath: "/tmp/does-not-exist/config.yaml",
     currentAgentId: "hana",
     getLocale: () => "zh-CN",
+    getUserName: () => "Owner",
     providerRegistry: {
       getAllProvidersRaw: () => ({ openai: { base_url: "https://api.openai.com", api: "openai-completions", api_key: "sk-secret", models: ["gpt-5"] } }),
       get: () => null,
@@ -96,11 +97,13 @@ describe("config route family: the bare config path is global-only", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
-    for (const key of ["agent", "user", "desk", "cwd_history", "_raw"]) {
+    for (const key of ["agent", "desk", "cwd_history", "_raw"]) {
       expect(data).not.toHaveProperty(key);
     }
     // Global material stays: schema-driven global fields and the provider catalog.
+    // The user's name comes from global preferences, not the focused agent's config.
     expect(data.locale).toBe("zh-CN");
+    expect(data.user).toEqual({ name: "Owner" });
     expect(data.providers.openai.models).toEqual(["gpt-5"]);
     expect(data.providers.openai.api_key).not.toBe("sk-secret");
   });
@@ -126,13 +129,28 @@ describe("config route family: the bare config path is global-only", () => {
     const res = await app.request("/api/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: { name: "Someone Else" } }),
+      body: JSON.stringify({ cwd_history: ["/somewhere-else"] }),
     });
     const data = await res.json();
 
     expect(res.status).toBe(400);
-    expect(data.error).toContain("user");
+    expect(data.error).toContain("cwd_history");
     expect(data.error).toContain("/api/agents/");
+    expect(engine.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it("writes the user's name to global preferences rather than to the focused agent", async () => {
+    const engine = makeGlobalEngine({ setUserName: vi.fn() });
+    const app = await mountWith(engine);
+
+    const res = await app.request("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: { name: "Someone Else" } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(engine.setUserName).toHaveBeenCalledWith("Someone Else");
     expect(engine.updateConfig).not.toHaveBeenCalled();
   });
 

@@ -14,7 +14,7 @@ import { validateProviderModels } from "../shared/provider-model-validation.ts";
 
 // ── 测试工具 ────────────────────────────────────────────────────────────────
 
-const LATEST_DATA_VERSION = 50;
+const LATEST_DATA_VERSION = 51;
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "hana-migrations-"));
@@ -188,7 +188,7 @@ describe("runMigrations runner", () => {
 
     expect(getMigrationStatus(prefs)).toEqual({
       registryLatestId: LATEST_DATA_VERSION,
-      pendingIds: [48, 49, 50],
+      pendingIds: [48, 49, 50, 51],
       lastFailedIds: [],
     });
     expect(fs.readFileSync(path.join(userDir, "preferences.json")).equals(before)).toBe(true);
@@ -286,7 +286,7 @@ describe("runMigrations runner", () => {
     }
 
     expect(logs).toContain("[migrations] 收据保存失败，应用将继续启动；未落盘的迁移会在下次启动重试");
-    expect(getMigrationStatus(prefs).pendingIds).toEqual([49, 50]);
+    expect(getMigrationStatus(prefs).pendingIds).toEqual([49, 50, 51]);
   });
 });
 

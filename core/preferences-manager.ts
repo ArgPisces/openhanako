@@ -516,6 +516,21 @@ export class PreferencesManager {
     this.savePreferences(prefs);
   }
 
+  /**
+   * 读取用户名（全局）。名字描述的是使用者本人，不属于任何一个 agent，
+   * 所以正源在这里，而不是各 agent 的 config.yaml。
+   */
+  getUserName() {
+    return this._cache.userName || "";
+  }
+
+  /** 保存用户名（全局） */
+  setUserName(name) {
+    const prefs = this._mutableCopy();
+    prefs.userName = typeof name === "string" ? name.trim() : "";
+    this.savePreferences(prefs);
+  }
+
   /** 读取编辑器排版偏好 */
   getEditor() {
     return normalizeEditorTypography(this._cache.editor);
