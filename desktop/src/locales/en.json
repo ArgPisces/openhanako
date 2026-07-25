@@ -577,6 +577,7 @@
       },
       "kong": {
         "label": "No divergent-thinking module (such as MOOD) — the same experience as ordinary agents.",
+        "shortLabel": "No thinking block; answers directly.",
         "avatar": "Kong.png"
       }
     },

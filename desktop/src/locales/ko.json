@@ -576,7 +576,8 @@
         "avatar": "Ming.png"
       },
       "kong": {
-        "label": "기본형",
+        "label": "발산적 사고 모듈(MOOD 등)이 없는, 다른 Agent와 동일한 경험.",
+        "shortLabel": "사고 블록 없음, 바로 답변합니다.",
         "avatar": "Kong.png"
       }
     },

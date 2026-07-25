@@ -532,6 +532,7 @@
       },
       "kong": {
         "label": "无发散思考模块（如 MOOD），和别的 Agent 一致体验。",
+        "shortLabel": "无思考区块，直接回答。",
         "avatar": "Kong.png"
       }
     },
