@@ -60,7 +60,7 @@ describe('WelcomeScreen workspace picker', () => {
       agentName: 'Hanako',
       agentAvatarUrl: null,
       agentYuan: 'hanako',
-      currentAgentId: null,
+      currentAgentId: 'hana',
       selectedAgentId: null,
       memoryEnabled: true,
       selectedFolder: '/workspace/Desktop',
@@ -185,7 +185,7 @@ describe('WelcomeScreen workspace picker', () => {
 
     expect(useStore.getState().selectedFolder).toBe('/workspace/Desktop');
     expect(useStore.getState().cwdHistory).toEqual([]);
-    expect(mocks.hanaFetch).toHaveBeenCalledWith('/api/config/workspaces/recent', expect.objectContaining({
+    expect(mocks.hanaFetch).toHaveBeenCalledWith('/api/config/workspaces/recent?agentId=hana', expect.objectContaining({
       method: 'DELETE',
       body: JSON.stringify({ path: '/workspace/Desktop/project-hana' }),
     }));

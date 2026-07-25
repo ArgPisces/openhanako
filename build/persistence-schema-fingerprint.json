@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:8fad99e41102a9c354ee33075220b9d6110b36cc42192d214889b71236838ed8",
+  "payloadFingerprint": "sha256:ce58e69c8b0b97fdafd84aa242fca7f777a9cd2331b277a512bbca1dcfe84858",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Shrank the identity-free config handlers; the only persistence effect is a line-number shift of the existing FactStore construction site in the same file. No store, schema, or DDL changed.",
-    "payloadFingerprint": "sha256:8fad99e41102a9c354ee33075220b9d6110b36cc42192d214889b71236838ed8"
+    "compatibilityReason": "Added explicit agent resolution to the recent-workspace handlers; the only persistence effect is a line-number shift of the existing FactStore construction site in the same file. No store, schema, or DDL changed.",
+    "payloadFingerprint": "sha256:ce58e69c8b0b97fdafd84aa242fca7f777a9cd2331b277a512bbca1dcfe84858"
   },
   "schemas": [
     {
@@ -8572,7 +8572,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 409,
+      "line": 421,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "server/routes/config.ts",
       "storeId": "agent-facts-sqlite"

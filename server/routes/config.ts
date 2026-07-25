@@ -215,40 +215,52 @@ export function createConfigRoute(engine: any) {
     }
   });
 
+  // ── 最近工作区（cwd_history）──
+  //
+  // 最近工作区列表写在某个 agent 自己的 config.yaml 里，所以这三条路由都要求
+  // 显式 agentId：读的是那个 agent 的历史，写的也是那个 agent 的历史，全程不碰
+  // 服务端此刻聚焦在谁身上。少了 agentId 就直接报错，不替调用方挑一个。
+
   route.post("/config/workspaces/recent", async (c) => {
     try {
+      const agent = resolveAgentStrict(engine, c);
       const body = await safeJson(c);
       const folder = normalizeWorkspacePath(body?.path);
       if (!folder) return c.json({ error: "path must be a non-empty string" }, 400);
       const stat = await fs.stat(folder).catch(() => null);
       if (!stat?.isDirectory()) return c.json({ error: "path must be an existing directory" }, 400);
-      const cwdHistory = mergeWorkspaceHistory(engine.config.cwd_history, [folder]);
-      await engine.updateConfig({ cwd_history: cwdHistory });
+      const cwdHistory = mergeWorkspaceHistory(agent.config?.cwd_history, [folder]);
+      await engine.updateConfig({ cwd_history: cwdHistory }, { agentId: agent.id });
       return c.json({ ok: true, cwd_history: cwdHistory });
     } catch (err) {
+      if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
       return c.json({ error: err.message }, 500);
     }
   });
 
   route.delete("/config/workspaces/recent", async (c) => {
     try {
+      const agent = resolveAgentStrict(engine, c);
       const body = await safeJson(c).catch(() => ({}));
       const folder = normalizeWorkspacePath(body?.path);
       if (!folder) return c.json({ error: "path must be a non-empty string" }, 400);
-      const cwdHistory = removeWorkspaceHistoryEntries(engine.config.cwd_history, [folder]);
-      await engine.updateConfig({ cwd_history: cwdHistory });
+      const cwdHistory = removeWorkspaceHistoryEntries(agent.config?.cwd_history, [folder]);
+      await engine.updateConfig({ cwd_history: cwdHistory }, { agentId: agent.id });
       return c.json({ ok: true, cwd_history: cwdHistory });
     } catch (err) {
+      if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
       return c.json({ error: err.message }, 500);
     }
   });
 
   route.delete("/config/workspaces/recent/all", async (c) => {
     try {
+      const agent = resolveAgentStrict(engine, c);
       const cwdHistory = clearWorkspaceHistory();
-      await engine.updateConfig({ cwd_history: cwdHistory });
+      await engine.updateConfig({ cwd_history: cwdHistory }, { agentId: agent.id });
       return c.json({ ok: true, cwd_history: cwdHistory });
     } catch (err) {
+      if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
       return c.json({ error: err.message }, 500);
     }
   });
