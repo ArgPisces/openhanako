@@ -473,6 +473,11 @@ export function createAgentsRoute(engine) {
       return c.json({ error: "agent not found" }, 404);
     }
     try {
+      // Drop workspace history entries whose folders are gone before answering.
+      // The bare config route has always done this; doing it here too means a
+      // caller gets the same config whichever door it comes through, instead of
+      // depending on having hit some other route first.
+      await engine.gcWorkspacePersistence?.({ agentId: id });
       const configPath = path.join(agentDir(engine, id), "config.yaml");
       // 直接解析 YAML，不走 loadConfig 全局缓存
       const config = YAML.load(await fs.readFile(configPath, "utf-8")) || {};

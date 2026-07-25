@@ -775,4 +775,34 @@ describe("agents route", () => {
     expect(fs.readFileSync(path.join(agentDir, "identity.md"), "utf-8")).toBe("original identity\n");
     expect(engine.updateConfig).not.toHaveBeenCalled();
   });
+  it("garbage-collects stale workspace history when reading an agent's config", async () => {
+    const agentId = "hana";
+    const agentDir = path.join(tempRoot, agentId);
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(path.join(agentDir, "config.yaml"), "agent:\n  name: Hana\n", "utf-8");
+
+    const { createAgentsRoute } = await import("../server/routes/agents.ts");
+    const app = new Hono();
+    const engine = {
+      agentsDir: tempRoot,
+      currentAgentId: "someone-else",
+      gcWorkspacePersistence: vi.fn(),
+      providerRegistry: {
+        getAllProvidersRaw: vi.fn(() => ({})),
+        get: vi.fn(() => null),
+      },
+      getAgent: vi.fn(() => ({ id: agentId, tools: [] })),
+      getComputerUseSettings: vi.fn(() => ({ enabled: false })),
+    };
+
+    app.route("/api", createAgentsRoute(engine));
+
+    const res = await app.request(`/api/agents/${agentId}/config`);
+
+    expect(res.status).toBe(200);
+    // The bare config route prunes workspace history that no longer exists on
+    // disk before answering. The per-agent front door must do the same for its
+    // own agent, so callers get the same answer whichever door they use.
+    expect(engine.gcWorkspacePersistence).toHaveBeenCalledWith({ agentId });
+  });
 });

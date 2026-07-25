@@ -8002,7 +8002,7 @@
     },
     {
       "sourceFile": "server/routes/agents.ts",
-      "line": 723,
+      "line": 728,
       "kind": "write-file",
       "excerpt": "fs.writeFile(path.join(agentDir(engine, id), \"identity.md\"), content, \"utf-8\")",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
@@ -8011,7 +8011,7 @@
     },
     {
       "sourceFile": "server/routes/agents.ts",
-      "line": 761,
+      "line": 766,
       "kind": "write-file",
       "excerpt": "fs.writeFile(path.join(agentDir(engine, id), \"ishiki.md\"), content, \"utf-8\")",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
@@ -8020,7 +8020,7 @@
     },
     {
       "sourceFile": "server/routes/agents.ts",
-      "line": 799,
+      "line": 804,
       "kind": "write-file",
       "excerpt": "fs.writeFile(path.join(agentDir(engine, id), \"public-ishiki.md\"), content, \"utf-8\")",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
