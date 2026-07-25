@@ -26,6 +26,7 @@ import { configureAppEventActions, handleAppEvent, readConfigCwdHistory, readCon
 import { configureWsMessageHandler } from './services/ws-message-handler';
 import { applyChatLayout } from './chat/layout';
 import { applyEditorTypography } from './editor/typography';
+import { findPrimaryAgent } from './utils/agent-workspace';
 import {
   LOCAL_CONNECTION_ID,
   createLocalServerConnection,
@@ -186,19 +187,31 @@ export async function initApp(): Promise<void> {
     console.warn('[init] appearance preference sync skipped:', err);
   });
 
-  // 2. 并行获取 health + config
+  // 2. 并行获取 health + 全局设置 + agent 列表
   try {
-    const [healthRes, configRes] = await Promise.all([
+    const [healthRes, globalConfigRes, agentsRes] = await Promise.all([
       hanaFetch('/api/health'),
       hanaFetch('/api/config'),
+      hanaFetch('/api/agents'),
     ]);
     const healthData = await healthRes.json();
-    const configData = await configRes.json();
-    applyEditorTypography(configData.editor);
-    applyChatLayout(configData.chat);
+    const globalConfig = await globalConfigRes.json();
+    const agentsData = await agentsRes.json();
+
+    // 排版、语言这些是全局偏好；书桌目录、记忆开关、聊天布局、最近工作区
+    // 属于某一个 agent，必须指名道姓地问那个 agent 要，不能从一个不带 agent
+    // 身份的请求里捞。启动后落到的是主助手（见 loadAgents 的选择逻辑），
+    // 所以这里也按主助手取，两边看到的是同一个 agent。
+    const bootAgentId = findPrimaryAgent(agentsData.agents || [])?.id || null;
+    const agentConfig = bootAgentId
+      ? await hanaFetch(`/api/agents/${encodeURIComponent(bootAgentId)}/config`).then(r => r.json())
+      : {};
+
+    applyEditorTypography(globalConfig.editor);
+    applyChatLayout(agentConfig.chat);
 
     // 3. 加载 i18n
-    await i18n.load(configData.locale || 'zh-CN');
+    await i18n.load(globalConfig.locale || 'zh-CN');
     useStore.setState({ locale: i18n.locale });
 
     // 4. 应用 agent 身份
@@ -209,14 +222,14 @@ export async function initApp(): Promise<void> {
     });
 
     // 5. 设置 desk 相关状态
-    const homeFolder = readConfigHomeFolder(configData);
+    const homeFolder = readConfigHomeFolder(agentConfig);
     useStore.setState({
       homeFolder,
       selectedFolder: homeFolder,
       workspaceFolders: [],
-      memoryMasterEnabled: readConfigMemoryMasterEnabled(configData),
+      memoryMasterEnabled: readConfigMemoryMasterEnabled(agentConfig),
     });
-    useStore.setState({ cwdHistory: readConfigCwdHistory(configData) });
+    useStore.setState({ cwdHistory: readConfigCwdHistory(agentConfig) });
 
     // 6. 加载头像
     loadAvatars(healthData.avatars);

@@ -40,7 +40,11 @@ export function MeTab() {
 
       const requests: Promise<Response>[] = [];
       if (Object.keys(partial).length) {
-        requests.push(hanaFetch('/api/config', {
+        // user.name lives in the agent's own config, so it has to be saved
+        // against the agent this settings window is showing.
+        const agentId = store.getSettingsAgentId();
+        if (!agentId) throw new Error('no settings agent selected');
+        requests.push(hanaFetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(partial),

@@ -73,6 +73,19 @@ export function reduceCliStreamIdentity(current, msg) {
   return state;
 }
 
+/**
+ * 从 /api/agents 的返回里挑出这个终端会话当前所在的 agent —— `agent switch`
+ * 改的就是这个标记。挑出来之后所有 per-agent 请求都点名带上它的 id，不靠服务端
+ * 替我们猜。列表为空时返回 null，让调用方自己决定怎么说，而不是凑一个出来。
+ */
+export function pickCliAgent(agents) {
+  const list = Array.isArray(agents) ? agents : [];
+  return list.find((a) => a?.isCurrent)
+    || list.find((a) => a?.isPrimary)
+    || list[0]
+    || null;
+}
+
 export function startCLI({ port, token, agentName, userName }) {
   const wsUrl = `ws://127.0.0.1:${port}/ws?token=${token}`;
   const apiBase = `http://127.0.0.1:${port}`;
@@ -395,13 +408,22 @@ ${c.bold}${t("cli.helpTitle")}${c.reset}
       }
 
       case "config": {
-        const data = await api("/api/config");
+        // Locale 是全局偏好；名字、缘、用户名、模型都写在某个 agent 自己的
+        // 配置里，所以先问清楚这个终端在哪个 agent 上，再点名去要它的配置。
+        const [globalConfig, agentList] = await Promise.all([
+          api("/api/config"),
+          api("/api/agents"),
+        ]);
+        const activeAgent = pickCliAgent(agentList.agents);
+        const agentConfig = activeAgent
+          ? await api(`/api/agents/${encodeURIComponent(activeAgent.id)}/config`)
+          : {};
         console.log(`\n${c.bold}${t("cli.currentConfig")}${c.reset}`);
-        console.log(`  ${c.dim}Agent:${c.reset}  ${data.agent?.name || "Hanako"}`);
-        console.log(`  ${c.dim}Yuan:${c.reset}   ${data.agent?.yuan || "hanako"}`);
-        console.log(`  ${c.dim}User:${c.reset}   ${data.user?.name || "User"}`);
-        console.log(`  ${c.dim}Locale:${c.reset} ${data.locale || "en"}`);
-        console.log(`  ${c.dim}Model:${c.reset}  ${data.api?.model || t("cli.notSet")}`);
+        console.log(`  ${c.dim}Agent:${c.reset}  ${agentConfig.agent?.name || "Hanako"}`);
+        console.log(`  ${c.dim}Yuan:${c.reset}   ${agentConfig.agent?.yuan || "hanako"}`);
+        console.log(`  ${c.dim}User:${c.reset}   ${agentConfig.user?.name || "User"}`);
+        console.log(`  ${c.dim}Locale:${c.reset} ${globalConfig.locale || "en"}`);
+        console.log(`  ${c.dim}Model:${c.reset}  ${agentConfig.api?.model || t("cli.notSet")}`);
         console.log();
         showPrompt();
         break;
