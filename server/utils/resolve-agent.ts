@@ -1,37 +1,18 @@
 /**
- * Resolve target agent from request context.
+ * Resolve the target agent from a request.
  *
- * resolveAgentStrict is the one to use. resolveAgent falls back to whichever
- * agent the server is currently focused on when the request does not name one,
- * which is a guess: with two clients open on two different agents it is
- * sometimes the other client's agent, so a read can describe the wrong agent
- * and a write can land on it.
+ * A request says which agent it is about, and this is the only way to find out.
+ * There used to be a second version that fell back to whichever agent the
+ * server was focused on when the request did not name one; with two clients
+ * open on two different agents that guess was sometimes the other client's
+ * agent, so a read could describe the wrong agent and a write could land on it.
+ * It is gone, and tests/focus-fallback-agent-resolution.test.ts keeps it gone.
  *
- * Only the plugin route still uses the guessing version, because agentId is
- * optional in the plugin contract and making it required would change that
- * contract. tests/focus-fallback-agent-resolution.test.ts pins that list at
- * exactly one entry: new routes take an explicit agentId and use
- * resolveAgentStrict.
+ * A route whose agent is genuinely optional passes null onward rather than
+ * substituting one.
  */
 
-/**
- * 焦点回落版：显式 ID 找不到时抛错；无 ID 时用焦点 agent。
- * 新代码别用，见上方说明；只有 plugins 路由是合法消费者。
- */
-export function resolveAgent(engine, c) {
-  const explicit = c.req.query("agentId") || c.req.param("agentId");
-  if (explicit) {
-    const found = engine.getAgent(explicit);
-    if (!found) throw new AgentNotFoundError(explicit);
-    return found;
-  }
-  // 无显式 ID：使用焦点 agent（UI 请求的默认行为）
-  const agent = engine.getAgent(engine.currentAgentId);
-  if (!agent) throw new AgentNotFoundError(engine.currentAgentId);
-  return agent;
-}
-
-/** 写操作用：强制要求显式 agentId，不做 fallback */
+/** 强制要求显式 agentId，不做 fallback */
 export function resolveAgentStrict(engine, c) {
   const explicit = c.req.query("agentId") || c.req.param("agentId");
   if (!explicit) {

@@ -4,7 +4,6 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import { extractZip } from "../../lib/extract-zip.ts";
-import { resolveAgent } from "../utils/resolve-agent.ts";
 import { fromRoot } from "../../shared/hana-root.ts";
 import { DEFAULT_THEME } from "../../desktop/src/shared/theme-registry.cjs";
 import { registerSessionFileFromRequest } from "../../lib/session-files/session-file-response.ts";
@@ -1334,8 +1333,16 @@ export function createPluginsRoute(engine: any) {
       ? url.pathname.slice(prefixIndex + prefix.length) || "/"
       : "/";
     await engine.pluginManager?.activatePluginRoute?.(pluginId, subPath);
-    const agent = resolveAgent(engine, c);
-    const agentId = agent?.id || null;
+    // The plugin contract lets a surface run without an agent, so an absent
+    // agentId is an answer rather than a question: pass null through instead of
+    // handing the plugin whichever agent the server happens to be focused on.
+    const requestedAgentId = c.req.query("agentId") || null;
+    let agentId: string | null = null;
+    if (requestedAgentId) {
+      const agent = engine.getAgent(requestedAgentId);
+      if (!agent) return c.json({ error: `agent "${requestedAgentId}" not found` }, 404);
+      agentId = agent.id;
+    }
     const requestPrincipal = pluginRouteRequestPrincipal(readAuthPrincipal(c), iframeTicket, pluginId);
     const response = await proxyToPlugin(c, pluginApp, pluginId, agentId, requestPrincipal);
     return appendPluginAssetSessionCookie(c, engine, pluginId, response, iframeTicket);

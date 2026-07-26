@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:549119a6ba7283d165b07cf2bd2700722b30ab190c9ed3c2ec927bcc98baa147",
+  "payloadFingerprint": "sha256:09394c874f0f7d66bb0d47c077c725d178f33fd67e42c03074f086dbd21d6d56",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Bridge session agent-resolution changes only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
-    "payloadFingerprint": "sha256:549119a6ba7283d165b07cf2bd2700722b30ab190c9ed3c2ec927bcc98baa147"
+    "compatibilityReason": "Plugin proxy agent-resolution changes only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
+    "payloadFingerprint": "sha256:09394c874f0f7d66bb0d47c077c725d178f33fd67e42c03074f086dbd21d6d56"
   },
   "schemas": [
     {
@@ -3139,7 +3139,7 @@
       "contract": "verified plugin release ZIP naming by pluginId/version and expected sha256",
       "kind": "directory-contract",
       "module": "server/routes/plugins.ts",
-      "sourceHash": "sha256:a5ba3f5d830f1215daaba00b716b9ccd46e4740171d373b1ffea7495a183b1d0",
+      "sourceHash": "sha256:2e225c1a1957cf2b9c37b516ecf22d12bebf428a0e021b601b205ad5ecb03952",
       "storeId": "plugin-download-cache"
     },
     {
@@ -8668,7 +8668,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 397,
+      "line": 396,
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "installed-plugins"
@@ -8676,7 +8676,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 421,
+      "line": 420,
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "installed-plugins"
@@ -8684,7 +8684,7 @@
     {
       "exemptionId": "conditional-plugin-install-cleanup",
       "kind": "remove-path",
-      "line": 428,
+      "line": 427,
       "reason": "One bounded cleanup list contains both HANA_HOME .installing staging and operating-system extraction temp; flow-sensitive attribution must replace this exact conditional site.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": null
@@ -8692,7 +8692,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 473,
+      "line": 472,
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "installed-plugins"
@@ -8700,7 +8700,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 535,
+      "line": 534,
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "installed-plugins"
@@ -8708,7 +8708,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 536,
+      "line": 535,
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "installed-plugins"
@@ -8716,7 +8716,7 @@
     {
       "exemptionId": "conditional-plugin-install-cleanup",
       "kind": "remove-path",
-      "line": 562,
+      "line": 561,
       "reason": "One bounded cleanup list contains both HANA_HOME .installing staging and operating-system extraction temp; flow-sensitive attribution must replace this exact conditional site.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": null
@@ -8724,7 +8724,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 668,
+      "line": 667,
       "reason": "Caches a sha256-verified plugin release package.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "plugin-download-cache"
@@ -8732,7 +8732,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 670,
+      "line": 669,
       "reason": "Caches a sha256-verified plugin release package.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "plugin-download-cache"
@@ -8740,7 +8740,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1144,
+      "line": 1143,
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
       "sourceFile": "server/routes/plugins.ts",
       "storeId": "installed-plugins"

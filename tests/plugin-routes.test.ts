@@ -571,6 +571,37 @@ describe("plugin management API", () => {
       expect(await res.json()).toEqual({ agentId: "butter", rawHeader: null });
     });
 
+    it("tells the plugin there is no agent instead of naming the focused one", async () => {
+      // The server is focused on an agent, but this surface was opened without
+      // one. The plugin contract allows a null agent, and answering with the
+      // focused agent would tell the plugin the surface belongs to an agent the
+      // opener never chose.
+      const engine = mockEngine({ getAgent: (id) => (id ? { id } : null) });
+      const pluginApp = new Hono();
+      pluginApp.get("/identity", (c) => c.json({
+        agentId: (c.env as { pluginRouteRequest?: { agentId?: string | null } })?.pluginRouteRequest?.agentId ?? null,
+      }));
+      engine.pluginManager.routeRegistry.set("demo", pluginApp);
+      const app = createApp(engine);
+
+      const res = await app.request("/api/plugins/demo/identity");
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ agentId: null });
+    });
+
+    it("still refuses a plugin request that names an agent that does not exist", async () => {
+      const engine = mockEngine({ getAgent: () => null });
+      const pluginApp = new Hono();
+      pluginApp.get("/identity", (c) => c.json({ ok: true }));
+      engine.pluginManager.routeRegistry.set("demo", pluginApp);
+      const app = createApp(engine);
+
+      const res = await app.request("/api/plugins/demo/identity?agentId=ghost");
+
+      expect(res.status).toBe(404);
+    });
+
     it("issues a path-scoped asset session from iframe pages and serves static plugin assets", async () => {
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-plugin-assets-"));
       try {

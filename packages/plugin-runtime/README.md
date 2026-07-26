@@ -93,6 +93,9 @@ import { getPluginRequestContext } from '@hana/plugin-runtime';
 export default function(app) {
   app.post('/create-session', async (c) => {
     const req = getPluginRequestContext(c);
+    // req.agentId is null when the surface belongs to no agent (a preview, for
+    // example). Handle that case rather than treating it as a default agent.
+    if (!req.agentId) return c.json({ error: 'this surface has no agent yet' }, 400);
     const result = await req.bus.request('session:create', { agentId: req.agentId });
     return c.json(result);
   });

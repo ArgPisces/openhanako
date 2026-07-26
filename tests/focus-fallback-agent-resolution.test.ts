@@ -4,22 +4,18 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * resolveAgent answers "which agent is this request about?" by falling back to
- * whichever agent the server is currently focused on when the request does not
+ * resolveAgent answered "which agent is this request about?" by falling back to
+ * whichever agent the server was currently focused on when the request did not
  * say. That is a guess, and with two clients open on two different agents it is
  * sometimes the wrong one — a read can describe the other client's agent, a
- * write can land on it. resolveAgentStrict is the version that refuses to
- * guess.
+ * write can land on it. It has been removed; resolveAgentStrict is the version
+ * that refuses to guess.
  *
- * The remaining users below are the ones that have not been converted yet. The
- * list is allowed to shrink and never to grow: a new entry means a new place
- * where the server picks an agent on the caller's behalf. If you are adding a
- * route, take an explicit agentId and use resolveAgentStrict instead of adding
- * yourself here.
+ * This count is permanently zero. A route that needs an agent takes an explicit
+ * agentId and uses resolveAgentStrict; a route whose agent is optional passes
+ * null onward instead of substituting one.
  */
-const ROUTES_STILL_GUESSING = [
-  "plugins.ts",
-];
+const ROUTES_STILL_GUESSING: string[] = [];
 
 const routesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "server", "routes");
 

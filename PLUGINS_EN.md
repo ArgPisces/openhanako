@@ -444,8 +444,13 @@ Every HTTP request entering a plugin route gets its own request-level context, r
 app.post("/create-session", async (c) => {
   const reqCtx = c.get("pluginRequestContext");
   // reqCtx.principal        identity behind this request (owner device / this plugin's iframe surface…), null when invoked directly in tests
-  // reqCtx.agentId          current agent id injected by the proxy layer
+  // reqCtx.agentId          which agent this request belongs to; null means the
+  //                         surface belongs to no agent right now (a preview,
+  //                         for example) — it is not a stand-in for a default one
   // reqCtx.capabilityGrant  { accessLevel, declaredPermissions, legacyDeclaration }
+  if (!reqCtx.agentId) {
+    return c.json({ error: "this surface has no agent yet" }, 400);
+  }
   const result = await reqCtx.bus.request("session:create", { agentId: reqCtx.agentId });
   return c.json(result);
 });

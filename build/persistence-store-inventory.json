@@ -8200,7 +8200,7 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 397,
+      "line": 396,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(userPluginsDir, { recursive: true })",
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
@@ -8209,7 +8209,7 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 421,
+      "line": 420,
       "kind": "copy-file",
       "excerpt": "fs.cpSync(pluginSrc, tmpTarget, { recursive: true })",
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
@@ -8218,7 +8218,7 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 428,
+      "line": 427,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(cleanupPath, { recursive: true, force: true })",
       "reason": "One bounded cleanup list contains both HANA_HOME .installing staging and operating-system extraction temp; flow-sensitive attribution must replace this exact conditional site.",
@@ -8227,7 +8227,16 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 473,
+      "line": 472,
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(targetDir, { recursive: true, force: true })",
+      "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
+      "storeId": "installed-plugins",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "server/routes/plugins.ts",
+      "line": 534,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(targetDir, { recursive: true, force: true })",
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
@@ -8237,15 +8246,6 @@
     {
       "sourceFile": "server/routes/plugins.ts",
       "line": 535,
-      "kind": "remove-path",
-      "excerpt": "fs.rmSync(targetDir, { recursive: true, force: true })",
-      "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
-      "storeId": "installed-plugins",
-      "exemptionId": null
-    },
-    {
-      "sourceFile": "server/routes/plugins.ts",
-      "line": 536,
       "kind": "rename",
       "excerpt": "fs.renameSync(stagedDir, targetDir)",
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
@@ -8254,7 +8254,7 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 562,
+      "line": 561,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(cleanupPath, { recursive: true, force: true })",
       "reason": "One bounded cleanup list contains both HANA_HOME .installing staging and operating-system extraction temp; flow-sensitive attribution must replace this exact conditional site.",
@@ -8263,7 +8263,7 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 668,
+      "line": 667,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(downloadsDir, { recursive: true })",
       "reason": "Caches a sha256-verified plugin release package.",
@@ -8272,7 +8272,7 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 670,
+      "line": 669,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(packagePath, body)",
       "reason": "Caches a sha256-verified plugin release package.",
@@ -8281,7 +8281,7 @@
     },
     {
       "sourceFile": "server/routes/plugins.ts",
-      "line": 1144,
+      "line": 1143,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(pluginDir, { recursive: true, force: true })",
       "reason": "Creates, promotes, rolls back, or removes an installed plugin directory.",
