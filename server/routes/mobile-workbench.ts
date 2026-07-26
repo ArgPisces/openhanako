@@ -35,6 +35,9 @@ export function createMobileWorkbenchRoute(engine) {
       locale: engine.getLocale?.() || engine.config?.locale || "zh-CN",
       agentName: engine.agentName || "Hanako",
       userName: engine.userName || "User",
+      // @ui-focus-ok: this is the phone's first-load handshake. It reports which
+      // agent the server is currently on so the phone can open there; the phone
+      // names an agent explicitly on every request after this one.
       currentAgentId: engine.currentAgentId || null,
       agentYuan: engine.agent?.config?.agent?.yuan || "hanako",
       homeFolder: engine.homeCwd || null,

@@ -422,10 +422,11 @@ export function createSkillsRoute(engine) {
         }
       }
 
-      // 返回 skill 详情：有 agentId 就取该 agent 视角，没有就 fallback 到焦点
-      const viewAgentId = agentId || engine.currentAgentId || "";
-      const skill = viewAgentId
-        ? engine.getAllSkills(viewAgentId).find(s => s.name === safeName)
+      // 返回 skill 详情：传了 agentId 就给该 agent 的视角（含 enabled 开关）。
+      // 全局安装没有 agent 视角可言，此时只回 skill 本身；借焦点 agent 的视角
+      // 会把"某个 agent 有没有开这个技能"当成全局安装的结果报给调用方。
+      const skill = agentId
+        ? engine.getAllSkills(agentId).find(s => s.name === safeName)
         : null;
       emitAppEvent(engine, "skills-changed", { agentId: agentId || null });
       return c.json({

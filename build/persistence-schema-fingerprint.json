@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:0f266ebbe8121b4f0aa3f099e265361fd18062278690cf329c6869f6f1d8d8b3",
+  "payloadFingerprint": "sha256:bc83c4678f2ef27f6f468b1240eb18488c330341481b6488368a51303ec4e24a",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Compaction concurrency guard changes only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
-    "payloadFingerprint": "sha256:0f266ebbe8121b4f0aa3f099e265361fd18062278690cf329c6869f6f1d8d8b3"
+    "compatibilityReason": "Focus-pointer annotations and the skills install view change only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
+    "payloadFingerprint": "sha256:bc83c4678f2ef27f6f468b1240eb18488c330341481b6488368a51303ec4e24a"
   },
   "schemas": [
     {
@@ -3208,7 +3208,7 @@
       "contract": "server-info writer and desktop bootstrap reader",
       "kind": "runtime-contract",
       "module": "server/index.ts",
-      "sourceHash": "sha256:499b628679a32e8c39c3af04de9289305139ae414cd60c9075f43fd57657e62f",
+      "sourceHash": "sha256:f4b51a6710b5e79dd059f9e26f195041de8dcc80e00cfb45a6b187c646b5f0ef",
       "storeId": "server-runtime-info"
     },
     {
@@ -8468,7 +8468,7 @@
     {
       "exemptionId": null,
       "kind": "append-file",
-      "line": 1131,
+      "line": 1135,
       "reason": "Appends the browser worker log.",
       "sourceFile": "server/index.ts",
       "storeId": "runtime-diagnostics"
@@ -8476,7 +8476,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 1190,
+      "line": 1194,
       "reason": "Writes or deletes live server discovery state.",
       "sourceFile": "server/index.ts",
       "storeId": "server-runtime-info"
@@ -8484,7 +8484,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1291,
+      "line": 1295,
       "reason": "Writes or deletes live server discovery state.",
       "sourceFile": "server/index.ts",
       "storeId": "server-runtime-info"
@@ -8524,7 +8524,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 728,
+      "line": 732,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8532,7 +8532,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 766,
+      "line": 770,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8540,7 +8540,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 804,
+      "line": 808,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/agents.ts",
       "storeId": "agent-profile"
@@ -8812,7 +8812,7 @@
     {
       "exemptionId": null,
       "kind": "append-file",
-      "line": 2313,
+      "line": 2320,
       "reason": "Appends switch failure diagnostics.",
       "sourceFile": "server/routes/sessions.ts",
       "storeId": "runtime-diagnostics"
@@ -8820,7 +8820,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2497,
+      "line": 2504,
       "reason": "Archives, restores, or deletes a session JSONL locator.",
       "sourceFile": "server/routes/sessions.ts",
       "storeId": "session-jsonl"
@@ -8828,7 +8828,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 2505,
+      "line": 2512,
       "reason": "Archives, restores, or deletes a session JSONL locator.",
       "sourceFile": "server/routes/sessions.ts",
       "storeId": "session-jsonl"
@@ -8836,7 +8836,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 2571,
+      "line": 2578,
       "reason": "Archives, restores, or deletes a session JSONL locator.",
       "sourceFile": "server/routes/sessions.ts",
       "storeId": "session-jsonl"
@@ -8844,7 +8844,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2583,
+      "line": 2590,
       "reason": "Archives, restores, or deletes a session JSONL locator.",
       "sourceFile": "server/routes/sessions.ts",
       "storeId": "session-jsonl"
@@ -8852,7 +8852,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 2584,
+      "line": 2591,
       "reason": "Archives, restores, or deletes a session JSONL locator.",
       "sourceFile": "server/routes/sessions.ts",
       "storeId": "session-jsonl"

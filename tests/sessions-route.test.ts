@@ -110,6 +110,8 @@ describe("sessions route", () => {
         baseUrl: "https://api.xiaomimimo.com/v1",
         input: ["text"],
       },
+      // A real engine always resolves ownership for a switchable session path.
+      resolveSessionOwnership: vi.fn(() => ({ agentId: "a", source: "path", agentDeleted: false })),
       isSessionStreaming: vi.fn(() => false),
       switchSession: vi.fn(async (sessionPath) => {
         engine.currentSessionPath = sessionPath;
@@ -183,6 +185,8 @@ describe("sessions route", () => {
       memoryModelUnavailableReason: null,
       cwd: "/tmp/workspace",
       currentAgentId: "a",
+      // A real engine always resolves ownership for a switchable session path.
+      resolveSessionOwnership: vi.fn(() => ({ agentId: "a", source: "path", agentDeleted: false })),
       isSessionStreaming: vi.fn(() => false),
       switchSession: vi.fn(async () => historicalModel),
       getSessionByPath: vi.fn(() => ({
@@ -240,6 +244,8 @@ describe("sessions route", () => {
           ? { sessionId, currentLocator: { path: currentPath } }
           : null
       )),
+      // A real engine always resolves ownership for a switchable session path.
+      resolveSessionOwnership: vi.fn(() => ({ agentId: "a", source: "path", agentDeleted: false })),
       isSessionStreaming: vi.fn(() => false),
       switchSession: vi.fn(async () => {}),
       getSessionByPath: vi.fn(() => ({ messages: [] })),
@@ -293,6 +299,8 @@ describe("sessions route", () => {
       cwd: "/tmp/workspace",
       currentAgentId: "a",
       currentModel: { id: "m", provider: "test", input: ["text"] },
+      // A real engine always resolves ownership for a switchable session path.
+      resolveSessionOwnership: vi.fn(() => ({ agentId: "a", source: "path", agentDeleted: false })),
       isSessionStreaming: vi.fn(() => false),
       switchSession: vi.fn(async (sessionPath) => {
         engine.currentSessionPath = sessionPath;
@@ -350,6 +358,8 @@ describe("sessions route", () => {
       cwd: "/tmp/workspace",
       currentAgentId: "a",
       currentModel: { id: "m", provider: "test", input: ["text"] },
+      // A real engine always resolves ownership for a switchable session path.
+      resolveSessionOwnership: vi.fn(() => ({ agentId: "a", source: "path", agentDeleted: false })),
       isSessionStreaming: vi.fn(() => false),
       switchSession: vi.fn(async (sessionPath) => {
         engine.currentSessionPath = sessionPath;
@@ -401,6 +411,8 @@ describe("sessions route", () => {
       cwd: "/tmp/workspace",
       currentAgentId: "a",
       currentModel: { id: "m", provider: "test", input: ["text"] },
+      // A real engine always resolves ownership for a switchable session path.
+      resolveSessionOwnership: vi.fn(() => ({ agentId: "a", source: "path", agentDeleted: false })),
       isSessionStreaming: vi.fn(() => false),
       switchSession: vi.fn(async () => {}),
       getSessionByPath: vi.fn(() => ({ messages: [] })),

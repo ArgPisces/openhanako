@@ -952,6 +952,10 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
     return c.json({
       status: "ok",
       version: appVersion,
+      // @ui-focus-ok: a client asking for health on first load has no agent of
+      // its own yet, and this tells it which agent the server was last left on
+      // so it can open there. It reports the focus rather than deciding who
+      // owns anything, and the fields below it describe that same agent.
       agentId: engine.currentAgentId || null,
       agent: engine.agentName,
       agentYuan: engine.agent?.config?.agent?.yuan || "hanako",

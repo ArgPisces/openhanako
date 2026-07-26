@@ -1996,6 +1996,11 @@ export function createSessionsRoute(engine, hub = null) {
         createOptions.workspaceLabel = workspaceSelection.mount.label || null;
       }
       let newSessionPath, newSessionId, newAgentId;
+      // @ui-focus-ok: this asks "is the caller switching to a different agent
+      // than the one already on screen?", which is a question about the focus
+      // itself. The caller's own view wins when it says so; the server's focus
+      // is the last resort for deciding whether this is a switch at all, and
+      // the agent being switched to is the explicit one either way.
       if (agentId && agentId !== (body.currentAgentId || engine.currentAgentId)) {
         ({ sessionPath: newSessionPath, sessionId: newSessionId, agentId: newAgentId } = await engine.createSessionForAgent(
           agentId,
@@ -2251,8 +2256,10 @@ export function createSessionsRoute(engine, hub = null) {
 
       const session = engine.getSessionByPath(sessionPath);
 
-      // 从 manifest 归属解析 agentId，避免依赖 engine 焦点指针的时序
-      const switchedAgentId = engine.resolveSessionOwnership?.(sessionPath)?.agentId || engine.currentAgentId;
+      // 从 manifest 归属解析 agentId，避免依赖 engine 焦点指针的时序。
+      // switchSession 只接受 agents/{id}/sessions/*.jsonl 布局的路径，归属要么
+      // 来自 manifest，要么从这个布局推出来，所以走到这里一定解析得到 agentId。
+      const switchedAgentId = engine.resolveSessionOwnership(sessionPath).agentId;
       const switchedAgent = engine.getAgent(switchedAgentId);
 
       // switchSession 已同步设置焦点到目标 session。

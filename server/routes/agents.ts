@@ -677,6 +677,10 @@ export function createAgentsRoute(engine) {
       engine.invalidateAgentListCache();
       // 触发目标 agent 模块刷新 + prompt 重建
       await engine.updateConfig(agentPartial, { agentId: id });
+      // @ui-focus-ok: the config was already written for the agent named in the
+      // path. This only asks whether that agent is the one currently loaded, so
+      // its live skill list is refreshed to match; any other agent picks the new
+      // policy up when it next loads. The focus decides nothing about ownership.
       if (hasWorkspaceSkillPolicyPatch(agentPartial.workspace_context) && id === engine.currentAgentId) {
         engine.syncAgentWorkspaceSkills?.(id);
       }
