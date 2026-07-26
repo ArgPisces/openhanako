@@ -267,10 +267,13 @@ export function useBridgeState() {
     agentId: string | null,
     signal?: AbortSignal,
   ): Promise<BridgeStatus | null> => {
+    // The status endpoint answers for one named agent. Without an id there is
+    // no answer to ask for, so skip the request instead of sending one that
+    // would be resolved on the server's terms.
+    if (!agentId) return null;
     const requestId = ++statusRequestIdRef.current;
     try {
-      const query = agentId ? `?agentId=${encodeURIComponent(agentId)}` : '';
-      const res = await hanaFetch(`/api/bridge/status${query}`, signal ? { signal } : undefined);
+      const res = await hanaFetch(`/api/bridge/status?agentId=${encodeURIComponent(agentId)}`, signal ? { signal } : undefined);
       const data = await res.json();
       if (
         signal?.aborted

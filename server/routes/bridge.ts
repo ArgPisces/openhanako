@@ -14,7 +14,7 @@ import { isBridgeOwner, resolveBridgeOwnerUserId } from "../../lib/bridge/owner-
 import { collectBridgeMediaAllowedRoots, isInsideBridgeMediaRoot } from "../../lib/bridge/media-roots.ts";
 import { sanitizeBridgeVisibleText } from "../../shared/bridge-visible-text.ts";
 import { t } from "../../lib/i18n.ts";
-import { resolveAgent, resolveAgentStrict } from "../utils/resolve-agent.ts";
+import { AgentNotFoundError, resolveAgentStrict } from "../utils/resolve-agent.ts";
 import { telegramBotOptions } from "../../lib/net/outbound-proxy.ts";
 import { createBridgeOutboundHttp } from "../../lib/bridge/outbound-http.ts";
 import {
@@ -333,9 +333,27 @@ export function createBridgeRoute(engine: any, bridgeManagerRef: any) {
     }
   }
 
+  /**
+   * Bridge reads answer for exactly one agent, so the request has to name it.
+   * There is no server-wide "current" agent that is the right answer for every
+   * connected client, so a request without an agentId gets a 404 rather than
+   * whichever agent the server happens to be focused on.
+   */
+  function withReadAgent(handler: (c: any, agent: any) => any) {
+    return async (c: any) => {
+      let agent;
+      try {
+        agent = resolveAgentStrict(engine, c);
+      } catch (err) {
+        if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
+        throw err;
+      }
+      return handler(c, agent);
+    };
+  }
+
   /** 获取所有平台连接状态（从 agent.config.bridge 读取） */
-  route.get("/bridge/status", async (c) => {
-    const agent = resolveAgent(engine, c);
+  route.get("/bridge/status", withReadAgent(async (c, agent) => {
     const manager = resolveBridgeManager();
     const bridgeState = bridgeRef.getState?.() || { ready: !!manager, initializing: false, error: null };
     return c.json({
@@ -344,7 +362,7 @@ export function createBridgeRoute(engine: any, bridgeManagerRef: any) {
       bridgeInitializing: !!bridgeState.initializing,
       bridgeError: bridgeState.error || null,
     });
-  });
+  }));
 
   /** 设置 owner（哪个账号是你）— 写入 agent.config.bridge */
   route.post("/bridge/owner", async (c) => {
@@ -527,16 +545,14 @@ export function createBridgeRoute(engine: any, bridgeManagerRef: any) {
   });
 
   /** 获取最近消息日志（实时内存缓冲） */
-  route.get("/bridge/messages", async (c) => {
+  route.get("/bridge/messages", withReadAgent(async (c, agent) => {
     const limit = parseInt(c.req.query("limit"), 10) || 50;
-    const agent = resolveAgent(engine, c);
     return c.json({ messages: resolveBridgeManager()?.getMessages(limit, agent.id) || [] });
-  });
+  }));
 
   /** 获取 bridge session 列表 */
-  route.get("/bridge/sessions", async (c) => {
+  route.get("/bridge/sessions", withReadAgent(async (c, agent) => {
     const platform = c.req.query("platform"); // optional filter
-    const agent = resolveAgent(engine, c);
     const index = engine.getBridgeIndex(agent.id);
     const bridgeDir = path.join(agent.sessionDir, "bridge");
     const sessions = [];
@@ -579,12 +595,11 @@ export function createBridgeRoute(engine: any, bridgeManagerRef: any) {
     // 按最后活跃时间排序
     sessions.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
     return c.json({ sessions });
-  });
+  }));
 
   /** 读取指定 bridge session 的消息 */
-  route.get("/bridge/sessions/:sessionKey/messages", async (c) => {
+  route.get("/bridge/sessions/:sessionKey/messages", withReadAgent(async (c, agent) => {
     const sessionKey = c.req.param("sessionKey");
-    const agent = resolveAgent(engine, c);
     const index = engine.getBridgeIndex(agent.id);
     const raw = index[sessionKey];
     const file = typeof raw === "string" ? raw : raw?.file;
@@ -637,7 +652,7 @@ export function createBridgeRoute(engine: any, bridgeManagerRef: any) {
     } catch (err) {
       return c.json({ error: err.message, messages: [] });
     }
-  });
+  }));
 
   /** 重置 bridge session（清除上下文，下次消息新建 session） */
   route.post("/bridge/sessions/:sessionKey/reset", async (c) => {

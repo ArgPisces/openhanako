@@ -261,7 +261,7 @@ describe("secret custody across HTTP routes", () => {
     const app = new Hono();
     app.route("/api", createBridgeRoute(engine, bridgeManager));
 
-    const readRes = await app.request("/api/bridge/status");
+    const readRes = await app.request("/api/bridge/status?agentId=hana");
     const readBody = await readRes.json();
 
     expect(readBody.telegram.token).toBe(MASKED_SECRET);

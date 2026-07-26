@@ -221,7 +221,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: null }, cwd_history: [] }))
@@ -261,6 +261,9 @@ describe('initApp bridge indicator', () => {
       local: mockState.activeServerConnection,
     });
     expect(mockState.bridgeDotConnected).toBe(true);
+    // The dot describes the bootstrap agent's bridges, named in the request,
+    // rather than whichever agent the server is focused on when it arrives.
+    expect(mockHanaFetch).toHaveBeenCalledWith('/api/bridge/status?agentId=hana');
   });
 
   it('refreshes the HttpOnly device web session before opening WebSocket for a persisted LAN frontend', async () => {
@@ -308,7 +311,7 @@ describe('initApp bridge indicator', () => {
         credentialKind: 'device_credential',
         capabilities: ['chat', 'resources', 'files'],
       }))
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: null }, cwd_history: [] }))
@@ -397,7 +400,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({
@@ -450,7 +453,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: null }, cwd_history: [] }))
@@ -499,7 +502,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: '/agent-home' }, cwd_history: [] }))
@@ -558,7 +561,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: '/agent-home' }, cwd_history: [] }))
@@ -630,7 +633,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: '/old-home' }, cwd_history: [] }))
@@ -692,7 +695,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: '/old-home' }, cwd_history: [] }))
@@ -754,7 +757,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: '/old-home' }, cwd_history: [] }))
@@ -820,7 +823,7 @@ describe('initApp bridge indicator', () => {
     mockGetWebSocket.mockReturnValue({ readyState: 1, send } as unknown as WebSocket);
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: null }, cwd_history: [] }))
@@ -891,7 +894,7 @@ describe('initApp bridge indicator', () => {
 
     mockHanaFetch
       .mockResolvedValueOnce(serverIdentityResponse())
-      .mockResolvedValueOnce(jsonResponse({ agent: 'Hanako', user: 'User', avatars: {} }))
+      .mockResolvedValueOnce(jsonResponse({ agentId: 'hana', agent: 'Hanako', user: 'User', avatars: {} }))
       .mockResolvedValueOnce(jsonResponse({ locale: 'zh-CN' }))
       .mockResolvedValueOnce(jsonResponse({ agents: [{ id: 'hana', isPrimary: true }] }))
       .mockResolvedValueOnce(jsonResponse({ desk: { home_folder: null }, cwd_history: [] }))

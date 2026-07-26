@@ -188,6 +188,9 @@ export async function initApp(): Promise<void> {
   });
 
   // 2. 并行获取 health + 全局设置 + agent 列表
+  // bootstrap 报出来的 agent 身份，后面按 agent 提问的请求都用它，免得任何一步
+  // 落到"服务端当前焦点是谁"上——两个客户端各开一个 agent 时那个答案是错的。
+  let bootstrapAgentId: string | null = null;
   try {
     const [healthRes, globalConfigRes, agentsRes] = await Promise.all([
       hanaFetch('/api/health'),
@@ -195,6 +198,7 @@ export async function initApp(): Promise<void> {
       hanaFetch('/api/agents'),
     ]);
     const healthData = await healthRes.json();
+    bootstrapAgentId = healthData.agentId || null;
     const globalConfig = await globalConfigRes.json();
     const agentsData = await agentsRes.json();
 
@@ -274,8 +278,10 @@ export async function initApp(): Promise<void> {
   } catch { /* ignore */ }
 
   // 15. Bridge 状态指示点（启动时就查一次，不等用户打开面板）
+  //     agent 身份用 bootstrap 给出的那个，和上面的头像同源
   try {
-    const res = await hanaFetch('/api/bridge/status');
+    if (!bootstrapAgentId) throw new Error('bridge status needs an agent id');
+    const res = await hanaFetch(`/api/bridge/status?agentId=${encodeURIComponent(bootstrapAgentId)}`);
     const data = await res.json();
     const anyConnected = data.telegram?.status === 'connected' || data.feishu?.status === 'connected' || data.qq?.status === 'connected' || data.wechat?.status === 'connected' || data.whatsapp?.status === 'connected';
     useStore.setState({ bridgeDotConnected: anyConnected });
