@@ -332,6 +332,20 @@ describe("channels route membership contract", () => {
     });
   });
 
+  it("reports an error instead of guessing a DM owner when no primary agent is configured", async () => {
+    engine.getPrimaryAgentId = () => null;
+    engine.currentAgentId = "carol";
+
+    const res = await app.request("/api/conversations/dm%3Abob/agent-phone-settings");
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toMatch(/no primary agent/i);
+
+    // An explicit owner still works with no primary agent configured.
+    const explicitRes = await app.request("/api/conversations/dm%3Abob/agent-phone-settings?agentId=carol");
+    expect(explicitRes.status).toBe(200);
+  });
+
   it("reads DM phone settings from the primary agent when focus is different", async () => {
     engine.currentAgentId = "carol";
     await updateAgentPhoneProjectionMeta({

@@ -49,7 +49,7 @@ import {
   readAgentPhoneProjection,
   updateAgentPhoneProjectionMeta,
 } from "../../lib/conversations/agent-phone-projection.ts";
-import { resolveAgent } from "../utils/resolve-agent.ts";
+import { resolveAgentStrict } from "../utils/resolve-agent.ts";
 import { findModel } from "../../shared/model-ref.ts";
 import { createModuleLogger } from "../../lib/debug-log.ts";
 
@@ -78,12 +78,16 @@ function requestedAgentId(c: any) {
 
 function resolveConversationOwnerAgent(engine: any, c: any) {
   if (requestedAgentId(c)) {
-    return resolveAgent(engine, c);
+    return resolveAgentStrict(engine, c);
   }
 
+  // Without an explicit agentId the conversation belongs to the primary agent.
+  // If there is no primary agent there is no owner to speak of, and picking
+  // whichever agent the server happens to be focused on would hand the caller
+  // a different agent's DM. Say so instead.
   const primaryAgentId = engine.getPrimaryAgentId?.() || null;
   if (!primaryAgentId) {
-    return resolveAgent(engine, c);
+    throw new Error("no primary agent configured");
   }
 
   const agent = engine.getAgent(primaryAgentId);

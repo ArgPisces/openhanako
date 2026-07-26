@@ -19,8 +19,6 @@ import { describe, expect, it } from "vitest";
  */
 const ROUTES_STILL_GUESSING = [
   "bridge.ts",
-  "channels.ts",
-  "dm.ts",
   "fs.ts",
   "plugins.ts",
   "skills.ts",
