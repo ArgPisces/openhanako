@@ -9,6 +9,7 @@ vi.mock("../core/compaction-utils.js", () => ({
 import { createCompactionGuardExtension } from "../lib/extensions/compaction-guard-ext.ts";
 import { buildSessionCacheSnapshot as buildSessionCacheSnapshotValue } from "../core/session-cache-snapshot.ts";
 import { estimateCachePreservingCompactionRequest } from "../core/session-compactor.ts";
+import { normalizeProviderPayload } from "../core/provider-compat.ts";
 import {
   computeHardTruncation,
   truncateTextHeadTail,
@@ -330,6 +331,60 @@ describe("CompactionGuardExtension", () => {
         retainedMessageCount: 1,
       }));
       expect(computeHardTruncation).not.toHaveBeenCalled();
+    });
+
+    it("normalizes the compaction payload exactly like a live request on the same session", async () => {
+      // The compaction request rides the same cache prefix as the live request.
+      // If the two paths normalize differently, the prefix diverges and the
+      // cache breaks. This pins them to the same normalization: the roleplay
+      // reasoning patch a live request applies has to reach compaction too.
+      pi = createMockPi();
+      const deepseekModel = {
+        ...model,
+        id: "deepseek-v4-chat",
+        provider: "deepseek",
+        api: "openai-completions",
+        reasoning: true,
+      };
+      const providerCompatOptions = {
+        deepseekRoleplayReasoningPatch: true,
+        deepseekRoleplayReasoningContext: { agentName: "Hana", agentDescription: "", locale: "zh-CN" },
+      };
+      const getProviderCompatOptions = vi.fn(() => providerCompatOptions);
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getProviderCompatOptions,
+      })(pi);
+
+      await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        { ...ctx, model: deepseekModel, getThinkingLevel: () => "medium" },
+      );
+
+      const request = cacheCompactor.mock.calls[0][0];
+      const rawPayload = {
+        model: deepseekModel.id,
+        messages: [{ role: "user", content: "hello" }],
+      };
+      const compactionPayload = await request.streamOptions.onPayload(
+        structuredClone(rawPayload),
+        deepseekModel,
+      );
+      // What the live path produces for the same request, through the same
+      // provider normalizer with the same options.
+      const livePayload = normalizeProviderPayload(structuredClone(rawPayload), deepseekModel, {
+        mode: "chat",
+        reasoningLevel: "medium",
+        ...providerCompatOptions,
+      });
+
+      expect(getProviderCompatOptions).toHaveBeenCalledWith("/sessions/current.jsonl");
+      expect(compactionPayload.messages).toEqual(livePayload.messages);
+      
     });
 
     it("composes the keyed ordinary payload hook before compaction normalization and cache affinity", async () => {

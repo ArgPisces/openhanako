@@ -498,6 +498,9 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
     getSessionAgentRunRuntime: (sessionPath) => (
       engine.getSessionAgentRunRuntime(sessionPath)
     ),
+    getProviderCompatOptions: (sessionPath) => (
+      engine.getProviderCompatOptionsForSession(sessionPath)
+    ),
     buildUsageContext: ({ ctx }) => {
       const sessionPath = ctx?.sessionManager?.getSessionFile?.() || null;
       const bridgeContext = sessionPath ? engine.getBridgeContextForSessionPath(sessionPath) : null;

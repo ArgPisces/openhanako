@@ -1342,6 +1342,18 @@ export class HanaEngine {
   getSessionProviderCacheAffinityKey(p) {
     return this._sessionCoord.getSessionProviderCacheAffinityKey(p);
   }
+  /**
+   * Per-session provider quirks that shape the request body. A live request and
+   * the compaction request for the same session share a cache prefix, so both
+   * have to normalize with the same options; this is the one place that answers
+   * what those options are, so neither path can drift from the other.
+   */
+  getProviderCompatOptionsForSession(p) {
+    return {
+      deepseekRoleplayReasoningPatch: this._sessionCoord.isDeepSeekRoleplayReasoningPatchEnabled(p),
+      deepseekRoleplayReasoningContext: this._sessionCoord.getDeepSeekRoleplayReasoningContext(p),
+    };
+  }
   getSessionStreamFn(p) {
     return this._sessionCoord.getSessionStreamFn(p);
   }
@@ -2264,10 +2276,10 @@ export class HanaEngine {
             || null;
           const reasoningLevel = resolveRequestReasoningLevel(this._models, this._prefs, ctx);
           const sessionPath = ctx?.sessionManager?.getSessionFile?.() || null;
-          const deepseekRoleplayReasoningPatch = this._sessionCoord
-            .isDeepSeekRoleplayReasoningPatchEnabled(sessionPath);
-          const deepseekRoleplayReasoningContext = this._sessionCoord
-            .getDeepSeekRoleplayReasoningContext(sessionPath);
+          const {
+            deepseekRoleplayReasoningPatch,
+            deepseekRoleplayReasoningContext,
+          } = this.getProviderCompatOptionsForSession(sessionPath);
           // The SDK hook exposes the serialized body, but not whether maxTokens came
           // from user intent or buildBaseOptions' model-derived default. Keep source
           // unspecified here; output-budget removes only values matching that SDK default.

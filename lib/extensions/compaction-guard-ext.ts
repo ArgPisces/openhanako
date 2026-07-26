@@ -147,6 +147,13 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
   const getSessionAgentRunRuntime = typeof opts.getSessionAgentRunRuntime === "function"
     ? opts.getSessionAgentRunRuntime
     : null;
+  // Provider quirks that a live request applies to its payload have to apply to
+  // the compaction request too: the two share a cache prefix, so normalizing
+  // them differently breaks the cache. This reads the same per-session options
+  // the live path reads, from the same place, rather than restating them.
+  const getProviderCompatOptions = typeof opts.getProviderCompatOptions === "function"
+    ? opts.getProviderCompatOptions
+    : null;
 
   function readCompactionMode(event: any, ctx: any) {
     try {
@@ -406,6 +413,7 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
                 ordinaryPayload === undefined ? payload : ordinaryPayload,
                 requestModel || model,
                 {
+                  ...(getProviderCompatOptions?.(sessionPath) || {}),
                   outputPolicy: COMPACTION_OUTPUT_POLICIES.PROVIDER_DEFAULT,
                   boundedMaxTokens: getCachePreservingCompactionMaxTokens(preparation),
                   reasoningLevel: requestReasoning,
