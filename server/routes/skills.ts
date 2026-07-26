@@ -19,7 +19,6 @@ import {
   sanitizeSkillName,
 } from "../../lib/skills/skill-package-installer.ts";
 import { t } from "../../lib/i18n.ts";
-import { resolveAgent } from "../utils/resolve-agent.ts";
 import { validateId, agentExists } from "../utils/validation.ts";
 import { registerSessionFileFromRequest } from "../../lib/session-files/session-file-response.ts";
 import {
@@ -492,17 +491,18 @@ export function createSkillsRoute(engine) {
         return c.json({ error: t("error.skillInvalidName") }, 400);
       }
 
+      // Deleting a skill is destructive and the target agent decides which
+      // skill is even visible, so the caller has to say which agent it means
+      // rather than letting the server pick the one it happens to be focused
+      // on.
       const queryAgentId = c.req.query("agentId");
-      let targetAgentId;
-      if (queryAgentId) {
-        if (!validateId(queryAgentId) || !agentExists(engine, queryAgentId)) {
-          return c.json({ error: "agent not found" }, 404);
-        }
-        targetAgentId = queryAgentId;
-      } else {
-        const resolved = resolveAgent(engine, c);
-        targetAgentId = resolved?.agentDir ? path.basename(resolved.agentDir) : "";
+      if (!queryAgentId) {
+        return c.json({ error: "agentId required" }, 400);
       }
+      if (!validateId(queryAgentId) || !agentExists(engine, queryAgentId)) {
+        return c.json({ error: "agent not found" }, 404);
+      }
+      const targetAgentId = queryAgentId;
 
       // 外部技能不可删除（用该 agent 的视角查 readonly 即可，与 enabled 无关）
       const allSkills = targetAgentId ? engine.getAllSkills(targetAgentId) : [];

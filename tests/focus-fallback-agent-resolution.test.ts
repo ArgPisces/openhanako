@@ -19,7 +19,6 @@ import { describe, expect, it } from "vitest";
  */
 const ROUTES_STILL_GUESSING = [
   "plugins.ts",
-  "skills.ts",
 ];
 
 const routesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "server", "routes");

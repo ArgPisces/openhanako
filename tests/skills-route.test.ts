@@ -779,7 +779,7 @@ describe("DELETE /skills/:name — per-agent target selection", () => {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it("backward-compat: 无 agentId query 时仍走 resolveAgent fallback 删除用户级 skill", async () => {
+  it("无 agentId query 时拒绝删除，而不是替调用方挑一个 agent", async () => {
     const engine = buildEngine({ agents: ["agent-a"], currentAgentId: "agent-a" });
     writeUserSkill("my-skill");
 
@@ -788,10 +788,10 @@ describe("DELETE /skills/:name — per-agent target selection", () => {
     app.route("/api", createSkillsRoute(engine));
 
     const res = await app.request("/api/skills/my-skill", { method: "DELETE" });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-    expect(fs.existsSync(path.join(skillsDir, "my-skill"))).toBe(false);
-    expect(engine.reloadSkills).toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/agentId/i);
+    expect(fs.existsSync(path.join(skillsDir, "my-skill"))).toBe(true);
+    expect(engine.reloadSkills).not.toHaveBeenCalled();
   });
 
   it("显式 agentId: legacy learned-skills 目录不再作为删除目标", async () => {

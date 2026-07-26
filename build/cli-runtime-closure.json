@@ -109726,11 +109726,6 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "server/routes/skills.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "server/routes/channels.ts",
           "kind": "import-statement"
         },
@@ -109745,7 +109740,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by server/routes/plugins.ts (import-statement); server/routes/config.ts (import-statement); server/routes/skills.ts (import-statement); +3 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by server/routes/plugins.ts (import-statement); server/routes/config.ts (import-statement); server/routes/channels.ts (import-statement); +2 more importer(s)."
     },
     {
       "path": "server/utils/uploaded-skill-package.ts",

@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:d46b84491ba56697d9456d76dab19f5c67f30f816d00b0ccc0e5ba34507bbc63",
+  "payloadFingerprint": "sha256:270e82711cc7266f1f0768747198cf29a4f9f94b38ca2974cba9da986687d5e9",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "avatar route now resolves the agent explicitly per request; startup agent-dir creation moved to write time, changing site shape only — no store or schema change",
-    "payloadFingerprint": "sha256:d46b84491ba56697d9456d76dab19f5c67f30f816d00b0ccc0e5ba34507bbc63"
+    "compatibilityReason": "skill delete route now requires an explicit agentId; removing the unused resolver import shifted one recorded source line, changing site shape only - no store or schema change",
+    "payloadFingerprint": "sha256:270e82711cc7266f1f0768747198cf29a4f9f94b38ca2974cba9da986687d5e9"
   },
   "schemas": [
     {
@@ -8844,7 +8844,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 41,
+      "line": 40,
       "reason": "Removes an installed user skill through the skill owner route.",
       "sourceFile": "server/routes/skills.ts",
       "storeId": "skill-state"
