@@ -231,8 +231,8 @@ export async function initApp(): Promise<void> {
     });
     useStore.setState({ cwdHistory: readConfigCwdHistory(agentConfig) });
 
-    // 6. 加载头像
-    loadAvatars(healthData.avatars);
+    // 6. 加载头像（agent 头像按 bootstrap 给出的 agent 身份请求）
+    loadAvatars(healthData.avatars, healthData.agentId);
   } catch (err) {
     console.error('[init] i18n/health/config failed:', err);
   }

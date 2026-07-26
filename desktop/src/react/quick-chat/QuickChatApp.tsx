@@ -337,7 +337,7 @@ export function QuickChatApp() {
           ui: { avatars: false, agents: false, welcome: true },
         });
         if (cancelled) return;
-        loadAvatars(healthData.avatars);
+        loadAvatars(healthData.avatars, healthData.agentId);
 
         const nextAgents = Array.isArray(agentsData.agents) ? agentsData.agents : [];
         const preferred = applyRuntimeAgentList(nextAgents, {

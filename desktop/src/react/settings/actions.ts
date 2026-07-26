@@ -46,6 +46,11 @@ export async function loadAgents() {
   }
 }
 
+/**
+ * 设置页的头像。user 头像与 agent 无关，直接取 health 的可用性标记；
+ * agent 头像属于设置页当前选中的那个 agent —— 它未必是服务端正在聚焦的
+ * agent，所以可用性从 agents 列表里那一条读，URL 也显式带上 agentId。
+ */
 export async function loadAvatars() {
   const ts = Date.now();
   const store = useSettingsStore.getState();
@@ -53,16 +58,15 @@ export async function loadAvatars() {
     const res = await hanaFetch('/api/health');
     const data = await res.json();
     const avatars = data.avatars || {};
-    for (const role of ['agent', 'user']) {
-      if (avatars[role]) {
-        const url = hanaUrl(`/api/avatar/${role}?t=${ts}`);
-        if (role === 'agent') store.set({ agentAvatarUrl: url });
-        else store.set({ userAvatarUrl: url });
-      } else {
-        if (role === 'agent') store.set({ agentAvatarUrl: null });
-        else store.set({ userAvatarUrl: null });
-      }
-    }
+    const agentId = store.getSettingsAgentId();
+    const agent = agentId ? (store.agents || []).find((a: any) => a.id === agentId) : null;
+
+    store.set({
+      userAvatarUrl: avatars.user ? hanaUrl(`/api/avatar/user?t=${ts}`) : null,
+      agentAvatarUrl: agentId && agent?.hasAvatar
+        ? hanaUrl(`/api/avatar/agent?agentId=${encodeURIComponent(agentId)}&t=${ts}`)
+        : null,
+    });
   } catch {}
 }
 

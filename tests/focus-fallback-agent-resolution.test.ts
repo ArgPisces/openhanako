@@ -18,7 +18,6 @@ import { describe, expect, it } from "vitest";
  * yourself here.
  */
 const ROUTES_STILL_GUESSING = [
-  "avatar.ts",
   "bridge.ts",
   "channels.ts",
   "dm.ts",

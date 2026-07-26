@@ -131,7 +131,7 @@ export async function initializeMobileRuntime(principal: MobilePrincipal): Promi
       ...(bootstrap.thinkingLevel ? { thinkingLevel: bootstrap.thinkingLevel } : {}),
     });
   }
-  loadAvatars(bootstrap.avatars);
+  loadAvatars(bootstrap.avatars, currentAgent?.id || bootstrap.currentAgentId || null);
   if (isSessionPermissionMode(permissionDefault.permissionMode)) {
     useStore.getState().setPendingNewSessionPermissionMode(permissionDefault.permissionMode);
   }

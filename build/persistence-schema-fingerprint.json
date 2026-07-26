@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:44007eefc39cb99dffea2a7ca29c1edb8f0cfa9b6a44cf0fb0e839eb80e0daf6",
+  "payloadFingerprint": "sha256:d46b84491ba56697d9456d76dab19f5c67f30f816d00b0ccc0e5ba34507bbc63",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "documentation-only comment insertion in core/migrations.ts shifted persistence site line anchors; no store, schema, or DDL change",
-    "payloadFingerprint": "sha256:44007eefc39cb99dffea2a7ca29c1edb8f0cfa9b6a44cf0fb0e839eb80e0daf6"
+    "compatibilityReason": "avatar route now resolves the agent explicitly per request; startup agent-dir creation moved to write time, changing site shape only — no store or schema change",
+    "payloadFingerprint": "sha256:d46b84491ba56697d9456d76dab19f5c67f30f816d00b0ccc0e5ba34507bbc63"
   },
   "schemas": [
     {
@@ -8532,7 +8532,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 30,
+      "line": 37,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/avatar.ts",
       "storeId": "agent-profile"
@@ -8540,7 +8540,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 31,
+      "line": 119,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/avatar.ts",
       "storeId": "agent-profile"
@@ -8548,7 +8548,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 98,
+      "line": 123,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/avatar.ts",
       "storeId": "agent-profile"
@@ -8556,7 +8556,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 102,
+      "line": 127,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/avatar.ts",
       "storeId": "agent-profile"
@@ -8564,7 +8564,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 115,
+      "line": 141,
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "sourceFile": "server/routes/avatar.ts",
       "storeId": "agent-profile"

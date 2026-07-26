@@ -8047,25 +8047,25 @@
     },
     {
       "sourceFile": "server/routes/avatar.ts",
-      "line": 30,
+      "line": 37,
       "kind": "mkdir",
-      "excerpt": "fsSync.mkdirSync(avatarDirFor(\"agent\"), { recursive: true })",
+      "excerpt": "fsSync.mkdirSync(userAvatarDir, { recursive: true })",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "storeId": "agent-profile",
       "exemptionId": null
     },
     {
       "sourceFile": "server/routes/avatar.ts",
-      "line": 31,
+      "line": 119,
       "kind": "mkdir",
-      "excerpt": "fsSync.mkdirSync(avatarDirFor(\"user\"), { recursive: true })",
+      "excerpt": "fs.mkdir(dir, { recursive: true })",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
       "storeId": "agent-profile",
       "exemptionId": null
     },
     {
       "sourceFile": "server/routes/avatar.ts",
-      "line": 98,
+      "line": 123,
       "kind": "remove-path",
       "excerpt": "fs.unlink(path.join(dir, `${role}.${oldExt}`))",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
@@ -8074,7 +8074,7 @@
     },
     {
       "sourceFile": "server/routes/avatar.ts",
-      "line": 102,
+      "line": 127,
       "kind": "write-file",
       "excerpt": "fs.writeFile(path.join(dir, `${role}.${ext}`), buf)",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
@@ -8083,7 +8083,7 @@
     },
     {
       "sourceFile": "server/routes/avatar.ts",
-      "line": 115,
+      "line": 141,
       "kind": "remove-path",
       "excerpt": "fs.unlink(path.join(dir, `${role}.${ext}`))",
       "reason": "Reads, repairs, removes, or edits agent/user profile material.",
