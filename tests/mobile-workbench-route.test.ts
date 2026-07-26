@@ -804,6 +804,11 @@ describe("mobile workbench route", () => {
       sandboxProfile: "workspace_write",
       backupPolicy: "snapshot_before_write",
       actorPrincipalId: expect.stringContaining("principal_device"),
+      // The workbench writes as a subsystem, not as an agent. The lease names
+      // that subsystem on both fields so the record says who really acted,
+      // instead of pinning the write on whichever agent was in the foreground.
+      agentId: "mobile_workbench",
+      sessionId: "mobile_workbench",
     });
     const audit = fs.readFileSync(path.join(hanakoHome, "logs", "security-audit.jsonl"), "utf-8");
     expect(audit).toContain(leases.leases[0].leaseId);

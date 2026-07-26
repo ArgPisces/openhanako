@@ -233,7 +233,11 @@ async function writeActionResponse(c, engine, action, auth, mountId, operation) 
       hanakoHome: engine?.hanakoHome,
       requestContext: auth?.requestContext,
       decision: auth?.decision,
-      agentId: engine?.currentAgentId || "mobile_workbench",
+      // The mobile workbench writes files as a subsystem: no agent asked for
+      // this and no agent owns the result. Both identity fields name the
+      // subsystem, so the audit trail says what actually performed the write
+      // rather than whichever agent the server was focused on at the time.
+      agentId: "mobile_workbench",
       sessionId: "mobile_workbench",
       resourceIds: [mountId || "default"],
       mountId: mountId && mountId !== "default" ? mountId : null,
