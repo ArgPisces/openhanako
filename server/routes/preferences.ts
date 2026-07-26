@@ -248,7 +248,9 @@ export function createPreferencesRoute(engine: any, options: Record<string, any>
 
       debugLog()?.log("api", `PUT /api/preferences/models sections=[${sections.join(",")}]`);
       if (sections.length > 0) {
-        emitAppEvent(engine, "models-changed", { agentId: engine.currentAgentId || null });
+        // Shared model preferences are global, so the event names no agent
+        // rather than whichever one the server happens to be focused on.
+        emitAppEvent(engine, "models-changed", { agentId: null });
       }
       recordSecurityAuditEvent(c, engine, {
         action: "settings.preferences.models.update",

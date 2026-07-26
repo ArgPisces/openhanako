@@ -320,7 +320,10 @@ export function createProvidersRoute(engine: any) {
   async function refreshProviderModels() {
     (clearConfigCache as any)();
     await engine.onProviderChanged();
-    emitAppEvent(engine, "models-changed", { agentId: engine.currentAgentId || null });
+    // The provider catalog is global: this refresh changes every agent's model
+    // list, so the event names no agent. Tagging it with whichever agent the
+    // server is focused on would label a global change as one agent's.
+    emitAppEvent(engine, "models-changed", { agentId: null });
   }
 
   /** Registry → defaults 两级 fallback，fetch-models 和 Anthropic 路径共用 */

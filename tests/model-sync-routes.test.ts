@@ -189,7 +189,9 @@ describe("model sync related routes", () => {
       utility: { id: "test-model", provider: "test-provider" },
     });
     expect(engine.syncModelsAndRefresh).toHaveBeenCalledTimes(1);
-    expectAppEvent(engine.emitEvent, "models-changed", { agentId: "hana" });
+    // Shared model preferences are global: every agent's model list changes, so
+    // the event names no agent rather than naming whichever one was focused.
+    expectAppEvent(engine.emitEvent, "models-changed", { agentId: null });
   });
 
   it("auxiliary vision toggle updates shared prefs without refreshing the model registry", async () => {
@@ -226,7 +228,7 @@ describe("model sync related routes", () => {
     });
     expect(engine.resolveModelWithCredentials).not.toHaveBeenCalled();
     expect(engine.syncModelsAndRefresh).not.toHaveBeenCalled();
-    expectAppEvent(engine.emitEvent, "models-changed", { agentId: "hana" });
+    expectAppEvent(engine.emitEvent, "models-changed", { agentId: null });
   });
 
   it("shared model preference updates return an error and emit no event when model refresh fails", async () => {
@@ -339,7 +341,7 @@ describe("model sync related routes", () => {
     expect(engine.setSharedModels).toHaveBeenCalledWith({
       vision: { id: "qwen-vl", provider: "dashscope" },
     });
-    expectAppEvent(engine.emitEvent, "models-changed", { agentId: "hana" });
+    expectAppEvent(engine.emitEvent, "models-changed", { agentId: null });
   });
 
   it("shared vision model preference rejects text-only models", async () => {
@@ -461,6 +463,9 @@ describe("model sync related routes", () => {
     expect(res.status).toBe(200);
     expect(saveProvider).toHaveBeenCalledWith("openai", { api_key: "" });
     expect(engine.onProviderChanged).toHaveBeenCalledTimes(1);
+    // This event does name an agent, and correctly so: the change came from
+    // that agent's own config route, so the id is the one in the path rather
+    // than the one the server is focused on.
     expectAppEvent(engine.emitEvent, "models-changed", { agentId: "hana" });
   });
 
@@ -874,7 +879,7 @@ describe("model sync related routes", () => {
     expect(removeModel).toHaveBeenCalledWith("openrouter", "openrouter/qwen/qwen-vl-plus");
     expect(clearConfigCache).toHaveBeenCalledTimes(1);
     expect(engine.onProviderChanged).toHaveBeenCalledTimes(1);
-    expectAppEvent(engine.emitEvent, "models-changed", { agentId: "hana" });
+    expectAppEvent(engine.emitEvent, "models-changed", { agentId: null });
     expect(engine.emitEvent).toHaveBeenCalledTimes(1);
   });
 
@@ -904,7 +909,7 @@ describe("model sync related routes", () => {
     });
     expect(clearConfigCache).toHaveBeenCalledTimes(1);
     expect(engine.onProviderChanged).toHaveBeenCalledTimes(1);
-    expectAppEvent(engine.emitEvent, "models-changed", { agentId: "hana" });
+    expectAppEvent(engine.emitEvent, "models-changed", { agentId: null });
     expect(engine.emitEvent).toHaveBeenCalledTimes(1);
   });
 
