@@ -156,6 +156,34 @@ describe("BridgeSessionManager teardown", () => {
     fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
+  it("refuses bridge work that does not say which agent it belongs to", async () => {
+    const agent = makeAgent(rootDir);
+    const manager = new BridgeSessionManager(makeDeps(agent));
+
+    // The deps still expose a focused agent. Bridge records are per-agent files,
+    // so an operation that never named an agent must say so rather than write
+    // into whichever agent happened to be in the foreground.
+    expect(() => manager.isFreshCompactAlreadySatisfied("telegram:dm:owner", {}))
+      .toThrow(/agentId required/);
+    expect(() => manager.recordAssistantMessage("telegram:dm:owner", "hi", {}))
+      .toThrow(/agentId required/);
+    await expect(manager.markFreshCompactSatisfied("telegram:dm:owner", {}))
+      .rejects.toThrow(/agentId required/);
+    await expect(manager.compactSession("telegram:dm:owner", {}))
+      .rejects.toThrow(/agentId required/);
+  });
+
+  it("refuses to locate a bridge index without an agent", () => {
+    const agent = makeAgent(rootDir);
+    const manager = new BridgeSessionManager(makeDeps(agent));
+
+    // Same reason: the index file lives under one agent's session directory.
+    expect(() => manager.readIndex(undefined as any)).toThrow(/agent required/);
+    expect(() => manager.writeIndex({}, undefined as any)).toThrow(/agent required/);
+    // Naming the agent still works.
+    expect(manager.readIndex(agent)).toEqual({});
+  });
+
   it("passes bridge steer text to the SDK without adding an internal prefix", () => {
     const agent = makeAgent(rootDir);
     const manager = new BridgeSessionManager(makeDeps(agent));

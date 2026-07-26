@@ -2467,7 +2467,7 @@
     },
     {
       "sourceFile": "core/bridge-session-manager.ts",
-      "line": 606,
+      "line": 615,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(dir, { recursive: true })",
       "reason": "Writes a session-owned sidecar or bridge index.",
@@ -2476,7 +2476,7 @@
     },
     {
       "sourceFile": "core/bridge-session-manager.ts",
-      "line": 607,
+      "line": 616,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(this._indexPath(agent), JSON.stringify(index, null, 2) + \"\\n\")",
       "reason": "Writes a session-owned sidecar or bridge index.",
@@ -2485,7 +2485,7 @@
     },
     {
       "sourceFile": "core/bridge-session-manager.ts",
-      "line": 972,
+      "line": 981,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(sessionDir, { recursive: true })",
       "reason": "Writes a session-owned sidecar or bridge index.",
@@ -2494,7 +2494,7 @@
     },
     {
       "sourceFile": "core/bridge-session-manager.ts",
-      "line": 1328,
+      "line": 1337,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(sessionDir, { recursive: true })",
       "reason": "Writes a session-owned sidecar or bridge index.",

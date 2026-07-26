@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:3387343b08f51c20933356ff0dfe6881f30605cb685ac3be2cf8f320b96ebd7c",
+  "payloadFingerprint": "sha256:549119a6ba7283d165b07cf2bd2700722b30ab190c9ed3c2ec927bcc98baa147",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Agent-resolution changes in the settings snapshot and desk routes only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
-    "payloadFingerprint": "sha256:3387343b08f51c20933356ff0dfe6881f30605cb685ac3be2cf8f320b96ebd7c"
+    "compatibilityReason": "Bridge session agent-resolution changes only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
+    "payloadFingerprint": "sha256:549119a6ba7283d165b07cf2bd2700722b30ab190c9ed3c2ec927bcc98baa147"
   },
   "schemas": [
     {
@@ -3328,7 +3328,7 @@
       "contract": "bridge index, legacy session metadata, title, and vision sidecar readers",
       "kind": "runtime-contract",
       "module": "core/bridge-session-manager.ts",
-      "sourceHash": "sha256:9a88d82623280a6ed3694d974ac3eba123106b3af48d330eb6db67e68ce325b6",
+      "sourceHash": "sha256:e47c9f34627c8c878031fdfbf3132767b23074935b07b67204547348f5249696",
       "storeId": "session-sidecars"
     },
     {
@@ -3572,7 +3572,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 606,
+      "line": 615,
       "reason": "Writes a session-owned sidecar or bridge index.",
       "sourceFile": "core/bridge-session-manager.ts",
       "storeId": "session-sidecars"
@@ -3580,7 +3580,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 607,
+      "line": 616,
       "reason": "Writes a session-owned sidecar or bridge index.",
       "sourceFile": "core/bridge-session-manager.ts",
       "storeId": "session-sidecars"
@@ -3588,7 +3588,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 972,
+      "line": 981,
       "reason": "Writes a session-owned sidecar or bridge index.",
       "sourceFile": "core/bridge-session-manager.ts",
       "storeId": "session-sidecars"
@@ -3596,7 +3596,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 1328,
+      "line": 1337,
       "reason": "Writes a session-owned sidecar or bridge index.",
       "sourceFile": "core/bridge-session-manager.ts",
       "storeId": "session-sidecars"

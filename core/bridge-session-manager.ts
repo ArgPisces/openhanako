@@ -521,18 +521,22 @@ export class BridgeSessionManager {
 
   /** bridge 索引文件路径 */
   _indexPath(agent) {
-    const a = agent || this._deps.getAgent();
-    return path.join(a.sessionDir, "bridge", "bridge-sessions.json");
+    // The index lives inside one agent's session directory, so the caller has
+    // to say whose index it means. Reaching for the focused agent here read and
+    // wrote another agent's file whenever the caller had a different one.
+    if (!agent?.sessionDir) throw new Error("bridge index: agent required");
+    return path.join(agent.sessionDir, "bridge", "bridge-sessions.json");
   }
 
-  _resolveAgent( opts: any = {}, operation = "operation") {
-    if (opts.agentId) {
-      const agent = this._deps.getAgentById?.(opts.agentId) || null;
-      if (!agent) throw new Error(`bridge ${operation}: agent "${opts.agentId}" not found`);
-      return agent;
-    }
-    const agent = this._deps.getAgent?.() || null;
-    if (!agent) throw new Error(`bridge ${operation}: focus agent not available`);
+  _resolveAgent(opts: any = {}, operation = "operation") {
+    // Bridge sessions belong to an agent: the transcript, the index entry and
+    // the outbound identity are all that agent's. Callers carry that agent in
+    // the message context or the bridge index entry they looked the session up
+    // from, so a missing id means the caller lost track of it, not that the
+    // focused agent is a reasonable substitute.
+    if (!opts.agentId) throw new Error(`bridge ${operation}: agentId required`);
+    const agent = this._deps.getAgentById?.(opts.agentId) || null;
+    if (!agent) throw new Error(`bridge ${operation}: agent "${opts.agentId}" not found`);
     return agent;
   }
 
@@ -549,6 +553,11 @@ export class BridgeSessionManager {
     const all = this._deps.getAgents?.();
     if (all instanceof Map) return [...all.values()].filter(Boolean);
     if (Array.isArray(all)) return all.filter(Boolean);
+    // This is the set of agents to search, not a decision about who owns
+    // anything: callers match a session path against each agent's index and
+    // take the id from whichever index actually contains it. When the roster is
+    // unavailable, searching just the focused agent narrows the search and can
+    // only end in "not found" — it can never pin a session on the wrong agent.
     const focus = this._deps.getAgent?.();
     return focus ? [focus] : [];
   }
