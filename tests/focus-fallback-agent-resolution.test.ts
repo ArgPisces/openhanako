@@ -18,7 +18,6 @@ import { describe, expect, it } from "vitest";
  * yourself here.
  */
 const ROUTES_STILL_GUESSING = [
-  "fs.ts",
   "plugins.ts",
   "skills.ts",
 ];
