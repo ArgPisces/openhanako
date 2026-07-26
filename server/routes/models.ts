@@ -244,7 +244,11 @@ export function createModelsRoute(engine) {
           },
           attribution: {
             kind: "utility",
-            agentId: engine.currentAgentId ?? null,
+            // A health probe from the settings panel is the product checking a
+            // provider, not an agent doing work. Billing it to whichever agent
+            // the server is focused on would put a cost on that agent's usage
+            // account for something it never did, so it stays unattributed.
+            agentId: null,
           },
         },
       });

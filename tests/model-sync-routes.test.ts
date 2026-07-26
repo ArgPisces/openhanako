@@ -683,6 +683,44 @@ describe("model sync related routes", () => {
     }));
   });
 
+  it("bills the model health probe to the global utility account, not the focused agent", async () => {
+    const { createModelsRoute } = await import("../server/routes/models.ts");
+    const app = new Hono();
+    const resolved = {
+      model: { id: "probe-model", provider: "deepseek" },
+      provider: "deepseek",
+      api: "openai-completions",
+      api_key: "sk-test",
+      base_url: "https://api.deepseek.com/v1",
+    };
+    const engine = {
+      availableModels: [],
+      currentModel: null,
+      config: {},
+      // The server is focused on an agent, but a settings-panel health probe is
+      // not that agent's work and must not land on its usage account.
+      currentAgentId: "hana",
+      usageLedger: {},
+      resolveModelWithCredentialsFresh: vi.fn(async () => resolved),
+    };
+    callText.mockResolvedValue("ok");
+
+    app.route("/api", createModelsRoute(engine));
+
+    const res = await app.request("/api/models/health", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modelId: { id: "probe-model", provider: "deepseek" } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(callText).toHaveBeenCalledWith(expect.objectContaining({
+      usageContext: expect.objectContaining({
+        attribution: { kind: "utility", agentId: null },
+      }),
+    }));
+  });
+
   it("model health forwards resolved Grok OAuth provider and model headers to callText", async () => {
     const { createModelsRoute } = await import("../server/routes/models.ts");
     const app = new Hono();
