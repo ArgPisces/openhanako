@@ -105,32 +105,25 @@ export function createSkillsRoute(engine) {
     };
   }
 
+  // Every bundle reply carries a per-agent enabled flag for each skill, and the
+  // write routes check the requested skills against the same view. The request
+  // has to say which agent it means: answering for whichever agent the server
+  // was focused on showed one client the other client's switches, and let a
+  // write be validated against an agent the caller never named.
   function resolveBundleSkillView(c) {
-    const agentId = c.req.query("agentId") || engine.currentAgentId || "";
-    if (agentId) {
-      if (!validateId(agentId) || !agentExists(engine, agentId)) {
-        const err: any = new Error("agent not found");
-        err.status = 404;
-        throw err;
-      }
-      const skills = engine.getAllSkills(agentId) || [];
-      return { agentId, skills, skillByName: new Map(skills.map(skill => [skill.name, skill])) };
+    const agentId = c.req.query("agentId") || "";
+    if (!agentId) {
+      const err: any = new Error("agentId required");
+      err.status = 400;
+      throw err;
     }
-    let skills = [];
-    try {
-      skills = engine.getAllSkills?.() || [];
-    } catch {
-      skills = [];
+    if (!validateId(agentId) || !agentExists(engine, agentId)) {
+      const err: any = new Error("agent not found");
+      err.status = 404;
+      throw err;
     }
-    if (skills.length === 0) {
-      const skillsDir = engine.userSkillsDir || engine.skillsDir;
-      if (skillsDir && fs.existsSync(skillsDir)) {
-        skills = fs.readdirSync(skillsDir, { withFileTypes: true })
-          .filter(entry => entry.isDirectory() && fs.existsSync(path.join(skillsDir, entry.name, "SKILL.md")))
-          .map(entry => ({ name: entry.name, enabled: false, source: "user" }));
-      }
-    }
-    return { agentId: null, skills, skillByName: new Map(skills.map(skill => [skill.name, skill])) };
+    const skills = engine.getAllSkills(agentId) || [];
+    return { agentId, skills, skillByName: new Map(skills.map(skill => [skill.name, skill])) };
   }
 
   function assertBundleSkillsInstalled(skillNames, skillByName) {
