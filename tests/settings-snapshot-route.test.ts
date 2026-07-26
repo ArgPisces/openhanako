@@ -214,6 +214,42 @@ describe("settings snapshot route", () => {
     expect(body.publicIshiki).toBe("public");
   });
 
+  it("answers for the primary agent when the request omits an agent id", async () => {
+    const engine = await makeEngine();
+    // A second agent the server happens to be focused on. A bare snapshot
+    // request must describe the primary agent, not whoever holds the focus.
+    const otherDir = path.join(engine.agentsDir, "agent-b");
+    await writeFile(path.join(otherDir, "config.yaml"), "agent:\n  name: Agent B\n");
+    (engine as any).currentAgentId = "agent-b";
+    (engine as any).getPrimaryAgentId = () => "agent-a";
+    (engine as any).listAgents = () => [
+      { id: "agent-b", name: "Agent B" },
+      { id: "agent-a", name: "Agent A" },
+    ];
+    const app = new Hono();
+    app.route("/api", createSettingsSnapshotRoute(engine));
+
+    const res = await app.request("/api/settings/snapshot");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.agentId).toBe("agent-a");
+    expect(body.config.agent.name).toBe("Agent A");
+  });
+
+  it("reports an error for a bare request when no primary agent is configured", async () => {
+    const engine = await makeEngine();
+    (engine as any).currentAgentId = "agent-a";
+    (engine as any).getPrimaryAgentId = () => null;
+    const app = new Hono();
+    app.route("/api", createSettingsSnapshotRoute(engine));
+
+    const res = await app.request("/api/settings/snapshot");
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe("settings snapshot agent not found");
+  });
+
   it("accepts a safe legacy uppercase and underscore agent id", async () => {
     const engine = await makeEngine();
     const legacyId = "Legacy_AGENT-1";

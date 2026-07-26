@@ -8137,7 +8137,7 @@
     },
     {
       "sourceFile": "server/routes/desk.ts",
-      "line": 683,
+      "line": 687,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(uploadRoot, { recursive: true })",
       "reason": "Writes or removes a bounded temporary cover upload.",
@@ -8146,7 +8146,7 @@
     },
     {
       "sourceFile": "server/routes/desk.ts",
-      "line": 686,
+      "line": 690,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(filePath, buffer)",
       "reason": "Writes or removes a bounded temporary cover upload.",
@@ -8155,7 +8155,7 @@
     },
     {
       "sourceFile": "server/routes/desk.ts",
-      "line": 689,
+      "line": 693,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(tempDir, { recursive: true, force: true })",
       "reason": "Writes or removes a bounded temporary cover upload.",
@@ -8164,7 +8164,7 @@
     },
     {
       "sourceFile": "server/routes/desk.ts",
-      "line": 1312,
+      "line": 1316,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates an approved external workspace root or its .agents/skills directory; the mount registry owns authorization, not the external content.",
@@ -8173,7 +8173,7 @@
     },
     {
       "sourceFile": "server/routes/desk.ts",
-      "line": 1362,
+      "line": 1366,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(skillDir, { recursive: true, force: true })",
       "reason": "Deletes a skill directory only after the route proves it belongs to the explicitly mounted workspace skill catalog, outside Hana-owned persistence.",
@@ -8182,7 +8182,7 @@
     },
     {
       "sourceFile": "server/routes/desk.ts",
-      "line": 1378,
+      "line": 1382,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(dir, { recursive: true })",
       "reason": "Creates an approved external workspace root or its .agents/skills directory; the mount registry owns authorization, not the external content.",
@@ -8191,7 +8191,7 @@
     },
     {
       "sourceFile": "server/routes/desk.ts",
-      "line": 1483,
+      "line": 1487,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(baseDir, { recursive: true })",
       "reason": "Creates an approved external workspace root or its .agents/skills directory; the mount registry owns authorization, not the external content.",

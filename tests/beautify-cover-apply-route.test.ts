@@ -346,6 +346,27 @@ describe("desk beautify cover apply route", () => {
     });
   });
 
+  it("reports the executor as unavailable when no primary agent is configured", async () => {
+    const { createDeskRoute } = await import("../server/routes/desk.ts");
+    const engine = makeEngine(tmpDir);
+    // The server is focused on agent-1, but no primary agent is configured.
+    // Beautify has no executor to name, and must not borrow the focus.
+    engine.getPrimaryAgentId = () => null;
+    const app = new Hono();
+    app.route("/api", createDeskRoute(engine, null));
+
+    const res = await app.request("/api/desk/beautify/status");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      agentGenerate: {
+        enabled: false,
+        executorAgentId: null,
+        disabledReason: "agent-unavailable",
+      },
+    });
+  });
+
   it("rejects Agent cover generation before creating an activity when default image model is missing", async () => {
     const notePath = path.join(tmpDir, "note.md");
     fs.writeFileSync(notePath, "# Demo\n", "utf-8");

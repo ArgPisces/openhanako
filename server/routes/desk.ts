@@ -390,9 +390,13 @@ export function createDeskRoute(engine, hub) {
   }
 
   function getBeautifyExecutorAgent(requestedAgentId) {
+    // Beautify runs as a named agent. Fall back to the primary agent when the
+    // caller does not name one, and report no executor at all when there is no
+    // primary: running as whichever agent the server is focused on would put
+    // the work, and its token cost, on an agent the caller never chose.
     const agentId = typeof requestedAgentId === "string" && requestedAgentId.trim()
       ? requestedAgentId.trim()
-      : (engine.getPrimaryAgentId?.() || engine.currentAgentId || null);
+      : (engine.getPrimaryAgentId?.() || null);
     const agent = agentId ? engine.getAgent?.(agentId) : null;
     return {
       agent: agent || null,

@@ -148,7 +148,12 @@ async function buildAgentConfig(engine: any, id: string) {
 }
 
 function resolveSnapshotAgentId(engine: any, rawAgentId: string | undefined) {
-  const id = rawAgentId || engine.currentAgentId || engine.getPrimaryAgent?.() || engine.listAgents?.()[0]?.id;
+  // A snapshot describes one agent's settings, so the agent has to be named.
+  // Without an explicit id the primary agent is the only defensible answer:
+  // handing back whichever agent the server is focused on, or whichever one
+  // happens to be listed first, would show the caller another agent's
+  // settings under the name they asked about. Say nothing instead.
+  const id = rawAgentId || engine.getPrimaryAgentId?.();
   if (!id || !validateId(id) || !agentExists(engine, id)) {
     throw new Error("settings snapshot agent not found");
   }

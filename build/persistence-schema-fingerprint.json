@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:2469a47bf51f46a13643f47e64812196e75e8c15fb3a939371864f29dad77f17",
+  "payloadFingerprint": "sha256:3387343b08f51c20933356ff0dfe6881f30605cb685ac3be2cf8f320b96ebd7c",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Compaction runtime changes only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
-    "payloadFingerprint": "sha256:2469a47bf51f46a13643f47e64812196e75e8c15fb3a939371864f29dad77f17"
+    "compatibilityReason": "Agent-resolution changes in the settings snapshot and desk routes only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
+    "payloadFingerprint": "sha256:3387343b08f51c20933356ff0dfe6881f30605cb685ac3be2cf8f320b96ebd7c"
   },
   "schemas": [
     {
@@ -3041,7 +3041,7 @@
       "contract": "bounded base64 cover upload temporary-directory lifecycle",
       "kind": "directory-contract",
       "module": "server/routes/desk.ts",
-      "sourceHash": "sha256:a0e35fa038a9b1b930e65b96caf75ed8d5ef69d8ee8dc3ce621d44d1495b0d5e",
+      "sourceHash": "sha256:3571ec498eb6dcfa0bc9ba4d5e8cc074f06786f7e6ce0e8c1d4f22fe61a255aa",
       "storeId": "desk-cover-upload-staging"
     },
     {
@@ -8612,7 +8612,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 683,
+      "line": 687,
       "reason": "Writes or removes a bounded temporary cover upload.",
       "sourceFile": "server/routes/desk.ts",
       "storeId": "desk-cover-upload-staging"
@@ -8620,7 +8620,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 686,
+      "line": 690,
       "reason": "Writes or removes a bounded temporary cover upload.",
       "sourceFile": "server/routes/desk.ts",
       "storeId": "desk-cover-upload-staging"
@@ -8628,7 +8628,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 689,
+      "line": 693,
       "reason": "Writes or removes a bounded temporary cover upload.",
       "sourceFile": "server/routes/desk.ts",
       "storeId": "desk-cover-upload-staging"
@@ -8636,7 +8636,7 @@
     {
       "exemptionId": "external-desk-workspace-roots",
       "kind": "mkdir",
-      "line": 1312,
+      "line": 1316,
       "reason": "Creates an approved external workspace root or its .agents/skills directory; the mount registry owns authorization, not the external content.",
       "sourceFile": "server/routes/desk.ts",
       "storeId": null
@@ -8644,7 +8644,7 @@
     {
       "exemptionId": "workspace-skill-delete",
       "kind": "remove-path",
-      "line": 1362,
+      "line": 1366,
       "reason": "Deletes a skill directory only after the route proves it belongs to the explicitly mounted workspace skill catalog, outside Hana-owned persistence.",
       "sourceFile": "server/routes/desk.ts",
       "storeId": null
@@ -8652,7 +8652,7 @@
     {
       "exemptionId": "external-desk-workspace-roots",
       "kind": "mkdir",
-      "line": 1378,
+      "line": 1382,
       "reason": "Creates an approved external workspace root or its .agents/skills directory; the mount registry owns authorization, not the external content.",
       "sourceFile": "server/routes/desk.ts",
       "storeId": null
@@ -8660,7 +8660,7 @@
     {
       "exemptionId": "external-desk-workspace-roots",
       "kind": "mkdir",
-      "line": 1483,
+      "line": 1487,
       "reason": "Creates an approved external workspace root or its .agents/skills directory; the mount registry owns authorization, not the external content.",
       "sourceFile": "server/routes/desk.ts",
       "storeId": null
