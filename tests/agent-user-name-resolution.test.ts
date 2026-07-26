@@ -5,10 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Agent } from "../core/agent.ts";
 
-// 用户名描述的是使用者本人，跨 agent 必须一致，所以正源是全局 preferences 的
-// userName。Agent.resolveUserName() 的语义链与 resolveLocale() 同构：
-// config.user.name（显式覆盖）→ 全局 prefs 的 userName → 按语言兜底
-// （中文 "用户"，其余 "User"）。
+// 用户名描述的是使用者本人，跨 agent 必须一致，所以唯一正源是全局 preferences
+// 的 userName。Agent.resolveUserName() 的链条：全局 prefs 的 userName → 按语言
+// 兜底（中文 "用户"，其余 "User"）。agent config 里的 user.name 不再参与。
 
 const tempDirs: string[] = [];
 
@@ -50,11 +49,18 @@ afterEach(() => {
 });
 
 describe("Agent user name resolution", () => {
-  it("prefers an explicit config.user.name over the global preferences name", () => {
+  it("ignores a leftover agent-level name so every agent calls the user the same thing", () => {
     const agent = makeAgent({ configUserName: "  阿黎  " });
     agent._cb = { getLocale: () => "zh-CN", getUserName: () => "全局名字" };
 
-    expect(agent.resolveUserName()).toBe("阿黎");
+    expect(agent.resolveUserName()).toBe("全局名字");
+  });
+
+  it("falls back to the placeholder rather than a leftover agent-level name", () => {
+    const agent = makeAgent({ configUserName: "阿黎" });
+    agent._cb = { getLocale: () => "zh-CN", getUserName: () => "" };
+
+    expect(agent.resolveUserName()).toBe("用户");
   });
 
   it("falls back to the global preferences name when config.user.name is absent", () => {

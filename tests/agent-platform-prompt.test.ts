@@ -108,7 +108,7 @@ describe("Agent platform prompt identity", () => {
 
   it("injects the configured Chinese user name as an explicit profile fact", () => {
     const agent = makeAgent("zh-CN");
-    agent._config.user = { name: "黎" };
+    agent._cb = { getTimezone: () => "Asia/Shanghai", getUserName: () => "黎" };
     agent.userName = "黎";
     writeUserProfile(agent, "喜欢安静、克制的界面。\n");
 
@@ -125,7 +125,7 @@ describe("Agent platform prompt identity", () => {
 
   it("injects the configured English user name as an explicit profile fact", () => {
     const agent = makeAgent("en");
-    agent._config.user = { name: "Li" };
+    agent._cb = { getTimezone: () => "Asia/Shanghai", getUserName: () => "Li" };
     agent.userName = "Li";
     writeUserProfile(agent, "Prefers quiet interfaces.\n");
 

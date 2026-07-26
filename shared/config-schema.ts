@@ -21,9 +21,9 @@
 /** @type {Record<string, FieldDef>} */
 export const CONFIG_SCHEMA = {
   locale:                       { scope: 'global', setter: 'setLocale',         getter: 'getLocale', defaultValue: '' },
-  // 用户名描述的是使用者本人，跨 agent 必须一致，所以正源是全局 preferences。
-  // agent config 里的 user.name 只剩显式覆盖的逃生门（没有 UI 会写它），
-  // 留给将来"某个 agent 用别的称呼叫我"的场景。
+  // 用户名描述的是使用者本人，跨 agent 必须一致，所以唯一正源是全局
+  // preferences：这条 global scope 把带 user.name 的写请求全部引到全局设置上，
+  // 落不进任何一个 agent 的 config。读取侧同样只认全局值。
   'user.name':                  { scope: 'global', setter: 'setUserName',       getter: 'getUserName', prefsPath: 'userName', defaultValue: '' },
   timezone:                     { scope: 'global', setter: 'setTimezone',       getter: 'getTimezone', defaultValue: '' },
   sandbox:                      { scope: 'global', setter: 'setSandbox',        getter: 'getSandbox', defaultValue: true },

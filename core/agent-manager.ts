@@ -113,9 +113,10 @@ function fallbackUserNameForLocale(locale, globalLocale = "") {
 
 function renderIdentityTemplateForList(identityMd, cfg, agentId, globalLocale = "", globalUserName = "") {
   const agentName = cfg?.agent?.name || agentId;
-  // 与 Agent.resolveUserName() 同一条链条：config.user.name（显式覆盖）→
-  // 全局 prefs 的 userName → 按语言兜底。
-  const userName = cfg?.user?.name || globalUserName || fallbackUserNameForLocale(cfg?.locale, globalLocale);
+  // 与 Agent.resolveUserName() 同一条链条：全局 prefs 的 userName → 按语言兜底。
+  // 不读 agent config 的 user.name，否则列表里显示的称呼会和 agent 实际用的
+  // 那个对不上。
+  const userName = globalUserName || fallbackUserNameForLocale(cfg?.locale, globalLocale);
   return String(identityMd || "")
     .replace(/\{\{userName\}\}/g, userName)
     .replace(/\{\{agentName\}\}/g, agentName)

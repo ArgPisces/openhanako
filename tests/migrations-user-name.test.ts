@@ -2,8 +2,11 @@
  * 迁移 #51：用户名正源从各 agent config 收敛到全局 preferences。
  *
  * 用户名描述的是使用者本人，跨 agent 必须一致。迁移把主 agent 的名字提升成
- * 全局 userName，并清掉各 agent 里与它相同的散落副本；值不同的保留下来，
- * 当作刻意的 per-agent 覆盖。
+ * 全局 userName，并清掉各 agent 里与它相同的散落副本。
+ *
+ * 这些用例跑的是整份迁移表，所以断言的是跑完之后的最终状态：#51 之后紧接着的
+ * #52 会把 agent config 里剩下的 user.name 一并删掉（覆盖层已取消）。这里关心
+ * 的是 #51 那份载荷——名字被提升到了全局的哪个值上。
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
@@ -84,7 +87,7 @@ describe("migration #51: user name to global preferences", () => {
     expect(readAgentConfig("hana").agent).toEqual({ name: "Hana" });
   });
 
-  it("keeps a differing per-agent name as a deliberate override", () => {
+  it("promotes the primary agent's name even when another agent had a different one", () => {
     const prefs = makePrefs(userDir);
     prefs.savePreferences({ _dataVersion: 50, primaryAgent: "hana" });
     writeAgentConfig("hana", { user: { name: "阿黎" } });
@@ -92,9 +95,10 @@ describe("migration #51: user name to global preferences", () => {
 
     run(prefs);
 
+    // 主 agent 的名字胜出；另一个 agent 的不同名字由 #52 清掉，不再生效
     expect(prefs.getPreferences().userName).toBe("阿黎");
     expect(readAgentConfig("hana").user).toBeUndefined();
-    expect(readAgentConfig("mio").user).toEqual({ name: "老板" });
+    expect(readAgentConfig("mio").user).toBeUndefined();
   });
 
   it("takes the first agent that has a name when the primary agent has none", () => {
@@ -109,27 +113,29 @@ describe("migration #51: user name to global preferences", () => {
     expect(readAgentConfig("mio").user).toBeUndefined();
   });
 
-  it("writes nothing when no agent has a configured name", () => {
+  it("writes no global name when no agent has a usable one", () => {
     const prefs = makePrefs(userDir);
     prefs.savePreferences({ _dataVersion: 50, primaryAgent: "hana" });
     writeAgentConfig("hana", { agent: { name: "Hana" }, user: { name: "  " } });
 
     run(prefs);
 
+    // 空白名字不算名字，不写全局；那个空字段本身由 #52 清掉
     expect(prefs.getPreferences().userName).toBeUndefined();
-    // 没有可迁移的值时不改动任何 agent config
-    expect(readAgentConfig("hana").user).toEqual({ name: "  " });
+    expect(readAgentConfig("hana").user).toBeUndefined();
+    expect(readAgentConfig("hana").agent).toEqual({ name: "Hana" });
   });
 
-  it("leaves an existing global name and the agent configs alone", () => {
+  it("leaves an existing global name alone", () => {
     const prefs = makePrefs(userDir);
     prefs.savePreferences({ _dataVersion: 50, primaryAgent: "hana", userName: "已定名" });
     writeAgentConfig("hana", { user: { name: "阿黎" } });
 
     run(prefs);
 
+    // 全局已有名字，#51 不覆盖它；agent 里那个不同的名字由 #52 清掉
     expect(prefs.getPreferences().userName).toBe("已定名");
-    expect(readAgentConfig("hana").user).toEqual({ name: "阿黎" });
+    expect(readAgentConfig("hana").user).toBeUndefined();
   });
 
   it("is idempotent when the whole registry is replayed", () => {
@@ -148,6 +154,6 @@ describe("migration #51: user name to global preferences", () => {
 
     expect(prefs.getPreferences().userName).toBe("阿黎");
     expect(readAgentConfig("hana").user).toBeUndefined();
-    expect(readAgentConfig("mio").user).toEqual({ name: "老板" });
+    expect(readAgentConfig("mio").user).toBeUndefined();
   });
 });

@@ -282,18 +282,15 @@ export class Agent {
   }
 
   /**
-   * 解析用户的名字：config.user.name（显式覆盖）→ 全局 prefs 的 userName →
-   * 按语言兜底（中文 "用户"，其余 "User"）。链条与 resolveLocale() 同构。
+   * 解析用户的名字：全局 prefs 的 userName → 按语言兜底（中文 "用户"，其余
+   * "User"）。
    *
-   * 名字描述的是使用者本人，不是这个 agent 的属性，所以正源在全局 preferences：
-   * 用户在设置里改一次名字，所有 agent 都得跟着改口，不该出现 A 叫得对、B 还
-   * 用旧称呼的情况。agent config 里的 user.name 保留为显式覆盖的逃生门（目前
-   * 没有任何 UI 会写它），留给将来"某个 agent 用别的称呼叫我"的场景；不写回
-   * config，否则会把用户日后在设置里改的名字锁死在这个 agent 身上。
+   * 名字描述的是使用者本人，不是某个 agent 的属性：一个用户就一个名字。用户在
+   * 设置里改一次称呼，所有 agent 都得跟着改口，不能出现 A 叫得对、B 还用旧称呼
+   * 的情况，所以唯一正源是全局 preferences，这里不读 agent config。曾经存在的
+   * agent 级 user.name 覆盖层已经取消，残留字段由迁移清掉。
    */
   resolveUserName() {
-    const explicit = typeof this._config?.user?.name === "string" ? this._config.user.name.trim() : "";
-    if (explicit) return explicit;
     const global_ = typeof this._cb?.getUserName === "function" ? String(this._cb.getUserName() || "").trim() : "";
     if (global_) return global_;
     return String(this.resolveLocale()).startsWith("zh") ? "用户" : "User";
@@ -1054,9 +1051,9 @@ export class Agent {
       throw new Error(`Agent config needs repair: ${this._repairState.message}`);
     }
 
-    // 更新身份
+    // 更新身份。用户的名字不在这里刷新：它只存在于全局 preferences，写它走
+    // 全局那条路，agent config 的改动影响不到它。
     if (partial.agent?.name) this.agentName = this._config.agent?.name || "Hanako";
-    if (partial.user?.name) this.userName = this.resolveUserName();
 
     // yuan 切换只需更新 config，buildSystemPrompt 会实时读模板
     if (partial.agent?.yuan) {
@@ -1290,7 +1287,7 @@ export class Agent {
     }
 
     // 用户档案（user.md）
-    // 名字走 resolveUserName()：显式覆盖 → 全局 preferences → 语言兜底。
+    // 名字走 resolveUserName()：全局 preferences → 语言兜底。
     // 因为末端有兜底值，这一行现在总会出现；没配过名字时给出的是"用户"/"User"
     // 这种中性称呼，与 prompt 其它位置对用户的称呼保持一致。
     const resolvedUserName = this.resolveUserName();

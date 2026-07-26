@@ -176,6 +176,8 @@ const migrations = {
   50: migrateGeminiImagePreviewIdsToStable,
   // 用户名正源收敛到全局 preferences；各 agent 里重复的同名副本一并清掉
   51: migrateUserNameToGlobalPreferences,
+  // agent 级 user.name 覆盖层取消：读取侧不再看这个字段，残留字段一并删掉
+  52: migrateClearUserNameOverrides,
 };
 
 const migrationDependencies = {
@@ -1049,6 +1051,69 @@ function migrateUserNameToGlobalPreferences(ctx) {
     fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
     fs.renameSync(tmp, cfgPath);
     log(`[migrations] #51 ${dir.name}: 移除与全局值重复的 user.name`);
+  }
+}
+
+/**
+ * #52 — 清除 agent 级 user.name 覆盖层
+ *
+ * #51 把用户名的正源收敛到全局 preferences，但留了"值和全局不同就当作刻意的
+ * per-agent 覆盖"这条尾巴。覆盖层现在取消了：一个用户一个名字，改一次称呼所有
+ * agent 都跟着改口。读取侧已经不看 agent config 的 user.name，所以配置文件里
+ * 残留的字段必须删掉，否则留着一个再也不生效的名字，下次谁读到都会被误导。
+ *
+ * 全局值为空时（#51 当时没有任何 agent 配过名字，或者用户装得比 #51 还早又
+ * 一直没走到），先按 #51 的同款选择逻辑提升一个上去再清理，避免把用户唯一配过
+ * 的名字直接删没。
+ *
+ * 幂等：字段删完之后重跑什么都不做。
+ */
+function migrateClearUserNameOverrides(ctx) {
+  const { agentsDir, prefs, log } = ctx;
+  const preferences = prefs.getPreferences();
+
+  let agentDirs;
+  try {
+    agentDirs = readDirectoryLikeDirentsSync(agentsDir);
+  } catch {
+    agentDirs = [];
+  }
+
+  const readUserName = (cfg) => (typeof cfg?.user?.name === "string" ? cfg.user.name.trim() : "");
+
+  // 全局还没名字：先提升一个，主 agent 的名字最能代表用户本人，排在最前面挑
+  if (!(typeof preferences.userName === "string" && preferences.userName.trim())) {
+    const primaryAgentId = preferences.primaryAgent || "hanako";
+    const ordered = [...agentDirs].sort((a, b) => {
+      if (a.name === primaryAgentId) return -1;
+      if (b.name === primaryAgentId) return 1;
+      return 0;
+    });
+    for (const dir of ordered) {
+      const cfg = safeReadYAMLSync(path.join(agentsDir, dir.name, "config.yaml"), null, YAML);
+      const name = readUserName(cfg);
+      if (name) {
+        // 先把目的地写durable，再清理来源：清理中途失败也不会丢名字
+        preferences.userName = name;
+        prefs.savePreferences(preferences);
+        log(`[migrations] #52: 用户名取自 agent "${dir.name}" 提升为全局值`);
+        break;
+      }
+    }
+  }
+
+  for (const dir of agentDirs) {
+    const cfgPath = path.join(agentsDir, dir.name, "config.yaml");
+    const config = safeReadYAMLSync(cfgPath, null, YAML);
+    if (!config?.user || !("name" in config.user)) continue;
+
+    delete config.user.name;
+    if (Object.keys(config.user).length === 0) delete config.user;
+
+    const tmp = cfgPath + ".tmp";
+    fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
+    fs.renameSync(tmp, cfgPath);
+    log(`[migrations] #52 ${dir.name}: 移除失效的 user.name 覆盖`);
   }
 }
 
