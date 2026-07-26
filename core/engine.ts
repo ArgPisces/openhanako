@@ -41,6 +41,7 @@ import { PluginDevService } from "./plugin-dev-service.ts";
 import { createPluginDevTools } from "./plugin-dev-tools.ts";
 import { DefaultResourceLoader, SessionManager, SettingsManager } from "../lib/pi-sdk/index.ts";
 import { compactSessionWithCachePreservationRecoveringRuntime } from "./session-compactor.ts";
+import { resolveRequestReasoningLevelForContext } from "./request-reasoning-level.ts";
 import { getFreshCompactNoopReason } from "../lib/fresh-compact/policy.ts";
 import { DeferredResultCoordinator } from "../lib/deferred-result-coordinator.ts";
 import {
@@ -66,27 +67,6 @@ function findUniqueModelById(models, id) {
   if (!id || !Array.isArray(models)) return null;
   const matches = models.filter(m => m.id === id);
   return matches.length === 1 ? matches[0] : null;
-}
-
-function readSessionThinkingLevel(ctx) {
-  try {
-    const level = ctx?.sessionManager?.buildSessionContext?.()?.thinkingLevel;
-    return typeof level === "string" ? level : null;
-  } catch {
-    return null;
-  }
-}
-
-function resolveRequestReasoningLevel(models, prefs, ctx) {
-  const sessionThinkingLevel = readSessionThinkingLevel(ctx);
-  const defaultThinkingLevel = typeof models.getModelDefaultThinkingLevel === "function"
-    ? models.getModelDefaultThinkingLevel(ctx?.model || null, prefs.getThinkingLevel())
-    : prefs.getThinkingLevel();
-  const preferenceThinkingLevel = models.resolveThinkingLevel(defaultThinkingLevel);
-  const preferenceRequestsMax = preferenceThinkingLevel === "xhigh" || preferenceThinkingLevel === "max";
-  return preferenceRequestsMax && sessionThinkingLevel === "high"
-    ? preferenceThinkingLevel
-    : (sessionThinkingLevel || preferenceThinkingLevel);
 }
 
 function resolveChannelsEnabledForToolAvailability(engine) {
@@ -1354,6 +1334,15 @@ export class HanaEngine {
       deepseekRoleplayReasoningContext: this._sessionCoord.getDeepSeekRoleplayReasoningContext(p),
     };
   }
+  /**
+   * The reasoning level a request on this session carries. Same reason as the
+   * provider options above: the live request and the compaction request for one
+   * session ride the same cache prefix, so they cannot each decide for
+   * themselves whether reasoning is on. Both ask this.
+   */
+  resolveRequestReasoningLevel(ctx) {
+    return resolveRequestReasoningLevelForContext(this._models, this._prefs, ctx);
+  }
   getSessionStreamFn(p) {
     return this._sessionCoord.getSessionStreamFn(p);
   }
@@ -2259,7 +2248,7 @@ export class HanaEngine {
         pi.on("context", (event, ctx) => {
           const model = ctx?.model;
           if (!model) return;
-          const reasoningLevel = resolveRequestReasoningLevel(this._models, this._prefs, ctx);
+          const reasoningLevel = this.resolveRequestReasoningLevel(ctx);
           const messages = normalizeProviderContextMessages(event.messages, model, {
             mode: "chat",
             reasoningLevel,
@@ -2274,7 +2263,7 @@ export class HanaEngine {
           const requestModel = ctx?.model
             || findUniqueModelById(this._models.availableModels, p.model)
             || null;
-          const reasoningLevel = resolveRequestReasoningLevel(this._models, this._prefs, ctx);
+          const reasoningLevel = this.resolveRequestReasoningLevel(ctx);
           const sessionPath = ctx?.sessionManager?.getSessionFile?.() || null;
           const {
             deepseekRoleplayReasoningPatch,

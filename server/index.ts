@@ -501,6 +501,7 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
     getProviderCompatOptions: (sessionPath) => (
       engine.getProviderCompatOptionsForSession(sessionPath)
     ),
+    getRequestReasoningLevel: (ctx) => engine.resolveRequestReasoningLevel(ctx),
     buildUsageContext: ({ ctx }) => {
       const sessionPath = ctx?.sessionManager?.getSessionFile?.() || null;
       const bridgeContext = sessionPath ? engine.getBridgeContextForSessionPath(sessionPath) : null;

@@ -25,6 +25,7 @@ import {
 } from "./provider-compat.ts";
 import { resolveOutputCapCapability } from "./provider-compat/output-budget.ts";
 import { normalizeRequestThinkingLevel } from "./session-thinking-level.ts";
+import { resolveRequestReasoningLevel } from "./request-reasoning-level.ts";
 
 const DEFAULT_HARD_TRUNCATE_THRESHOLD = 0.85;
 
@@ -237,13 +238,20 @@ export function normalizeCompactionProviderPayload(payload, model, {
   return normalized;
 }
 
-export function resolveCompactionReasoningPolicy(model, thinkingLevel) {
+/**
+ * The thinking level a compaction runs at, and the reasoning level its request
+ * carries. The second is not decided here: it comes from the same function the
+ * live pipeline asks, because a compaction request that reasons differently
+ * than the live requests it follows cannot ride their cache prefix. This used
+ * to gate on the model's own reasoning capability and answer "no reasoning"
+ * where the live request answered a level, which cost a cold prefix on every
+ * such compaction and reported nothing.
+ */
+export function resolveCompactionReasoningPolicy(thinkingLevel) {
   const normalizedThinkingLevel = normalizeRequestThinkingLevel(thinkingLevel, "off");
   return {
     thinkingLevel: normalizedThinkingLevel,
-    reasoningLevel: model?.reasoning && normalizedThinkingLevel !== "off"
-      ? normalizedThinkingLevel
-      : null,
+    reasoningLevel: resolveRequestReasoningLevel({ sessionThinkingLevel: normalizedThinkingLevel }),
   };
 }
 
@@ -1154,6 +1162,7 @@ export async function createCachePreservingCompactionResult({
   customInstructions,
   signal,
   thinkingLevel,
+  reasoningLevel,
   outputPolicy = COMPACTION_OUTPUT_POLICIES.PROVIDER_DEFAULT,
   streamFn,
   streamOptions = {},
@@ -1175,6 +1184,7 @@ export async function createCachePreservingCompactionResult({
   customInstructions: any;
   signal: any;
   thinkingLevel: any;
+  reasoningLevel?: string | null;
   outputPolicy?: "provider-default" | "bounded";
   streamFn: any;
   streamOptions?: Record<string, any>;
@@ -1193,15 +1203,20 @@ export async function createCachePreservingCompactionResult({
     : cacheKeyParams;
   const resolvedOutputPolicy = normalizeCompactionOutputPolicy(outputPolicy);
   const rawThinkingLevel = seedCacheKeyParams.thinkingLevel ?? thinkingLevel ?? "off";
-  const reasoningPolicy = resolveCompactionReasoningPolicy(model, rawThinkingLevel);
+  const reasoningPolicy = resolveCompactionReasoningPolicy(rawThinkingLevel);
   const effectiveCacheKeyParams = {
     ...seedCacheKeyParams,
     thinkingLevel: reasoningPolicy.thinkingLevel,
   };
   const effectiveThinkingLevel = !cacheMetadataOverride
     ? reasoningPolicy.thinkingLevel
-    : resolveCompactionReasoningPolicy(model, thinkingLevel).thinkingLevel;
-  const effectiveReasoningLevel = resolveCompactionReasoningPolicy(model, effectiveThinkingLevel).reasoningLevel;
+    : resolveCompactionReasoningPolicy(thinkingLevel).thinkingLevel;
+  // A caller that already knows what the live requests on this session reason at
+  // says so, and that answer wins: the compaction request has to match the body
+  // the cached prefix was built from, not just its own thinking level.
+  const effectiveReasoningLevel = reasoningLevel !== undefined
+    ? reasoningLevel
+    : resolveCompactionReasoningPolicy(effectiveThinkingLevel).reasoningLevel;
   const rawLlmMessages = messagesAreNormalized
     ? messages
     : await convertToLlm(messages);
@@ -1408,7 +1423,7 @@ export async function runCachePreservingCompactionForSession(session: any, {
     const rawLiveMessages = session.sessionManager.buildSessionContext()?.messages;
     const convertToLlm = session.agent.convertToLlm || convertAgentMessagesToLlm;
     const thinkingLevel = session.thinkingLevel ?? session.agent.state?.thinkingLevel ?? "off";
-    const reasoningPolicy = resolveCompactionReasoningPolicy(model, thinkingLevel);
+    const reasoningPolicy = resolveCompactionReasoningPolicy(thinkingLevel);
     const prefix = await buildCachePreservingCompactionPrefix({
       liveMessages: rawLiveMessages,
       preparation,

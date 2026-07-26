@@ -2071,6 +2071,23 @@
       "reason": "Reached via esbuild source module graph, imported by core/execution-lease-registry.ts (import-statement)."
     },
     {
+      "path": "core/request-reasoning-level.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/session-compactor.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); core/engine.ts (import-statement)."
+    },
+    {
       "path": "core/resource-access-service.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -111935,9 +111952,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9600,
+    "totalFiles": 9601,
     "byInputType": {
-      "source-graph": 622,
+      "source-graph": 623,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

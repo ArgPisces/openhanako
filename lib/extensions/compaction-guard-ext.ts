@@ -33,7 +33,6 @@ import {
   createCachePreservingCompactionResult,
   getCachePreservingCompactionMaxTokens,
   normalizeCompactionProviderPayload,
-  resolveCompactionReasoningPolicy,
   shouldHardTruncateCachePreservingCompaction,
   stripInlineMediaFromCompactionPreparation,
 } from "../../core/session-compactor.ts";
@@ -154,6 +153,24 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
   const getProviderCompatOptions = typeof opts.getProviderCompatOptions === "function"
     ? opts.getProviderCompatOptions
     : null;
+  // Same reason, one layer up: whether this request reasons at all, and at which
+  // level, is decided for the whole session in one place. Deriving it here from
+  // the session's thinking level alone gave a different answer than the live
+  // request whenever the preference had a say, and the compaction request then
+  // rode a prefix that did not exist.
+  const getRequestReasoningLevel = typeof opts.getRequestReasoningLevel === "function"
+    ? opts.getRequestReasoningLevel
+    : null;
+
+  function resolveReasoningLevelForRequest(ctx: any) {
+    if (!getRequestReasoningLevel) {
+      throw new CompactionSessionOwnershipError(
+        "Cache-preserving compaction requires the shared request reasoning level resolver",
+        ctx?.sessionManager?.getSessionFile?.() || null,
+      );
+    }
+    return getRequestReasoningLevel(ctx);
+  }
 
   function readCompactionMode(event: any, ctx: any) {
     try {
@@ -265,9 +282,11 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
           ? builtContext.messages
           : [];
         const preparation = stripInlineMediaFromCompactionPreparation(rawPreparation);
-        const initialReasoningPolicy = resolveCompactionReasoningPolicy(model, readThinkingLevel(ctx));
-        const thinkingLevel = initialReasoningPolicy.thinkingLevel;
-        const reasoningLevel = initialReasoningPolicy.reasoningLevel;
+        // The thinking level is the session's own, because it keys the cache
+        // entry; the reasoning level the request carries is the session-wide
+        // answer, because it shapes the body the cache entry was written from.
+        const thinkingLevel = normalizeRequestThinkingLevel(readThinkingLevel(ctx), "off");
+        const reasoningLevel = resolveReasoningLevelForRequest(ctx);
         let reasoningReplay = "preserve";
         let cacheMetadataOverride = null;
         const systemPrompt = ctx.getSystemPrompt?.() || builtContext?.systemPrompt || "";
@@ -367,7 +386,6 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
         const requestThinkingLevel = typeof requestCacheKeyParams.thinkingLevel === "string"
           ? normalizeRequestThinkingLevel(requestCacheKeyParams.thinkingLevel, "off")
           : normalizeRequestThinkingLevel(thinkingLevel, "off");
-        const requestReasoningLevel = resolveCompactionReasoningPolicy(model, requestThinkingLevel).reasoningLevel;
 
         const providerCacheAffinityKey = getSessionProviderCacheAffinityKey?.(sessionPath)
           || ctx.sessionManager?.getSessionId?.();
@@ -379,7 +397,11 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
           requestMetadataOverride = cacheMetadataOverride,
           requestKeyParams = requestCacheKeyParams,
           requestThinking = requestMetadataOverride ? thinkingLevel : requestThinkingLevel,
-          requestReasoning = requestMetadataOverride ? reasoningLevel : requestReasoningLevel,
+          // The cache key can be recovered from the snapshot, but the reasoning
+          // the body carries stays the session's one answer either way: a
+          // request that reasons differently than the live requests it follows
+          // cannot ride their prefix, whichever key it is filed under.
+          requestReasoning = reasoningLevel,
         } = {}) => ({
           preparation,
           model,
@@ -395,6 +417,7 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
           customInstructions: event.customInstructions,
           signal: event.signal,
           thinkingLevel: requestThinking,
+          reasoningLevel: requestReasoning,
           outputPolicy: COMPACTION_OUTPUT_POLICIES.PROVIDER_DEFAULT,
           streamFn: agentRunRuntime.streamFn,
           streamOptions: withProviderCacheAffinity({

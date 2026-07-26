@@ -10,6 +10,7 @@ import { createCompactionGuardExtension } from "../lib/extensions/compaction-gua
 import { buildSessionCacheSnapshot as buildSessionCacheSnapshotValue } from "../core/session-cache-snapshot.ts";
 import { estimateCachePreservingCompactionRequest } from "../core/session-compactor.ts";
 import { normalizeProviderPayload } from "../core/provider-compat.ts";
+import { resolveRequestReasoningLevelForContext } from "../core/request-reasoning-level.ts";
 import {
   computeHardTruncation,
   truncateTextHeadTail,
@@ -102,6 +103,14 @@ function createMockPi() {
 
 const identityTransformContext = async (messages) => messages;
 
+// Stands in for the engine's session-wide resolver. Tests that are not about
+// the resolution itself only need the level the mock session runs at.
+const sessionReasoningLevel = (ctx: any) => (
+  ctx?.getThinkingLevel?.()
+  ?? ctx?.sessionManager?.buildSessionContext?.()?.thinkingLevel
+  ?? null
+);
+
 describe("CompactionGuardExtension", () => {
   let pi;
   let cacheCompactor;
@@ -145,6 +154,7 @@ describe("CompactionGuardExtension", () => {
       streamOptions: { sessionId: "runtime-session-id" },
     }));
     createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
       cacheCompactor,
       buildSessionCacheSnapshot,
       getSessionTransformContext,
@@ -352,6 +362,7 @@ describe("CompactionGuardExtension", () => {
       };
       const getProviderCompatOptions = vi.fn(() => providerCompatOptions);
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -384,7 +395,138 @@ describe("CompactionGuardExtension", () => {
 
       expect(getProviderCompatOptions).toHaveBeenCalledWith("/sessions/current.jsonl");
       expect(compactionPayload.messages).toEqual(livePayload.messages);
-      
+
+    });
+
+    // The reasoning level is part of the shared prefix too. The live request and
+    // the compaction request for one session have to agree on whether reasoning
+    // is on and at which level, or the prefix diverges and the cache is lost
+    // without anything reporting it. Each scenario resolves the live answer
+    // through the live resolver, hands compaction that same resolver, and
+    // compares the two bodies.
+    const deepseekModel = {
+      ...model,
+      id: "deepseek-v4-chat",
+      provider: "deepseek",
+      api: "openai-completions",
+      reasoning: true,
+      // Reaches the top effort, so a preference asking for it survives provider
+      // normalization instead of being folded back down to "high".
+      xhigh: true,
+    };
+    const identityModels = {
+      getModelDefaultThinkingLevel: (_model, preferenceLevel) => preferenceLevel,
+      resolveThinkingLevel: (level) => level,
+    };
+
+    async function compactionAndLivePayloads({ models: liveModels, prefs, sessionCtx }) {
+      pi = createMockPi();
+      const getRequestReasoningLevel = (requestCtx) => (
+        resolveRequestReasoningLevelForContext(liveModels, prefs, requestCtx)
+      );
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getRequestReasoningLevel,
+      })(pi);
+
+      await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        sessionCtx,
+      );
+
+      const request = cacheCompactor.mock.calls[0][0];
+      const rawPayload = {
+        model: deepseekModel.id,
+        messages: [{ role: "user", content: "hello" }],
+      };
+      const compactionPayload = await request.streamOptions.onPayload(
+        structuredClone(rawPayload),
+        deepseekModel,
+      );
+      const livePayload = normalizeProviderPayload(structuredClone(rawPayload), deepseekModel, {
+        mode: "chat",
+        reasoningLevel: getRequestReasoningLevel(sessionCtx),
+      });
+      const reasoningShape = (payload) => ({
+        thinking: payload.thinking,
+        reasoning_effort: payload.reasoning_effort,
+      });
+      return {
+        compactionReasoning: reasoningShape(compactionPayload),
+        liveReasoning: reasoningShape(livePayload),
+        compactionPayload,
+        livePayload,
+      };
+    }
+
+    it("reasons in the compaction request whenever the live request reasons", async () => {
+      // The session itself states no thinking level, so a live request falls
+      // back to the preference and reasons at "high". Compaction reading the
+      // session alone would call it off and send a body without thinking.
+      const sessionCtx = {
+        ...ctx,
+        model: deepseekModel,
+        sessionManager: {
+          ...ctx.sessionManager,
+          buildSessionContext: () => ({ messages: [oldMessage, retainedTail] }),
+        },
+      };
+      const { compactionReasoning, liveReasoning } = await compactionAndLivePayloads({
+        models: identityModels,
+        prefs: { getThinkingLevel: () => "high" },
+        sessionCtx,
+      });
+
+      expect(liveReasoning).toEqual({ thinking: { type: "enabled" }, reasoning_effort: "high" });
+      expect(compactionReasoning).toEqual(liveReasoning);
+    });
+
+    it("reasons at the same level as the live request when the preference outranks the session", async () => {
+      // A session pinned at "high" under a preference asking for "max" runs its
+      // live requests at "max". Compaction reading the session level alone would
+      // send "high" and pay for a cold prefix.
+      const sessionCtx = {
+        ...ctx,
+        model: deepseekModel,
+        getThinkingLevel: () => "high",
+        sessionManager: {
+          ...ctx.sessionManager,
+          buildSessionContext: () => ({
+            thinkingLevel: "high",
+            messages: [oldMessage, retainedTail],
+          }),
+        },
+      };
+      const { compactionReasoning, liveReasoning } = await compactionAndLivePayloads({
+        models: identityModels,
+        prefs: { getThinkingLevel: () => "max" },
+        sessionCtx,
+      });
+
+      expect(liveReasoning).toEqual({ thinking: { type: "enabled" }, reasoning_effort: "max" });
+      expect(compactionReasoning).toEqual(liveReasoning);
+    });
+
+    it("turns reasoning off in the compaction request when the live request has it off", async () => {
+      // Mirror image of the first case: a session that says "off" must not have
+      // its compaction request quietly reason at the preference's level.
+      const sessionCtx = {
+        ...ctx,
+        model: deepseekModel,
+        getThinkingLevel: () => "off",
+      };
+      const { compactionReasoning, liveReasoning } = await compactionAndLivePayloads({
+        models: identityModels,
+        prefs: { getThinkingLevel: () => "high" },
+        sessionCtx,
+      });
+
+      expect(liveReasoning).toEqual({ thinking: { type: "disabled" }, reasoning_effort: undefined });
+      expect(compactionReasoning).toEqual(liveReasoning);
     });
 
     it("composes the keyed ordinary payload hook before compaction normalization and cache affinity", async () => {
@@ -419,6 +561,7 @@ describe("CompactionGuardExtension", () => {
         },
       }));
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -488,6 +631,7 @@ describe("CompactionGuardExtension", () => {
         streamOptions: {},
       }));
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -563,6 +707,7 @@ describe("CompactionGuardExtension", () => {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       };
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         getSessionTransformContext,
         getSessionAgentRunRuntime,
         buildSessionCacheSnapshot: (sessionPath, { reason, messages }) => (
@@ -668,6 +813,7 @@ describe("CompactionGuardExtension", () => {
         details: { reason: "compaction-guard-hard-truncate" },
       });
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -706,6 +852,7 @@ describe("CompactionGuardExtension", () => {
       pi = createMockPi();
       const ownershipResolver = vi.fn(() => identityTransformContext);
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext: ownershipResolver,
@@ -734,6 +881,7 @@ describe("CompactionGuardExtension", () => {
     it("cancels explicit cache mode before compaction decisions when the ownership accessor is absent", async () => {
       pi = createMockPi();
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getCompactionMode: () => "cache_preserving",
@@ -755,6 +903,7 @@ describe("CompactionGuardExtension", () => {
       pi = createMockPi();
       const ownershipResolver = vi.fn(() => null);
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext: ownershipResolver,
@@ -778,6 +927,7 @@ describe("CompactionGuardExtension", () => {
       pi = createMockPi();
       const ownershipResolver = vi.fn(() => identityTransformContext);
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext: ownershipResolver,
@@ -799,6 +949,7 @@ describe("CompactionGuardExtension", () => {
       pi = createMockPi();
       const getSessionProviderCacheAffinityKey = vi.fn(() => "pi-source-lineage");
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionProviderCacheAffinityKey,
@@ -864,6 +1015,7 @@ describe("CompactionGuardExtension", () => {
     it("lets Pi SDK native compaction run when pi-compatible mode is selected", async () => {
       pi = createMockPi();
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getCompactionMode: () => "pi_compatible",
@@ -887,6 +1039,7 @@ describe("CompactionGuardExtension", () => {
         throw new Error("cache prefix mismatch");
       });
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor: failingCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -915,6 +1068,7 @@ describe("CompactionGuardExtension", () => {
         throw new Error("cache prefix mismatch");
       });
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor: failingCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -944,6 +1098,7 @@ describe("CompactionGuardExtension", () => {
       };
       const autoPi = createMockPi();
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -952,6 +1107,7 @@ describe("CompactionGuardExtension", () => {
       })(autoPi);
       const explicitPi = createMockPi();
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -1125,6 +1281,7 @@ describe("CompactionGuardExtension", () => {
       });
       getSessionTransformContext = vi.fn(() => transformContext);
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -1187,6 +1344,7 @@ describe("CompactionGuardExtension", () => {
         message.content?.[0]?.text !== "old history to summarize"
       )));
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext: () => transformContext,
@@ -1373,6 +1531,7 @@ describe("CompactionGuardExtension", () => {
           details: { readFiles: [], modifiedFiles: [] },
         });
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor: requestStageCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -1450,6 +1609,7 @@ describe("CompactionGuardExtension", () => {
           details: { readFiles: [], modifiedFiles: [] },
         });
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor: requestStageCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -1517,6 +1677,7 @@ describe("CompactionGuardExtension", () => {
     it("cancels explicit cache mode when full-prefix A is over but native-summary B fits", async () => {
       pi = createMockPi();
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -1623,6 +1784,7 @@ describe("CompactionGuardExtension", () => {
 
       pi = createMockPi();
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionTransformContext,
@@ -1741,6 +1903,7 @@ describe("CompactionGuardExtension", () => {
     it("honors custom hardTruncateThreshold option", async () => {
       pi = createMockPi();
       createCompactionGuardExtension({
+        getRequestReasoningLevel: sessionReasoningLevel,
         hardTruncateThreshold: 0.5,
         cacheCompactor,
         getSessionTransformContext,

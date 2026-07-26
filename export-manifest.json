@@ -120,6 +120,7 @@
     "core/provider-prompt-patches.ts",
     "core/provider-registry.ts",
     "core/remote-execution-boundary.ts",
+    "core/request-reasoning-level.ts",
     "core/resource-access-service.ts",
     "core/resource-service.ts",
     "core/resource-ticket-service.ts",

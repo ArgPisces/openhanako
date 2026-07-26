@@ -2764,7 +2764,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 326,
+      "line": 306,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.channelsDir, { recursive: true })",
       "reason": "Creates the channel root.",
@@ -2773,7 +2773,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 372,
+      "line": 352,
       "kind": "persistent-store-constructor",
       "excerpt": "new PreferencesManager({ userDir: this.userDir, agentsDir: this.agentsDir })",
       "reason": "Constructs the preferences owner.",
@@ -2782,7 +2782,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 373,
+      "line": 353,
       "kind": "persistent-store-constructor",
       "excerpt": "new InputDraftsStore({ hanakoHome: this.hanakoHome })",
       "reason": "Constructs draft/project stores.",
@@ -2791,7 +2791,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 391,
+      "line": 371,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionProjectCatalogStore({ userDir: this.userDir })",
       "reason": "Constructs draft/project stores.",
@@ -2800,7 +2800,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 624,
+      "line": 604,
       "kind": "persistent-store-constructor",
       "excerpt": "new TaskRegistry({ persistencePath: path.join(this.hanakoHome, \".ephemeral\", \"plugin-tasks.json\"), getSessionIdForPath: (sessionPath) => this.getSessionIdForPath(sessionPath), })",
       "reason": "Constructs the plugin task registry.",
@@ -2809,7 +2809,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1247,
+      "line": 1227,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2818,7 +2818,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1268,
+      "line": 1248,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2827,7 +2827,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2237,
+      "line": 2226,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates the user skill root.",
@@ -2836,7 +2836,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2419,
+      "line": 2408,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
@@ -2845,7 +2845,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2473,
+      "line": 2462,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(pluginDevSourcesDir, { recursive: true })",
       "reason": "Creates the plugin development source root.",
@@ -7939,7 +7939,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 691,
+      "line": 692,
       "kind": "persistent-store-constructor",
       "excerpt": "new ConfirmStore({ getSessionIdForPath: (sessionPath: string) => engine.getSessionIdForPath?.(sessionPath) || null, })",
       "reason": "ConfirmStore is deliberately process-memory-only: pending approvals time out or abort with their session and have no restart replay contract.",
@@ -7948,7 +7948,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 696,
+      "line": 697,
       "kind": "persistent-store-constructor",
       "excerpt": "new SubagentRunStore( path.join(hanakoHome, \"subagent-runs.json\"), { getSessionIdForPath: (sessionPath: string) => engine.getSessionIdForPath?.(sessionPath) || null }, )",
       "reason": "Constructs subagent stores.",
@@ -7957,7 +7957,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 702,
+      "line": 703,
       "kind": "persistent-store-constructor",
       "excerpt": "new SubagentThreadStore( path.join(hanakoHome, \"subagent-threads.json\"), { getSessionIdForPath: (sessionPath: string) => engine.getSessionIdForPath?.(sessionPath) || null }, )",
       "reason": "Constructs subagent stores.",
@@ -7966,7 +7966,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 713,
+      "line": 714,
       "kind": "persistent-store-constructor",
       "excerpt": "new WorkflowActivityStore( path.join(hanakoHome, \"workflow-activity.json\"), )",
       "reason": "Constructs the workflow activity store.",
@@ -7975,7 +7975,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 1135,
+      "line": 1136,
       "kind": "append-file",
       "excerpt": "fs.promises.appendFile(_bwsLogPath, chunk)",
       "reason": "Appends the browser worker log.",
@@ -7984,7 +7984,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 1194,
+      "line": 1195,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(serverInfoPath, JSON.stringify({ pid: process.pid, port: actualPort, host, configuredHost: serverRuntimeState.listenHost, networkMode: serverRuntimeState.mode, configuredMode: serverRuntimeState.configuredMode, configuredLi",
       "reason": "Writes or deletes live server discovery state.",
@@ -7993,7 +7993,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 1295,
+      "line": 1296,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(path.join(hanakoHome, \"server-info.json\"))",
       "reason": "Writes or deletes live server discovery state.",

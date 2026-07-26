@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:bc83c4678f2ef27f6f468b1240eb18488c330341481b6488368a51303ec4e24a",
+  "payloadFingerprint": "sha256:fc2f21da0cbfb996cd84ad141ef8fabc23b90828906f33f1ee63439559d763c4",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Focus-pointer annotations and the skills install view change only shift registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
-    "payloadFingerprint": "sha256:bc83c4678f2ef27f6f468b1240eb18488c330341481b6488368a51303ec4e24a"
+    "compatibilityReason": "Sharing the request reasoning level between the live and compaction paths only shifts registered persistence source-line receipts; store paths, schemas, and DATA_EPOCH are unchanged.",
+    "payloadFingerprint": "sha256:fc2f21da0cbfb996cd84ad141ef8fabc23b90828906f33f1ee63439559d763c4"
   },
   "schemas": [
     {
@@ -3208,7 +3208,7 @@
       "contract": "server-info writer and desktop bootstrap reader",
       "kind": "runtime-contract",
       "module": "server/index.ts",
-      "sourceHash": "sha256:f4b51a6710b5e79dd059f9e26f195041de8dcc80e00cfb45a6b187c646b5f0ef",
+      "sourceHash": "sha256:0d16a722b850fc2c8ef84d9c449bd68b9d903e1c18fb9e4dcfc5ff99eb84b81f",
       "storeId": "server-runtime-info"
     },
     {
@@ -3836,7 +3836,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 326,
+      "line": 306,
       "reason": "Creates the channel root.",
       "sourceFile": "core/engine.ts",
       "storeId": "channels"
@@ -3844,7 +3844,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 372,
+      "line": 352,
       "reason": "Constructs the preferences owner.",
       "sourceFile": "core/engine.ts",
       "storeId": "user-preferences"
@@ -3852,7 +3852,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 373,
+      "line": 353,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -3860,7 +3860,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 391,
+      "line": 371,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -3868,7 +3868,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 624,
+      "line": 604,
       "reason": "Constructs the plugin task registry.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-task-registry"
@@ -3876,7 +3876,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1247,
+      "line": 1227,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -3884,7 +3884,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1268,
+      "line": 1248,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -3892,7 +3892,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2237,
+      "line": 2226,
       "reason": "Creates the user skill root.",
       "sourceFile": "core/engine.ts",
       "storeId": "skill-state"
@@ -3900,7 +3900,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 2419,
+      "line": 2408,
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-jsonl"
@@ -3908,7 +3908,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2473,
+      "line": 2462,
       "reason": "Creates the plugin development source root.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-development-state"
@@ -8436,7 +8436,7 @@
     {
       "exemptionId": "in-memory-confirm-registry",
       "kind": "persistent-store-constructor",
-      "line": 691,
+      "line": 692,
       "reason": "ConfirmStore is deliberately process-memory-only: pending approvals time out or abort with their session and have no restart replay contract.",
       "sourceFile": "server/index.ts",
       "storeId": null
@@ -8444,7 +8444,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 696,
+      "line": 697,
       "reason": "Constructs subagent stores.",
       "sourceFile": "server/index.ts",
       "storeId": "subagent-state"
@@ -8452,7 +8452,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 702,
+      "line": 703,
       "reason": "Constructs subagent stores.",
       "sourceFile": "server/index.ts",
       "storeId": "subagent-state"
@@ -8460,7 +8460,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 713,
+      "line": 714,
       "reason": "Constructs the workflow activity store.",
       "sourceFile": "server/index.ts",
       "storeId": "workflow-state"
@@ -8468,7 +8468,7 @@
     {
       "exemptionId": null,
       "kind": "append-file",
-      "line": 1135,
+      "line": 1136,
       "reason": "Appends the browser worker log.",
       "sourceFile": "server/index.ts",
       "storeId": "runtime-diagnostics"
@@ -8476,7 +8476,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 1194,
+      "line": 1195,
       "reason": "Writes or deletes live server discovery state.",
       "sourceFile": "server/index.ts",
       "storeId": "server-runtime-info"
@@ -8484,7 +8484,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1295,
+      "line": 1296,
       "reason": "Writes or deletes live server discovery state.",
       "sourceFile": "server/index.ts",
       "storeId": "server-runtime-info"
