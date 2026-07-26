@@ -1,14 +1,24 @@
+import { randomUUID } from "node:crypto";
 import {
-  completeSimple,
+  buildNativeCompactionRequestShapes,
   convertAgentMessagesToLlm,
   estimateTokens,
   prepareCompaction,
 } from "../lib/pi-sdk/index.ts";
 import { computeHardTruncation } from "./compaction-utils.ts";
 import { stripAllInlineMediaForHistory } from "./message-sanitizer.ts";
-import { buildSessionCacheSnapshot } from "./session-cache-snapshot.ts";
-import { runSessionSnapshotSideTask } from "../lib/llm/session-snapshot-side-task-runner.ts";
-import { buildCacheStrategyMetadata } from "../lib/llm/cache-strategy-contract.ts";
+import {
+  assertSessionSnapshotRequest,
+  buildSessionCacheSnapshot,
+  buildSessionSnapshotRequestContract,
+  normalizeProviderVisibleTools,
+} from "./session-cache-snapshot.ts";
+import {
+  CACHE_STRATEGIES,
+  buildCacheStrategyMetadata,
+} from "../lib/llm/cache-strategy-contract.ts";
+import { stableSerialize } from "../lib/llm/cache-prefix-contract.ts";
+import { runCachePreservingCompactionAgentRun } from "../lib/llm/cache-preserving-compaction-agent-run.ts";
 import {
   normalizeProviderContextMessages,
   normalizeProviderPayload,
@@ -25,6 +35,124 @@ export const COMPACTION_OUTPUT_POLICIES = Object.freeze({
   PROVIDER_DEFAULT: "provider-default",
   BOUNDED: "bounded",
 });
+
+export const CACHE_PRESERVING_COMPACTION_PREFIX_CONTRACT_ERROR =
+  "CACHE_PRESERVING_COMPACTION_PREFIX_CONTRACT";
+
+export class CachePreservingCompactionPrefixContractError extends Error {
+  code = CACHE_PRESERVING_COMPACTION_PREFIX_CONTRACT_ERROR;
+  details: Record<string, any>;
+
+  constructor(message: string, details: Record<string, any> = {}) {
+    super(message);
+    this.name = "CachePreservingCompactionPrefixContractError";
+    this.details = details;
+  }
+}
+
+function prefixContractError(message: string, details: Record<string, any> = {}) {
+  return new CachePreservingCompactionPrefixContractError(
+    `Cache-preserving compaction prefix contract is not proven: ${message}`,
+    details,
+  );
+}
+
+async function convertMessagePartition(convertToLlm, messages, label) {
+  const converted = await convertToLlm(messages);
+  if (!Array.isArray(converted)) {
+    throw prefixContractError(`${label} conversion did not return a message array`);
+  }
+  return converted;
+}
+
+export async function deriveCachePreservingCompactionBoundary({
+  liveMessages,
+  preparation,
+  convertToLlm = convertAgentMessagesToLlm,
+}: {
+  liveMessages?: any[];
+  preparation?: any;
+  convertToLlm?: any;
+} = {}) {
+  if (!Array.isArray(liveMessages)) {
+    throw prefixContractError("live context messages are unavailable");
+  }
+  if (!preparation || typeof preparation !== "object") {
+    throw prefixContractError("Pi compaction preparation is unavailable");
+  }
+  if (typeof convertToLlm !== "function") {
+    throw prefixContractError("convertToLlm is unavailable");
+  }
+
+  const messagesToSummarize = Array.isArray(preparation.messagesToSummarize)
+    ? preparation.messagesToSummarize
+    : [];
+  const turnPrefixMessages = Array.isArray(preparation.turnPrefixMessages)
+    ? preparation.turnPrefixMessages
+    : [];
+  const hasPreviousSummary = typeof preparation.previousSummary === "string";
+  const firstLiveMessage = liveMessages[0];
+  const previousSummaryRepresented = hasPreviousSummary
+    && firstLiveMessage?.role === "compactionSummary"
+    && firstLiveMessage?.summary === preparation.previousSummary;
+
+  if (hasPreviousSummary && !previousSummaryRepresented) {
+    throw prefixContractError("previousSummary is not represented by the live compactionSummary");
+  }
+
+  const expectedOldRegion = [
+    ...(previousSummaryRepresented ? [firstLiveMessage] : []),
+    ...messagesToSummarize,
+    ...turnPrefixMessages,
+  ];
+  if (expectedOldRegion.length > liveMessages.length) {
+    throw prefixContractError("Pi preparation extends beyond the live context", {
+      expectedOldRegionLength: expectedOldRegion.length,
+      liveMessageCount: liveMessages.length,
+    });
+  }
+  const actualOldRegion = liveMessages.slice(0, expectedOldRegion.length);
+  if (stableSerialize(actualOldRegion) !== stableSerialize(expectedOldRegion)) {
+    throw prefixContractError("Pi preparation does not match the live context prefix", {
+      expectedOldRegionLength: expectedOldRegion.length,
+      liveMessageCount: liveMessages.length,
+    });
+  }
+
+  const retainedRawMessages = liveMessages.slice(expectedOldRegion.length);
+  const providerOldMessages = await convertMessagePartition(
+    convertToLlm,
+    actualOldRegion,
+    "old-region",
+  );
+  const providerRetainedMessages = await convertMessagePartition(
+    convertToLlm,
+    retainedRawMessages,
+    "retained-region",
+  );
+  const providerLiveMessages = await convertMessagePartition(
+    convertToLlm,
+    liveMessages,
+    "live-prefix",
+  );
+  if (
+    stableSerialize(providerLiveMessages)
+    !== stableSerialize([...providerOldMessages, ...providerRetainedMessages])
+  ) {
+    throw prefixContractError("provider-visible partitions do not reconstruct the live prefix", {
+      providerLiveMessageCount: providerLiveMessages.length,
+      providerOldMessageCount: providerOldMessages.length,
+      providerRetainedMessageCount: providerRetainedMessages.length,
+    });
+  }
+
+  return {
+    rawBoundaryIndex: expectedOldRegion.length,
+    oldMessageCount: providerOldMessages.length,
+    retainedMessageCount: providerRetainedMessages.length,
+    previousSummaryRepresented,
+  };
+}
 
 function positiveInteger(value) {
   const number = Number(value);
@@ -107,9 +235,57 @@ export function resolveCompactionReasoningPolicy(model, thinkingLevel) {
   };
 }
 
-// Keep these prompt strings aligned with Pi SDK's compaction prompts. Hana's
-// cache-preserving variant only moves the prompt after the cached message prefix.
-const PI_SUMMARIZATION_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
+function textBlock(text: string) {
+  return { type: "text" as const, text };
+}
+
+function estimateTextTokens(text) {
+  if (typeof text !== "string" || text.length === 0) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+export function getCachePreservingCompactionMaxTokens(preparation) {
+  return Math.max(512, Math.floor((preparation?.settings?.reserveTokens ?? 4096) * 0.8));
+}
+
+function buildCachePreservingCompactionInstructionValue({
+  preparation,
+  customInstructions,
+  liveMessageCount = 0,
+  retainedMessageCount = 0,
+  boundaryPlaceholder = null,
+}: {
+  preparation?: any;
+  customInstructions?: any;
+  liveMessageCount?: number;
+  retainedMessageCount?: number;
+  boundaryPlaceholder?: string | null;
+} = {}) {
+  if (!Number.isInteger(retainedMessageCount) || retainedMessageCount < 0 || retainedMessageCount > liveMessageCount) {
+    throw prefixContractError("retainedMessageCount is outside the live provider prefix", {
+      liveMessageCount,
+      retainedMessageCount,
+    });
+  }
+  const oldRegionEnd = liveMessageCount - retainedMessageCount;
+  const scopeLines = [
+    "Internal compaction-only run.",
+    "Do not call tools. Do not address the user.",
+    "Do not output <mood>, <pulse>, <reflect>, or any other internal narration.",
+    "Return only the exact structured checkpoint format below.",
+    boundaryPlaceholder || buildCompactionBoundaryScope(oldRegionEnd),
+    "Use recent-tail content only to understand continuity; never restate it as though it will be removed.",
+    "If the live prefix begins with an existing compaction checkpoint, incorporate it from that position without duplicating it.",
+  ];
+  if (preparation?.isSplitTurn) {
+    scopeLines.push(
+      "This is a split-turn compaction: preserve the original request and early progress needed to understand the retained suffix.",
+    );
+  }
+  if (customInstructions) {
+    scopeLines.push(`Additional focus for the checkpoint only: ${customInstructions}`);
+  }
+  const prompt = `${scopeLines.join("\n")}
 
 Use this EXACT format:
 
@@ -137,106 +313,540 @@ Use this EXACT format:
 1. [Ordered list of what should happen next]
 
 ## Critical Context
-- [Any data, examples, or references needed to continue]
+- [Only old-region context needed to continue from the retained suffix]
 - [Or "(none)" if not applicable]
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
-
-const PI_UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
-
-Update the existing structured summary with new information. RULES:
-- PRESERVE all existing information from the previous summary
-- ADD new progress, decisions, and context from the new messages
-- UPDATE the Progress section: move items from "In Progress" to "Done" when completed
-- UPDATE "Next Steps" based on what was accomplished
-- PRESERVE exact file paths, function names, and error messages
-- If something is no longer relevant, you may remove it
-
-Use this EXACT format:
-
-## Goal
-[Preserve existing goals, add new ones if the task expanded]
-
-## Constraints & Preferences
-- [Preserve existing, add new ones discovered]
-
-## Progress
-### Done
-- [x] [Include previously done items AND newly completed items]
-
-### In Progress
-- [ ] [Current work - update based on progress]
-
-### Blocked
-- [Current blockers - remove if resolved]
-
-## Key Decisions
-- **[Decision]**: [Brief rationale] (preserve all previous, add new)
-
-## Next Steps
-1. [Update based on current state]
-
-## Critical Context
-- [Preserve important context, add new if needed]
-
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
-
-const PI_TURN_PREFIX_SUMMARIZATION_PROMPT = `This is the PREFIX of a turn that was too large to keep. The SUFFIX (recent work) is retained.
-
-Summarize the prefix to provide context for the retained suffix:
-
-## Original Request
-[What did the user ask for in this turn?]
-
-## Early Progress
-- [Key decisions and work done in the prefix]
-
-## Context for Suffix
-- [Information needed to understand the kept suffix]
-
-Be concise. Focus on what's needed to understand the kept suffix.`;
-
-function textBlock(text) {
-  return { type: "text", text };
-}
-
-function estimateTextTokens(text) {
-  if (typeof text !== "string" || text.length === 0) return 0;
-  return Math.ceil(text.length / 4);
-}
-
-export function getCachePreservingCompactionMaxTokens(preparation) {
-  return Math.max(512, Math.floor((preparation?.settings?.reserveTokens ?? 4096) * 0.8));
-}
-
-function getCachePreservingTurnPrefixMaxTokens(preparation) {
-  return Math.max(256, Math.floor((preparation?.settings?.reserveTokens ?? 4096) * 0.5));
-}
-
-function buildPiSummaryPrompt({ preparation, customInstructions }: { preparation?: any; customInstructions?: any } = {}) {
-  let basePrompt = preparation?.previousSummary
-    ? PI_UPDATE_SUMMARIZATION_PROMPT
-    : PI_SUMMARIZATION_PROMPT;
-  if (customInstructions) {
-    basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
-  }
-  if (!preparation?.previousSummary) return basePrompt;
-  return `<previous-summary>\n${preparation.previousSummary}\n</previous-summary>\n\n${basePrompt}`;
-}
-
-export function buildCachePreservingCompactionInstruction({ preparation, customInstructions }: { preparation?: any; customInstructions?: any } = {}) {
   return {
-    role: "user",
-    content: [textBlock(buildPiSummaryPrompt({ preparation, customInstructions }))],
+    role: "user" as const,
+    content: [textBlock(prompt)],
     timestamp: Date.now(),
   };
 }
 
-function buildCachePreservingTurnPrefixInstruction() {
+export function buildCachePreservingCompactionInstruction({
+  preparation,
+  customInstructions,
+  liveMessageCount = 0,
+  retainedMessageCount = 0,
+}: {
+  preparation?: any;
+  customInstructions?: any;
+  liveMessageCount?: number;
+  retainedMessageCount?: number;
+} = {}) {
+  return buildCachePreservingCompactionInstructionValue({
+    preparation,
+    customInstructions,
+    liveMessageCount,
+    retainedMessageCount,
+  });
+}
+
+const COMPACTION_TRANSFORM_PROOF_KEY_PREFIX = "__hana_compaction_transform_proof_";
+const COMPACTION_TRANSFORM_PROOF_KEY_ATTEMPTS = 16;
+let compactionBoundaryPlaceholderSequence = 0;
+
+function buildCompactionBoundaryScope(oldRegionEnd: number) {
+  return [
+    `Old region: live message indexes [0, ${oldRegionEnd}). Summarize only that old region.`,
+    `Retained boundary: live message index ${oldRegionEnd}. Messages from that boundary onward remain verbatim in the session.`,
+  ].join("\n");
+}
+
+function createCompactionBoundaryPlaceholder() {
+  compactionBoundaryPlaceholderSequence += 1;
+  return `<hana.compaction.boundary:${Date.now().toString(36)}:${compactionBoundaryPlaceholderSequence}>`;
+}
+
+function countStringTokenOccurrences(value: any, token: string): number {
+  if (typeof value === "string") return value.split(token).length - 1;
+  if (Array.isArray(value)) {
+    return value.reduce(
+      (count, item) => count + countStringTokenOccurrences(item, token),
+      0,
+    );
+  }
+  if (!value || typeof value !== "object") return 0;
+  let count = 0;
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor && "value" in descriptor) {
+      count += countStringTokenOccurrences(descriptor.value, token);
+    }
+  }
+  return count;
+}
+
+function replaceStringToken(value: any, token: string, replacement: string): any {
+  if (typeof value === "string") return value.replace(token, replacement);
+  if (!value || typeof value !== "object") return value;
+  if (countStringTokenOccurrences(value, token) === 0) return value;
+
+  const clone = Array.isArray(value)
+    ? []
+    : Object.create(Object.getPrototypeOf(value));
+  for (const key of Reflect.ownKeys(value)) {
+    if (Array.isArray(value) && key === "length") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor) continue;
+    const nextDescriptor = "value" in descriptor
+      ? {
+          ...descriptor,
+          value: replaceStringToken(descriptor.value, token, replacement),
+        }
+      : descriptor;
+    Object.defineProperty(clone, key, nextDescriptor);
+  }
+  if (Array.isArray(value)) {
+    Object.defineProperty(
+      clone,
+      "length",
+      Object.getOwnPropertyDescriptor(value, "length"),
+    );
+    Object.setPrototypeOf(clone, Object.getPrototypeOf(value));
+  }
+  return clone;
+}
+
+function assertTransformProofInputMessages(messages: any[], instruction: any) {
+  for (const [index, message] of [...messages, instruction].entries()) {
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      throw prefixContractError("transform input contains a non-message value", { index });
+    }
+  }
+}
+
+function createTransformProofCarrier(messages: any[], instruction: any) {
+  assertTransformProofInputMessages(messages, instruction);
+  const inputs = [...messages, instruction];
+  for (let attempt = 0; attempt < COMPACTION_TRANSFORM_PROOF_KEY_ATTEMPTS; attempt += 1) {
+    const nonce = randomUUID();
+    const key = `${COMPACTION_TRANSFORM_PROOF_KEY_PREFIX}${nonce}`;
+    const collides = inputs.some((message) => Reflect.ownKeys(message).includes(key));
+    if (collides) continue;
+    return {
+      key,
+      messageValues: messages.map((_, index) => `${nonce}:message:${index}`),
+      instructionValue: `${nonce}:instruction`,
+    };
+  }
+  throw prefixContractError("could not allocate a collision-free transform proof carrier");
+}
+
+function tagTransformProofMessage(message: any, key: string, value: string) {
+  const tagged = Object.create(Object.getPrototypeOf(message));
+  Object.defineProperties(tagged, Object.getOwnPropertyDescriptors(message));
+  Object.defineProperty(tagged, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+  return tagged;
+}
+
+function transformProofTokens(proof: {
+  key: string;
+  messageValues: string[];
+  instructionValue: string;
+}) {
+  return [proof.key, ...proof.messageValues, proof.instructionValue];
+}
+
+function containsTransformProofToken(value: unknown, tokens: string[]) {
+  return typeof value === "string" && tokens.some((token) => value.includes(token));
+}
+
+function assertTransformProofArtifactsOnlyAtTopLevel({
+  messages,
+  allowedTopLevelValues,
+  proof,
+}: {
+  messages: any[];
+  allowedTopLevelValues: Array<string | undefined>;
+  proof: {
+    key: string;
+    messageValues: string[];
+    instructionValue: string;
+  };
+}) {
+  const tokens = transformProofTokens(proof);
+  const visited = new WeakSet<object>();
+
+  const visitStrict = (value: unknown) => {
+    if (containsTransformProofToken(value, tokens)) {
+      throw prefixContractError("transformContext copied a transform proof token outside its allowed top-level slot");
+    }
+    if (!value || typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+    for (const key of Reflect.ownKeys(value)) {
+      if (containsTransformProofToken(key, tokens)) {
+        throw prefixContractError("transformContext copied a transform proof key outside its allowed top-level slot");
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !("value" in descriptor)) continue;
+      visitStrict(descriptor.value);
+    }
+  };
+
+  for (const [index, message] of messages.entries()) {
+    const allowedValue = allowedTopLevelValues[index];
+    if (allowedValue === undefined) {
+      visitStrict(message);
+      continue;
+    }
+    for (const key of Reflect.ownKeys(message)) {
+      const descriptor = Object.getOwnPropertyDescriptor(message, key);
+      if (
+        key === proof.key
+        && descriptor
+        && "value" in descriptor
+        && descriptor.enumerable === true
+        && descriptor.value === allowedValue
+      ) {
+        continue;
+      }
+      if (containsTransformProofToken(key, tokens)) {
+        throw prefixContractError("transformContext copied a transform proof key outside its allowed top-level slot");
+      }
+      if (!descriptor || !("value" in descriptor)) continue;
+      visitStrict(descriptor.value);
+    }
+  }
+}
+
+function assertNoTransformProofArtifacts(
+  messages: any[],
+  proof: {
+    key: string;
+    messageValues: string[];
+    instructionValue: string;
+  },
+) {
+  assertTransformProofArtifactsOnlyAtTopLevel({
+    messages,
+    allowedTopLevelValues: messages.map(() => undefined),
+    proof,
+  });
+}
+
+function stripTransformProofMarker(
+  message: any,
+  markerKey: string,
+  expectedValue: string | undefined,
+) {
+  const clean = Object.create(Object.getPrototypeOf(message));
+  for (const key of Reflect.ownKeys(message)) {
+    const descriptor = Object.getOwnPropertyDescriptor(message, key);
+    if (key === markerKey) {
+      if (
+        expectedValue === undefined
+        || !descriptor
+        || !("value" in descriptor)
+        || descriptor.enumerable !== true
+        || descriptor.value !== expectedValue
+      ) {
+        throw prefixContractError("transformContext altered an allowed top-level proof slot");
+      }
+      continue;
+    }
+    if (descriptor) Object.defineProperty(clean, key, descriptor);
+  }
+  return clean;
+}
+
+async function applyTransformProofPass({
+  liveMessages,
+  instruction,
+  boundaryPlaceholder,
+  rawBoundaryIndex,
+  transformContext,
+  signal,
+}: {
+  liveMessages: any[];
+  instruction: any;
+  boundaryPlaceholder: string;
+  rawBoundaryIndex: number;
+  transformContext: any;
+  signal?: any;
+}) {
+  const proof = createTransformProofCarrier(liveMessages, instruction);
+  const taggedLive = liveMessages.map((message, index) => (
+    tagTransformProofMessage(message, proof.key, proof.messageValues[index])
+  ));
+  const taggedInstruction = tagTransformProofMessage(
+    instruction,
+    proof.key,
+    proof.instructionValue,
+  );
+  const transformed = await transformContext([...taggedLive, taggedInstruction], signal);
+  if (!Array.isArray(transformed)) {
+    throw prefixContractError("transformContext did not return a message array");
+  }
+  for (const [index, message] of transformed.entries()) {
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      throw prefixContractError("transformContext returned a non-message value", { index });
+    }
+  }
+  const proofValueToMessageIndex = new Map(
+    proof.messageValues.map((value, index) => [value, index]),
+  );
+  const observedProofSequence: Array<number | "instruction" | "unknown"> = [];
+  const instructionIndexes: number[] = [];
+  const allowedTopLevelProofValues: Array<string | undefined> = transformed.map(() => undefined);
+  const transformedProofMessageIndexes: Array<number | undefined> = transformed.map(() => undefined);
+  for (const [index, message] of transformed.entries()) {
+    const descriptor = Object.getOwnPropertyDescriptor(message, proof.key);
+    if (!descriptor) continue;
+    if (!("value" in descriptor) || descriptor.enumerable !== true) {
+      observedProofSequence.push("unknown");
+      continue;
+    }
+    const value = descriptor.value;
+    if (value === proof.instructionValue) {
+      observedProofSequence.push("instruction");
+      instructionIndexes.push(index);
+      allowedTopLevelProofValues[index] = value;
+      continue;
+    }
+    const messageIndex = proofValueToMessageIndex.get(value);
+    observedProofSequence.push(messageIndex ?? "unknown");
+    if (messageIndex !== undefined) {
+      allowedTopLevelProofValues[index] = value;
+      transformedProofMessageIndexes[index] = messageIndex;
+    }
+  }
+  const expectedProofSequence: Array<number | "instruction"> = [
+    ...liveMessages.map((_, index) => index),
+    "instruction",
+  ];
+  if (stableSerialize(observedProofSequence) !== stableSerialize(expectedProofSequence)) {
+    throw prefixContractError("transformContext filtered, duplicated, reordered, or altered proof-carrying messages", {
+      expectedMessageCount: liveMessages.length,
+      observedProofKinds: observedProofSequence.map((value) => (
+        value === "instruction" ? "instruction" : typeof value === "number" ? "message" : "unknown"
+      )),
+    });
+  }
+  if (instructionIndexes.length !== 1 || instructionIndexes[0] !== transformed.length - 1) {
+    throw prefixContractError("transformContext did not preserve the final compaction instruction marker", {
+      instructionIndexes,
+      transformedMessageCount: transformed.length,
+    });
+  }
+  assertTransformProofArtifactsOnlyAtTopLevel({
+    messages: transformed,
+    allowedTopLevelValues: allowedTopLevelProofValues,
+    proof,
+  });
+  const transformedPrefix = transformed.slice(0, -1);
+  const prefixPlaceholderCount = countStringTokenOccurrences(
+    transformedPrefix,
+    boundaryPlaceholder,
+  );
+  const instructionPlaceholderCount = countStringTokenOccurrences(
+    transformed.at(-1),
+    boundaryPlaceholder,
+  );
+  if (prefixPlaceholderCount !== 0 || instructionPlaceholderCount !== 1) {
+    throw prefixContractError("transformContext did not preserve one boundary placeholder inside the instruction", {
+      prefixPlaceholderCount,
+      instructionPlaceholderCount,
+    });
+  }
+  const firstRetainedIndex = transformedPrefix.findIndex((_, index) => {
+    const proofMessageIndex = transformedProofMessageIndexes[index];
+    return proofMessageIndex !== undefined && proofMessageIndex >= rawBoundaryIndex;
+  });
+  const transformedBoundaryIndex = firstRetainedIndex >= 0
+    ? firstRetainedIndex
+    : transformedPrefix.length;
+  const cleanPrefix = transformedPrefix.map((message, index) => (
+    stripTransformProofMarker(
+      message,
+      proof.key,
+      allowedTopLevelProofValues[index],
+    )
+  ));
+  const cleanInstruction = stripTransformProofMarker(
+    transformed.at(-1),
+    proof.key,
+    allowedTopLevelProofValues.at(-1),
+  );
+  assertNoTransformProofArtifacts([...cleanPrefix, cleanInstruction], proof);
   return {
-    role: "user",
-    content: [textBlock(PI_TURN_PREFIX_SUMMARIZATION_PROMPT)],
-    timestamp: Date.now(),
+    prefix: cleanPrefix,
+    oldRegion: cleanPrefix.slice(0, transformedBoundaryIndex),
+    retainedRegion: cleanPrefix.slice(transformedBoundaryIndex),
+    instruction: cleanInstruction,
+  };
+}
+
+async function convertAndNormalizePartition({
+  messages,
+  convertToLlm,
+  normalizeMessages,
+  label,
+}: {
+  messages: any[];
+  convertToLlm: any;
+  normalizeMessages: any;
+  label: string;
+}) {
+  const converted = await convertToLlm(messages);
+  if (!Array.isArray(converted)) {
+    throw prefixContractError(`${label} conversion did not return a message array`);
+  }
+  const normalized = await normalizeMessages(converted);
+  if (!Array.isArray(normalized)) {
+    throw prefixContractError(`${label} normalization did not return a message array`);
+  }
+  return normalized;
+}
+
+function assertNormalizedPartition({
+  full,
+  oldRegion,
+  retainedRegion,
+}: {
+  full: any[];
+  oldRegion: any[];
+  retainedRegion: any[];
+}) {
+  const reconstructed = [...oldRegion, ...retainedRegion];
+  if (full.length !== reconstructed.length) {
+    throw prefixContractError("normalized old/retained partition changed cardinality", {
+      fullMessageCount: full.length,
+      oldMessageCount: oldRegion.length,
+      retainedMessageCount: retainedRegion.length,
+    });
+  }
+  if (stableSerialize(full) !== stableSerialize(reconstructed)) {
+    throw prefixContractError("normalized old/retained partition does not reconstruct the live prefix", {
+      fullMessageCount: full.length,
+      oldMessageCount: oldRegion.length,
+      retainedMessageCount: retainedRegion.length,
+    });
+  }
+}
+
+export async function buildCachePreservingCompactionPrefix({
+  liveMessages,
+  preparation,
+  model,
+  customInstructions,
+  transformContext = async (messages) => messages,
+  convertToLlm = convertAgentMessagesToLlm,
+  normalizeMessages = (messages) => normalizeProviderContextMessages(messages, model, { mode: "chat" }),
+  signal,
+}: {
+  liveMessages?: any[];
+  preparation?: any;
+  model?: any;
+  customInstructions?: any;
+  transformContext?: any;
+  convertToLlm?: any;
+  normalizeMessages?: any;
+  signal?: any;
+} = {}) {
+  const rawBoundary = await deriveCachePreservingCompactionBoundary({
+    liveMessages,
+    preparation,
+    convertToLlm,
+  });
+  const boundaryPlaceholder = createCompactionBoundaryPlaceholder();
+  const instructionTemplate = buildCachePreservingCompactionInstructionValue({
+    preparation,
+    customInstructions,
+    liveMessageCount: 0,
+    retainedMessageCount: 0,
+    boundaryPlaceholder,
+  });
+  const transformed = await applyTransformProofPass({
+    liveMessages,
+    instruction: instructionTemplate,
+    boundaryPlaceholder,
+    rawBoundaryIndex: rawBoundary.rawBoundaryIndex,
+    transformContext,
+    signal,
+  });
+  const [normalizedFull, normalizedOld, normalizedRetained] = await Promise.all([
+    convertAndNormalizePartition({
+      messages: transformed.prefix,
+      convertToLlm,
+      normalizeMessages,
+      label: "transformed-live-prefix",
+    }),
+    convertAndNormalizePartition({
+      messages: transformed.oldRegion,
+      convertToLlm,
+      normalizeMessages,
+      label: "transformed-old-region",
+    }),
+    convertAndNormalizePartition({
+      messages: transformed.retainedRegion,
+      convertToLlm,
+      normalizeMessages,
+      label: "transformed-retained-region",
+    }),
+  ]);
+  assertNormalizedPartition({
+    full: normalizedFull,
+    oldRegion: normalizedOld,
+    retainedRegion: normalizedRetained,
+  });
+
+  const oldRegionEnd = normalizedFull.length - normalizedRetained.length;
+  const instruction = replaceStringToken(
+    transformed.instruction,
+    boundaryPlaceholder,
+    buildCompactionBoundaryScope(oldRegionEnd),
+  );
+  if (countStringTokenOccurrences(instruction, boundaryPlaceholder) !== 0) {
+    throw prefixContractError("boundary placeholder survived instruction materialization");
+  }
+  const [finalFull, finalPrefix, finalInstruction] = await Promise.all([
+    convertAndNormalizePartition({
+      messages: [...transformed.prefix, instruction],
+      convertToLlm,
+      normalizeMessages,
+      label: "transformed-final-request",
+    }),
+    convertAndNormalizePartition({
+      messages: transformed.prefix,
+      convertToLlm,
+      normalizeMessages,
+      label: "transformed-final-prefix",
+    }),
+    convertAndNormalizePartition({
+      messages: [instruction],
+      convertToLlm,
+      normalizeMessages,
+      label: "transformed-final-instruction",
+    }),
+  ]);
+  if (
+    finalInstruction.length !== 1
+    || stableSerialize(finalFull) !== stableSerialize([...finalPrefix, ...finalInstruction])
+  ) {
+    throw prefixContractError("normalized final instruction does not preserve prefix append-only parity", {
+      finalMessageCount: finalFull.length,
+      prefixMessageCount: finalPrefix.length,
+      instructionMessageCount: finalInstruction.length,
+    });
+  }
+  if (stableSerialize(finalPrefix) !== stableSerialize(normalizedFull)) {
+    throw prefixContractError("final transformed prefix differs from the proven normalized prefix");
+  }
+
+  return {
+    messages: finalPrefix,
+    instruction: finalInstruction[0],
+    oldMessageCount: normalizedOld.length,
+    retainedMessageCount: normalizedRetained.length,
+    previousSummaryRepresented: rawBoundary.previousSummaryRepresented,
   };
 }
 
@@ -264,47 +874,6 @@ export function stripInlineMediaFromCompactionPreparation(preparation) {
   return changed ? { ...preparation, ...next } : preparation;
 }
 
-function buildCachePreservingCompactionRequests({ preparation, customInstructions }: { preparation?: any; customInstructions?: any } = {}) {
-  preparation = stripInlineMediaFromCompactionPreparation(preparation);
-  const messagesToSummarize = Array.isArray(preparation?.messagesToSummarize)
-    ? preparation.messagesToSummarize
-    : [];
-  const turnPrefixMessages = Array.isArray(preparation?.turnPrefixMessages)
-    ? preparation.turnPrefixMessages
-    : [];
-
-  if (preparation?.isSplitTurn && turnPrefixMessages.length > 0) {
-    const requests = [];
-    if (messagesToSummarize.length > 0) {
-      requests.push({
-        kind: "history",
-        messages: [
-          ...messagesToSummarize,
-          buildCachePreservingCompactionInstruction({ preparation, customInstructions }),
-        ],
-        maxTokens: getCachePreservingCompactionMaxTokens(preparation),
-      });
-    }
-    requests.push({
-      kind: "turn-prefix",
-      messages: [
-        ...turnPrefixMessages,
-        buildCachePreservingTurnPrefixInstruction(),
-      ],
-      maxTokens: getCachePreservingTurnPrefixMaxTokens(preparation),
-    });
-    return requests;
-  }
-
-  return [{
-    kind: "history",
-    messages: [
-      ...messagesToSummarize,
-      buildCachePreservingCompactionInstruction({ preparation, customInstructions }),
-    ],
-    maxTokens: getCachePreservingCompactionMaxTokens(preparation),
-  }];
-}
 
 function computeFileDetails(fileOps) {
   const read = fileOps?.read instanceof Set ? fileOps.read : new Set(fileOps?.read || []);
@@ -327,18 +896,6 @@ function appendFileOperationContext(summary, details) {
   }
   if (sections.length === 0) return summary;
   return `${summary.trimEnd()}\n\n${sections.join("\n\n")}`;
-}
-
-function extractSummaryText(response) {
-  return response?.content
-    ?.filter((block) => block?.type === "text" && typeof block.text === "string")
-    ?.map((block) => block.text)
-    ?.join("\n")
-    ?.trim();
-}
-
-function isErrorResponse(response) {
-  return response?.stopReason === "error" || response?.stopReason === "aborted";
 }
 
 function cacheKeyParamsFromSnapshot(snapshot) {
@@ -368,63 +925,155 @@ function isRecoverableCachePreservingCompactionRuntimeError(error) {
 
 export function estimateCachePreservingCompactionRequest({
   preparation,
+  messages = [],
+  retainedMessageCount = 0,
+  model,
+  instruction = null,
   systemPrompt = "",
+  tools = [],
   customInstructions,
-}: { preparation?: any; systemPrompt?: string; customInstructions?: any } = {}) {
+}: {
+  preparation?: any;
+  messages?: any[];
+  retainedMessageCount?: number;
+  model?: any;
+  instruction?: any;
+  systemPrompt?: string;
+  tools?: any[];
+  customInstructions?: any;
+} = {}) {
+  const nativePreparation = preparation;
   preparation = stripInlineMediaFromCompactionPreparation(preparation);
   const systemPromptTokens = estimateTextTokens(systemPrompt);
-  const requests = buildCachePreservingCompactionRequests({ preparation, customInstructions })
-    .map((request) => {
-      const messageTokens = request.messages.reduce((sum, message) => sum + estimateTokens(message), 0);
-      const promptTokens = messageTokens + systemPromptTokens + COMPACTION_REQUEST_BUFFER_TOKENS;
-      return {
-        kind: request.kind,
-        promptTokens,
-        maxTokens: request.maxTokens,
-        totalTokens: promptTokens + request.maxTokens,
-        messageTokens,
-        instructionTokens: 0,
-        systemPromptTokens,
-        bufferTokens: COMPACTION_REQUEST_BUFFER_TOKENS,
-      };
-    });
-  const fallbackMaxTokens = getCachePreservingCompactionMaxTokens(preparation);
-  const fallbackBudget = {
-    kind: "history",
-    promptTokens: systemPromptTokens + COMPACTION_REQUEST_BUFFER_TOKENS,
-    maxTokens: fallbackMaxTokens,
-    totalTokens: systemPromptTokens + COMPACTION_REQUEST_BUFFER_TOKENS + fallbackMaxTokens,
-    messageTokens: 0,
-    instructionTokens: 0,
+  const liveMessages = Array.isArray(messages) ? messages : [];
+  const cacheInstruction = instruction || buildCachePreservingCompactionInstruction({
+    preparation,
+    customInstructions,
+    liveMessageCount: liveMessages.length,
+    retainedMessageCount,
+  });
+  const cacheMessageTokens = liveMessages.reduce((sum, message) => sum + estimateTokens(message), 0);
+  const cacheInstructionTokens = estimateTokens(cacheInstruction);
+  const providerVisibleTools = normalizeProviderVisibleTools(tools);
+  const toolSchemaTokens = providerVisibleTools.length > 0
+    ? estimateTextTokens(stableSerialize(providerVisibleTools))
+    : 0;
+  const cacheMaxTokens = getCachePreservingCompactionMaxTokens(preparation);
+  const cachePromptTokens = cacheMessageTokens
+    + cacheInstructionTokens
+    + systemPromptTokens
+    + toolSchemaTokens
+    + COMPACTION_REQUEST_BUFFER_TOKENS;
+  const cachePreservingBudget = {
+    kind: "cache-preserving",
+    promptTokens: cachePromptTokens,
+    maxTokens: cacheMaxTokens,
+    totalTokens: cachePromptTokens + cacheMaxTokens,
+    messageTokens: cacheMessageTokens,
+    instructionTokens: cacheInstructionTokens,
     systemPromptTokens,
+    toolSchemaTokens,
     bufferTokens: COMPACTION_REQUEST_BUFFER_TOKENS,
   };
-  const budget = requests.reduce((max, current) => (
-    current.totalTokens > max.totalTokens ? current : max
-  ), fallbackBudget);
-  return { ...budget, requests };
+
+  const nativeRequests = buildNativeCompactionRequestShapes({
+    preparation: nativePreparation,
+    model,
+    customInstructions,
+  }).requests.map((request) => {
+    const messageTokens = request.messages.reduce(
+      (sum, message) => sum + estimateTokens(message),
+      0,
+    );
+    const systemPromptTokens = estimateTextTokens(request.systemPrompt);
+    const promptTokens = messageTokens
+      + systemPromptTokens
+      + COMPACTION_REQUEST_BUFFER_TOKENS;
+    return {
+      kind: request.kind,
+      promptTokens,
+      maxTokens: request.maxTokens,
+      totalTokens: promptTokens + request.maxTokens,
+      messageTokens,
+      instructionTokens: estimateTextTokens(request.promptText),
+      systemPromptTokens,
+      toolSchemaTokens: 0,
+      bufferTokens: COMPACTION_REQUEST_BUFFER_TOKENS,
+    };
+  });
+  const nativeSummaryBudget = nativeRequests.reduce((largest, current) => (
+    !largest || current.totalTokens > largest.totalTokens ? current : largest
+  ), null) || {
+    kind: "history",
+    promptTokens: COMPACTION_REQUEST_BUFFER_TOKENS,
+    maxTokens: cacheMaxTokens,
+    totalTokens: COMPACTION_REQUEST_BUFFER_TOKENS + cacheMaxTokens,
+    messageTokens: 0,
+    instructionTokens: 0,
+    systemPromptTokens: 0,
+    toolSchemaTokens: 0,
+    bufferTokens: COMPACTION_REQUEST_BUFFER_TOKENS,
+  };
+  return {
+    cachePreservingBudget,
+    nativeSummaryBudget,
+    nativeRequests,
+  };
 }
 
 export function shouldHardTruncateCachePreservingCompaction({
   preparation,
+  messages,
+  retainedMessageCount,
   model,
+  instruction,
   systemPrompt,
+  tools,
   customInstructions,
   hardTruncateThreshold = DEFAULT_HARD_TRUNCATE_THRESHOLD,
-}: { preparation?: any; model?: any; systemPrompt?: any; customInstructions?: any; hardTruncateThreshold?: number } = {}) {
+}: {
+  preparation?: any;
+  messages?: any[];
+  retainedMessageCount?: number;
+  model?: any;
+  instruction?: any;
+  systemPrompt?: any;
+  tools?: any[];
+  customInstructions?: any;
+  hardTruncateThreshold?: number;
+} = {}) {
   const contextWindow = model?.contextWindow ?? 0;
-  const budget = estimateCachePreservingCompactionRequest({
+  const budgets = estimateCachePreservingCompactionRequest({
     preparation,
+    messages,
+    retainedMessageCount,
+    model,
+    instruction,
     systemPrompt,
+    tools,
     customInstructions,
   });
+  const { cachePreservingBudget, nativeSummaryBudget } = budgets;
   if (contextWindow <= 0) {
-    return { shouldHardTruncate: true, budget, threshold: 0, contextWindow };
+    return {
+      ...budgets,
+      cachePreservingFits: false,
+      nativeSummaryFits: false,
+      shouldUseNativeFallback: false,
+      shouldHardTruncate: true,
+      threshold: 0,
+      contextWindow,
+    };
   }
   const threshold = Math.floor(contextWindow * hardTruncateThreshold);
+  const cachePreservingFits = cachePreservingBudget.totalTokens <= threshold;
+  const nativeSummaryFits = nativeSummaryBudget.totalTokens <= threshold;
   return {
-    shouldHardTruncate: budget.totalTokens > threshold,
-    budget,
+    ...budgets,
+    cachePreservingFits,
+    nativeSummaryFits,
+    shouldUseNativeFallback: !cachePreservingFits && nativeSummaryFits,
+    shouldHardTruncate: !cachePreservingFits && !nativeSummaryFits,
     threshold,
     contextWindow,
   };
@@ -483,6 +1132,9 @@ export async function createCachePreservingCompactionResult({
   model,
   systemPrompt,
   messages,
+  retainedMessageCount,
+  instruction: preparedInstruction = null,
+  messagesAreNormalized = false,
   tools = [],
   sessionSnapshot = null,
   cacheKeyParams = {},
@@ -500,7 +1152,10 @@ export async function createCachePreservingCompactionResult({
   preparation: any;
   model: any;
   systemPrompt: any;
-  messages?: any;
+  messages?: any[];
+  retainedMessageCount: number;
+  instruction?: any;
+  messagesAreNormalized?: boolean;
   tools?: any[];
   sessionSnapshot?: any;
   cacheKeyParams?: Record<string, any>;
@@ -517,13 +1172,10 @@ export async function createCachePreservingCompactionResult({
 }) {
   if (!preparation) throw new Error("Cache-preserving compaction requires preparation");
   if (!model) throw new Error("Cache-preserving compaction requires a model");
+  if (!Array.isArray(messages)) {
+    throw prefixContractError("full provider-visible live messages are unavailable");
+  }
   preparation = stripInlineMediaFromCompactionPreparation(preparation);
-  const rawMessagesToSummarize = Array.isArray(preparation.messagesToSummarize)
-    ? preparation.messagesToSummarize
-    : [];
-  const effectivePreparation = Array.isArray(messages) && messages.length === rawMessagesToSummarize.length
-    ? { ...preparation, messagesToSummarize: messages }
-    : preparation;
   const seedCacheKeyParams = !cacheMetadataOverride
     ? (cacheKeyParamsFromSnapshot(sessionSnapshot) || cacheKeyParams)
     : cacheKeyParams;
@@ -538,113 +1190,154 @@ export async function createCachePreservingCompactionResult({
     ? reasoningPolicy.thinkingLevel
     : resolveCompactionReasoningPolicy(model, thinkingLevel).thinkingLevel;
   const effectiveReasoningLevel = resolveCompactionReasoningPolicy(model, effectiveThinkingLevel).reasoningLevel;
-  const requests = buildCachePreservingCompactionRequests({ preparation: effectivePreparation, customInstructions });
-
-  async function runRequest(request) {
-    const rawLlmMessages = await convertToLlm(request.messages);
-    const llmMessages = normalizeProviderContextMessages(rawLlmMessages, model, {
-      mode: "chat",
-      reasoningLevel: effectiveThinkingLevel,
-      reasoningReplay: effectiveCacheKeyParams.reasoningReplay,
-    });
-    const suffixMessage = llmMessages[llmMessages.length - 1];
-    const prefixMessages = llmMessages.slice(0, -1);
-    const options: Record<string, any> = {
-      ...streamOptions,
-      signal,
-      toolChoice: "none",
-    };
-    delete options.maxTokens;
-    delete options.reasoning;
-    if (resolvedOutputPolicy === COMPACTION_OUTPUT_POLICIES.BOUNDED) {
-      options.maxTokens = request.maxTokens;
-    }
-    if (effectiveReasoningLevel) options.reasoning = effectiveReasoningLevel;
-    if (cacheMetadataOverride) {
-      const context = {
-        systemPrompt,
-        tools,
-        messages: llmMessages,
-      };
-      const metadata = buildCacheStrategyMetadata(cacheMetadataOverride);
-      const usageRequest = usageLedger?.start?.({
-        model: { provider: model?.provider ?? null, modelId: model?.id ?? null, api: model?.api ?? null },
-        usageContext,
-        metadata,
-        costRates: model?.cost,
-      }) || null;
-      let response;
-      try {
-        response = streamFn
-          ? await (await streamFn(model, context, options)).result()
-          : await completeSimple(model, context, options);
-      } catch (error) {
-        if (usageRequest?.requestId) usageLedger?.recordError?.(usageRequest.requestId, error);
-        throw error;
-      }
-      if (isErrorResponse(response)) {
-        const error = new Error(`Cache-preserving compaction failed: ${response.errorMessage || response.stopReason || "unknown error"}`);
-        if (usageRequest?.requestId) usageLedger?.recordError?.(usageRequest.requestId, error, "error", { usage: response?.usage });
-        throw error;
-      }
-      usageLedger?.finish?.(usageRequest?.requestId, {
-        usage: response?.usage,
-        model: { provider: model?.provider ?? null, modelId: model?.id ?? null, api: model?.api ?? null },
-        costRates: model?.cost,
+  const rawLlmMessages = messagesAreNormalized
+    ? messages
+    : await convertToLlm(messages);
+  const llmMessages = messagesAreNormalized
+    ? rawLlmMessages
+    : normalizeProviderContextMessages(rawLlmMessages, model, {
+        mode: "chat",
+        reasoningLevel: effectiveReasoningLevel,
+        reasoningReplay: effectiveCacheKeyParams.reasoningReplay,
       });
-      return extractSummaryText(response);
-    }
-    const snapshotForRequest = sessionSnapshot?.messageCount === prefixMessages.length
-      ? sessionSnapshot
-      : buildSessionCacheSnapshot({
-        sessionPath: sessionSnapshot?.sessionPath || "",
-        reason: request.kind === "turn-prefix" ? "compaction.turn_prefix" : "compaction.history",
-        model,
-        cacheKeyParams: effectiveCacheKeyParams,
-        systemPrompt,
-        tools,
-        messages: prefixMessages,
-      });
-    const sideTask = await runSessionSnapshotSideTask({
+  if (!Array.isArray(llmMessages)) {
+    throw prefixContractError("provider normalization did not return the full live message array");
+  }
+  const instruction = preparedInstruction || buildCachePreservingCompactionInstruction({
+    preparation,
+    customInstructions,
+    liveMessageCount: llmMessages.length,
+    retainedMessageCount,
+  });
+  const snapshotForRequest = sessionSnapshot || buildSessionCacheSnapshot({
+    sessionPath: "",
+    reason: "compaction.history",
+    model,
+    cacheKeyParams: effectiveCacheKeyParams,
+    systemPrompt,
+    tools,
+    messages: llmMessages,
+  });
+  const requestTools = Array.isArray(tools) ? tools : [];
+  let cacheMetadata;
+  if (cacheMetadataOverride) {
+    cacheMetadata = buildCacheStrategyMetadata(cacheMetadataOverride);
+  } else {
+    const requestContract = buildSessionSnapshotRequestContract({
       snapshot: snapshotForRequest,
       model,
       cacheKeyParams: effectiveCacheKeyParams,
-      suffixMessage,
-      streamFn,
-      options,
-      cacheGroup: request.kind === "turn-prefix" ? "compaction.turn_prefix" : "compaction.history",
-      templateVersion: "v1",
-      usageLedger,
-      usageContext,
-    } as any);
-
-    const text = sideTask.text;
-    if (!text) {
-      throw new Error("Cache-preserving compaction failed: empty summary");
+      systemPrompt,
+      tools: requestTools,
+      messages: llmMessages,
+      prefixMessageCount: llmMessages.length,
+    });
+    const assertion = assertSessionSnapshotRequest(snapshotForRequest, requestContract);
+    if (!assertion.ok) {
+      const fields = assertion.diffs.map((diff) => diff.field).join(", ");
+      throw new Error(`Session snapshot request is not strict: ${fields}`);
     }
-    return text;
+    cacheMetadata = buildCacheStrategyMetadata({
+      cacheStrategy: CACHE_STRATEGIES.SESSION_SNAPSHOT,
+      cacheGroup: "compaction.history",
+      templateVersion: "agent-run.v1",
+      cachePrefixHash: requestContract.cachePrefixHash,
+      parentCachePrefixHash: snapshotForRequest.cachePrefixHash,
+      strict: true,
+    });
   }
+  const options: Record<string, any> = {
+    ...streamOptions,
+  };
+  delete options.maxTokens;
+  delete options.reasoning;
+  delete options.toolChoice;
+  if (resolvedOutputPolicy === COMPACTION_OUTPUT_POLICIES.BOUNDED) {
+    options.maxTokens = getCachePreservingCompactionMaxTokens(preparation);
+  }
+  if (effectiveReasoningLevel) options.reasoning = effectiveReasoningLevel;
 
-  let text;
-  if (preparation.isSplitTurn && Array.isArray(preparation.turnPrefixMessages) && preparation.turnPrefixMessages.length > 0) {
-    const historyRequest = requests.find((request) => request.kind === "history");
-    const turnPrefixRequest = requests.find((request) => request.kind === "turn-prefix");
-    const [historyText, turnPrefixText] = await Promise.all([
-      historyRequest ? runRequest(historyRequest) : Promise.resolve("No prior history."),
-      turnPrefixRequest ? runRequest(turnPrefixRequest) : Promise.resolve(""),
-    ]);
-    text = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixText}`;
-  } else {
-    text = await runRequest(requests[0]);
-  }
+  const runResult = await runCachePreservingCompactionAgentRun({
+    liveMessages: llmMessages,
+    systemPrompt,
+    tools: requestTools,
+    model,
+    instruction,
+    streamFn,
+    streamOptions: options,
+    convertToLlm: async (input: any[]) => input,
+    signal,
+    usageLedger,
+    usageContext,
+    cacheMetadata,
+  });
 
   const details = computeFileDetails(preparation.fileOps);
   return {
-    summary: appendFileOperationContext(text, details),
+    summary: appendFileOperationContext(runResult.summary, details),
     firstKeptEntryId: preparation.firstKeptEntryId,
     tokensBefore: preparation.tokensBefore,
     details,
   };
+}
+
+export async function createColdUtilitySummaryResult({
+  preparation,
+  transcriptMessages,
+  model,
+  systemPrompt,
+  customInstructions,
+  signal,
+  thinkingLevel,
+  outputPolicy = COMPACTION_OUTPUT_POLICIES.PROVIDER_DEFAULT,
+  streamFn,
+  streamOptions = {},
+  convertToLlm = convertAgentMessagesToLlm,
+  usageLedger,
+  usageContext,
+}: {
+  preparation: any;
+  transcriptMessages: any[];
+  model: any;
+  systemPrompt: any;
+  customInstructions?: any;
+  signal?: any;
+  thinkingLevel?: any;
+  outputPolicy?: "provider-default" | "bounded";
+  streamFn: any;
+  streamOptions?: Record<string, any>;
+  convertToLlm?: any;
+  usageLedger?: any;
+  usageContext?: any;
+}) {
+  if (!Array.isArray(transcriptMessages)) {
+    throw new Error("Cold utility summary requires an explicit transcript");
+  }
+  return await createCachePreservingCompactionResult({
+    preparation,
+    model,
+    systemPrompt,
+    messages: transcriptMessages,
+    retainedMessageCount: 0,
+    tools: [],
+    cacheMetadataOverride: {
+      cacheStrategy: CACHE_STRATEGIES.UTILITY_TEMPLATE,
+      cacheGroup: "compaction.deleted-agent-continuation",
+      templateVersion: "cold-transcript.v1",
+      cachePrefixHash: "",
+      parentCachePrefixHash: "",
+      strict: false,
+    },
+    customInstructions,
+    signal,
+    thinkingLevel,
+    outputPolicy,
+    streamFn,
+    streamOptions,
+    convertToLlm,
+    usageLedger,
+    usageContext,
+  });
 }
 
 function replaceSessionMessages(session) {
@@ -689,10 +1382,43 @@ export async function runCachePreservingCompactionForSession(session: any, {
     }
 
     const systemPrompt = session.agent.state?.systemPrompt ?? session.systemPrompt;
-    const fit = shouldHardTruncateCachePreservingCompaction({
+    const rawLiveMessages = session.sessionManager.buildSessionContext()?.messages;
+    const convertToLlm = session.agent.convertToLlm || convertAgentMessagesToLlm;
+    const thinkingLevel = session.thinkingLevel ?? session.agent.state?.thinkingLevel ?? "off";
+    const reasoningPolicy = resolveCompactionReasoningPolicy(model, thinkingLevel);
+    const prefix = await buildCachePreservingCompactionPrefix({
+      liveMessages: rawLiveMessages,
       preparation,
       model,
+      customInstructions,
+      transformContext: session.agent.transformContext || (async (messages) => messages),
+      convertToLlm,
+      normalizeMessages: (messages) => normalizeProviderContextMessages(messages, model, {
+        mode: "chat",
+        reasoningLevel: reasoningPolicy.reasoningLevel,
+      }),
+      signal,
+    });
+    const cacheKeyParams = { thinkingLevel: reasoningPolicy.thinkingLevel };
+    const providerMessages = prefix.messages;
+    const tools = session.agent.state?.tools || [];
+    const sessionSnapshot = buildSessionCacheSnapshot({
+      sessionPath: session.sessionManager.getSessionFile?.() || "",
+      reason: "compaction.history",
+      model,
+      cacheKeyParams,
       systemPrompt,
+      tools,
+      messages: providerMessages,
+    });
+    const fit = shouldHardTruncateCachePreservingCompaction({
+      preparation,
+      messages: providerMessages,
+      retainedMessageCount: prefix.retainedMessageCount,
+      model,
+      instruction: prefix.instruction,
+      systemPrompt,
+      tools,
       customInstructions,
       hardTruncateThreshold,
     });
@@ -700,8 +1426,9 @@ export async function runCachePreservingCompactionForSession(session: any, {
       const truncation = hardTruncateCachePreservingCompaction(branchEntries, preparation);
       if (!truncation) {
         throw new Error(
-          `Cache-preserving compaction request exceeds model window ` +
-          `(${fit.budget.totalTokens} > ${fit.threshold}) and hard truncation is unavailable`
+          `Cache-preserving and native compaction requests exceed the model window ` +
+          `(A=${fit.cachePreservingBudget.totalTokens}, B=${fit.nativeSummaryBudget.totalTokens}, ` +
+          `threshold=${fit.threshold}) and hard truncation is unavailable`
         );
       }
       const result = await appendCompactionResultToSession(session, truncation, { fromExtension: true, onCompacted });
@@ -716,18 +1443,28 @@ export async function runCachePreservingCompactionForSession(session: any, {
       }
       return result;
     }
+    if (fit.shouldUseNativeFallback) {
+      throw new Error(
+        `Cache-preserving compaction request exceeds the model window while Pi native compaction fits ` +
+        `(A=${fit.cachePreservingBudget.totalTokens}, B=${fit.nativeSummaryBudget.totalTokens}, ` +
+        `threshold=${fit.threshold})`
+      );
+    }
 
     const result = await createCachePreservingCompactionResult({
       preparation,
       model,
       systemPrompt,
+      messages: providerMessages,
+      retainedMessageCount: prefix.retainedMessageCount,
+      instruction: prefix.instruction,
+      messagesAreNormalized: true,
       customInstructions,
       signal,
-      thinkingLevel: session.thinkingLevel ?? session.agent.state?.thinkingLevel,
-      tools: session.agent.state?.tools || [],
-      cacheKeyParams: {
-        thinkingLevel: session.thinkingLevel ?? session.agent.state?.thinkingLevel ?? "off",
-      },
+      thinkingLevel: reasoningPolicy.thinkingLevel,
+      tools,
+      sessionSnapshot,
+      cacheKeyParams,
       outputPolicy: COMPACTION_OUTPUT_POLICIES.PROVIDER_DEFAULT,
       streamFn: session.agent.streamFn,
       streamOptions: {
@@ -738,7 +1475,7 @@ export async function runCachePreservingCompactionForSession(session: any, {
         thinkingBudgets: session.agent.thinkingBudgets,
         maxRetryDelayMs: session.agent.maxRetryDelayMs,
       },
-      convertToLlm: session.agent.convertToLlm,
+      convertToLlm: async (input: any[]) => input,
       usageLedger,
       usageContext,
     });

@@ -492,6 +492,12 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
     getSessionProviderCacheAffinityKey: (sessionPath) => (
       engine.getSessionProviderCacheAffinityKey(sessionPath)
     ),
+    getSessionTransformContext: (sessionPath) => (
+      engine.getSessionTransformContext(sessionPath)
+    ),
+    getSessionAgentRunRuntime: (sessionPath) => (
+      engine.getSessionAgentRunRuntime(sessionPath)
+    ),
     buildUsageContext: ({ ctx }) => {
       const sessionPath = ctx?.sessionManager?.getSessionFile?.() || null;
       const bridgeContext = sessionPath ? engine.getBridgeContextForSessionPath(sessionPath) : null;

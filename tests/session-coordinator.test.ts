@@ -3,12 +3,23 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 
-const { createAgentSessionMock, sessionManagerCreateMock, sessionManagerListMock, emitSessionShutdownMock, refreshSessionModelFromRegistryMock, moduleLogMock } = vi.hoisted(() => ({
+const {
+  createAgentSessionMock,
+  sessionManagerCreateMock,
+  sessionManagerListMock,
+  emitSessionShutdownMock,
+  estimateTokensMock,
+  refreshSessionModelFromRegistryMock,
+  runAgentLoopMock,
+  moduleLogMock,
+} = vi.hoisted(() => ({
   createAgentSessionMock: vi.fn(),
   sessionManagerCreateMock: vi.fn(),
   sessionManagerListMock: vi.fn(),
   emitSessionShutdownMock: vi.fn(),
+  estimateTokensMock: vi.fn((message) => JSON.stringify(message).length),
   refreshSessionModelFromRegistryMock: vi.fn(),
+  runAgentLoopMock: vi.fn(),
   moduleLogMock: {
     log: vi.fn(),
     warn: vi.fn(),
@@ -19,6 +30,8 @@ const { createAgentSessionMock, sessionManagerCreateMock, sessionManagerListMock
 vi.mock("../lib/pi-sdk/index.js", () => ({
   createAgentSession: createAgentSessionMock,
   emitSessionShutdown: emitSessionShutdownMock,
+  estimateTokens: estimateTokensMock,
+  runAgentLoop: runAgentLoopMock,
   SessionManager: {
     create: sessionManagerCreateMock,
     list: sessionManagerListMock,
@@ -3367,6 +3380,132 @@ describe("SessionCoordinator", () => {
     expect(snapshot.messages[0].content[1]).toEqual({ type: "input_audio", audio_url: "file://voice.wav" });
   });
 
+  it("returns the transform context owned by the keyed session runtime", () => {
+    const sessionPath = path.join(tempDir, "hana", "sessions", "transform.jsonl");
+    const transformContext = vi.fn(async (messages) => messages);
+    const coordinator = Object.create(SessionCoordinator.prototype);
+    coordinator._sessions = new Map([
+      [sessionPath, {
+        session: {
+          agent: { transformContext },
+        },
+      }],
+    ]);
+
+    expect(coordinator.getSessionTransformContext(sessionPath)).toBe(transformContext);
+  });
+
+  it("returns the complete AgentRun runtime owned by the keyed session", () => {
+    const sessionPath = path.join(tempDir, "hana", "sessions", "agent-run-runtime.jsonl");
+    const streamFn = vi.fn();
+    const onPayload = vi.fn();
+    const onResponse = vi.fn();
+    const prepareArguments = vi.fn((args) => args);
+    const execute = vi.fn();
+    const tools = [{
+      name: "read",
+      label: "Read",
+      description: "Read files",
+      parameters: { type: "object" },
+      prepareArguments,
+      execute,
+    }];
+    const coordinator = Object.create(SessionCoordinator.prototype);
+    coordinator._sessions = new Map([
+      [sessionPath, {
+        session: {
+          sessionManager: { getSessionId: () => "session-runtime-1" },
+          agent: {
+            streamFn,
+            onPayload,
+            onResponse,
+            transport: "sse",
+            thinkingBudgets: { high: 8192 },
+            maxRetryDelayMs: 1234,
+            state: { tools },
+          },
+        },
+      }],
+    ]);
+
+    const runtime = coordinator.getSessionAgentRunRuntime(sessionPath);
+    expect(runtime).toEqual({
+      streamFn,
+      tools,
+      streamOptions: {
+        sessionId: "session-runtime-1",
+        onPayload,
+        onResponse,
+        transport: "sse",
+        thinkingBudgets: { high: 8192 },
+        maxRetryDelayMs: 1234,
+      },
+    });
+    expect(Object.isFrozen(runtime)).toBe(true);
+    expect(Object.isFrozen(runtime.tools)).toBe(true);
+    expect(Object.isFrozen(runtime.streamOptions)).toBe(true);
+    expect(runtime.tools[0]).not.toBe(tools[0]);
+  });
+
+  it.each([
+    ["unknown session", false, undefined],
+    ["missing streamFn", true, undefined],
+  ])("throws a typed AgentRun runtime error for %s", (_name, includeSession, streamFn) => {
+    const sessionPath = path.join(tempDir, "hana", "sessions", "missing-agent-run-runtime.jsonl");
+    const coordinator = Object.create(SessionCoordinator.prototype);
+    coordinator._sessions = new Map(includeSession
+      ? [[sessionPath, { session: { agent: { streamFn, state: { tools: [] } } } }]]
+      : []);
+
+    let caught = null;
+    try {
+      coordinator.getSessionAgentRunRuntime(sessionPath);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      name: "SessionAgentRunRuntimeResolutionError",
+      code: "SESSION_AGENT_RUN_RUNTIME_UNKNOWN",
+      sessionPath,
+    });
+  });
+
+  it("returns an explicit identity transform for a resolved session without one", async () => {
+    const sessionPath = path.join(tempDir, "hana", "sessions", "identity.jsonl");
+    const coordinator = Object.create(SessionCoordinator.prototype);
+    coordinator._sessions = new Map([
+      [sessionPath, {
+        session: {
+          agent: {},
+        },
+      }],
+    ]);
+
+    const identityTransform = coordinator.getSessionTransformContext(sessionPath);
+    expect(typeof identityTransform).toBe("function");
+    const messages = [{ role: "user", content: "hello" }];
+    await expect(identityTransform(messages)).resolves.toBe(messages);
+  });
+
+  it("throws a typed ownership error for an unknown session path", () => {
+    const coordinator = Object.create(SessionCoordinator.prototype);
+    coordinator._sessions = new Map();
+    const missingPath = path.join(tempDir, "missing.jsonl");
+    let caught = null;
+    try {
+      coordinator.getSessionTransformContext(missingPath);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      name: "SessionTransformContextResolutionError",
+      code: "SESSION_TRANSFORM_CONTEXT_UNKNOWN",
+      sessionPath: missingPath,
+    });
+  });
+
   it("cleans up the temporary session file when aborted after session creation", async () => {
     const sessionFile = path.join(tempDir, "isolated.jsonl");
     fs.writeFileSync(sessionFile, "temp");
@@ -3495,6 +3634,157 @@ describe("SessionCoordinator", () => {
     expect(coordinator.discardSessionRuntime).not.toHaveBeenCalled();
     expect(coordinator.setSessionPinned).toHaveBeenCalledWith(sourcePath, false);
     expect(fs.existsSync(createdPath)).toBe(true);
+  });
+
+  it("summarizes a deleted-agent continuation through the explicit cold utility lane", async () => {
+    const summary = `## Goal
+Continue the restored transcript.
+
+## Constraints & Preferences
+- Keep the continuation self-contained.
+
+## Progress
+### Done
+- [x] Summarized the deleted Agent transcript.
+
+### In Progress
+- [ ] Continue in the primary Agent.
+
+### Blocked
+- (none)
+
+## Key Decisions
+- Use a cold utility summary.
+
+## Next Steps
+1. Continue the work.
+
+## Critical Context
+- The source Agent runtime is unavailable.`;
+    const transcriptMessages = [
+      { role: "user", content: [{ type: "text", text: "old user transcript" }], timestamp: 1 },
+      { role: "assistant", content: [{ type: "text", text: "old assistant transcript" }], timestamp: 2 },
+    ];
+    const providerContexts: any[] = [];
+    runAgentLoopMock.mockImplementationOnce(async (
+      prompts,
+      context,
+      config,
+      emit,
+      signal,
+      streamFn,
+    ) => {
+      const providerContext = {
+        systemPrompt: context.systemPrompt,
+        messages: [...context.messages, ...prompts],
+        tools: context.tools,
+      };
+      providerContexts.push(providerContext);
+      const stream = await streamFn(config.model, providerContext, { signal });
+      const message = await stream.result();
+      await emit({ type: "message_end", message });
+      return [...prompts, message];
+    });
+    const streamFn = vi.fn(async () => ({
+      async result() {
+        return {
+          role: "assistant",
+          content: [{ type: "text", text: summary }],
+          stopReason: "stop",
+          usage: {
+            input: 20,
+            output: 10,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 30,
+          },
+        };
+      },
+    }));
+    const appendCompaction = vi.fn(() => "cold-compaction-entry");
+    const compactedMessages = [{ role: "compactionSummary", summary }];
+    const emit = vi.fn();
+    const replaceMessages = vi.fn();
+    const ledger = createUsageLedger({ requestIdFactory: () => "deleted-agent-cold-1" });
+    const session = {
+      model: {
+        id: "test-model",
+        provider: "test-provider",
+        api: "openai-completions",
+        reasoning: false,
+      },
+      thinkingLevel: "off",
+      _emit: emit,
+      settingsManager: {
+        getCompactionSettings: () => ({ reserveTokens: 1000, keepRecentTokens: 0 }),
+      },
+      sessionManager: {
+        getSessionFile: () => "/sessions/continued.jsonl",
+        appendCompaction,
+        buildSessionContext: () => ({ messages: compactedMessages }),
+      },
+      agent: {
+        id: "hana",
+        state: {
+          systemPrompt: "primary Agent system prompt",
+          tools: [{ name: "dangerous-live-tool", execute: vi.fn() }],
+        },
+        streamFn,
+        convertToLlm: async (messages) => messages,
+        replaceMessages,
+      },
+    };
+    const coordinator = Object.create(SessionCoordinator.prototype);
+    coordinator._d = { getUsageLedger: () => ledger };
+    coordinator._createSettings = vi.fn();
+    coordinator._sessionIdForPath = vi.fn(() => "sess-continued");
+    coordinator._markSessionCompacted = vi.fn();
+
+    const result = await coordinator._freshCompactDeletedAgentContinuation(
+      session,
+      transcriptMessages,
+      {
+        sourceSessionPath: "/deleted/session.jsonl",
+        sourceAgentId: "deleted-agent",
+      },
+    );
+
+    expect(result).toMatchObject({
+      summary,
+      firstKeptEntryId: null,
+    });
+    expect(providerContexts).toHaveLength(1);
+    expect(providerContexts[0].messages.slice(0, -1)).toEqual(transcriptMessages);
+    expect(providerContexts[0].tools).toEqual([]);
+    expect(appendCompaction).toHaveBeenCalledWith(
+      summary,
+      null,
+      expect.any(Number),
+      { readFiles: [], modifiedFiles: [] },
+      false,
+    );
+    expect(replaceMessages).toHaveBeenCalledWith(compactedMessages);
+    expect(emit.mock.calls).toEqual([
+      [{ type: "compaction_start", reason: "deleted_agent_continue" }],
+      [{
+        type: "compaction_end",
+        reason: "deleted_agent_continue",
+        result: expect.objectContaining({ summary }),
+        aborted: false,
+        willRetry: false,
+      }],
+    ]);
+    expect(coordinator._markSessionCompacted).toHaveBeenCalledWith("/sessions/continued.jsonl");
+    expect(ledger.list({ operation: "deleted_agent_continue" }).entries[0]).toMatchObject({
+      metadata: {
+        cacheStrategy: "utility_template",
+        cacheGroup: "compaction.deleted-agent-continuation",
+        strict: false,
+      },
+      usage: {
+        cache: { readTokens: 0, hit: false },
+      },
+    });
   });
 
   it("uses compaction summaries as transcript material when continuing a deleted-agent session", async () => {

@@ -43,6 +43,17 @@ import {
 // ── Session 管理 ──
 export { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 
+// ── 低层 AgentLoop（隔离 side lane 用）──
+export { runAgentLoop } from "@earendil-works/pi-agent-core";
+export type {
+  AgentContext,
+  AgentEvent,
+  AgentLoopConfig,
+  AgentMessage,
+  AgentTool,
+  StreamFn,
+} from "@earendil-works/pi-agent-core";
+
 /**
  * Hana 侧保持稳定的 Tool[] 调用契约，适配层负责转换 Pi SDK 版本差异。
  *
@@ -107,6 +118,10 @@ export {
 
 // Diary material summarization only. Context compaction must go through core/session-compactor.js.
 export { generateSummary } from "@earendil-works/pi-coding-agent";
+export {
+  buildNativeCompactionRequestShapes,
+  NATIVE_SUMMARIZATION_SYSTEM_PROMPT,
+} from "./compaction-request-shape.ts";
 
 export const completeSimple = rawCompleteSimple;
 export const convertAgentMessagesToLlm = rawConvertToLlm;

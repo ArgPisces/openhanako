@@ -6,14 +6,21 @@ const {
   estimateTokensMock,
   findCutPointMock,
   prepareCompactionMock,
+  runAgentLoopMock,
 } = vi.hoisted(() => ({
   convertAgentMessagesToLlmMock: vi.fn(async (messages) => messages),
   estimateTokensMock: vi.fn(() => 2000),
   findCutPointMock: vi.fn(() => ({ firstKeptEntryIndex: 1, turnStartIndex: -1, isSplitTurn: false })),
   prepareCompactionMock: vi.fn(),
+  runAgentLoopMock: vi.fn(async (_prompts, context, config, _emit, _signal, streamFn) => {
+    const stream = await streamFn(config.model, context, config);
+    const response = await stream.result();
+    return [{ role: "assistant", timestamp: Date.now(), ...response }];
+  }),
 }));
 
 vi.mock("../lib/pi-sdk/index.js", () => ({
+  buildNativeCompactionRequestShapes: vi.fn(() => ({ requests: [] })),
   completeSimple: vi.fn(),
   convertAgentMessagesToLlm: convertAgentMessagesToLlmMock,
   createAgentSession: vi.fn(),
@@ -25,6 +32,7 @@ vi.mock("../lib/pi-sdk/index.js", () => ({
   findCutPoint: findCutPointMock,
   generateSummary: vi.fn(),
   prepareCompaction: prepareCompactionMock,
+  runAgentLoop: runAgentLoopMock,
   emitSessionShutdown: vi.fn(),
   refreshSessionModelFromRegistry: vi.fn(),
 }));
@@ -42,6 +50,30 @@ import { SessionCoordinator } from "../core/session-coordinator.ts";
 const agentsDir = "/tmp/agents";
 const sessionPath = `${agentsDir}/hana/sessions/session.jsonl`;
 const missingSessionPath = `${agentsDir}/hana/sessions/missing.jsonl`;
+const VALID_COMPACTION_SUMMARY = `## Goal
+Preserve the session across the model switch.
+
+## Constraints & Preferences
+- Keep the retained context intact.
+
+## Progress
+### Done
+- [x] Summarized the compacted prefix.
+
+### In Progress
+- [ ] Continue with the selected model.
+
+### Blocked
+- (none)
+
+## Key Decisions
+- Use the cache-preserving compaction path.
+
+## Next Steps
+1. Resume from the retained tail.
+
+## Critical Context
+- The model switch requested compaction.`;
 
 describe("SessionCoordinator.switchSessionModel", () => {
   beforeEach(() => {
@@ -191,7 +223,7 @@ describe("SessionCoordinator.switchSessionModel", () => {
         streamFn: vi.fn(async () => ({
           result: vi.fn(async () => ({
             stopReason: "stop",
-            content: [{ type: "text", text: "cache summary" }],
+            content: [{ type: "text", text: VALID_COMPACTION_SUMMARY }],
           })),
         })),
         convertToLlm: vi.fn(async (messages) => messages),
@@ -202,12 +234,12 @@ describe("SessionCoordinator.switchSessionModel", () => {
     const sessionPath = path.join(agentsDir, "hana", "sessions", "compact.jsonl");
     const result = await coord._compactWithModel(sessionPath, session, 5000, session.model);
 
-    expect(result.summary).toBe("cache summary");
+    expect(result.summary).toBe(VALID_COMPACTION_SUMMARY);
     expect(emit).toHaveBeenNthCalledWith(1, { type: "compaction_start", reason: "model_switch" });
     expect(emit).toHaveBeenLastCalledWith({
       type: "compaction_end",
       reason: "model_switch",
-      result: expect.objectContaining({ summary: "cache summary" }),
+      result: expect.objectContaining({ summary: VALID_COMPACTION_SUMMARY }),
       aborted: false,
       willRetry: false,
     });

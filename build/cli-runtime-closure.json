@@ -2298,12 +2298,12 @@
       "provenance": [
         {
           "root": "server-bootstrap",
-          "from": "lib/llm/session-snapshot-side-task-runner.ts",
+          "from": "core/session-compactor.ts",
           "kind": "import-statement"
         },
         {
           "root": "server-bootstrap",
-          "from": "core/session-compactor.ts",
+          "from": "lib/llm/session-snapshot-side-task-runner.ts",
           "kind": "import-statement"
         },
         {
@@ -2312,7 +2312,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/llm/session-snapshot-side-task-runner.ts (import-statement); core/session-compactor.ts (import-statement); core/session-coordinator.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); lib/llm/session-snapshot-side-task-runner.ts (import-statement); core/session-coordinator.ts (import-statement)."
     },
     {
       "path": "core/session-capability-drift.ts",
@@ -2826,11 +2826,6 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "lib/llm/session-snapshot-side-task-runner.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "core/provider-compat/anthropic.ts",
           "kind": "import-statement"
         },
@@ -2866,6 +2861,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/llm/session-snapshot-side-task-runner.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/session-coordinator.ts",
           "kind": "import-statement"
         },
@@ -2890,7 +2890,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); core/session-cache-snapshot.ts (import-statement); lib/llm/session-snapshot-side-task-runner.ts (import-statement); +12 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); core/session-cache-snapshot.ts (import-statement); core/provider-compat/anthropic.ts (import-statement); +12 more importer(s)."
     },
     {
       "path": "core/session-turn-actions.ts",
@@ -5744,6 +5744,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/session-compactor.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/session-capability-drift.ts",
           "kind": "import-statement"
         },
@@ -5753,7 +5758,19 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-cache-snapshot.ts (import-statement); core/session-capability-drift.ts (import-statement); core/session-coordinator.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-cache-snapshot.ts (import-statement); core/session-compactor.ts (import-statement); core/session-capability-drift.ts (import-statement); +1 more importer(s)."
+    },
+    {
+      "path": "lib/llm/cache-preserving-compaction-agent-run.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/session-compactor.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement)."
     },
     {
       "path": "lib/llm/cache-strategy-contract.ts",
@@ -5766,7 +5783,7 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "lib/llm/session-snapshot-side-task-runner.ts",
+          "from": "lib/llm/cache-preserving-compaction-agent-run.ts",
           "kind": "import-statement"
         },
         {
@@ -5786,6 +5803,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/llm/session-snapshot-side-task-runner.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/memory/memory-ticker.ts",
           "kind": "import-statement"
         },
@@ -5795,7 +5817,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-cache-snapshot.ts (import-statement); lib/llm/session-snapshot-side-task-runner.ts (import-statement); core/session-compactor.ts (import-statement); +4 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-cache-snapshot.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +5 more importer(s)."
     },
     {
       "path": "lib/llm/prompt-layout.ts",
@@ -5864,16 +5886,11 @@
       "provenance": [
         {
           "root": "server-bootstrap",
-          "from": "core/session-compactor.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "lib/memory/memory-reflection-runner.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); lib/memory/memory-reflection-runner.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/memory-reflection-runner.ts (import-statement)."
     },
     {
       "path": "lib/llm/usage-context.ts",
@@ -6425,6 +6442,18 @@
       "reason": "Reached via esbuild source module graph, imported by lib/tools/session-permission-wrapper.ts (import-statement)."
     },
     {
+      "path": "lib/pi-sdk/compaction-request-shape.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/pi-sdk/index.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/pi-sdk/index.ts (import-statement)."
+    },
+    {
       "path": "lib/pi-sdk/index.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -6435,7 +6464,7 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "lib/llm/session-snapshot-side-task-runner.ts",
+          "from": "lib/llm/cache-preserving-compaction-agent-run.ts",
           "kind": "import-statement"
         },
         {
@@ -6481,6 +6510,11 @@
         {
           "root": "server-bootstrap",
           "from": "core/bridge-session-manager.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/llm/session-snapshot-side-task-runner.ts",
           "kind": "import-statement"
         },
         {
@@ -6674,7 +6708,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/session-snapshot-side-task-runner.ts (import-statement); core/session-compactor.ts (import-statement); +46 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +47 more importer(s)."
     },
     {
       "path": "lib/pi-sdk/search-tools.ts",
@@ -8683,6 +8717,11 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "lib/llm/cache-preserving-compaction-agent-run.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/llm-utils.ts",
           "kind": "import-statement"
         },
@@ -8697,7 +8736,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/llm-utils.ts (import-statement); core/session-coordinator.ts (import-statement); hub/agent-executor.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/llm-utils.ts (import-statement); core/session-coordinator.ts (import-statement); +1 more importer(s)."
     },
     {
       "path": "lib/time-utils.ts",
@@ -111901,9 +111940,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9598,
+    "totalFiles": 9600,
     "byInputType": {
-      "source-graph": 620,
+      "source-graph": 622,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

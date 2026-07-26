@@ -1345,6 +1345,12 @@ export class HanaEngine {
   getSessionStreamFn(p) {
     return this._sessionCoord.getSessionStreamFn(p);
   }
+  getSessionAgentRunRuntime(p) {
+    return this._sessionCoord.getSessionAgentRunRuntime(p);
+  }
+  getSessionTransformContext(p) {
+    return this._sessionCoord.getSessionTransformContext(p);
+  }
   async switchSession(p) {
     const result = await this._sessionCoord.switchSession(p);
     await this.syncWorkspaceSkillPaths(this.cwd, { reload: true, emitEvent: false });

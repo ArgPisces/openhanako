@@ -3,16 +3,79 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock compaction-utils 以便精准控制 L3 判断和硬截断结果
 vi.mock("../core/compaction-utils.js", () => ({
   computeHardTruncation: vi.fn(),
-  estimatePreparationTokens: vi.fn(),
   truncateTextHeadTail: vi.fn(),
 }));
 
 import { createCompactionGuardExtension } from "../lib/extensions/compaction-guard-ext.ts";
+import { buildSessionCacheSnapshot as buildSessionCacheSnapshotValue } from "../core/session-cache-snapshot.ts";
+import { estimateCachePreservingCompactionRequest } from "../core/session-compactor.ts";
 import {
   computeHardTruncation,
-  estimatePreparationTokens,
   truncateTextHeadTail,
 } from "../core/compaction-utils.ts";
+import { Type } from "../lib/pi-sdk/index.ts";
+
+const VALID_COMPACTION_SUMMARY = `## Goal
+Keep the session useful.
+
+## Constraints & Preferences
+- Preserve the retained suffix.
+
+## Progress
+### Done
+- [x] Summarized the old region.
+
+### In Progress
+- [ ] Continue from the retained suffix.
+
+### Blocked
+- (none)
+
+## Key Decisions
+- Keep the proven boundary stable.
+
+## Next Steps
+1. Continue the session.
+
+## Critical Context
+- The recent tail remains verbatim.`;
+
+const usage = {
+  input: 10,
+  output: 5,
+  cacheRead: 3,
+  cacheWrite: 0,
+  totalTokens: 15,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
+
+function assistantStream(message: any) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield {
+        type: message.stopReason === "error" ? "error" : "done",
+        reason: message.stopReason,
+        message,
+      };
+    },
+    async result() {
+      return message;
+    },
+  } as any;
+}
+
+function assistantMessage(content: any[], stopReason = "stop") {
+  return {
+    role: "assistant",
+    content,
+    api: "openai-completions",
+    provider: "test-provider",
+    model: "test-model",
+    usage,
+    stopReason,
+    timestamp: Date.now(),
+  };
+}
 
 function createMockPi() {
   const handlers: any = {};
@@ -36,10 +99,14 @@ function createMockPi() {
   };
 }
 
+const identityTransformContext = async (messages) => messages;
+
 describe("CompactionGuardExtension", () => {
   let pi;
   let cacheCompactor;
   let buildSessionCacheSnapshot;
+  let getSessionTransformContext;
+  let getSessionAgentRunRuntime;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,7 +131,24 @@ describe("CompactionGuardExtension", () => {
       messages,
       messageCount: Array.isArray(messages) ? messages.length : 0,
     }));
-    createCompactionGuardExtension({ cacheCompactor, buildSessionCacheSnapshot })(pi);
+    getSessionTransformContext = vi.fn(() => identityTransformContext);
+    getSessionAgentRunRuntime = vi.fn(() => ({
+      streamFn: vi.fn(),
+      tools: [{
+        name: "read",
+        label: "Read",
+        description: "Read files",
+        parameters: { type: "object" },
+        execute: vi.fn(),
+      }],
+      streamOptions: { sessionId: "runtime-session-id" },
+    }));
+    createCompactionGuardExtension({
+      cacheCompactor,
+      buildSessionCacheSnapshot,
+      getSessionTransformContext,
+      getSessionAgentRunRuntime,
+    })(pi);
   });
 
   it("registers only tool_result and session_before_compact handlers", () => {
@@ -162,11 +246,23 @@ describe("CompactionGuardExtension", () => {
 
   describe("L3: session_before_compact preemptive hard truncate", () => {
     const model = { id: "m", provider: "p", contextWindow: 128_000 };
+    const oldMessage = {
+      role: "user",
+      content: [{ type: "text", text: "old history to summarize" }],
+      timestamp: 1,
+    };
+    const retainedTail = {
+      role: "assistant",
+      content: [{ type: "text", text: "retained live tail" }],
+      timestamp: 2,
+    };
     const preparation = {
       firstKeptEntryId: "uuid-42",
-      messagesToSummarize: [{ role: "user", content: "..." }],
+      messagesToSummarize: [oldMessage],
+      turnPrefixMessages: [],
+      isSplitTurn: false,
       tokensBefore: 90_000,
-      settings: { keepRecentTokens: 20_000 },
+      settings: { keepRecentTokens: 20_000, reserveTokens: 4_096 },
     };
     const ctx = {
       model,
@@ -183,13 +279,12 @@ describe("CompactionGuardExtension", () => {
         getBranch: () => [],
         buildSessionContext: () => ({
           thinkingLevel: "off",
-          messages: [{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 1 }],
+          messages: [oldMessage, retainedTail],
         }),
       },
     };
 
     it("returns cache-preserving compaction when summarize tokens are within threshold", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000); // < 128K * 0.85 = 108,800
       const res = await pi.trigger(
         "session_before_compact",
         { preparation, signal: { aborted: false } },
@@ -220,15 +315,429 @@ describe("CompactionGuardExtension", () => {
         }),
         tools: [{
           name: "read",
+          label: "Read",
           description: "Read files",
           parameters: { type: "object" },
+          execute: expect.any(Function),
         }],
       }));
       expect(buildSessionCacheSnapshot).toHaveBeenCalledWith("/sessions/current.jsonl", expect.objectContaining({
         reason: "compaction.history",
-        messages: preparation.messagesToSummarize,
+        messages: [oldMessage, retainedTail],
+      }));
+      expect(cacheCompactor).toHaveBeenCalledWith(expect.objectContaining({
+        messages: [oldMessage, retainedTail],
+        retainedMessageCount: 1,
       }));
       expect(computeHardTruncation).not.toHaveBeenCalled();
+    });
+
+    it("composes the keyed ordinary payload hook before compaction normalization and cache affinity", async () => {
+      pi = createMockPi();
+      const streamFn = vi.fn();
+      const onResponse = vi.fn();
+      const ordinaryOnPayload = vi.fn()
+        .mockImplementationOnce(async (payload) => ({
+          ...payload,
+          max_output_tokens: 777,
+          reasoning_effort: "auto",
+          ordinaryHook: true,
+        }))
+        .mockResolvedValueOnce(undefined);
+      const runtimeTools = [{
+        name: "read",
+        label: "Read",
+        description: "Read files",
+        parameters: { type: "object" },
+        execute: vi.fn(),
+      }];
+      const getSessionAgentRunRuntime = vi.fn(() => ({
+        streamFn,
+        tools: runtimeTools,
+        streamOptions: {
+          sessionId: "runtime-session-id",
+          onPayload: ordinaryOnPayload,
+          onResponse,
+          transport: "sse",
+          thinkingBudgets: { high: 8192 },
+          maxRetryDelayMs: 1234,
+        },
+      }));
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getSessionProviderCacheAffinityKey: () => "persisted-lineage",
+      })(pi);
+      const requestModel = {
+        ...model,
+        api: "openai-responses",
+        provider: "openai",
+        reasoning: true,
+      };
+
+      await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        {
+          ...ctx,
+          model: requestModel,
+          sessionManager: {
+            ...ctx.sessionManager,
+            getSessionId: () => "ctx-session-id",
+          },
+        },
+      );
+
+      expect(getSessionAgentRunRuntime).toHaveBeenCalledWith("/sessions/current.jsonl");
+      const request = cacheCompactor.mock.calls[0][0];
+      expect(request.streamFn).toBe(streamFn);
+      expect(request.tools).toBe(runtimeTools);
+      expect(request.streamOptions).toMatchObject({
+        sessionId: "runtime-session-id",
+        onResponse,
+        transport: "sse",
+        thinkingBudgets: { high: 8192 },
+        maxRetryDelayMs: 1234,
+      });
+      const transformed = await request.streamOptions.onPayload({
+        prompt_cache_key: "ctx-session-id",
+        max_output_tokens: 100,
+        input: [],
+      }, requestModel);
+      expect(transformed).toMatchObject({
+        ordinaryHook: true,
+        prompt_cache_key: "persisted-lineage",
+        reasoning_effort: "medium",
+      });
+      expect(transformed).not.toHaveProperty("max_output_tokens");
+      const undefinedResult = await request.streamOptions.onPayload({
+        prompt_cache_key: "ctx-session-id",
+        max_output_tokens: 100,
+        preservedOriginal: true,
+        input: [],
+      }, requestModel);
+      expect(undefinedResult).toMatchObject({
+        prompt_cache_key: "persisted-lineage",
+        preservedOriginal: true,
+      });
+      expect(undefinedResult).not.toHaveProperty("max_output_tokens");
+    });
+
+    it("falls back before compaction when the keyed AgentRun runtime has no stream function", async () => {
+      pi = createMockPi();
+      const getSessionAgentRunRuntime = vi.fn(() => ({
+        streamFn: null,
+        tools: [],
+        streamOptions: {},
+      }));
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getCompactionMode: () => "auto",
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(getSessionAgentRunRuntime).toHaveBeenCalledWith("/sessions/current.jsonl");
+      expect(cacheCompactor).not.toHaveBeenCalled();
+      expect(buildSessionCacheSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("runs the default compactor with full keyed tools and placeholder-only tool recovery", async () => {
+      pi = createMockPi();
+      const prepareArguments = vi.fn((args: any) => ({ path: args.inputPath }));
+      const liveExecute = vi.fn(async () => ({
+        content: [{ type: "text", text: "real tool output" }],
+        details: {},
+      }));
+      const runtimeTools = [{
+        name: "read",
+        label: "Read",
+        description: "Read files",
+        parameters: Type.Object({ path: Type.String() }),
+        prepareArguments,
+        execute: liveExecute,
+      }];
+      const responses = [
+        assistantMessage([{
+          type: "toolCall",
+          id: "call-prepare",
+          name: "read",
+          arguments: { inputPath: "notes.md" },
+        }], "toolUse"),
+        assistantMessage([{ type: "text", text: VALID_COMPACTION_SUMMARY }]),
+      ];
+      const providerContexts: any[] = [];
+      const streamFn = vi.fn(async (_model, providerContext, options) => {
+        providerContexts.push({
+          messages: [...providerContext.messages],
+          tools: providerContext.tools,
+          options,
+        });
+        return assistantStream(responses.shift());
+      });
+      const onResponse = vi.fn();
+      const getSessionAgentRunRuntime = vi.fn(() => ({
+        streamFn,
+        tools: runtimeTools,
+        streamOptions: {
+          sessionId: "runtime-session-id",
+          onPayload: vi.fn(async (payload) => payload),
+          onResponse,
+          transport: "sse",
+          thinkingBudgets: { high: 8192 },
+          maxRetryDelayMs: 1234,
+        },
+      }));
+      const requestModel = {
+        id: "test-model",
+        provider: "test-provider",
+        api: "openai-completions",
+        reasoning: false,
+        contextWindow: 128_000,
+        maxTokens: 8_192,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      };
+      createCompactionGuardExtension({
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        buildSessionCacheSnapshot: (sessionPath, { reason, messages }) => (
+          buildSessionCacheSnapshotValue({
+            sessionPath,
+            reason,
+            model: requestModel,
+            cacheKeyParams: { thinkingLevel: "off" },
+            systemPrompt: "system prompt",
+            tools: runtimeTools,
+            messages,
+          })
+        ),
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        {
+          ...ctx,
+          model: requestModel,
+          sessionManager: {
+            ...ctx.sessionManager,
+            getSessionId: () => "runtime-session-id",
+          },
+        },
+      );
+
+      expect(result?.compaction?.summary).toBe(VALID_COMPACTION_SUMMARY);
+      expect(prepareArguments).toHaveBeenCalledWith({ inputPath: "notes.md" });
+      expect(liveExecute).not.toHaveBeenCalled();
+      expect(providerContexts).toHaveLength(2);
+      expect(providerContexts[0].tools[0]).toMatchObject({
+        name: "read",
+        label: "Read",
+        prepareArguments,
+      });
+      expect(providerContexts[1].messages.at(-1)).toMatchObject({
+        role: "toolResult",
+        toolCallId: "call-prepare",
+        isError: false,
+      });
+      expect(providerContexts[0].options).toMatchObject({
+        sessionId: "runtime-session-id",
+        onResponse,
+        transport: "sse",
+        thinkingBudgets: { high: 8192 },
+        maxRetryDelayMs: 1234,
+      });
+    });
+
+    it("hard truncates before a provider call when large runtime tool schemas make A and B exceed the boundary", async () => {
+      pi = createMockPi();
+      const previousSummary = "prior checkpoint ".repeat(120);
+      const previousSummaryMessage = {
+        role: "compactionSummary",
+        summary: previousSummary,
+        timestamp: 0,
+      };
+      const boundaryPreparation = {
+        ...preparation,
+        previousSummary,
+        messagesToSummarize: [oldMessage],
+        settings: { keepRecentTokens: 100, reserveTokens: 640 },
+      };
+      const boundaryMessages = [previousSummaryMessage, oldMessage];
+      const noToolBudget = estimateCachePreservingCompactionRequest({
+        preparation: boundaryPreparation,
+        messages: boundaryMessages,
+        retainedMessageCount: 0,
+        model: { maxTokens: 512 },
+        systemPrompt: "",
+        tools: [],
+      } as any);
+      expect(noToolBudget.nativeSummaryBudget.totalTokens)
+        .toBeGreaterThan(noToolBudget.cachePreservingBudget.totalTokens);
+      const contextWindow = noToolBudget.nativeSummaryBudget.totalTokens - 1;
+      const streamFn = vi.fn();
+      const runtimeTools = [{
+        name: "schema_heavy_tool",
+        label: "Schema heavy tool",
+        description: "x".repeat(8_000),
+        parameters: {
+          type: "object",
+          properties: {
+            input: {
+              type: "string",
+              description: "y".repeat(8_000),
+            },
+          },
+        },
+        execute: vi.fn(),
+      }];
+      const getSessionAgentRunRuntime = vi.fn(() => ({
+        streamFn,
+        tools: runtimeTools,
+        streamOptions: { sessionId: "runtime-session-id" },
+      }));
+      (computeHardTruncation as any).mockReturnValue({
+        summary: "[hard truncated]",
+        firstKeptEntryId: "uuid-42",
+        tokensBefore: 90_000,
+        details: { reason: "compaction-guard-hard-truncate" },
+      });
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        hardTruncateThreshold: 1,
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation: boundaryPreparation, signal: { aborted: false } },
+        {
+          ...ctx,
+          model: { ...model, contextWindow, maxTokens: 512 },
+          sessionManager: {
+            ...ctx.sessionManager,
+            buildSessionContext: () => ({
+              thinkingLevel: "off",
+              messages: boundaryMessages,
+            }),
+          },
+        },
+      );
+
+      expect(result).toMatchObject({
+        compaction: {
+          summary: "[hard truncated]",
+          details: { reason: "compaction-guard-hard-truncate" },
+        },
+      });
+      expect(computeHardTruncation).toHaveBeenCalledOnce();
+      expect(cacheCompactor).not.toHaveBeenCalled();
+      expect(streamFn).not.toHaveBeenCalled();
+    });
+
+    it("falls back before compaction decisions when the session path is missing", async () => {
+      pi = createMockPi();
+      const ownershipResolver = vi.fn(() => identityTransformContext);
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext: ownershipResolver,
+        getCompactionMode: () => "auto",
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        {
+          ...ctx,
+          sessionManager: {
+            ...ctx.sessionManager,
+            getSessionFile: () => null,
+          },
+        },
+      );
+
+      expect(result).toBeUndefined();
+      expect(ownershipResolver).not.toHaveBeenCalled();
+      expect(cacheCompactor).not.toHaveBeenCalled();
+      expect(buildSessionCacheSnapshot).not.toHaveBeenCalled();
+      expect(computeHardTruncation).not.toHaveBeenCalled();
+    });
+
+    it("cancels explicit cache mode before compaction decisions when the ownership accessor is absent", async () => {
+      pi = createMockPi();
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getCompactionMode: () => "cache_preserving",
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        ctx,
+      );
+
+      expect(result).toEqual({ cancel: true });
+      expect(cacheCompactor).not.toHaveBeenCalled();
+      expect(buildSessionCacheSnapshot).not.toHaveBeenCalled();
+      expect(computeHardTruncation).not.toHaveBeenCalled();
+    });
+
+    it("falls back before compaction decisions when the keyed session is unknown", async () => {
+      pi = createMockPi();
+      const ownershipResolver = vi.fn(() => null);
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext: ownershipResolver,
+        getCompactionMode: () => "auto",
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(ownershipResolver).toHaveBeenCalledWith("/sessions/current.jsonl");
+      expect(cacheCompactor).not.toHaveBeenCalled();
+      expect(buildSessionCacheSnapshot).not.toHaveBeenCalled();
+      expect(computeHardTruncation).not.toHaveBeenCalled();
+    });
+
+    it("accepts a resolved session whose explicit transform is identity", async () => {
+      pi = createMockPi();
+      const ownershipResolver = vi.fn(() => identityTransformContext);
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext: ownershipResolver,
+        getSessionAgentRunRuntime,
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        ctx,
+      );
+
+      expect(result?.compaction?.summary).toBe("cache summary");
+      expect(ownershipResolver).toHaveBeenCalledWith("/sessions/current.jsonl");
+      expect(cacheCompactor).toHaveBeenCalledOnce();
     });
 
     it("shares the persisted cache lineage during compaction without replacing the child Pi identity", async () => {
@@ -238,8 +747,12 @@ describe("CompactionGuardExtension", () => {
         cacheCompactor,
         buildSessionCacheSnapshot,
         getSessionProviderCacheAffinityKey,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime: () => ({
+          ...getSessionAgentRunRuntime(),
+          streamOptions: { sessionId: "pi-child" },
+        }),
       })(pi);
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
       const codexModel = {
         ...model,
         api: "openai-codex-responses",
@@ -277,7 +790,6 @@ describe("CompactionGuardExtension", () => {
         apiKey: undefined,
         headers: { Authorization: "Bearer header-owned-token" },
       });
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
 
       const res = await pi.trigger(
         "session_before_compact",
@@ -301,7 +813,6 @@ describe("CompactionGuardExtension", () => {
         buildSessionCacheSnapshot,
         getCompactionMode: () => "pi_compatible",
       })(pi);
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
 
       const res = await pi.trigger(
         "session_before_compact",
@@ -323,9 +834,10 @@ describe("CompactionGuardExtension", () => {
       createCompactionGuardExtension({
         cacheCompactor: failingCompactor,
         buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
         getCompactionMode: () => "auto",
       })(pi);
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
 
       const res = await pi.trigger(
         "session_before_compact",
@@ -337,7 +849,7 @@ describe("CompactionGuardExtension", () => {
       expect(failingCompactor).toHaveBeenCalledOnce();
       expect(buildSessionCacheSnapshot).toHaveBeenCalledWith("/sessions/current.jsonl", expect.objectContaining({
         reason: "compaction.history",
-        messages: preparation.messagesToSummarize,
+        messages: [oldMessage, retainedTail],
       }));
       expect(computeHardTruncation).not.toHaveBeenCalled();
     });
@@ -350,9 +862,10 @@ describe("CompactionGuardExtension", () => {
       createCompactionGuardExtension({
         cacheCompactor: failingCompactor,
         buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
         getCompactionMode: () => "cache_preserving",
       })(pi);
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
 
       const res = await pi.trigger(
         "session_before_compact",
@@ -364,8 +877,51 @@ describe("CompactionGuardExtension", () => {
       expect(failingCompactor).toHaveBeenCalledOnce();
     });
 
-    it("strips inline media from compaction preparation before estimating or snapshotting history", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
+    it("preserves the auto fallback and explicit cancel behavior when model auth is unavailable", async () => {
+      const authUnavailableCtx = {
+        ...ctx,
+        modelRegistry: {
+          getApiKeyAndHeaders: vi.fn(async () => ({
+            ok: false,
+            error: "missing credentials",
+          })),
+        },
+      };
+      const autoPi = createMockPi();
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getCompactionMode: () => "auto",
+      })(autoPi);
+      const explicitPi = createMockPi();
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getCompactionMode: () => "cache_preserving",
+      })(explicitPi);
+
+      const autoResult = await autoPi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        authUnavailableCtx,
+      );
+      const explicitResult = await explicitPi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        authUnavailableCtx,
+      );
+
+      expect(autoResult).toBeUndefined();
+      expect(explicitResult).toEqual({ cancel: true });
+      expect(cacheCompactor).not.toHaveBeenCalled();
+      expect(buildSessionCacheSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("strips inline media from Pi preparation while preserving the full normalized live prefix", async () => {
       const mediaPreparation = {
         ...preparation,
         messagesToSummarize: [
@@ -393,30 +949,39 @@ describe("CompactionGuardExtension", () => {
       await pi.trigger(
         "session_before_compact",
         { preparation: mediaPreparation, signal: { aborted: false } },
-        ctx,
+        {
+          ...ctx,
+          sessionManager: {
+            ...ctx.sessionManager,
+            buildSessionContext: () => ({
+              thinkingLevel: "off",
+              messages: [...mediaPreparation.messagesToSummarize, retainedTail],
+            }),
+          },
+        },
       );
 
-      const estimatedPreparation = (estimatePreparationTokens as any).mock.calls[0][0];
-      expect(JSON.stringify(estimatedPreparation)).not.toContain("BASE64_AUDIO");
-      expect(JSON.stringify(estimatedPreparation)).not.toContain("BASE64_IMAGE");
-      expect(estimatedPreparation.messagesToSummarize[0].content).toEqual([
+      const passedPreparation = cacheCompactor.mock.calls[0][0].preparation;
+      expect(JSON.stringify(passedPreparation)).not.toContain("BASE64_AUDIO");
+      expect(JSON.stringify(passedPreparation)).not.toContain("BASE64_IMAGE");
+      expect(passedPreparation.messagesToSummarize[0].content).toEqual([
         { type: "text", text: "[attached_audio: /tmp/recording.wav]\n听一下" },
       ]);
-      expect(estimatedPreparation.messagesToSummarize[1].content).toEqual([
+      expect(passedPreparation.messagesToSummarize[1].content).toEqual([
         { type: "text", text: "Screenshot captured" },
         { type: "text", text: "[图片已省略：历史图片保留为文件引用，避免重复发送原始 base64]" },
       ]);
 
       const passedMessages = cacheCompactor.mock.calls[0][0].messages;
-      expect(passedMessages).toEqual(estimatedPreparation.messagesToSummarize);
+      expect(JSON.stringify(passedMessages)).toContain("BASE64_AUDIO");
+      expect(JSON.stringify(passedMessages)).toContain("BASE64_IMAGE");
       expect(buildSessionCacheSnapshot).toHaveBeenCalledWith("/sessions/current.jsonl", expect.objectContaining({
         reason: "compaction.history",
-        messages: estimatedPreparation.messagesToSummarize,
+        messages: passedMessages,
       }));
     });
 
-    it("does not let the latest transformed context expand the Pi compaction boundary", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
+    it("uses the full built session context instead of transient extension events", async () => {
       await pi.trigger("context", {
         messages: [{ role: "user", content: [{ type: "text", text: "live context" }], timestamp: 1 }],
       });
@@ -430,11 +995,10 @@ describe("CompactionGuardExtension", () => {
         ctx,
       );
 
-      expect(cacheCompactor.mock.calls[0][0].messages).toEqual(preparation.messagesToSummarize);
+      expect(cacheCompactor.mock.calls[0][0].messages).toEqual([oldMessage, retainedTail]);
     });
 
-    it("passes only Pi preparation messages to the cache compactor, not the kept tail from live context", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
+    it("passes the retained tail to the cache compactor as part of the full live prefix", async () => {
       await pi.trigger("context", {
         messages: [
           { role: "user", content: [{ type: "text", text: "old history to summarize" }], timestamp: 1 },
@@ -457,13 +1021,136 @@ describe("CompactionGuardExtension", () => {
       );
 
       const passedMessages = cacheCompactor.mock.calls[0][0].messages;
-      expect(passedMessages).toHaveLength(1);
+      expect(passedMessages).toHaveLength(2);
       expect(JSON.stringify(passedMessages)).toContain("old history to summarize");
-      expect(JSON.stringify(passedMessages)).not.toContain("KEPT_TAIL_SHOULD_NOT_ENTER_SUMMARY");
+      expect(JSON.stringify(passedMessages)).toContain("retained live tail");
+      expect(cacheCompactor.mock.calls[0][0].retainedMessageCount).toBe(1);
+    });
+
+    it("materializes the keyed session transform exactly once before snapshotting the prefix", async () => {
+      pi = createMockPi();
+      const toolResult = {
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "read",
+        content: [{ type: "text", text: "raw tool output" }],
+        timestamp: 2,
+      };
+      const transformedPreparation = {
+        ...preparation,
+        messagesToSummarize: [oldMessage, toolResult],
+      };
+      let boundaryPlaceholder = "";
+      const transformContext = vi.fn(async (messages) => {
+        boundaryPlaceholder = messages.at(-1).content[0].text.match(
+          /<hana\.compaction\.boundary:[^>]+>/,
+        )?.[0] || "";
+        return [
+          {
+            role: "user",
+            content: [{ type: "text", text: "injected system context" }],
+            timestamp: 0,
+          },
+          ...messages.slice(0, -1).map((message) => (
+            message.role === "toolResult"
+              ? {
+                  ...message,
+                  content: [{ type: "text", text: "rewritten tool output" }],
+                }
+              : message
+          )),
+          {
+            ...messages.at(-1),
+            content: [{
+              type: "text",
+              text: `rewritten before\n${messages.at(-1).content[0].text}\nrewritten after`,
+            }],
+          },
+        ];
+      });
+      getSessionTransformContext = vi.fn(() => transformContext);
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+      })(pi);
+
+      await pi.trigger(
+        "session_before_compact",
+        { preparation: transformedPreparation, signal: { aborted: false } },
+        {
+          ...ctx,
+          sessionManager: {
+            ...ctx.sessionManager,
+            buildSessionContext: () => ({
+              thinkingLevel: "off",
+              messages: [oldMessage, toolResult, retainedTail],
+            }),
+          },
+        },
+      );
+
+      expect(getSessionTransformContext).toHaveBeenCalledWith("/sessions/current.jsonl");
+      expect(transformContext).toHaveBeenCalledTimes(1);
+      expect(boundaryPlaceholder).toMatch(/^<hana\.compaction\.boundary:/);
+      expect(cacheCompactor).toHaveBeenCalledWith(expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: [{ type: "text", text: "injected system context" }],
+          }),
+          oldMessage,
+          expect.objectContaining({
+            role: "toolResult",
+            content: [{ type: "text", text: "rewritten tool output" }],
+          }),
+          retainedTail,
+        ],
+        instruction: expect.objectContaining({
+          content: [{
+            type: "text",
+            text: expect.stringMatching(
+              /^rewritten before\nInternal compaction-only run\.[\s\S]*Old region: live message indexes \[0, 3\)\.[\s\S]*\nrewritten after$/,
+            ),
+          }],
+        }),
+        retainedMessageCount: 1,
+      }));
+      expect(buildSessionCacheSnapshot).toHaveBeenCalledWith(
+        "/sessions/current.jsonl",
+        expect.objectContaining({
+          messages: cacheCompactor.mock.calls[0][0].messages,
+        }),
+      );
+      expect(JSON.stringify(cacheCompactor.mock.calls[0][0])).not.toContain(boundaryPlaceholder);
+      expect(JSON.stringify(buildSessionCacheSnapshot.mock.calls[0][1])).not.toContain(boundaryPlaceholder);
+    });
+
+    it("falls back with the typed prefix error when session transform filters a live message", async () => {
+      pi = createMockPi();
+      const transformContext = vi.fn(async (messages) => messages.filter((message) => (
+        message.content?.[0]?.text !== "old history to summarize"
+      )));
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext: () => transformContext,
+        getSessionAgentRunRuntime,
+        getCompactionMode: () => "auto",
+      })(pi);
+
+      const result = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(cacheCompactor).not.toHaveBeenCalled();
+      expect(buildSessionCacheSnapshot).not.toHaveBeenCalled();
     });
 
     it("does not read stale session-bound pi helpers during compaction", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
       pi.getThinkingLevel.mockImplementation(() => {
         throw new Error("This extension ctx is stale after session replacement or reload.");
       });
@@ -482,7 +1169,6 @@ describe("CompactionGuardExtension", () => {
     });
 
     it("uses the session snapshot cache params for the side-task request contract", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
       (buildSessionCacheSnapshot as any).mockImplementationOnce((sessionPath: any, { reason, messages }: any = {}) => ({
         strategy: "session_snapshot",
         strict: true,
@@ -510,7 +1196,6 @@ describe("CompactionGuardExtension", () => {
     });
 
     it("canonicalizes legacy auto thinking before compaction side-task requests", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
       const deepseekModel = {
         id: "deepseek-v4-pro",
         provider: "deepseek",
@@ -539,7 +1224,10 @@ describe("CompactionGuardExtension", () => {
           model: deepseekModel,
           sessionManager: {
             ...ctx.sessionManager,
-            buildSessionContext: () => ({ thinkingLevel: "auto" }),
+            buildSessionContext: () => ({
+              thinkingLevel: "auto",
+              messages: [oldMessage, retainedTail],
+            }),
           },
         },
       );
@@ -547,7 +1235,7 @@ describe("CompactionGuardExtension", () => {
       const call = cacheCompactor.mock.calls[0][0];
       expect(call.cacheKeyParams).toEqual({ thinkingLevel: "medium" });
       expect(call.thinkingLevel).toBe("medium");
-      const normalizedPayload = call.streamOptions.onPayload({
+      const normalizedPayload = await call.streamOptions.onPayload({
         model: "deepseek-v4-pro",
         messages: [{ role: "user", content: "hello" }],
         reasoning_effort: "auto",
@@ -558,7 +1246,6 @@ describe("CompactionGuardExtension", () => {
     });
 
     it("uses explicit cache recovery when GLM thinking tool-call history cannot replay reasoning_content", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
       const glmModel = {
         id: "glm-4.5",
         provider: "zhipu",
@@ -566,18 +1253,17 @@ describe("CompactionGuardExtension", () => {
         reasoning: true,
         contextWindow: 128_000,
       };
+      const glmHistory = {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "call_1", type: "function", function: { name: "read", arguments: "{}" } }],
+      };
       const res = await pi.trigger(
         "session_before_compact",
         {
           preparation: {
             ...preparation,
-            messagesToSummarize: [
-              {
-                role: "assistant",
-                content: "",
-                tool_calls: [{ id: "call_1", type: "function", function: { name: "read", arguments: "{}" } }],
-              },
-            ],
+            messagesToSummarize: [glmHistory],
           },
           signal: { aborted: false },
         },
@@ -586,7 +1272,10 @@ describe("CompactionGuardExtension", () => {
           model: glmModel,
           sessionManager: {
             ...ctx.sessionManager,
-            buildSessionContext: () => ({ thinkingLevel: "high" }),
+            buildSessionContext: () => ({
+              thinkingLevel: "high",
+              messages: [glmHistory, retainedTail],
+            }),
           },
         },
       );
@@ -603,7 +1292,7 @@ describe("CompactionGuardExtension", () => {
         }),
       }));
       const call = cacheCompactor.mock.calls[0][0];
-      const recoveredPayload = call.streamOptions.onPayload({
+      const recoveredPayload = await call.streamOptions.onPayload({
         model: "glm-4.5",
         messages: [{
           role: "assistant",
@@ -631,9 +1320,10 @@ describe("CompactionGuardExtension", () => {
       createCompactionGuardExtension({
         cacheCompactor: requestStageCompactor,
         buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
         getCompactionMode: () => "auto",
       })(pi);
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
       const glmModel = {
         id: "glm-5.1",
         provider: "zhipu",
@@ -650,7 +1340,10 @@ describe("CompactionGuardExtension", () => {
           model: glmModel,
           sessionManager: {
             ...ctx.sessionManager,
-            buildSessionContext: () => ({ thinkingLevel: "high" }),
+            buildSessionContext: () => ({
+              thinkingLevel: "high",
+              messages: [oldMessage, retainedTail],
+            }),
           },
         },
       );
@@ -678,7 +1371,7 @@ describe("CompactionGuardExtension", () => {
           degradeReason: "reasoning_replay_unavailable",
         }),
       });
-      const recoveryPayload = requestStageCompactor.mock.calls[1][0].streamOptions.onPayload({
+      const recoveryPayload = await requestStageCompactor.mock.calls[1][0].streamOptions.onPayload({
         model: "glm-5.1",
         messages: [{
           role: "assistant",
@@ -704,9 +1397,10 @@ describe("CompactionGuardExtension", () => {
       createCompactionGuardExtension({
         cacheCompactor: requestStageCompactor,
         buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
         getCompactionMode: () => "auto",
       })(pi);
-      (estimatePreparationTokens as any).mockReturnValue(50_000);
       const kimiModel = {
         id: "k3",
         provider: "kimi-coding",
@@ -724,7 +1418,10 @@ describe("CompactionGuardExtension", () => {
           model: kimiModel,
           sessionManager: {
             ...ctx.sessionManager,
-            buildSessionContext: () => ({ thinkingLevel: "max" }),
+            buildSessionContext: () => ({
+              thinkingLevel: "max",
+              messages: [oldMessage, retainedTail],
+            }),
           },
         },
       );
@@ -733,50 +1430,74 @@ describe("CompactionGuardExtension", () => {
       expect(requestStageCompactor).toHaveBeenCalledTimes(1);
     });
 
-    it("returns hard truncation when the full cache-preserving request would exceed the budget", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(100); // old Pi summarizer estimate fits
-      (computeHardTruncation as any).mockReturnValue({
-        summary: "[hard truncated for full request]",
-        firstKeptEntryId: "uuid-42",
-        tokensBefore: 90_000,
-        details: { reason: "compaction-guard-hard-truncate" },
-      });
-      const branch = [{ type: "message", id: "a" }, { type: "message", id: "b" }];
-      const tinyModel = { ...model, contextWindow: 1000 };
+    it("falls back to Pi native in auto when full-prefix A is over but native-summary B fits", async () => {
+      const tinyModel = { ...model, contextWindow: 3_000 };
       const res = await pi.trigger(
         "session_before_compact",
-        { preparation: { ...preparation, settings: { keepRecentTokens: 100, reserveTokens: 512 } }, signal: { aborted: false } },
+        {
+          preparation: { ...preparation, settings: { keepRecentTokens: 100, reserveTokens: 640 } },
+          signal: { aborted: false },
+        },
         {
           ...ctx,
           model: tinyModel,
-          getSystemPrompt: vi.fn(() => "system " + "x".repeat(1000)),
           sessionManager: {
             ...ctx.sessionManager,
-            getBranch: () => branch,
             buildSessionContext: () => ({
               thinkingLevel: "off",
-              messages: [{ role: "user", content: [{ type: "text", text: "x".repeat(6000) }], timestamp: 1 }],
+              messages: [
+                oldMessage,
+                { role: "assistant", content: [{ type: "text", text: "x".repeat(8_000) }], timestamp: 2 },
+              ],
             }),
           },
         },
       );
 
-      expect(res).toEqual({
-        compaction: {
-          summary: "[hard truncated for full request]",
-          firstKeptEntryId: "uuid-42",
-          tokensBefore: 90_000,
-          details: { reason: "compaction-guard-hard-truncate" },
-        },
-      });
-      expect(computeHardTruncation).toHaveBeenCalledWith(branch, 100, expect.objectContaining({
-        reason: "compaction-guard-hard-truncate",
-      }));
+      expect(res).toBeUndefined();
+      expect(computeHardTruncation).not.toHaveBeenCalled();
       expect(cacheCompactor).not.toHaveBeenCalled();
     });
 
-    it("returns hard truncation when summarize tokens exceed threshold", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(120_000); // > 108,800
+    it("cancels explicit cache mode when full-prefix A is over but native-summary B fits", async () => {
+      pi = createMockPi();
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getCompactionMode: () => "cache_preserving",
+      })(pi);
+      const tinyModel = { ...model, contextWindow: 3_000 };
+
+      const res = await pi.trigger(
+        "session_before_compact",
+        {
+          preparation: { ...preparation, settings: { keepRecentTokens: 100, reserveTokens: 640 } },
+          signal: { aborted: false },
+        },
+        {
+          ...ctx,
+          model: tinyModel,
+          sessionManager: {
+            ...ctx.sessionManager,
+            buildSessionContext: () => ({
+              thinkingLevel: "off",
+              messages: [
+                oldMessage,
+                { role: "assistant", content: [{ type: "text", text: "x".repeat(8_000) }], timestamp: 2 },
+              ],
+            }),
+          },
+        },
+      );
+
+      expect(res).toEqual({ cancel: true });
+      expect(computeHardTruncation).not.toHaveBeenCalled();
+      expect(cacheCompactor).not.toHaveBeenCalled();
+    });
+
+    it("returns the existing hard truncation only when both request shapes exceed threshold", async () => {
       (computeHardTruncation as any).mockReturnValue({
         summary: "[hard truncated]",
         firstKeptEntryId: "uuid-42",
@@ -784,10 +1505,31 @@ describe("CompactionGuardExtension", () => {
         details: { reason: "compaction-guard-hard-truncate" },
       });
       const branch = [{ type: "message", id: "a" }, { type: "message", id: "b" }];
+      const oversizedOld = {
+        role: "user",
+        content: [{ type: "text", text: "x".repeat(20_000) }],
+        timestamp: 1,
+      };
+      const oversizedPreparation = {
+        ...preparation,
+        messagesToSummarize: [oversizedOld],
+        settings: { keepRecentTokens: 20_000, reserveTokens: 640 },
+      };
       const res = await pi.trigger(
         "session_before_compact",
-        { preparation, signal: { aborted: false } },
-        { ...ctx, sessionManager: { ...ctx.sessionManager, getBranch: () => branch } },
+        { preparation: oversizedPreparation, signal: { aborted: false } },
+        {
+          ...ctx,
+          model: { ...model, contextWindow: 3_000 },
+          sessionManager: {
+            ...ctx.sessionManager,
+            getBranch: () => branch,
+            buildSessionContext: () => ({
+              thinkingLevel: "off",
+              messages: [oversizedOld, retainedTail],
+            }),
+          },
+        },
       );
       expect(res).toEqual({
         compaction: {
@@ -803,19 +1545,79 @@ describe("CompactionGuardExtension", () => {
       expect(cacheCompactor).not.toHaveBeenCalled();
     });
 
-    it("cancels when hard truncate itself fails", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(120_000);
-      (computeHardTruncation as any).mockReturnValue(null); // 无法截断
-      const res = await pi.trigger(
+    it("maps an unprovable live boundary to native fallback in auto and cancel in explicit mode", async () => {
+      const mismatchedCtx = {
+        ...ctx,
+        sessionManager: {
+          ...ctx.sessionManager,
+          buildSessionContext: () => ({
+            thinkingLevel: "off",
+            messages: [
+              { role: "user", content: [{ type: "text", text: "different old history" }], timestamp: 1 },
+              retainedTail,
+            ],
+          }),
+        },
+      };
+
+      const autoResult = await pi.trigger(
         "session_before_compact",
         { preparation, signal: { aborted: false } },
-        ctx,
+        mismatchedCtx,
+      );
+
+      pi = createMockPi();
+      createCompactionGuardExtension({
+        cacheCompactor,
+        buildSessionCacheSnapshot,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+        getCompactionMode: () => "cache_preserving",
+      })(pi);
+      const explicitResult = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal: { aborted: false } },
+        mismatchedCtx,
+      );
+
+      expect(autoResult).toBeUndefined();
+      expect(explicitResult).toEqual({ cancel: true });
+      expect(cacheCompactor).not.toHaveBeenCalled();
+    });
+
+    it("cancels when hard truncate itself fails", async () => {
+      (computeHardTruncation as any).mockReturnValue(null); // 无法截断
+      const oversizedOld = {
+        role: "user",
+        content: [{ type: "text", text: "x".repeat(20_000) }],
+        timestamp: 1,
+      };
+      const res = await pi.trigger(
+        "session_before_compact",
+        {
+          preparation: {
+            ...preparation,
+            messagesToSummarize: [oversizedOld],
+            settings: { keepRecentTokens: 100, reserveTokens: 640 },
+          },
+          signal: { aborted: false },
+        },
+        {
+          ...ctx,
+          model: { ...model, contextWindow: 3_000 },
+          sessionManager: {
+            ...ctx.sessionManager,
+            buildSessionContext: () => ({
+              thinkingLevel: "off",
+              messages: [oversizedOld, retainedTail],
+            }),
+          },
+        },
       );
       expect(res).toEqual({ cancel: true });
     });
 
     it("cancels when signal already aborted", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(120_000);
       const res = await pi.trigger(
         "session_before_compact",
         { preparation, signal: { aborted: true } },
@@ -826,7 +1628,6 @@ describe("CompactionGuardExtension", () => {
     });
 
     it("cancels when model is missing", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(120_000);
       const res = await pi.trigger(
         "session_before_compact",
         { preparation, signal: { aborted: false } },
@@ -836,7 +1637,6 @@ describe("CompactionGuardExtension", () => {
     });
 
     it("cancels when contextWindow is 0", async () => {
-      (estimatePreparationTokens as any).mockReturnValue(120_000);
       const res = await pi.trigger(
         "session_before_compact",
         { preparation, signal: { aborted: false } },
@@ -845,32 +1645,62 @@ describe("CompactionGuardExtension", () => {
       expect(res).toEqual({ cancel: true });
     });
 
-    it("swallows hook exceptions and cancels", async () => {
-      (estimatePreparationTokens as any).mockImplementation(() => {
-        throw new Error("boom");
-      });
+    it("falls back to Pi native when an auto-mode hook dependency throws", async () => {
       const res = await pi.trigger(
         "session_before_compact",
         { preparation, signal: { aborted: false } },
-        ctx,
+        {
+          ...ctx,
+          sessionManager: {
+            ...ctx.sessionManager,
+            buildSessionContext: () => {
+              throw new Error("boom");
+            },
+          },
+        },
       );
-      expect(res).toEqual({ cancel: true });
+      expect(res).toBeUndefined();
     });
 
     it("honors custom hardTruncateThreshold option", async () => {
       pi = createMockPi();
-      createCompactionGuardExtension({ hardTruncateThreshold: 0.5, cacheCompactor })(pi);
-      // 50% * 128K = 64K
-      (estimatePreparationTokens as any).mockReturnValue(70_000); // > 64K 应触发
+      createCompactionGuardExtension({
+        hardTruncateThreshold: 0.5,
+        cacheCompactor,
+        getSessionTransformContext,
+        getSessionAgentRunRuntime,
+      })(pi);
+      const oversizedOld = {
+        role: "user",
+        content: [{ type: "text", text: "x".repeat(300_000) }],
+        timestamp: 1,
+      };
       (computeHardTruncation as any).mockReturnValue({
         summary: "s", firstKeptEntryId: "id", tokensBefore: 0, details: {},
       });
       const res = await pi.trigger(
         "session_before_compact",
-        { preparation, signal: { aborted: false } },
-        ctx,
+        {
+          preparation: {
+            ...preparation,
+            messagesToSummarize: [oversizedOld],
+          },
+          signal: { aborted: false },
+        },
+        {
+          ...ctx,
+          sessionManager: {
+            ...ctx.sessionManager,
+            buildSessionContext: () => ({
+              thinkingLevel: "off",
+              messages: [oversizedOld, retainedTail],
+            }),
+          },
+        },
       );
       expect(res).toMatchObject({ compaction: expect.any(Object) });
+      expect(computeHardTruncation).toHaveBeenCalledOnce();
+      expect(cacheCompactor).not.toHaveBeenCalled();
     });
   });
 });

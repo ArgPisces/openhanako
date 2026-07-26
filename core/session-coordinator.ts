@@ -15,7 +15,7 @@ import { isDefaultWorkspacePath, restoreDefaultWorkspaceIfMissing } from "../sha
 import { computeHardTruncation } from "./compaction-utils.ts";
 import {
   appendCompactionResultToSession,
-  createCachePreservingCompactionResult,
+  createColdUtilitySummaryResult,
   runCachePreservingCompactionForSession,
 } from "./session-compactor.ts";
 import { teardownSessionResources } from "./session-teardown.ts";
@@ -137,6 +137,29 @@ const SESSION_META_INDEX_MAX_BYTES = 1024 * 1024;
 // 当前块头是静态的；`at <时间戳>` 是历史 JSONL 里的旧块头，剥离端必须继续认
 const REMINDER_HEADER_RE = /^\[hana_reminder(?: at \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\]$/;
 const SESSION_MODEL_UNAVAILABLE_API = "hana-unavailable-model";
+const identitySessionTransformContext = async (messages: any[]) => messages;
+
+export class SessionTransformContextResolutionError extends Error {
+  code = "SESSION_TRANSFORM_CONTEXT_UNKNOWN";
+  sessionPath: any;
+
+  constructor(sessionPath: any) {
+    super(`Session transform context unavailable: unknown session ${sessionPath || "(empty)"}`);
+    this.name = "SessionTransformContextResolutionError";
+    this.sessionPath = sessionPath;
+  }
+}
+
+export class SessionAgentRunRuntimeResolutionError extends Error {
+  code = "SESSION_AGENT_RUN_RUNTIME_UNKNOWN";
+  sessionPath: any;
+
+  constructor(sessionPath: any, reason = "unknown session") {
+    super(`Session AgentRun runtime unavailable: ${reason} ${sessionPath || "(empty)"}`);
+    this.name = "SessionAgentRunRuntimeResolutionError";
+    this.sessionPath = sessionPath;
+  }
+}
 
 type SessionModelAvailability = {
   available: boolean;
@@ -1569,6 +1592,45 @@ export class SessionCoordinator {
   getSessionStreamFn(sessionPath: any) {
     const entry = this._getSessionEntryByPath(sessionPath);
     return entry?.session?.agent?.streamFn || null;
+  }
+
+  getSessionAgentRunRuntime(sessionPath: any) {
+    const entry = this._getSessionEntryByPath(sessionPath);
+    if (!sessionPath || !entry?.session) {
+      throw new SessionAgentRunRuntimeResolutionError(sessionPath);
+    }
+    const session = entry.session;
+    const agent = session.agent;
+    if (typeof agent?.streamFn !== "function") {
+      throw new SessionAgentRunRuntimeResolutionError(sessionPath, "missing streamFn for session");
+    }
+    const tools = Object.freeze(
+      (Array.isArray(agent.state?.tools) ? agent.state.tools : [])
+        .map((tool) => Object.freeze({ ...tool })),
+    );
+    const streamOptions = Object.freeze({
+      sessionId: agent.sessionId ?? session.sessionManager?.getSessionId?.(),
+      onPayload: agent.onPayload,
+      onResponse: agent.onResponse,
+      transport: agent.transport,
+      thinkingBudgets: agent.thinkingBudgets,
+      maxRetryDelayMs: agent.maxRetryDelayMs,
+    });
+    return Object.freeze({
+      streamFn: agent.streamFn,
+      tools,
+      streamOptions,
+    });
+  }
+
+  getSessionTransformContext(sessionPath: any) {
+    const entry = this._getSessionEntryByPath(sessionPath);
+    if (!sessionPath || !entry?.session) {
+      throw new SessionTransformContextResolutionError(sessionPath);
+    }
+    return typeof entry.session.agent?.transformContext === "function"
+      ? entry.session.agent.transformContext
+      : identitySessionTransformContext;
   }
 
   getSessionProviderCacheAffinityKey(sessionPath: any) {
@@ -4212,8 +4274,9 @@ export class SessionCoordinator {
     const targetSessionPath = session.sessionManager?.getSessionFile?.() || null;
     const targetSessionId = targetSessionPath ? this._sessionIdForPath(targetSessionPath) : null;
     try {
-      const result = await createCachePreservingCompactionResult({
+      const result = await createColdUtilitySummaryResult({
         preparation,
+        transcriptMessages,
         model,
         systemPrompt: session.agent?.state?.systemPrompt ?? session.systemPrompt,
         customInstructions: [
