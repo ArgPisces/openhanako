@@ -37,6 +37,7 @@ import {
   createColdUtilitySummaryResult,
   estimateCachePreservingCompactionRequest,
   normalizeCompactionProviderPayload,
+  isDirectCompactionInProgress,
   runCachePreservingCompactionForSession,
   shouldHardTruncateCachePreservingCompaction,
 } from "../core/session-compactor.ts";
@@ -2168,5 +2169,57 @@ describe("session snapshot side-task runner", () => {
       templateVersion: "v1",
     })).rejects.toThrow("Session snapshot request is not strict");
     expect(streamFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("direct compaction mutual exclusion", () => {
+  const settings = { enabled: true, reserveTokens: 2000 };
+  const model = { id: "m", provider: "p", contextWindow: 128_000 };
+
+  it("refuses to start while the SDK's own compaction holds the session", async () => {
+    const session = {
+      isCompacting: true,
+      agent: {},
+      sessionManager: { getBranch: () => [] },
+    };
+
+    await expect(runCachePreservingCompactionForSession(session, { model, settings }))
+      .rejects.toThrow(/compaction already in progress/);
+  });
+
+  it("refuses a second direct compaction on the same session", async () => {
+    let reentry: Promise<string> | null = null;
+    const session: any = {
+      agent: {},
+      sessionManager: {
+        getBranch: () => {
+          // Re-enter while the first run still holds this session. Two
+          // compactions on one session would write two summaries over the same
+          // history, so the second has to be told, not quietly queued.
+          reentry ??= runCachePreservingCompactionForSession(session, { model, settings })
+            .then(() => "resolved", (err) => err.message);
+          return [];
+        },
+      },
+    };
+
+    await expect(runCachePreservingCompactionForSession(session, { model, settings }))
+      .rejects.toThrow();
+    await expect(reentry).resolves.toMatch(/compaction already in progress/);
+  });
+
+  it("releases the session again once the compaction fails", async () => {
+    const session: any = {
+      agent: {},
+      sessionManager: { getBranch: () => [] },
+    };
+
+    await expect(runCachePreservingCompactionForSession(session, { model, settings }))
+      .rejects.toThrow();
+    expect(isDirectCompactionInProgress(session)).toBe(false);
+    // A failed attempt must not leave the session permanently locked: the next
+    // one gets to fail on its own merits, not on a stale lock.
+    await expect(runCachePreservingCompactionForSession(session, { model, settings }))
+      .rejects.not.toThrow(/compaction already in progress/);
   });
 });

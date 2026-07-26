@@ -16,6 +16,7 @@ import { computeHardTruncation } from "./compaction-utils.ts";
 import {
   appendCompactionResultToSession,
   createColdUtilitySummaryResult,
+  isDirectCompactionInProgress,
   runCachePreservingCompactionForSession,
 } from "./session-compactor.ts";
 import { teardownSessionResources } from "./session-teardown.ts";
@@ -5197,7 +5198,10 @@ export class SessionCoordinator {
     if (entry._switching) {
       throw new Error("Model switch already in progress for this session");
     }
-    if (session.isCompacting) {
+    // Both kinds of compaction rewrite this session's history, so either one
+    // blocks a model switch: isCompacting covers the SDK's own pass, and the
+    // direct cache-preserving pass reports itself separately.
+    if (session.isCompacting || isDirectCompactionInProgress(session)) {
       throw new Error("Cannot switch model while compaction is in progress");
     }
 

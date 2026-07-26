@@ -27,6 +27,18 @@ import { resolveOutputCapCapability } from "./provider-compat/output-budget.ts";
 import { normalizeRequestThinkingLevel } from "./session-thinking-level.ts";
 
 const DEFAULT_HARD_TRUNCATE_THRESHOLD = 0.85;
+
+/**
+ * Marks a session as being compacted by this module. It lives on the session
+ * because that is what is being compacted, next to the SDK's own isCompacting
+ * flag, so neither path can start while the other is running.
+ */
+const DIRECT_COMPACTION_IN_PROGRESS = Symbol("hanaDirectCompactionInProgress");
+
+/** True while this module is compacting the given session. */
+export function isDirectCompactionInProgress(session: any) {
+  return session?.[DIRECT_COMPACTION_IN_PROGRESS] === true;
+}
 const COMPACTION_REQUEST_BUFFER_TOKENS = 1024;
 const OUTPUT_CAP_FIELDS = ["max_completion_tokens", "max_tokens", "max_output_tokens", "maxOutputTokens"];
 const OUTPUT_CAP_FIELD_SET = new Set(OUTPUT_CAP_FIELDS);
@@ -1368,6 +1380,17 @@ export async function runCachePreservingCompactionForSession(session: any, {
   const compactionSettings = settings || session.settingsManager?.getCompactionSettings?.();
   if (!compactionSettings) throw new Error("runCachePreservingCompactionForSession: missing compaction settings");
 
+  // One session, one compaction at a time. Two of them rewrite the same history
+  // into two summaries, and the loser silently discards the winner's work. The
+  // SDK's own compaction flags itself through isCompacting; this path flags
+  // itself the same way so either one blocks the other. Queueing instead would
+  // run the second compaction against history the first already replaced.
+  if (session.isCompacting === true || session[DIRECT_COMPACTION_IN_PROGRESS] === true) {
+    throw new Error("runCachePreservingCompactionForSession: compaction already in progress for this session");
+  }
+  session[DIRECT_COMPACTION_IN_PROGRESS] = true;
+
+  try {
   const branchEntries = session.sessionManager.getBranch();
   if (emitLifecycle) {
     emitCompactionProgress(session, { type: "compaction_start", reason: lifecycleReason });
@@ -1505,6 +1528,9 @@ export async function runCachePreservingCompactionForSession(session: any, {
       });
     }
     throw error;
+  }
+  } finally {
+    delete session[DIRECT_COMPACTION_IN_PROGRESS];
   }
 }
 

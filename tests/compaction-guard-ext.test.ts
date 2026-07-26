@@ -1717,6 +1717,27 @@ describe("CompactionGuardExtension", () => {
       expect(res).toBeUndefined();
     });
 
+    it("stops instead of starting a native summary when the compaction was aborted", async () => {
+      // The session was cancelled mid-request. Handing the work to the native
+      // summarizer would start a fresh, uncached request for a compaction
+      // nobody is waiting for any more, so the hook stops.
+      const signal = { aborted: false };
+      cacheCompactor.mockImplementation(async () => {
+        signal.aborted = true;
+        const err: any = new Error("The operation was aborted");
+        err.name = "AbortError";
+        throw err;
+      });
+
+      const res = await pi.trigger(
+        "session_before_compact",
+        { preparation, signal },
+        ctx,
+      );
+
+      expect(res).toEqual({ cancel: true });
+    });
+
     it("honors custom hardTruncateThreshold option", async () => {
       pi = createMockPi();
       createCompactionGuardExtension({

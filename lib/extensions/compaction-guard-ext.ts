@@ -473,6 +473,13 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
         );
         return { compaction };
       } catch (err) {
+        // An aborted compaction is finished, not failed. Handing it to the
+        // native summarizer would start a fresh uncached request for a result
+        // nobody is waiting for any more, so stop here even in auto mode.
+        if (event.signal?.aborted || err?.name === "AbortError") {
+          log.log("[L3] cache-preserving compaction aborted; stopping without a native summary");
+          return { cancel: true };
+        }
         if (allowNativeFallback) {
           return fallBackToPiNative(err?.message || String(err));
         }
