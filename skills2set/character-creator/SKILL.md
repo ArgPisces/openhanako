@@ -56,7 +56,7 @@ Hana 的每个角色跑在一个"人格底座"上，它决定角色的内心独�
 
 两条路，用户选：
 
-- **AI 生成**：先读 `media-generation-guide` skill，根据采访到的外貌写 prompt，`ratio: 1:1`。生成后用 `current_status` 的 `session_files` 拿到本地路径
+- **AI 生成**：先调 `media_get-guide` 读生成指南，根据采访到的外貌写 prompt，`ratio: 1:1`。生成后用 `current_status` 的 `session_files` 拿到本地路径
 - **用户上传**：用户把图拖进会话，同样从 `session_files` 拿路径
 
 拿到图后复制进包内 `assets/avatar.png`（支持 png/jpg/webp）。都没有就跳过，导入时会自动用 yuan 的默认头像。

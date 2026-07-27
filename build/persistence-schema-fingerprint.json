@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:bcb10a67f66abf4ec7ad067e88c5891384b74288eb44189f07e044b7fcd59536",
+  "payloadFingerprint": "sha256:3ee23e1fbc06c574c1af02607c140ceace97ab340eb98f8a5d3758c69a587b5b",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Pinned sessions gain a nullable pin_order column; existing rows read as null, no data is rewritten, and DATA_EPOCH is unchanged.",
-    "payloadFingerprint": "sha256:bcb10a67f66abf4ec7ad067e88c5891384b74288eb44189f07e044b7fcd59536"
+    "compatibilityReason": "Builtin plugins no longer register a skills/ directory; this only changes runtime skill path registration and leaves the installed manifest, install receipt, backup, and source-package directory layouts untouched.",
+    "payloadFingerprint": "sha256:3ee23e1fbc06c574c1af02607c140ceace97ab340eb98f8a5d3758c69a587b5b"
   },
   "schemas": [
     {
@@ -3083,7 +3083,7 @@
       "contract": "installed manifest, install receipt, backup, and source-package directory protocols",
       "kind": "directory-contract",
       "module": "core/plugin-manager.ts",
-      "sourceHash": "sha256:7c71fc376b3ef75df9d454bc57fca096ff6de4df20e29a834047976112649206",
+      "sourceHash": "sha256:16f056520eb357128e7cda98cfadad80301581b3db09dcfaec51b306aa087c7b",
       "storeId": "installed-plugins"
     },
     {

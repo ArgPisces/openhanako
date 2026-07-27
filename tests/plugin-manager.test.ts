@@ -144,6 +144,7 @@ describe("loadAll", () => {
         "media_generate-image",
         "media_generate-video",
         "media_describe-options",
+        "media_get-guide",
         "beautify_create-cover",
         "beautify_apply-cover-candidate",
         "beautify_get-cover-style-guide",
@@ -153,9 +154,9 @@ describe("loadAll", () => {
         "office_read-document",
         "office_html-to-pdf",
       ]));
-      expect(pm.getSkillPaths()).toEqual(expect.arrayContaining([
-        expect.objectContaining({ pluginId: "media", builtin: true }),
-      ]));
+      // 内置插件的指南走工具，不贡献 skill 目录：它们的安装路径带版本号，
+      // 冻结进会话快照后会在下次服务端更新时失效。
+      expect(pm.getSkillPaths()).toHaveLength(0);
       expect(pm.routeRegistry.has("mcp")).toBe(true);
       expect(pm.getConfigSchema("beautify")?.properties).toHaveProperty("coverResolution");
       expect(pm.getSettingsTabs()).toEqual(expect.arrayContaining([
@@ -848,18 +849,41 @@ describe("tool loading", () => {
 });
 
 describe("skill paths", () => {
-  it("getSkillPaths returns skill directories from all plugins", async () => {
-    const dir = path.join(pluginsDir, "skill-plug");
+  /** 第一个扫描目录是 builtin，其余是 community（见 scan()）。 */
+  function makeSkillPlugin(rootDir: string, pluginId: string) {
+    const dir = path.join(rootDir, pluginId);
     fs.mkdirSync(path.join(dir, "skills", "my-skill"), { recursive: true });
     fs.writeFileSync(path.join(dir, "skills", "my-skill", "SKILL.md"),
       "---\nname: my-skill\ndescription: test\n---\n# My Skill");
-    const pm = new PluginManager({ pluginsDir, dataDir, bus: await makeBus() } as any);
+    return dir;
+  }
+
+  it("getSkillPaths returns skill directories from community plugins", async () => {
+    const builtinDir = path.join(tmpHome, "builtin-empty");
+    fs.mkdirSync(builtinDir, { recursive: true });
+    makeSkillPlugin(pluginsDir, "skill-plug");
+    const pm = new PluginManager({
+      pluginsDirs: [builtinDir, pluginsDir], dataDir, bus: await makeBus(),
+    } as any);
     pm.scan();
     await pm.loadAll();
     const paths = pm.getSkillPaths();
     expect(paths).toHaveLength(1);
     expect(paths[0].dirPath).toContain("skill-plug");
     expect(paths[0].label).toBe("plugin:skill-plug");
+  });
+
+  // 内置插件随 server artifact 分发，目录名带版本号（artifacts/server/{version}-{platformArch}/）。
+  // skill 的绝对路径会被冻结进 session 的 system prompt 快照，artifact 一换代就指向不存在的文件，
+  // 模型照着死路径读盘失败。内置插件的指南必须走工具（见 beautify_get-html-style-guide），
+  // 工具在运行时解析资源，路径永不进上下文。
+  it("rejects skill directories contributed by builtin plugins", async () => {
+    makeSkillPlugin(pluginsDir, "builtin-skill-plug");
+    const pm = new PluginManager({ pluginsDir, dataDir, bus: await makeBus() } as any);
+    const scanned = pm.scan();
+    expect(scanned[0].source).toBe("builtin");
+    await pm.loadAll();
+    expect(pm.getSkillPaths()).toHaveLength(0);
   });
 });
 

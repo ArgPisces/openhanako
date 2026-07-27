@@ -952,6 +952,18 @@ export class PluginManager {
   async _loadSkillPaths(entry) {
     const skillsDir = path.join(entry.pluginDir, "skills");
     if (!hasSkillSourceEntry(skillsDir)) return;
+    // 内置插件随服务端运行时一起分发，安装目录带版本号，每次服务端自更新就整体换一个新目录、
+    // 清掉旧的。skill 的绝对路径会被冻结进会话的 system prompt 快照，于是跨过一次更新的老会话
+    // 就会拿着一条指向已删除目录的路径去读盘，模型照着死路径扑空。内置插件的指南一律走工具
+    // （参考 beautify 的 style guide 工具）：工具在每次调用时解析自己的资源，路径永远不进上下文。
+    if (entry.source === "builtin") {
+      log.warn(
+        `builtin plugin "${entry.id}" contributes a skills/ directory; skipped. ` +
+        `Builtin plugins ship inside the versioned server runtime directory, so a frozen skill path ` +
+        `breaks after the next update. Expose the guidance through a tool instead.`
+      );
+      return;
+    }
     this._skillPaths.push({
       dirPath: skillsDir,
       label: `plugin:${entry.id}`,
