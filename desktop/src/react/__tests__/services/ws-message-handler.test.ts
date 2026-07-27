@@ -878,6 +878,60 @@ describe('ws-message-handler session-scoped desktop events', () => {
     expect(useStore.getState().thinkingLevel).toBe('high');
     expect(useStore.getState().capabilityDriftBySession['/session/b.jsonl']).toBeUndefined();
   });
+
+  it('merges a pin order update into the matching session', () => {
+    useStore.setState({
+      sessions: [
+        {
+          path: '/session/a.jsonl',
+          title: 'A',
+          firstMessage: 'hello',
+          modified: '2026-04-24T10:00:00.000Z',
+          messageCount: 1,
+          agentId: 'a1',
+          agentName: 'Hana',
+          cwd: null,
+          pinnedAt: null,
+        },
+        {
+          path: '/session/b.jsonl',
+          title: 'B',
+          firstMessage: 'other',
+          modified: '2026-04-24T10:00:00.000Z',
+          messageCount: 1,
+          agentId: 'a1',
+          agentName: 'Hana',
+          cwd: null,
+          pinnedAt: '2026-04-29T08:00:00.000Z',
+        },
+      ],
+    } as never);
+
+    handleServerMessage({
+      type: 'session_metadata_updated',
+      sessionPath: '/session/b.jsonl',
+      metadata: { pinOrder: 3072 },
+    });
+
+    expect(useStore.getState().sessions.map(session => ({
+      path: session.path,
+      pinOrder: session.pinOrder,
+    }))).toEqual([
+      { path: '/session/a.jsonl', pinOrder: undefined },
+      { path: '/session/b.jsonl', pinOrder: 3072 },
+    ]);
+
+    handleServerMessage({
+      type: 'session_metadata_updated',
+      sessionPath: '/session/b.jsonl',
+      metadata: { pinnedAt: null, pinOrder: null },
+    });
+
+    expect(useStore.getState().sessions[1]).toMatchObject({
+      pinnedAt: null,
+      pinOrder: null,
+    });
+  });
 });
 
 describe('ws-message-handler activity updates', () => {

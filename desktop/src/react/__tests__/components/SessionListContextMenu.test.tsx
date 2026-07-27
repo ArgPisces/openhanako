@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
@@ -13,6 +13,7 @@ const archiveSessionMock = vi.fn();
 const renameSessionMock = vi.fn();
 const pinSessionMock = vi.fn();
 const createNewSessionMock = vi.fn();
+const reorderPinnedSessionsMock = vi.fn();
 
 const localServerConnection = {
   connectionId: 'local',
@@ -40,6 +41,7 @@ vi.mock('../../stores/session-actions', () => ({
   renameSession: (...args: unknown[]) => renameSessionMock(...args),
   pinSession: (...args: unknown[]) => pinSessionMock(...args),
   createNewSession: (...args: unknown[]) => createNewSessionMock(...args),
+  reorderPinnedSessions: (...args: unknown[]) => reorderPinnedSessionsMock(...args),
 }));
 
 vi.mock('../../hooks/use-i18n', () => ({
@@ -165,6 +167,7 @@ describe('SessionList context menu', () => {
     renameSessionMock.mockReset();
     pinSessionMock.mockReset();
     createNewSessionMock.mockReset();
+    reorderPinnedSessionsMock.mockReset();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: vi.fn(async () => undefined) },
@@ -1176,6 +1179,167 @@ describe('SessionList context menu', () => {
 
     expect(css).toMatch(/\.projectSessionList\s*\{[\s\S]*padding-left:\s*0/);
     expect(css).not.toMatch(/\.projectSessionList\s*\{[\s\S]*margin-left:/);
+  });
+
+  describe('pinned strip reordering', () => {
+    function seedPinnedSessions(options: { withSessionIds?: boolean } = {}) {
+      const withSessionIds = options.withSessionIds !== false;
+      useStore.setState({
+        sessions: [
+          {
+            path: '/tmp/agents/hana/sessions/pin-a.jsonl',
+            sessionId: withSessionIds ? 'sess_pin_a' : null,
+            title: 'Pin A',
+            firstMessage: 'a',
+            modified: '2026-04-29T08:00:00.000Z',
+            messageCount: 1,
+            agentId: 'hana',
+            agentName: 'Hana',
+            cwd: '/tmp/project',
+            pinnedAt: '2026-04-28T07:00:00.000Z',
+            pinOrder: 1024,
+          },
+          {
+            path: '/tmp/agents/hana/sessions/pin-b.jsonl',
+            sessionId: withSessionIds ? 'sess_pin_b' : null,
+            title: 'Pin B',
+            firstMessage: 'b',
+            modified: '2026-04-29T07:00:00.000Z',
+            messageCount: 1,
+            agentId: 'hana',
+            agentName: 'Hana',
+            cwd: '/tmp/project',
+            pinnedAt: '2026-04-28T07:00:00.000Z',
+            pinOrder: 2048,
+          },
+          {
+            path: '/tmp/agents/hana/sessions/pin-c.jsonl',
+            sessionId: withSessionIds ? 'sess_pin_c' : null,
+            title: 'Pin C',
+            firstMessage: 'c',
+            modified: '2026-04-29T06:00:00.000Z',
+            messageCount: 1,
+            agentId: 'hana',
+            agentName: 'Hana',
+            cwd: '/tmp/project',
+            pinnedAt: '2026-04-28T07:00:00.000Z',
+            pinOrder: 3072,
+          },
+        ],
+      } as never);
+    }
+
+    function pinnedRow(title: string) {
+      const row = sessionButton(title).closest('[data-pinned-session-path]');
+      if (!row) throw new Error(`Missing pinned row: ${title}`);
+      return row as HTMLElement;
+    }
+
+    function stubRowGeometry(row: HTMLElement) {
+      row.getBoundingClientRect = () => ({
+        top: 0, bottom: 40, left: 0, right: 100, width: 100, height: 40, x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    }
+
+    // jsdom has no DragEvent, so fireEvent cannot carry pointer coordinates on a
+    // drag event; define them on the event object the way a browser would.
+    function fireDragAt(
+      type: 'dragOver' | 'drop',
+      row: HTMLElement,
+      dataTransfer: ReturnType<typeof dragData>,
+      clientY: number,
+    ) {
+      const event = createEvent[type](row, { dataTransfer });
+      Object.defineProperty(event, 'clientY', { value: clientY });
+      fireEvent(row, event);
+    }
+
+    it('submits the full pinned order when a row is dropped above another row', async () => {
+      seedPinnedSessions();
+      render(<SessionList />);
+
+      const dataTransfer = dragData();
+      fireEvent.dragStart(sessionButton('Pin C'), { dataTransfer });
+      const target = pinnedRow('Pin A');
+      stubRowGeometry(target);
+      fireDragAt('dragOver', target, dataTransfer, 5);
+      fireDragAt('drop', target, dataTransfer, 5);
+
+      await waitFor(() => {
+        expect(reorderPinnedSessionsMock).toHaveBeenCalledWith([
+          'sess_pin_c',
+          'sess_pin_a',
+          'sess_pin_b',
+        ]);
+      });
+    });
+
+    it('submits the order with the dragged row below the target when dropped on its lower half', async () => {
+      seedPinnedSessions();
+      render(<SessionList />);
+
+      const dataTransfer = dragData();
+      fireEvent.dragStart(sessionButton('Pin A'), { dataTransfer });
+      const target = pinnedRow('Pin B');
+      stubRowGeometry(target);
+      fireDragAt('dragOver', target, dataTransfer, 35);
+      fireDragAt('drop', target, dataTransfer, 35);
+
+      await waitFor(() => {
+        expect(reorderPinnedSessionsMock).toHaveBeenCalledWith([
+          'sess_pin_b',
+          'sess_pin_a',
+          'sess_pin_c',
+        ]);
+      });
+    });
+
+    it('disables pinned reordering entirely when any pinned row has no session id', () => {
+      seedPinnedSessions({ withSessionIds: false });
+      render(<SessionList />);
+
+      expect(sessionButton('Pin A')).not.toHaveAttribute('draggable', 'true');
+
+      const dataTransfer = dragData();
+      fireEvent.dragStart(sessionButton('Pin C'), { dataTransfer });
+      fireDragAt('drop', pinnedRow('Pin A'), dataTransfer, 5);
+
+      expect(reorderPinnedSessionsMock).not.toHaveBeenCalled();
+    });
+
+    it('does not assign a pinned row to a project when it is dragged out of the pinned strip', async () => {
+      seedPinnedSessions();
+      hanaFetchMock.mockImplementation(async (url: string) => {
+        if (url === '/api/browser/session-states') return jsonResponse({});
+        if (url === '/api/session-projects') {
+          return jsonResponse({
+            catalog: {
+              folders: [],
+              projects: [{ id: 'project-custom', name: 'Custom Project', folderId: null, order: 0 }],
+            },
+          });
+        }
+        return jsonResponse({});
+      });
+
+      render(<SessionList />);
+      await switchToProjectView();
+
+      const dataTransfer = dragData();
+      fireEvent.dragStart(sessionButton('Pin A'), { dataTransfer });
+      const projectRow = await screen.findByText('Custom Project');
+      fireEvent.dragOver(projectRow, { dataTransfer });
+      fireEvent.drop(projectRow, { dataTransfer });
+
+      await waitFor(() => {
+        expect(hanaFetchMock).not.toHaveBeenCalledWith(
+          '/api/session-projects/session-assignment',
+          expect.anything(),
+        );
+      });
+      expect(reorderPinnedSessionsMock).not.toHaveBeenCalled();
+    });
   });
 
   it('keeps the pinned heading font unified with date and project headings', () => {

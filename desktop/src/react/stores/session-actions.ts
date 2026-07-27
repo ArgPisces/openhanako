@@ -1495,6 +1495,46 @@ export async function pinSession(path: string, pinned: boolean): Promise<boolean
   }
 }
 
+/**
+ * 提交置顶区的完整新顺序。先按新顺序乐观改写本地 pinOrder（步长与服务端一致），
+ * 拖完立刻定位；服务端拒绝或请求失败就整体回滚到提交前的快照并提示，
+ * 不留下半套顺序。
+ */
+export async function reorderPinnedSessions(orderedSessionIds: string[]): Promise<boolean> {
+  const sessionIds = Array.isArray(orderedSessionIds)
+    ? orderedSessionIds.filter((id): id is string => typeof id === 'string' && !!id.trim())
+    : [];
+  if (sessionIds.length === 0) return false;
+
+  const snapshot = useStore.getState().sessions;
+  const orderById = new Map(sessionIds.map((sessionId, index) => [sessionId, (index + 1) * 1024]));
+  useStore.setState({
+    sessions: snapshot.map(s => {
+      const sessionId = normalizeSessionId(s.sessionId);
+      const pinOrder = sessionId ? orderById.get(sessionId) : undefined;
+      return pinOrder === undefined ? s : { ...s, pinOrder };
+    }),
+  });
+
+  try {
+    const res = await hanaFetch('/api/sessions/pin-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionIds }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || res.statusText);
+    }
+    return true;
+  } catch (err) {
+    console.error('[session] pin reorder failed:', err);
+    useStore.setState({ sessions: snapshot });
+    showSidebarToast(window.t('session.reorderFailed'));
+    return false;
+  }
+}
+
 // ══════════════════════════════════════════════════════
 // #1624 工具能力漂移：dismiss / 显式刷新（fresh compact）
 // ══════════════════════════════════════════════════════

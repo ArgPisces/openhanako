@@ -600,6 +600,21 @@
     flex-shrink: 0;
 }
 
+/* 置顶区可拖拽重排的行容器。插入指示线用 inset 阴影而非 border，
+   避免拖动经过时行高抖 2px。 */
+.pinnedRow {
+    position: relative;
+    border-radius: var(--radius-sm);
+}
+
+.pinnedDropIndicatorBefore {
+    box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.pinnedDropIndicatorAfter {
+    box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
 .projectRootDrop {
     padding: 0;
 }

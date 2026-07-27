@@ -204,6 +204,7 @@
     "unpin": "取消置顶",
     "pinFailed": "置顶 session 失败",
     "unpinFailed": "取消置顶失败",
+    "reorderFailed": "调整置顶顺序失败",
     "archive": "归档",
     "copyId": "复制 Session ID",
     "copyIdDone": "Session ID 已复制",

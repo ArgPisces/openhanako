@@ -204,6 +204,7 @@
     "unpin": "ピン留めを解除",
     "pinFailed": "セッションのピン留めに失敗しました",
     "unpinFailed": "ピン留め解除に失敗しました",
+    "reorderFailed": "ピン留めの並び替えに失敗しました",
     "archive": "アーカイブ",
     "copyId": "Session ID をコピー",
     "copyIdDone": "Session ID をコピーしました",

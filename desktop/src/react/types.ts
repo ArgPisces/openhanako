@@ -217,6 +217,8 @@ export interface Session {
   projectId?: string | null;
   permissionMode?: SessionPermissionMode | null;
   pinnedAt?: string | null;
+  // 置顶区的手动顺序（升序）。null 表示还没有固化顺序，读时退回按最近活动排。
+  pinOrder?: number | null;
   hasSummary?: boolean;
   agentDeleted?: boolean;
   readOnlyReason?: 'agent_deleted' | string | null;

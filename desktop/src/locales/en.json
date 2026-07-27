@@ -204,6 +204,7 @@
     "unpin": "Unpin",
     "pinFailed": "Failed to pin session",
     "unpinFailed": "Failed to unpin session",
+    "reorderFailed": "Failed to reorder pinned sessions",
     "archive": "Archive",
     "copyId": "Copy Session ID",
     "copyIdDone": "Session ID copied",

@@ -12,7 +12,7 @@ import { useStore } from '../stores';
 import { hanaFetch } from '../hooks/use-hana-fetch';
 import { useI18n } from '../hooks/use-i18n';
 import { formatSessionDate } from '../utils/format';
-import { switchSession, archiveSession, renameSession, pinSession, createNewSession } from '../stores/session-actions';
+import { switchSession, archiveSession, renameSession, pinSession, createNewSession, reorderPinnedSessions } from '../stores/session-actions';
 import { locateSearchHit } from '../stores/chat-find-actions';
 import { setBrowserStateForPath } from '../stores/browser-slice';
 import { sessionScopedListIncludes } from '../stores/session-slice';
@@ -51,9 +51,13 @@ const PROJECT_SESSION_PREVIEW_LIMIT = 5;
 
 type SidebarDragState =
   | { kind: 'session'; sessionPath: string }
+  | { kind: 'pinned-session'; sessionPath: string; sessionId: string | null }
   | { kind: 'project'; projectId: string }
   | { kind: 'folder'; folderId: string }
   | null;
+
+// 置顶区拖拽重排时的插入指示线位置：落在目标行的上边还是下边
+type PinnedDropTarget = { sessionPath: string; edge: 'before' | 'after' } | null;
 
 type ProjectNameDialogState =
   | { kind: 'create-project'; value: string }
@@ -130,6 +134,7 @@ function normalizeSessionSearchResults(data: unknown): SessionSearchResult[] {
       cwd: typeof item.cwd === 'string' ? item.cwd : null,
       projectId: typeof item.projectId === 'string' ? item.projectId : null,
       pinnedAt: typeof item.pinnedAt === 'string' ? item.pinnedAt : null,
+      pinOrder: typeof item.pinOrder === 'number' ? item.pinOrder : null,
       hasSummary: item.hasSummary === true,
       rcAttachment: null,
       agentDeleted: item.agentDeleted === true,
@@ -213,6 +218,7 @@ function SessionListInner() {
   const [projectNameDialog, setProjectNameDialog] = useState<ProjectNameDialogState>(null);
   const [dragState, setDragState] = useState<SidebarDragState>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [pinnedDropTarget, setPinnedDropTarget] = useState<PinnedDropTarget>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [titleResults, setTitleResults] = useState<SessionSearchResult[]>([]);
   const [contentResults, setContentResults] = useState<SessionSearchResult[]>([]);
@@ -440,7 +446,62 @@ function SessionListInner() {
   const clearDragState = useCallback(() => {
     setDragState(null);
     setDropTargetId(null);
+    setPinnedDropTarget(null);
   }, []);
+
+  // ── 置顶区内拖拽重排 ──
+
+  const handlePinnedDragStart = useCallback((event: React.DragEvent, session: Session) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(SESSION_DRAG_MIME, session.path);
+    setDragState({
+      kind: 'pinned-session',
+      sessionPath: session.path,
+      sessionId: session.sessionId || null,
+    });
+  }, []);
+
+  const handlePinnedDragOver = useCallback((event: React.DragEvent, session: Session) => {
+    if (dragState?.kind !== 'pinned-session') return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    const rect = event.currentTarget.getBoundingClientRect();
+    const edge = event.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+    setPinnedDropTarget({ sessionPath: session.path, edge });
+  }, [dragState]);
+
+  const handlePinnedDragLeave = useCallback((event: React.DragEvent) => {
+    const next = event.relatedTarget as Node | null;
+    if (next && event.currentTarget.contains(next)) return;
+    setPinnedDropTarget(current => (
+      current && current.sessionPath === (event.currentTarget as HTMLElement).dataset.pinnedSessionPath
+        ? null
+        : current
+    ));
+  }, []);
+
+  const handlePinnedDrop = useCallback((
+    event: React.DragEvent,
+    target: Session,
+    pinnedItems: Session[],
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedPath = dragState?.kind === 'pinned-session' ? dragState.sessionPath : null;
+    const edge = pinnedDropTarget?.sessionPath === target.path ? pinnedDropTarget.edge : 'before';
+    clearDragState();
+    if (!draggedPath || draggedPath === target.path) return;
+    // 缺 sessionId 就没有可提交的身份，整区不重排（门控见 pinnedReorderEnabled）
+    if (pinnedItems.some(session => !session.sessionId)) return;
+    const dragged = pinnedItems.find(session => session.path === draggedPath);
+    if (!dragged) return;
+    const ordered = pinnedItems.filter(session => session.path !== draggedPath);
+    const targetIndex = ordered.findIndex(session => session.path === target.path);
+    if (targetIndex < 0) return;
+    ordered.splice(edge === 'after' ? targetIndex + 1 : targetIndex, 0, dragged);
+    void reorderPinnedSessions(ordered.map(session => session.sessionId as string));
+  }, [clearDragState, dragState, pinnedDropTarget]);
 
   const ensureCatalogProject = useCallback(async (project: SessionProjectGroup, folderId: string | null = project.folderId) => {
     const existing = projectCatalog.projects.find(item => item.id === project.id);
@@ -451,6 +512,8 @@ function SessionListInner() {
   const handleDropOnProject = useCallback(async (event: React.DragEvent, project: SessionProjectGroup) => {
     event.preventDefault();
     event.stopPropagation();
+    // 置顶区的行只在置顶区内重排，不接受落到项目/文件夹/根上
+    if (dragState?.kind === 'pinned-session') { clearDragState(); return; }
     const sessionPath = dragSessionPath(event, dragState);
     const projectId = dragProjectId(event, dragState);
     clearDragState();
@@ -487,6 +550,8 @@ function SessionListInner() {
   const handleDropOnProjectRoot = useCallback(async (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    // 置顶区的行只在置顶区内重排，不接受落到项目/文件夹/根上
+    if (dragState?.kind === 'pinned-session') { clearDragState(); return; }
     const projectId = dragProjectId(event, dragState);
     clearDragState();
     if (!projectId) return;
@@ -508,6 +573,8 @@ function SessionListInner() {
   const handleDropOnFolder = useCallback(async (event: React.DragEvent, folder: SessionProjectFolderGroup) => {
     event.preventDefault();
     event.stopPropagation();
+    // 置顶区的行只在置顶区内重排，不接受落到项目/文件夹/根上
+    if (dragState?.kind === 'pinned-session') { clearDragState(); return; }
     const projectId = dragProjectId(event, dragState);
     const folderId = dragFolderId(event, dragState);
     clearDragState();
@@ -538,7 +605,10 @@ function SessionListInner() {
   }, [clearDragState, dragState, ensureCatalogProject, projectCatalog, reorderFolders, reorderProjects, sessions]);
 
   const activeSessionPath = pendingSessionSwitchPath || currentSessionPath;
-  const renderSessionItem = (s: Session, options: { draggable?: boolean } = {}) => (
+  const renderSessionItem = (
+    s: Session,
+    options: { draggable?: boolean; onDragStart?: (event: React.DragEvent, session: Session) => void } = {},
+  ) => (
     <SessionItem
       key={s.path}
       session={s}
@@ -552,10 +622,33 @@ function SessionListInner() {
       rowMode={sessionListRowMode}
       onCloseBrowser={handleCloseBrowserSession}
       draggable={options.draggable === true && s.agentDeleted !== true}
-      onDragStart={handleSessionDragStart}
+      onDragStart={options.onDragStart || handleSessionDragStart}
       onDragEnd={clearDragState}
     />
   );
+
+  // 置顶行：可拖拽重排，行内上/下半区决定插入位。整区任一行缺 sessionId 就整体禁用，
+  // 因为提交的是完整有序 sessionId 列表，缺一个就无法表达完整顺序。
+  const renderPinnedSessionItem = (s: Session, pinnedItems: Session[]) => {
+    const reorderable = pinnedItems.length > 1 && pinnedItems.every(item => !!item.sessionId);
+    const indicator = pinnedDropTarget?.sessionPath === s.path
+      ? (pinnedDropTarget.edge === 'before'
+        ? styles.pinnedDropIndicatorBefore
+        : styles.pinnedDropIndicatorAfter)
+      : '';
+    return (
+      <div
+        key={s.path}
+        className={`${styles.pinnedRow}${indicator ? ` ${indicator}` : ''}`}
+        data-pinned-session-path={s.path}
+        onDragOver={reorderable ? (event) => handlePinnedDragOver(event, s) : undefined}
+        onDragLeave={reorderable ? handlePinnedDragLeave : undefined}
+        onDrop={reorderable ? (event) => handlePinnedDrop(event, s, pinnedItems) : undefined}
+      >
+        {renderSessionItem(s, { draggable: reorderable, onDragStart: handlePinnedDragStart })}
+      </div>
+    );
+  };
 
   const sections = buildSessionSections(sessions, { mode: 'time' });
   const projectView = buildSessionProjectView(sessions, projectCatalog, { catalogLoaded: projectCatalogLoaded });
@@ -597,7 +690,9 @@ function SessionListInner() {
   }, []);
   const hasTodaySection = sections.some(section => section.kind === 'date' && section.group === 'today');
   const timeContent = sections.map(section => {
-    const items = section.items.map(s => renderSessionItem(s));
+    const items = section.kind === 'pinned'
+      ? section.items.map(s => renderPinnedSessionItem(s, section.items))
+      : section.items.map(s => renderSessionItem(s));
 
     if (section.kind === 'pinned') {
       return (
@@ -649,6 +744,7 @@ function SessionListInner() {
     <ProjectSessionView
       view={projectView}
       renderSessionItem={(session) => renderSessionItem(session, { draggable: true })}
+      renderPinnedSessionItem={renderPinnedSessionItem}
       collapsedProjectIds={collapsedProjectIds}
       collapsedFolderIds={collapsedFolderIds}
       showAllProjectIds={showAllProjectIds}
@@ -830,6 +926,7 @@ function ProjectNameDialog({
 function ProjectSessionView({
   view,
   renderSessionItem,
+  renderPinnedSessionItem,
   collapsedProjectIds,
   collapsedFolderIds,
   showAllProjectIds,
@@ -853,6 +950,7 @@ function ProjectSessionView({
 }: {
   view: ReturnType<typeof buildSessionProjectView>;
   renderSessionItem: (session: Session) => React.ReactNode;
+  renderPinnedSessionItem: (session: Session, pinnedItems: Session[]) => React.ReactNode;
   collapsedProjectIds: Set<string>;
   collapsedFolderIds: Set<string>;
   showAllProjectIds: Set<string>;
@@ -882,7 +980,7 @@ function ProjectSessionView({
           <span>{t('sidebar.pinned')}</span>
           <PinIcon />
         </SectionTitle>
-        {view.pinned.map(session => renderSessionItem(session))}
+        {view.pinned.map(session => renderPinnedSessionItem(session, view.pinned))}
       </section>
       <SectionTitle
         actions={(
