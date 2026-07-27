@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SESSION_MANIFEST_DB_USER_VERSION,
   SessionManifestStore,
+  loadBetterSqliteDatabase,
 } from "../core/session-manifest/store.ts";
 import { sessionLocatorKey } from "../core/session-manifest/path-normalizer.ts";
 
@@ -428,6 +429,106 @@ describe("SessionManifestStore", () => {
       completedAt: "2026-06-18T00:01:00.000Z",
       result: { scanned: 1, created: 1, existing: 0, skipped: 0 },
     });
+  });
+
+  it("stores an explicit pin order alongside the pinned timestamp", () => {
+    const sessionPath = createSessionFile("pin-order");
+    const manifest = store.createForPath({ sessionPath, domain: "desktop", kind: "chat" });
+
+    expect(manifest.pinOrder).toBeNull();
+
+    const pinned = store.setPinnedAt(manifest.sessionId, "2026-06-18T00:10:00.000Z");
+    const ordered = store.setPinOrder(manifest.sessionId, -1024);
+
+    expect(pinned.pinnedAt).toBe("2026-06-18T00:10:00.000Z");
+    expect(ordered.pinOrder).toBe(-1024);
+    expect(store.getBySessionId(manifest.sessionId)?.pinOrder).toBe(-1024);
+
+    expect(store.setPinOrder(manifest.sessionId, null).pinOrder).toBeNull();
+    expect(store.getBySessionId(manifest.sessionId)?.pinOrder).toBeNull();
+  });
+
+  it("reports the smallest pin order among pinned sessions", () => {
+    const first = store.createForPath({ sessionPath: createSessionFile("min-a"), domain: "desktop" });
+    const second = store.createForPath({ sessionPath: createSessionFile("min-b"), domain: "desktop" });
+    const unpinned = store.createForPath({ sessionPath: createSessionFile("min-c"), domain: "desktop" });
+
+    expect(store.minPinOrder()).toBeNull();
+
+    store.setPinnedAt(first.sessionId, "2026-06-18T00:10:00.000Z");
+    store.setPinOrder(first.sessionId, 1024);
+    store.setPinnedAt(second.sessionId, "2026-06-18T00:11:00.000Z");
+    store.setPinOrder(second.sessionId, -2048);
+    // Unpinned rows never contribute an order, even if one was left behind.
+    store.setPinOrder(unpinned.sessionId, -9999);
+
+    expect(store.minPinOrder()).toBe(-2048);
+  });
+
+  it("adds the pin order column to databases created before it existed", () => {
+    const legacyDbPath = path.join(tmpDir, "legacy-pin-order.db");
+    const Database = loadBetterSqliteDatabase();
+    const legacyDb = new Database(legacyDbPath);
+    legacyDb.exec(`
+      CREATE TABLE session_manifests (
+        session_id TEXT PRIMARY KEY,
+        schema_version INTEGER NOT NULL,
+        owner_agent_id TEXT,
+        domain TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        lifecycle TEXT NOT NULL,
+        health TEXT NOT NULL,
+        current_locator_type TEXT NOT NULL,
+        current_locator_path TEXT NOT NULL,
+        current_locator_key TEXT NOT NULL UNIQUE,
+        current_locator_reason TEXT,
+        locator_updated_at TEXT NOT NULL,
+        memory_policy_json TEXT NOT NULL,
+        permission_mode_snapshot_json TEXT NOT NULL,
+        thinking_level TEXT,
+        pinned_at TEXT,
+        workspace_scope_json TEXT NOT NULL,
+        plugin_json TEXT NOT NULL,
+        provenance_json TEXT NOT NULL,
+        migration_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT
+      );
+    `);
+    legacyDb.prepare(`
+      INSERT INTO session_manifests (
+        session_id, schema_version, owner_agent_id, domain, kind, lifecycle, health,
+        current_locator_type, current_locator_path, current_locator_key, current_locator_reason,
+        locator_updated_at, memory_policy_json, permission_mode_snapshot_json, thinking_level,
+        pinned_at, workspace_scope_json, plugin_json, provenance_json, migration_json,
+        created_at, updated_at, deleted_at
+      ) VALUES (
+        'sess_legacy_0001', 1, 'hana', 'desktop', 'chat', 'active', 'ok',
+        'jsonl', '/tmp/agents/hana/sessions/legacy.jsonl', 'legacy-key', 'create',
+        '2026-06-01T00:00:00.000Z', '{"mode":"inherit"}', '{"mode":"auto"}', NULL,
+        '2026-06-01T00:05:00.000Z', '{}', 'null', '{}', '{}',
+        '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', NULL
+      )
+    `).run();
+    legacyDb.pragma("user_version = 4");
+    legacyDb.close();
+
+    const migrated = new SessionManifestStore({ dbPath: legacyDbPath });
+    try {
+      const columns = migrated.db.pragma("table_info(session_manifests)").map((column) => column.name);
+      expect(columns).toContain("pin_order");
+      const manifest = migrated.getBySessionId("sess_legacy_0001");
+      expect(manifest).toMatchObject({
+        sessionId: "sess_legacy_0001",
+        ownerAgentId: "hana",
+        pinnedAt: "2026-06-01T00:05:00.000Z",
+        pinOrder: null,
+      });
+      expect(migrated.setPinOrder("sess_legacy_0001", 2048).pinOrder).toBe(2048);
+    } finally {
+      migrated.close();
+    }
   });
 
   it("closes a partially opened database when initialization fails", () => {

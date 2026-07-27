@@ -9,7 +9,7 @@ import {
 } from "../session-permission-mode.ts";
 
 export const SESSION_MANIFEST_SCHEMA_VERSION = 1;
-export const SESSION_MANIFEST_DB_USER_VERSION = 4;
+export const SESSION_MANIFEST_DB_USER_VERSION = 5;
 
 const require = createRequire(import.meta.url);
 let BetterSqliteDatabase = null;
@@ -175,6 +175,7 @@ function toRowManifest(row) {
     ),
     thinkingLevel: row.thinking_level || null,
     pinnedAt: row.pinned_at || null,
+    pinOrder: Number.isFinite(row.pin_order) ? row.pin_order : null,
     workspaceScope: parseJson(row.workspace_scope_json, {}),
     plugin: parseJson(row.plugin_json, null),
     provenance: parseJson(row.provenance_json, {}),
@@ -289,6 +290,7 @@ export class SessionManifestStore {
         permission_mode_snapshot_json TEXT NOT NULL,
         thinking_level TEXT,
         pinned_at TEXT,
+        pin_order INTEGER,
         workspace_scope_json TEXT NOT NULL,
         plugin_json TEXT NOT NULL,
         provenance_json TEXT NOT NULL,
@@ -381,11 +383,27 @@ export class SessionManifestStore {
               )
             `);
             break;
+          case 4:
+            this._addColumnIfMissing("session_manifests", "pin_order", "INTEGER");
+            break;
         }
         version++;
       }
       this.db.pragma(`user_version = ${SESSION_MANIFEST_DB_USER_VERSION}`);
     })();
+  }
+
+  /**
+   * SQLite has no `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, and a fresh
+   * database already gets every column from _initSchema before _migrate runs.
+   * Probing the current columns keeps both paths (fresh + upgraded) idempotent
+   * without ever dropping or rebuilding the table.
+   */
+  _addColumnIfMissing(table, column, definition) {
+    const columns = this.db.pragma(`table_info(${table})`);
+    if (columns.some((entry) => entry.name === column)) return false;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    return true;
   }
 
   _prepareStatements() {
@@ -408,6 +426,7 @@ export class SessionManifestStore {
           permission_mode_snapshot_json,
           thinking_level,
           pinned_at,
+          pin_order,
           workspace_scope_json,
           plugin_json,
           provenance_json,
@@ -432,6 +451,7 @@ export class SessionManifestStore {
           @permissionModeSnapshotJson,
           @thinkingLevel,
           @pinnedAt,
+          @pinOrder,
           @workspaceScopeJson,
           @pluginJson,
           @provenanceJson,
@@ -508,6 +528,16 @@ export class SessionManifestStore {
         UPDATE session_manifests
         SET pinned_at = @pinnedAt, updated_at = @updatedAt
         WHERE session_id = @sessionId
+      `),
+      setPinOrder: this.db.prepare(`
+        UPDATE session_manifests
+        SET pin_order = @pinOrder, updated_at = @updatedAt
+        WHERE session_id = @sessionId
+      `),
+      minPinOrder: this.db.prepare(`
+        SELECT MIN(pin_order) AS value
+        FROM session_manifests
+        WHERE pinned_at IS NOT NULL
       `),
       backfillOwnerAgent: this.db.prepare(`
         UPDATE session_manifests
@@ -689,6 +719,7 @@ export class SessionManifestStore {
         ),
         thinkingLevel: input.thinkingLevel || null,
         pinnedAt: input.pinnedAt || null,
+        pinOrder: input.pinOrder ?? null,
         workspaceScopeJson: stringifyJson(input.workspaceScope, {}),
         pluginJson: stringifyJson(input.plugin, null),
         provenanceJson: stringifyJson(input.provenance, {}),
@@ -838,6 +869,26 @@ export class SessionManifestStore {
       updatedAt,
     });
     return this.getBySessionId(sessionId);
+  }
+
+  setPinOrder(sessionId, pinOrder) {
+    const updatedAt = this._now();
+    this._stmts.setPinOrder.run({
+      sessionId,
+      pinOrder: Number.isFinite(pinOrder) ? pinOrder : null,
+      updatedAt,
+    });
+    return this.getBySessionId(sessionId);
+  }
+
+  /**
+   * Smallest explicit order among pinned sessions, or null when no pinned
+   * session carries one. Callers put a new pin above everything by subtracting
+   * a step from this value.
+   */
+  minPinOrder() {
+    const value = this._stmts.minPinOrder.get()?.value;
+    return Number.isFinite(value) ? value : null;
   }
 
   backfillOwnerAgentId(sessionId, ownerAgentId) {

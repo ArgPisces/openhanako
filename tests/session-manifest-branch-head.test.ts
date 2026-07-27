@@ -91,7 +91,7 @@ describe("SessionManifestStore branch heads", () => {
     store = new SessionManifestStore({ dbPath });
 
     expect(store.db.pragma("user_version", { simple: true })).toBe(SESSION_MANIFEST_DB_USER_VERSION);
-    expect(SESSION_MANIFEST_DB_USER_VERSION).toBe(4);
+    expect(SESSION_MANIFEST_DB_USER_VERSION).toBe(5);
     expect(store.getBySessionId(manifest.sessionId)).toMatchObject({
       sessionId: manifest.sessionId,
       ownerAgentId: "hana",

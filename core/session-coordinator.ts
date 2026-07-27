@@ -138,6 +138,11 @@ const SESSION_META_INDEX_MAX_BYTES = 1024 * 1024;
 // 当前块头是静态的；`at <时间戳>` 是历史 JSONL 里的旧块头，剥离端必须继续认
 const REMINDER_HEADER_RE = /^\[hana_reminder(?: at \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\]$/;
 const SESSION_MODEL_UNAVAILABLE_API = "hana-unavailable-model";
+// Pinned sessions carry a sparse manual order so a single drag only rewrites
+// the sessions the user actually moved. A fresh pin takes `min - STEP` to land
+// on top; a submitted reorder renumbers everything from STEP upwards.
+const PIN_ORDER_STEP = 1024;
+const PIN_ORDER_BACKFILL_STATE_KEY = "pin-order-backfill-v1";
 const identitySessionTransformContext = async (messages: any[]) => messages;
 
 export class SessionTransformContextResolutionError extends Error {
@@ -1004,6 +1009,7 @@ export class SessionCoordinator {
   declare _prePromptAbortControllers: Map<string, AbortController>;
   declare _turnContextBySession: Map<string, any>;
   declare _sessionManifestStore: any;
+  declare _pinOrderBackfill: Promise<any> | null;
   declare _envChangeLedger: any;
   declare _ensureSessionLoadedInFlight: Map<string, Promise<any>>;
   declare _metaQuarantines: Map<string, { metaPath: string; backupPath: string; quarantinedAt: string }>;
@@ -1052,6 +1058,7 @@ export class SessionCoordinator {
     this._prePromptAbortControllers = new Map();
     this._turnContextBySession = new Map();
     this._sessionManifestStore = deps.sessionManifestStore || null;
+    this._pinOrderBackfill = null;
     this._envChangeLedger = deps.envChangeLedger || null;
     this._ensureSessionLoadedInFlight = new Map();
     // 运行期 session-meta 隔离记录：key 是 metaPath，value 是隔离详情。
@@ -6529,6 +6536,9 @@ export class SessionCoordinator {
           s.pinnedAt = typeof manifest?.pinnedAt === "string"
             ? manifest.pinnedAt
             : (typeof metaEntry?.pinnedAt === "string" ? metaEntry.pinnedAt : null);
+          s.pinOrder = Number.isFinite(manifest?.pinOrder)
+            ? manifest.pinOrder
+            : (Number.isFinite(metaEntry?.pinOrder) ? metaEntry.pinOrder : null);
           s.projectId = typeof metaEntry?.projectId === "string" && metaEntry.projectId.trim()
             ? metaEntry.projectId.trim()
             : null;
@@ -6609,6 +6619,7 @@ export class SessionCoordinator {
         workspaceLabel: entry.workspaceLabel || null,
         sessionId: entry.sessionId || this._sessionIdForPath(sessionPath),
         pinnedAt: null,
+        pinOrder: null,
         projectId: null,
         ...(isDeleted ? {
           agentDeleted: true,
@@ -6623,7 +6634,52 @@ export class SessionCoordinator {
     }
 
     allSessions.sort((a, b) => b.modified - a.modified);
+    this._ensurePinOrderBackfill(allSessions);
     return allSessions;
+  }
+
+  /**
+   * Sessions pinned before pinning carried an explicit order have none, and
+   * would otherwise all sort as "unordered". This writes the order the user was
+   * already looking at (most recently touched first) exactly once, so their
+   * pinned strip does not visibly shuffle on the upgrade. Runs in the
+   * background: the list this was called with is already on its way out.
+   */
+  _ensurePinOrderBackfill(projectedSessions: any[]) {
+    const store = this._sessionManifestStore;
+    if (!store || typeof store.getState !== "function") return;
+    if (this._pinOrderBackfill) return;
+    if (store.getState(PIN_ORDER_BACKFILL_STATE_KEY)?.completedAt) return;
+
+    const pending = projectedSessions
+      .filter((session) => (
+        typeof session?.pinnedAt === "string"
+        && session.pinnedAt
+        && !Number.isFinite(session.pinOrder)
+        && !!session.sessionId
+      ))
+      .sort((a, b) => b.modified - a.modified);
+
+    this._pinOrderBackfill = (async () => {
+      for (const [index, session] of pending.entries()) {
+        const pinOrder = (index + 1) * PIN_ORDER_STEP;
+        await this.writeSessionMeta(session.path, { pinOrder });
+        store.setPinOrder(session.sessionId, pinOrder);
+        session.pinOrder = pinOrder;
+        this._emitSessionMetadataUpdated(session.path, { pinOrder });
+      }
+      store.setState(PIN_ORDER_BACKFILL_STATE_KEY, {
+        completedAt: new Date().toISOString(),
+        ordered: pending.length,
+      });
+    })()
+      .catch((err) => {
+        // Leaving the marker unset is the retry: the next list tries again.
+        log.warn(`pin order backfill failed: ${err?.message || err}`);
+      })
+      .finally(() => {
+        this._pinOrderBackfill = null;
+      });
   }
 
   async saveSessionTitle(sessionPath: any, title: any) {
@@ -6644,16 +6700,92 @@ export class SessionCoordinator {
     this._titlesCache.set(sessionDir, { titles: { ...titles }, ts: Date.now() });
   }
 
+  /**
+   * Pins or unpins a session. A new pin goes above every existing one, and
+   * unpinning drops the order together with the timestamp — the two fields
+   * share one lifetime, so a later re-pin is a brand new pin.
+   *
+   * @returns {Promise<{pinnedAt: string|null, pinOrder: number|null}>}
+   */
   async setSessionPinned(sessionRef: any, pinned: any) {
     const { sessionId, sessionPath, manifest } = this._resolveSessionWriteRef(sessionRef, "setSessionPinned");
     const pinnedAt = pinned ? new Date().toISOString() : null;
-    await this.writeSessionMeta(sessionPath, { pinnedAt });
+    const pinOrder = pinned ? this._topPinOrder() : null;
+    await this.writeSessionMeta(sessionPath, { pinnedAt, pinOrder });
     if (manifest || sessionId) {
-      this._sessionManifestStore.setPinnedAt((manifest?.sessionId || sessionId), pinnedAt);
+      const targetSessionId = manifest?.sessionId || sessionId;
+      this._sessionManifestStore.setPinnedAt(targetSessionId, pinnedAt);
+      this._sessionManifestStore.setPinOrder(targetSessionId, pinOrder);
     }
-    await this._verifySessionPinnedState(sessionPath, pinnedAt);
-    this._emitSessionMetadataUpdated(sessionPath, { pinnedAt });
-    return pinnedAt;
+    await this._verifySessionPinnedState(sessionPath, pinnedAt, pinOrder);
+    this._emitSessionMetadataUpdated(sessionPath, { pinnedAt, pinOrder });
+    return { pinnedAt, pinOrder };
+  }
+
+  /** Order that places a session above every currently pinned one. */
+  _topPinOrder() {
+    const min = this._sessionManifestStore?.minPinOrder?.();
+    return (Number.isFinite(min) ? min : 0) - PIN_ORDER_STEP;
+  }
+
+  /**
+   * Applies a manually submitted pin order. The caller sends the complete
+   * ordered list of pinned sessions; every entry is validated before anything
+   * is written, so a list naming an unpinned or unknown session changes
+   * nothing at all rather than landing halfway.
+   *
+   * @param {Array<{sessionId: string}|string>} orderedRefs
+   * @returns {Promise<Array<{sessionId: string, pinOrder: number}>>}
+   */
+  async setSessionPinOrder(orderedRefs: any) {
+    const refs = Array.isArray(orderedRefs) ? orderedRefs : null;
+    if (!refs || refs.length === 0) {
+      const error: any = new Error("setSessionPinOrder: at least one session is required");
+      error.code = "session_pin_order_empty";
+      error.status = 400;
+      throw error;
+    }
+
+    const resolved = [];
+    const seen = new Set();
+    for (const ref of refs) {
+      const sessionId = typeof ref === "string"
+        ? ref.trim()
+        : (typeof ref?.sessionId === "string" ? ref.sessionId.trim() : "");
+      if (!sessionId) {
+        const error: any = new Error("setSessionPinOrder: sessionId is required for every entry");
+        error.code = "session_pin_order_invalid";
+        error.status = 400;
+        throw error;
+      }
+      if (seen.has(sessionId)) {
+        const error: any = new Error(`setSessionPinOrder: duplicate session ${sessionId}`);
+        error.code = "session_pin_order_duplicate";
+        error.status = 400;
+        error.sessionId = sessionId;
+        throw error;
+      }
+      seen.add(sessionId);
+      const target = this._resolveSessionWriteRef({ sessionId }, "setSessionPinOrder");
+      if (!target.manifest?.pinnedAt) {
+        const error: any = new Error(`setSessionPinOrder: session ${sessionId} is not pinned`);
+        error.code = "session_not_pinned";
+        error.status = 400;
+        error.sessionId = sessionId;
+        throw error;
+      }
+      resolved.push(target);
+    }
+
+    const orders = [];
+    for (const [index, target] of resolved.entries()) {
+      const pinOrder = (index + 1) * PIN_ORDER_STEP;
+      await this.writeSessionMeta(target.sessionPath, { pinOrder });
+      this._sessionManifestStore.setPinOrder(target.manifest.sessionId, pinOrder);
+      this._emitSessionMetadataUpdated(target.sessionPath, { pinOrder });
+      orders.push({ sessionId: target.manifest.sessionId, pinOrder });
+    }
+    return orders;
   }
 
   async setSessionPluginMeta(sessionPath: any, patch: any = {}) {
@@ -6699,7 +6831,7 @@ export class SessionCoordinator {
     return plugin;
   }
 
-  async _verifySessionPinnedState(sessionPath: any, expectedPinnedAt: any) {
+  async _verifySessionPinnedState(sessionPath: any, expectedPinnedAt: any, expectedPinOrder: any = null) {
     const metaPath = this._sessionMetaPathFor(sessionPath);
     const sessKey = path.basename(sessionPath);
     let meta = {};
@@ -6712,6 +6844,10 @@ export class SessionCoordinator {
     const actual = meta[sessKey]?.pinnedAt ?? null;
     if (actual !== expectedPinnedAt) {
       throw new Error(`setSessionPinned: expected pinnedAt=${expectedPinnedAt ?? "null"} for ${sessKey}, got ${actual ?? "null"}`);
+    }
+    const actualOrder = meta[sessKey]?.pinOrder ?? null;
+    if (actualOrder !== expectedPinOrder) {
+      throw new Error(`setSessionPinned: expected pinOrder=${expectedPinOrder ?? "null"} for ${sessKey}, got ${actualOrder ?? "null"}`);
     }
   }
 

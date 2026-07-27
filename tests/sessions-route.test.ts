@@ -807,6 +807,35 @@ describe("sessions route", () => {
     expect(data[0].pinnedAt).toBe(pinnedAt);
   });
 
+  it("includes the manual pin order in the session list and search responses", async () => {
+    const { createSessionsRoute } = await import("../server/routes/sessions.ts");
+    const app = new Hono();
+    const session = {
+      path: "/tmp/agents/hana/sessions/a.jsonl",
+      title: "Pinned thread",
+      firstMessage: "hello",
+      modified: new Date("2026-04-29T07:00:00.000Z"),
+      messageCount: 2,
+      cwd: "/tmp/work",
+      agentId: "hana",
+      agentName: "Hana",
+      sessionId: "sess_route_order",
+      pinnedAt: "2026-04-29T08:00:00.000Z",
+      pinOrder: 2048,
+    };
+
+    app.route("/api", createSessionsRoute({
+      listSessions: vi.fn(async () => [session]),
+      rcState: null,
+    }));
+
+    const listData = await (await app.request("/api/sessions")).json();
+    const searchData = await (await app.request("/api/sessions/search?q=Pinned")).json();
+
+    expect(listData[0].pinOrder).toBe(2048);
+    expect(searchData.results[0].pinOrder).toBe(2048);
+  });
+
   it("includes explicit projectId in the session list response", async () => {
     const { createSessionsRoute } = await import("../server/routes/sessions.ts");
     const app = new Hono();
@@ -1172,7 +1201,7 @@ describe("sessions route", () => {
       agentIdFromSessionPath: vi.fn(() => "deleted"),
       isAgentDeleted: vi.fn(() => true),
       isDeletedAgentSession: vi.fn(() => true),
-      setSessionPinned: vi.fn(),
+      setSessionPinned: vi.fn(async () => ({ pinnedAt: null, pinOrder: null })),
       switchSession: vi.fn(),
       saveSessionTitle: vi.fn(),
       rcState: null,
@@ -1597,7 +1626,9 @@ describe("sessions route", () => {
 
     const engine = {
       agentsDir: "/tmp/agents",
-      setSessionPinned: vi.fn(async (_sessionPath, pinned) => pinned ? pinnedAt : null),
+      setSessionPinned: vi.fn(async (_sessionPath, pinned) => (
+        pinned ? { pinnedAt, pinOrder: -1024 } : { pinnedAt: null, pinOrder: null }
+      )),
       getSessionIdForPath: vi.fn(() => "sess_route_pin"),
     };
 
@@ -1615,7 +1646,7 @@ describe("sessions route", () => {
       sessionId: "sess_route_pin",
       sessionPath: "/tmp/agents/hana/sessions/a.jsonl",
     }, true);
-    expect(pinData).toEqual({ ok: true, pinnedAt, sessionId: "sess_route_pin" });
+    expect(pinData).toEqual({ ok: true, pinnedAt, pinOrder: -1024, sessionId: "sess_route_pin" });
 
     const unpinRes = await app.request("/api/sessions/pin", {
       method: "POST",
@@ -1629,7 +1660,173 @@ describe("sessions route", () => {
       sessionId: "sess_route_pin",
       sessionPath: "/tmp/agents/hana/sessions/a.jsonl",
     }, false);
-    expect(unpinData).toEqual({ ok: true, pinnedAt: null, sessionId: "sess_route_pin" });
+    expect(unpinData).toEqual({ ok: true, pinnedAt: null, pinOrder: null, sessionId: "sess_route_pin" });
+  });
+
+  it("applies a submitted pin order for the whole pinned strip", async () => {
+    const { createSessionsRoute } = await import("../server/routes/sessions.ts");
+    const app = new Hono();
+    const locators = {
+      sess_a: "/tmp/agents/hana/sessions/a.jsonl",
+      sess_b: "/tmp/agents/hana/sessions/b.jsonl",
+    };
+
+    const engine = {
+      agentsDir: "/tmp/agents",
+      getSessionManifest: vi.fn((sessionId) => (
+        locators[sessionId] ? { sessionId, currentLocator: { path: locators[sessionId] } } : null
+      )),
+      setSessionPinOrder: vi.fn(async (refs) => refs.map((ref, index) => ({
+        sessionId: ref.sessionId,
+        pinOrder: (index + 1) * 1024,
+      }))),
+    };
+
+    app.route("/api", createSessionsRoute(engine));
+
+    const res = await app.request("/api/sessions/pin-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionIds: ["sess_b", "sess_a"] }),
+    });
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(engine.setSessionPinOrder).toHaveBeenCalledWith([
+      { sessionId: "sess_b" },
+      { sessionId: "sess_a" },
+    ]);
+    expect(data).toEqual({
+      ok: true,
+      orders: [
+        { sessionId: "sess_b", pinOrder: 1024 },
+        { sessionId: "sess_a", pinOrder: 2048 },
+      ],
+    });
+  });
+
+  it("rejects a pin order request that is empty, repeats a session, or names an unknown one", async () => {
+    const { createSessionsRoute } = await import("../server/routes/sessions.ts");
+    const app = new Hono();
+
+    const engine = {
+      agentsDir: "/tmp/agents",
+      getSessionManifest: vi.fn((sessionId) => (
+        sessionId === "sess_a"
+          ? { sessionId, currentLocator: { path: "/tmp/agents/hana/sessions/a.jsonl" } }
+          : null
+      )),
+      setSessionPinOrder: vi.fn(async () => []),
+    };
+
+    app.route("/api", createSessionsRoute(engine));
+
+    async function post(body) {
+      const res = await app.request("/api/sessions/pin-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, data: await res.json() };
+    }
+
+    expect((await post({ sessionIds: [] })).status).toBe(400);
+    expect((await post({})).status).toBe(400);
+    expect((await post({ sessionIds: ["sess_a", "sess_a"] }))).toMatchObject({
+      status: 400,
+      data: { code: "session_pin_order_duplicate" },
+    });
+    expect((await post({ sessionIds: ["sess_a", "sess_missing"] }))).toMatchObject({
+      status: 404,
+      data: { code: "session_manifest_not_found" },
+    });
+    expect(engine.setSessionPinOrder).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an unpinned session in a pin order request as a client error", async () => {
+    const { createSessionsRoute } = await import("../server/routes/sessions.ts");
+    const app = new Hono();
+
+    const engine = {
+      agentsDir: "/tmp/agents",
+      getSessionManifest: vi.fn((sessionId) => ({
+        sessionId,
+        currentLocator: { path: `/tmp/agents/hana/sessions/${sessionId}.jsonl` },
+      })),
+      setSessionPinOrder: vi.fn(async () => {
+        const err: any = new Error("setSessionPinOrder: session sess_b is not pinned");
+        err.code = "session_not_pinned";
+        err.status = 400;
+        err.sessionId = "sess_b";
+        throw err;
+      }),
+    };
+
+    app.route("/api", createSessionsRoute(engine));
+
+    const res = await app.request("/api/sessions/pin-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionIds: ["sess_a", "sess_b"] }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      code: "session_not_pinned",
+      sessionId: "sess_b",
+    });
+  });
+
+  it("refuses a pin order request from a principal without session write scope", async () => {
+    const { createSessionsRoute } = await import("../server/routes/sessions.ts");
+    const app = new Hono();
+
+    app.use("*", async (c, next) => {
+      (c as any).set("authPrincipal", Object.freeze({
+        kind: "device",
+        credentialKind: "device_credential",
+        connectionKind: "lan",
+        trustState: "lan",
+        serverNodeId: "node_projection",
+        userId: "user_projection",
+        studioId: "studio_projection",
+        studioIds: ["studio_projection"],
+        deviceId: "device_phone",
+        scopes: [],
+      }));
+      await next();
+    });
+
+    const engine = {
+      agentsDir: "/tmp/agents",
+      getRuntimeContext: () => ({
+        serverId: "server_projection",
+        serverNodeId: "node_projection",
+        userId: "user_projection",
+        studioId: "studio_projection",
+        connectionKind: "local",
+        credentialKind: "loopback_token",
+        platformAccountId: null,
+        officialServiceKind: null,
+      }),
+      getSessionManifest: vi.fn((sessionId) => ({
+        sessionId,
+        currentLocator: { path: `/tmp/agents/hana/sessions/${sessionId}.jsonl` },
+      })),
+      setSessionPinOrder: vi.fn(async () => []),
+    };
+
+    app.route("/api", createSessionsRoute(engine));
+
+    const res = await app.request("/api/sessions/pin-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionIds: ["sess_a"] }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "insufficient_scope" });
+    expect(engine.setSessionPinOrder).not.toHaveBeenCalled();
   });
 
   it("pins sessions by sessionId and rejects stale locator paths", async () => {
@@ -1645,7 +1842,9 @@ describe("sessions route", () => {
           ? { sessionId, currentLocator: { path: currentPath } }
           : null
       )),
-      setSessionPinned: vi.fn(async (_sessionPath, pinned) => pinned ? pinnedAt : null),
+      setSessionPinned: vi.fn(async (_sessionPath, pinned) => (
+        pinned ? { pinnedAt, pinOrder: -1024 } : { pinnedAt: null, pinOrder: null }
+      )),
       getSessionIdForPath: vi.fn(() => "sess_route_pin"),
     };
 
@@ -1684,7 +1883,7 @@ describe("sessions route", () => {
       sessionId: "sess_route_pin",
       sessionPath: currentPath,
     }, true);
-    expect(data).toEqual({ ok: true, pinnedAt, sessionId: "sess_route_pin" });
+    expect(data).toEqual({ ok: true, pinnedAt, pinOrder: -1024, sessionId: "sess_route_pin" });
   });
 
   it("clears pinned state before archiving a session", async () => {

@@ -932,6 +932,7 @@ export function createSessionsRoute(engine, hub = null) {
             ? engine.getSessionPermissionMode(s.path)
             : engine.permissionMode || null),
           pinnedAt: s.pinnedAt || null,
+          pinOrder: Number.isFinite(s.pinOrder) ? s.pinOrder : null,
           agentDeleted: s.agentDeleted === true,
           readOnlyReason: s.readOnlyReason || (s.agentDeleted === true ? "agent_deleted" : null),
           continuationAvailable: s.continuationAvailable === true,
@@ -996,6 +997,7 @@ export function createSessionsRoute(engine, hub = null) {
         workspaceMountId: s.workspaceMountId || null,
         workspaceLabel: s.workspaceLabel || null,
         pinnedAt: s.pinnedAt || null,
+        pinOrder: Number.isFinite(s.pinOrder) ? s.pinOrder : null,
         agentDeleted: s.agentDeleted === true,
         readOnlyReason: s.readOnlyReason || (s.agentDeleted === true ? "agent_deleted" : null),
         continuationAvailable: s.continuationAvailable === true,
@@ -1128,11 +1130,63 @@ export function createSessionsRoute(engine, hub = null) {
         sessionPath,
       });
       if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
-      const pinnedAt = await engine.setSessionPinned({
+      const { pinnedAt, pinOrder } = await engine.setSessionPinned({
         ...(sessionId ? { sessionId } : {}),
         sessionPath,
       }, pinned);
-      return c.json({ ok: true, pinnedAt, sessionId: sessionId || engine.getSessionIdForPath?.(sessionPath) || null });
+      return c.json({
+        ok: true,
+        pinnedAt,
+        pinOrder: Number.isFinite(pinOrder) ? pinOrder : null,
+        sessionId: sessionId || engine.getSessionIdForPath?.(sessionPath) || null,
+      });
+    } catch (err) {
+      return c.json(bodyFromRouteError(err), statusFromRouteError(err));
+    }
+  });
+
+  // 重排置顶区：提交完整有序的 sessionId 列表，服务端整体重新编号
+  route.post("/sessions/pin-order", async (c) => {
+    try {
+      const requestContext = createRequestContext(c, engine);
+      const body = await safeJson(c);
+      const rawSessionIds = Array.isArray(body?.sessionIds) ? body.sessionIds : null;
+      if (!rawSessionIds || rawSessionIds.length === 0) {
+        return c.json({ error: t("error.missingParam", { param: "sessionIds" }) }, 400);
+      }
+
+      const refs = [];
+      const seen = new Set();
+      for (const rawSessionId of rawSessionIds) {
+        const sessionId = normalizeRequestSessionId(rawSessionId);
+        if (!sessionId) {
+          return c.json({ error: t("error.missingParam", { param: "sessionIds" }) }, 400);
+        }
+        if (seen.has(sessionId)) {
+          return c.json({
+            error: `setSessionPinOrder: duplicate session ${sessionId}`,
+            code: "session_pin_order_duplicate",
+            sessionId,
+          }, 400);
+        }
+        seen.add(sessionId);
+        // 每个 session 都独立解析定位并鉴权：一次请求跨多个 session，
+        // 授权不能只看列表里的第一个。
+        const sessionRef = resolveSessionLocatorFromBody({ sessionId }, "setSessionPinOrder");
+        if (!isValidSessionPath(sessionRef.sessionPath, engine.agentsDir)) {
+          return c.json({ error: "Invalid session path" }, 403);
+        }
+        const auth = authorizeSessionRoute(requestContext, "sessions.write", {
+          kind: "session",
+          studioId: requestContext.studioId,
+          sessionPath: sessionRef.sessionPath,
+        });
+        if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
+        refs.push({ sessionId: sessionRef.sessionId });
+      }
+
+      const orders = await engine.setSessionPinOrder(refs);
+      return c.json({ ok: true, orders });
     } catch (err) {
       return c.json(bodyFromRouteError(err), statusFromRouteError(err));
     }

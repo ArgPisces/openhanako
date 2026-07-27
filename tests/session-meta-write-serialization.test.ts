@@ -386,34 +386,37 @@ describe("SessionCoordinator.writeSessionMeta serialization", () => {
     expect(hydrated[path.basename(sessionPaths[0])].promptSnapshot.systemPrompt).toBe(mediumPrompt);
   });
 
-  it("setSessionPinned writes and clears pinnedAt on the session meta entry", async () => {
-    const pinnedAt = await sessionCoord.setSessionPinned(fakeSessionPath, true);
+  it("setSessionPinned writes and clears pinnedAt and pinOrder on the session meta entry", async () => {
+    const { pinnedAt, pinOrder } = await sessionCoord.setSessionPinned(fakeSessionPath, true);
 
     const metaPath = path.join(sessionDir, "session-meta.json");
     let meta = JSON.parse(await fsp.readFile(metaPath, "utf-8"));
     expect(meta[path.basename(fakeSessionPath)].pinnedAt).toBe(pinnedAt);
+    expect(meta[path.basename(fakeSessionPath)].pinOrder).toBe(pinOrder);
+    expect(pinOrder).toBe(-1024);
     expect(new Date(pinnedAt).toString()).not.toBe("Invalid Date");
 
-    const unpinnedAt = await sessionCoord.setSessionPinned(fakeSessionPath, false);
+    const unpinned = await sessionCoord.setSessionPinned(fakeSessionPath, false);
 
     meta = JSON.parse(await fsp.readFile(metaPath, "utf-8"));
-    expect(unpinnedAt).toBeNull();
+    expect(unpinned).toEqual({ pinnedAt: null, pinOrder: null });
     expect(meta[path.basename(fakeSessionPath)].pinnedAt).toBeNull();
+    expect(meta[path.basename(fakeSessionPath)].pinOrder).toBeNull();
   });
 
   it("setSessionPinned emits a scoped session metadata update", async () => {
-    const pinnedAt = await sessionCoord.setSessionPinned(fakeSessionPath, true);
+    const { pinnedAt, pinOrder } = await sessionCoord.setSessionPinned(fakeSessionPath, true);
 
     expect(sessionCoord._d.emitEvent).toHaveBeenCalledWith({
       type: "session_metadata_updated",
-      metadata: { pinnedAt },
+      metadata: { pinnedAt, pinOrder },
     }, fakeSessionPath);
 
     await sessionCoord.setSessionPinned(fakeSessionPath, false);
 
     expect(sessionCoord._d.emitEvent).toHaveBeenLastCalledWith({
       type: "session_metadata_updated",
-      metadata: { pinnedAt: null },
+      metadata: { pinnedAt: null, pinOrder: null },
     }, fakeSessionPath);
   });
 
