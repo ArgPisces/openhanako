@@ -12,6 +12,7 @@ import { hanaFetch } from './hooks/use-hana-fetch';
 import { applyAgentIdentity, loadAgents, loadAvatars } from './stores/agent-actions';
 import { loadPendingNewSessionPermissionDefault, loadSessions, pendingNewSessionIdentityPatch, switchSession } from './stores/session-actions';
 import { initSessionProjectCatalog } from './stores/session-project-actions';
+import { loadSidebarUiPrefs } from './stores/sidebar-ui-slice';
 import { connectWebSocket, getWebSocket } from './services/websocket';
 import { setStatus, loadModels } from './utils/ui-helpers';
 import { initJian } from './stores/desk-actions';
@@ -302,6 +303,24 @@ export async function initApp(): Promise<void> {
   platform.onSettingsChanged((type: string, data: any) => {
     handleAppEvent(type, data, { source: 'desktop-ipc' });
   });
+
+  // 19b. 侧边栏 UI 偏好（session 行高 / 项目视图折叠）：store 持有，侧栏实例只读。
+  //      连接就绪后拉一次，连接对象变化后再拉；设置页保存的同窗广播走这里，
+  //      跨窗 IPC 走 handleAppEvent 的同名事件，两条路径落到同一个 action。
+  window.addEventListener('hana-settings', (event: Event) => {
+    const detail = (event as CustomEvent).detail;
+    if (!detail || detail.type !== 'sidebar-ui-changed') return;
+    useStore.getState().applySidebarUiPrefs(detail.sidebarUi || detail);
+  });
+  const syncSidebarUiPrefs = (connection: ServerConnection | null) => {
+    if (!connection) return;
+    void loadSidebarUiPrefs();
+  };
+  useStore.subscribe((state, prev) => {
+    if (state.activeServerConnection === prev.activeServerConnection) return;
+    syncSidebarUiPrefs(state.activeServerConnection);
+  });
+  syncSidebarUiPrefs(useStore.getState().activeServerConnection);
 
   // 20. 主进程请求打开设置：托盘 / 外部 IPC 统一落到主窗口 modal
   platform.onOpenSettingsModal?.((tab?: string) => {

@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStore } from '../../stores';
 
-const mockHanaFetch = vi.fn();
+// vi.hoisted: the mock factory below is hoisted above this file's imports, and
+// importing the store now reaches use-hana-fetch during that hoisted phase.
+const mockHanaFetch = vi.hoisted(() => vi.fn());
 
 vi.mock('../../hooks/use-hana-fetch', () => ({
   hanaFetch: mockHanaFetch,

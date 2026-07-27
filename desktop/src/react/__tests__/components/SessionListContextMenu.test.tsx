@@ -139,6 +139,9 @@ async function switchToProjectView() {
 describe('SessionList context menu', () => {
   beforeEach(() => {
     window.localStorage.removeItem('hana-session-sidebar-view-mode');
+    window.localStorage.removeItem('hana-sidebar-ui-prefs');
+    useStore.getState().applySidebarUiPrefs({});
+    useStore.setState({ sidebarUiPrefsLoaded: false });
     globalThis.t = ((key: string) => {
       if (key === 'yuan.types') return {};
       return key;
@@ -322,130 +325,68 @@ describe('SessionList context menu', () => {
     });
   });
 
-  it('applies the persisted single-line row mode to regular session rows', async () => {
-    hanaFetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/browser/session-states') return jsonResponse({});
-      if (url === '/api/preferences/sidebar-ui') {
-        return jsonResponse({
-          sidebarUi: {
-            projectView: {
-              collapsedProjectIds: [],
-              collapsedFolderIds: [],
-              showAllProjectIds: [],
-            },
-            sessionList: { rowMode: 'single-line' },
-          },
-        });
-      }
-      return jsonResponse({});
+  it('applies the persisted single-line row mode from the store to regular session rows', () => {
+    act(() => {
+      useStore.getState().applySidebarUiPrefs({
+        sidebarUi: {
+          projectView: { collapsedProjectIds: [], collapsedFolderIds: [], showAllProjectIds: [] },
+          sessionList: { rowMode: 'single-line' },
+        },
+      });
     });
 
     render(<SessionList />);
 
     const row = sessionButton('Has summary');
-    await waitFor(() => {
-      expect(row).toHaveAttribute('data-row-mode', 'single-line');
-    });
+    expect(row).toHaveAttribute('data-row-mode', 'single-line');
     expect(row.querySelector('[data-session-actions]')).toBeInTheDocument();
     expect(row).toHaveAttribute('title', expect.stringContaining('Hana'));
   });
 
-  it('waits for an active server connection before loading sidebar UI preferences', () => {
-    useStore.setState({
-      activeServerConnectionId: null,
-      activeServerConnection: null,
-    });
-
+  it('never fetches sidebar UI preferences itself', async () => {
     render(<SessionList />);
 
+    await waitFor(() => {
+      expect(hanaFetchMock).toHaveBeenCalledWith('/api/browser/session-states');
+    });
     expect(hanaFetchMock).not.toHaveBeenCalledWith('/api/preferences/sidebar-ui');
   });
 
-  it('loads single-line row mode when the server connection becomes available', async () => {
-    useStore.setState({
-      activeServerConnectionId: null,
-      activeServerConnection: null,
-    });
-    hanaFetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/browser/session-states') return jsonResponse({});
-      if (url === '/api/preferences/sidebar-ui') {
-        return jsonResponse({
-          sidebarUi: {
-            projectView: {
-              collapsedProjectIds: [],
-              collapsedFolderIds: [],
-              showAllProjectIds: [],
-            },
-            sessionList: { rowMode: 'single-line' },
-          },
-        });
-      }
-      return jsonResponse({});
-    });
-
+  it('follows the row mode when the store picks up new preferences after mount', async () => {
     render(<SessionList />);
-    expect(hanaFetchMock).not.toHaveBeenCalledWith('/api/preferences/sidebar-ui');
+    expect(sessionButton('Has summary')).toHaveAttribute('data-row-mode', 'two-line');
 
     act(() => {
-      useStore.setState({
-        activeServerConnectionId: localServerConnection.connectionId,
-        activeServerConnection: localServerConnection,
+      useStore.getState().applySidebarUiPrefs({
+        sidebarUi: {
+          projectView: { collapsedProjectIds: [], collapsedFolderIds: [], showAllProjectIds: [] },
+          sessionList: { rowMode: 'single-line' },
+        },
       });
     });
 
     await waitFor(() => {
       expect(sessionButton('Has summary')).toHaveAttribute('data-row-mode', 'single-line');
     });
-    expect(hanaFetchMock).toHaveBeenCalledWith('/api/preferences/sidebar-ui');
   });
 
-  it('retries sidebar UI preferences with bounded backoff after transient failures', async () => {
-    vi.useFakeTimers();
-    let preferenceAttempts = 0;
-    hanaFetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/browser/session-states') return jsonResponse({});
-      if (url === '/api/preferences/sidebar-ui') {
-        preferenceAttempts += 1;
-        if (preferenceAttempts < 3) throw new Error('server is still starting');
-        return jsonResponse({
-          sidebarUi: {
-            projectView: {
-              collapsedProjectIds: [],
-              collapsedFolderIds: [],
-              showAllProjectIds: [],
-            },
-            sessionList: { rowMode: 'single-line' },
-          },
-        });
-      }
-      return jsonResponse({});
+  it('keeps single-line rows on the very first frame after a remount, without any request', () => {
+    act(() => {
+      useStore.getState().applySidebarUiPrefs({
+        sidebarUi: {
+          projectView: { collapsedProjectIds: [], collapsedFolderIds: [], showAllProjectIds: [] },
+          sessionList: { rowMode: 'single-line' },
+        },
+      });
     });
+
+    const first = render(<SessionList />);
+    expect(sessionButton('Has summary')).toHaveAttribute('data-row-mode', 'single-line');
+    first.unmount();
 
     render(<SessionList />);
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(preferenceAttempts).toBe(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(299);
-    });
-    expect(preferenceAttempts).toBe(1);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(preferenceAttempts).toBe(2);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(599);
-    });
-    expect(preferenceAttempts).toBe(2);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-
-    expect(preferenceAttempts).toBe(3);
     expect(sessionButton('Has summary')).toHaveAttribute('data-row-mode', 'single-line');
+    expect(hanaFetchMock).not.toHaveBeenCalledWith('/api/preferences/sidebar-ui');
   });
 
   it('shows title search results first and then content results', async () => {
@@ -959,7 +900,7 @@ describe('SessionList context menu', () => {
         },
       ],
     });
-    hanaFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    hanaFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/browser/session-states') return jsonResponse({});
       if (url === '/api/session-projects') {
         return jsonResponse({
@@ -969,10 +910,12 @@ describe('SessionList context menu', () => {
           },
         });
       }
-      if (url === '/api/preferences/sidebar-ui' && !init) {
-        return jsonResponse({ sidebarUi: { projectView: { collapsedProjectIds: ['project-root'], collapsedFolderIds: [], showAllProjectIds: [] } } });
-      }
       return jsonResponse({});
+    });
+    act(() => {
+      useStore.getState().applySidebarUiPrefs({
+        sidebarUi: { projectView: { collapsedProjectIds: ['project-root'], collapsedFolderIds: [], showAllProjectIds: [] } },
+      });
     });
 
     render(<SessionList />);
@@ -1019,7 +962,7 @@ describe('SessionList context menu', () => {
         },
       ],
     });
-    hanaFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    hanaFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/browser/session-states') return jsonResponse({});
       if (url === '/api/session-projects') {
         return jsonResponse({
@@ -1029,10 +972,12 @@ describe('SessionList context menu', () => {
           },
         });
       }
-      if (url === '/api/preferences/sidebar-ui' && !init) {
-        return jsonResponse({ sidebarUi: { projectView: { collapsedProjectIds: [], collapsedFolderIds: ['folder-work'], showAllProjectIds: [] } } });
-      }
       return jsonResponse({});
+    });
+    act(() => {
+      useStore.getState().applySidebarUiPrefs({
+        sidebarUi: { projectView: { collapsedProjectIds: [], collapsedFolderIds: ['folder-work'], showAllProjectIds: [] } },
+      });
     });
 
     render(<SessionList />);

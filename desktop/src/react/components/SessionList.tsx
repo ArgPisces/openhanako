@@ -39,11 +39,7 @@ import {
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu';
 import { renderMarkdown } from '../utils/markdown';
 import { cwdFromAutoProjectId } from '../../../../shared/session-projects.ts';
-import {
-  normalizeSidebarUiPrefs,
-  type SidebarSessionListRowMode,
-  type SidebarUiPrefs,
-} from '../../../../shared/sidebar-ui-state.ts';
+import type { SidebarSessionListRowMode } from '../../../../shared/sidebar-ui-state.ts';
 import { FolderIcon } from './shared/FolderIcon';
 import styles from './SessionList.module.css';
 
@@ -52,7 +48,6 @@ const SESSION_DRAG_MIME = 'application/x-hana-session-path';
 const PROJECT_DRAG_MIME = 'application/x-hana-project-id';
 const FOLDER_DRAG_MIME = 'application/x-hana-project-folder-id';
 const PROJECT_SESSION_PREVIEW_LIMIT = 5;
-const SIDEBAR_UI_PREF_RETRY_DELAYS_MS = [300, 600] as const;
 
 type SidebarDragState =
   | { kind: 'session'; sessionPath: string }
@@ -75,12 +70,6 @@ type FolderActionMenuState = {
   position: { x: number; y: number };
   folder: SessionProjectFolderGroup;
 } | null;
-
-interface SidebarProjectViewPrefs {
-  collapsedProjectIds: string[];
-  collapsedFolderIds: string[];
-  showAllProjectIds: string[];
-}
 
 interface BrowserSessionState {
   url: string | null;
@@ -162,27 +151,6 @@ function readInitialSessionViewMode(): SessionViewMode {
   }
 }
 
-function normalizeSidebarUiResponse(data: unknown): SidebarUiPrefs {
-  const raw = data && typeof data === 'object' && !Array.isArray(data)
-    ? (data as { sidebarUi?: unknown })
-    : {};
-  return normalizeSidebarUiPrefs(raw.sidebarUi || data);
-}
-
-function sidebarProjectViewPayload(
-  collapsedProjectIds: Set<string>,
-  collapsedFolderIds: Set<string>,
-  showAllProjectIds: Set<string>,
-): { projectView: SidebarProjectViewPrefs } {
-  return {
-    projectView: {
-      collapsedProjectIds: [...collapsedProjectIds],
-      collapsedFolderIds: [...collapsedFolderIds],
-      showAllProjectIds: [...showAllProjectIds],
-    },
-  };
-}
-
 function dragSessionPath(event: React.DragEvent, state: SidebarDragState): string | null {
   const fromState = state?.kind === 'session' ? state.sessionPath : null;
   return event.dataTransfer.getData(SESSION_DRAG_MIME) || fromState;
@@ -218,15 +186,27 @@ function SessionListInner() {
   const browserBySession = useStore(s => s.browserBySession);
   const projectCatalog = useStore(s => s.sessionProjectCatalog);
   const projectCatalogLoaded = useStore(s => s.sessionProjectCatalogLoaded);
-  const activeServerConnection = useStore(s => s.activeServerConnection);
   const metaRecovery = useStore(s => s.metaRecovery);
+  // 侧边栏 UI 偏好归 store：本组件有多个实例（主侧栏 / 悬浮侧栏），
+  // 重挂载时直接读已加载的值，不再各自拉取、也就没有默认双行的首帧。
+  const sidebarUiPrefs = useStore(s => s.sidebarUiPrefs);
+  const setSidebarProjectViewPrefs = useStore(s => s.setSidebarProjectViewPrefs);
+  const sessionListRowMode: SidebarSessionListRowMode = sidebarUiPrefs.sessionList.rowMode;
+  const collapsedProjectIds = useMemo(
+    () => new Set(sidebarUiPrefs.projectView.collapsedProjectIds),
+    [sidebarUiPrefs],
+  );
+  const collapsedFolderIds = useMemo(
+    () => new Set(sidebarUiPrefs.projectView.collapsedFolderIds),
+    [sidebarUiPrefs],
+  );
+  const showAllProjectIds = useMemo(
+    () => new Set(sidebarUiPrefs.projectView.showAllProjectIds),
+    [sidebarUiPrefs],
+  );
 
   const [browserSessions, setBrowserSessions] = useState<Record<string, BrowserSessionState>>({});
   const [viewMode, setViewModeState] = useState<SessionViewMode>(readInitialSessionViewMode);
-  const [sessionListRowMode, setSessionListRowMode] = useState<SidebarSessionListRowMode>('two-line');
-  const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
-  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(() => new Set());
-  const [showAllProjectIds, setShowAllProjectIds] = useState<Set<string>>(() => new Set());
   const [projectMenuPosition, setProjectMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [projectActionMenu, setProjectActionMenu] = useState<ProjectActionMenuState>(null);
   const [folderActionMenu, setFolderActionMenu] = useState<FolderActionMenuState>(null);
@@ -327,90 +307,11 @@ function SessionListInner() {
     }
   }, []);
 
-  const persistSidebarProjectView = useCallback((
-    nextCollapsedProjectIds: Set<string>,
-    nextCollapsedFolderIds: Set<string>,
-    nextShowAllProjectIds: Set<string>,
-  ) => {
-    hanaFetch('/api/preferences/sidebar-ui', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(sidebarProjectViewPayload(
-        nextCollapsedProjectIds,
-        nextCollapsedFolderIds,
-        nextShowAllProjectIds,
-      )),
-    }).catch(err => console.warn('[sessions] persist sidebar UI prefs failed:', err));
-  }, []);
-
-  const applySidebarUiPrefs = useCallback((data: unknown) => {
-    const prefs = normalizeSidebarUiResponse(data);
-    setCollapsedProjectIds(new Set(prefs.projectView.collapsedProjectIds));
-    setCollapsedFolderIds(new Set(prefs.projectView.collapsedFolderIds));
-    setShowAllProjectIds(new Set(prefs.projectView.showAllProjectIds));
-    setSessionListRowMode(prefs.sessionList.rowMode);
-  }, []);
-
   useEffect(() => {
     if (viewMode !== 'project') return;
     loadSessionProjectCatalog()
       .catch(err => console.warn('[sessions] fetch project catalog failed:', err));
   }, [viewMode]);
-
-  useEffect(() => {
-    if (!activeServerConnection) return;
-
-    let cancelled = false;
-    let retryTimer: number | null = null;
-    let attempt = 0;
-
-    const loadSidebarUiPrefs = async () => {
-      attempt += 1;
-      try {
-        const res = await hanaFetch('/api/preferences/sidebar-ui');
-        const data = await res.json();
-        if (cancelled) return;
-        applySidebarUiPrefs(data);
-      } catch (err) {
-        if (cancelled) return;
-        const retryDelay = SIDEBAR_UI_PREF_RETRY_DELAYS_MS[attempt - 1];
-        if (retryDelay !== undefined) {
-          retryTimer = window.setTimeout(() => {
-            retryTimer = null;
-            void loadSidebarUiPrefs();
-          }, retryDelay);
-          return;
-        }
-        console.warn('[sessions] fetch sidebar UI prefs failed:', err);
-      }
-    };
-
-    void loadSidebarUiPrefs();
-    return () => {
-      cancelled = true;
-      if (retryTimer !== null) window.clearTimeout(retryTimer);
-    };
-  }, [activeServerConnection, applySidebarUiPrefs]);
-
-  useEffect(() => {
-    const handleLocalSettings = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      if (!detail || detail.type !== 'sidebar-ui-changed') return;
-      applySidebarUiPrefs(detail.sidebarUi || detail);
-    };
-    window.addEventListener('hana-settings', handleLocalSettings);
-    const unsubscribe = window.platform?.onSettingsChanged?.((type: string, data: unknown) => {
-      if (type !== 'sidebar-ui-changed') return;
-      const payload = data && typeof data === 'object' && !Array.isArray(data)
-        ? (data as { sidebarUi?: unknown })
-        : {};
-      applySidebarUiPrefs(payload.sidebarUi || data);
-    });
-    return () => {
-      window.removeEventListener('hana-settings', handleLocalSettings);
-      if (typeof unsubscribe === 'function') unsubscribe();
-    };
-  }, [applySidebarUiPrefs]);
 
   useEffect(() => {
     if (!projectNameDialog) return;
@@ -473,28 +374,26 @@ function SessionListInner() {
     const confirmed = window.confirm?.(t('sidebar.projects.deleteProjectConfirm', { name: project.name }));
     if (!confirmed) return;
     await deleteSessionProjectFromCatalog(project.id, project.items.map(item => item.path));
-    setCollapsedProjectIds(prev => {
-      const next = new Set(prev);
-      next.delete(project.id);
-      return next;
+    if (!collapsedProjectIds.has(project.id) && !showAllProjectIds.has(project.id)) return;
+    const nextCollapsed = new Set(collapsedProjectIds);
+    nextCollapsed.delete(project.id);
+    const nextShowAll = new Set(showAllProjectIds);
+    nextShowAll.delete(project.id);
+    setSidebarProjectViewPrefs({
+      collapsedProjectIds: [...nextCollapsed],
+      showAllProjectIds: [...nextShowAll],
     });
-    setShowAllProjectIds(prev => {
-      const next = new Set(prev);
-      next.delete(project.id);
-      return next;
-    });
-  }, [t]);
+  }, [collapsedProjectIds, setSidebarProjectViewPrefs, showAllProjectIds, t]);
 
   const deleteFolder = useCallback(async (folder: SessionProjectFolderGroup) => {
     const confirmed = window.confirm?.(t('sidebar.projects.deleteFolderConfirm', { name: folder.name }));
     if (!confirmed) return;
     await deleteSessionProjectFolderFromCatalog(folder.id);
-    setCollapsedFolderIds(prev => {
-      const next = new Set(prev);
-      next.delete(folder.id);
-      return next;
-    });
-  }, [t]);
+    if (!collapsedFolderIds.has(folder.id)) return;
+    const next = new Set(collapsedFolderIds);
+    next.delete(folder.id);
+    setSidebarProjectViewPrefs({ collapsedFolderIds: [...next] });
+  }, [collapsedFolderIds, setSidebarProjectViewPrefs, t]);
 
   const handleCreateProjectSession = useCallback((project: SessionProjectGroup) => {
     if (project.source === 'cwd') {
@@ -677,31 +576,22 @@ function SessionListInner() {
     </button>
   );
   const handleToggleProjectCollapsed = useCallback((projectId: string) => {
-    setCollapsedProjectIds(prev => {
-      const next = new Set(prev);
-      if (next.has(projectId)) next.delete(projectId);
-      else next.add(projectId);
-      persistSidebarProjectView(next, collapsedFolderIds, showAllProjectIds);
-      return next;
-    });
-  }, [collapsedFolderIds, persistSidebarProjectView, showAllProjectIds]);
+    const next = new Set(collapsedProjectIds);
+    if (next.has(projectId)) next.delete(projectId);
+    else next.add(projectId);
+    setSidebarProjectViewPrefs({ collapsedProjectIds: [...next] });
+  }, [collapsedProjectIds, setSidebarProjectViewPrefs]);
   const handleToggleFolderCollapsed = useCallback((folderId: string) => {
-    setCollapsedFolderIds(prev => {
-      const next = new Set(prev);
-      if (next.has(folderId)) next.delete(folderId);
-      else next.add(folderId);
-      persistSidebarProjectView(collapsedProjectIds, next, showAllProjectIds);
-      return next;
-    });
-  }, [collapsedProjectIds, persistSidebarProjectView, showAllProjectIds]);
+    const next = new Set(collapsedFolderIds);
+    if (next.has(folderId)) next.delete(folderId);
+    else next.add(folderId);
+    setSidebarProjectViewPrefs({ collapsedFolderIds: [...next] });
+  }, [collapsedFolderIds, setSidebarProjectViewPrefs]);
   const handleShowAllProject = useCallback((projectId: string) => {
-    setShowAllProjectIds(prev => {
-      const next = new Set(prev);
-      next.add(projectId);
-      persistSidebarProjectView(collapsedProjectIds, collapsedFolderIds, next);
-      return next;
-    });
-  }, [collapsedFolderIds, collapsedProjectIds, persistSidebarProjectView]);
+    const next = new Set(showAllProjectIds);
+    next.add(projectId);
+    setSidebarProjectViewPrefs({ showAllProjectIds: [...next] });
+  }, [setSidebarProjectViewPrefs, showAllProjectIds]);
   const handleProjectNameChange = useCallback((value: string) => {
     setProjectNameDialog(dialog => dialog ? { ...dialog, value } : dialog);
   }, []);

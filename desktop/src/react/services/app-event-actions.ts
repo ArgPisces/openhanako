@@ -259,6 +259,9 @@ export function handleAppEvent(type: string, data: any = {}, options: AppEventOp
     case 'paper-texture-changed':
       window.setPaperTexture(data.enabled);
       break;
+    case 'sidebar-ui-changed':
+      useStore.getState().applySidebarUiPrefs(data);
+      break;
     case 'leaves-overlay-changed':
       window.dispatchEvent(new CustomEvent('hana-settings', {
         detail: { type: 'leaves-overlay-changed', enabled: data.enabled },
