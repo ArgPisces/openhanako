@@ -4318,6 +4318,73 @@ Continue the restored transcript.
     );
   });
 
+  it("emits a synthetic turn_end before releasing an aborted streaming session", async () => {
+    const sessionFile = path.join(tempDir, "aborted-turn-end.jsonl");
+    let coordinator: any;
+    const events: any[] = [];
+    const emitEvent = vi.fn((event: any, sp: any) => {
+      events.push({
+        type: event.type,
+        aborted: event.aborted,
+        isStreaming: event.isStreaming,
+        sp,
+        sessionAlive: coordinator?.getSessionByPath(sessionFile) != null,
+      });
+    });
+    const unsubscribe = vi.fn();
+    const stuckSession = {
+      isStreaming: true,
+      sessionManager: { getSessionFile: () => sessionFile },
+      abort: vi.fn(),
+      dispose: vi.fn(),
+      extensionRunner: null,
+    };
+
+    coordinator = new SessionCoordinator({
+      agentsDir: tempDir,
+      getAgent: () => ({
+        id: "hana",
+        agentDir: tempDir,
+        sessionDir: tempDir,
+        _memoryTicker: { notifySessionEnd: vi.fn(() => Promise.resolve()) },
+      }),
+      getActiveAgentId: () => "hana",
+      getModels: () => ({ authStorage: {}, modelRegistry: {}, resolveThinkingLevel: () => "medium" }),
+      getResourceLoader: () => ({ getSystemPrompt: () => "prompt" }),
+      getSkills: () => null,
+      buildTools: () => ({ tools: [], customTools: [] }),
+      emitEvent,
+      getHomeCwd: () => tempDir,
+      agentIdFromSessionPath: () => "hana",
+      switchAgentOnly: async () => {},
+      getConfig: () => ({}),
+      getPrefs: () => ({ getThinkingLevel: () => "medium" }),
+      getAgents: () => new Map(),
+      getActivityStore: () => null,
+      getAgentById: () => null,
+      listAgents: () => [],
+    });
+    coordinator.sessions.set(sessionFile, {
+      session: stuckSession,
+      agentId: "hana",
+      lastTouchedAt: Date.now(),
+      unsub: unsubscribe,
+    });
+
+    await coordinator.abortSession(sessionFile);
+
+    const turnEndIndex = events.findIndex(
+      (e) => e.type === "turn_end" && e.aborted === true && e.sp === sessionFile,
+    );
+    const statusIndex = events.findIndex(
+      (e) => e.type === "session_status" && e.isStreaming === false,
+    );
+    expect(turnEndIndex).toBeGreaterThanOrEqual(0);
+    expect(statusIndex).toBeGreaterThanOrEqual(0);
+    expect(turnEndIndex).toBeLessThan(statusIndex);
+    expect(events[turnEndIndex].sessionAlive).toBe(true);
+  });
+
   it("aborts session-owned sidecars when the user cancels a streaming session", async () => {
     const sessionFile = path.join(tempDir, "cancel-sidecars.jsonl");
     const taskRegistry = { abortByParentSession: vi.fn() };

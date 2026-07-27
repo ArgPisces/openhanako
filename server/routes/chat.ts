@@ -1618,44 +1618,53 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
       }
     } else if (event.type === "turn_end") {
       if (!ss) return;
-      const turnWasAborted = ss.isAborted === true;
+      // 合成的中止事件带 event.aborted：中止源在 WS abort 之外时（断线宽限中止、
+      // 关机 abort_all）ss.isAborted 不会被置位，只能靠事件本身识别。
+      const turnWasAborted = ss.isAborted === true || event.aborted === true;
       const turnStreamId = ss.streamId || null;
       flushTerminalParsers();
 
       // 空回复检测：本轮没有文本输出也没有工具调用，提示用户检查配置
-      // 被 abort 的 turn 不弹此提示（用户主动停止 / WS 断开 / 连接超时）
-      if (!ss.hasOutput && !ss.hasToolCall && !ss.hasThinking && !ss.hasError && !ss.isAborted) {
+      // 被 abort 的 turn 不弹此提示（用户主动停止 / WS 断开 / 连接超时）；
+      // 合成中止事件同样豁免
+      if (!ss.hasOutput && !ss.hasToolCall && !ss.hasThinking && !ss.hasError && !turnWasAborted) {
         ss.hasError = true;
         broadcast({ type: "error", message: t("error.modelNoResponse"), sessionPath });
       }
       const turnWasSuccessful = !turnWasAborted && !ss.hasError && (ss.hasOutput || ss.hasToolCall || ss.hasThinking);
 
-      // ── token usage 事件（供插件监听做用量统计）──
-      try {
-        const sess = engine.getSessionByPath(sessionPath);
-        if (sess) {
-          const usage = getLastAssistantUsage(sess.entries ?? []);
-          if (usage) {
-            const model = sess.model;
-            logLlmUsage({
-              source: "chat",
-              api: model?.api ?? null,
-              modelId: model?.id ?? null,
-              provider: model?.provider ?? null,
-              usage,
-              costRates: model?.cost,
-            } as any);
-            hub.eventBus.emit({
-              type: "token_usage",
-              usage,
-              modelId: model?.id ?? null,
-              modelProvider: model?.provider ?? null,
-            }, sessionPath);
-          }
-        }
-      } catch (_) { /* 统计失败不阻塞主流程 */ }
-
       const persistedEntries = persistedTurnEntryIds(engine, sessionPath);
+
+      // ── token usage 事件（供插件监听做用量统计）──
+      // 中止的 turn 没落盘任何 assistant 时跳过记账：branch 里最后一条 assistant
+      // 属于上一轮，它的 usage 在上一轮 turn_end 已经记过一次，重复记会双计。
+      const skipUsageAccounting = event.aborted === true && !persistedEntries.assistantEntryId;
+      if (!skipUsageAccounting) {
+        try {
+          const sess = engine.getSessionByPath(sessionPath);
+          if (sess) {
+            const usage = getLastAssistantUsage(sess.entries ?? []);
+            if (usage) {
+              const model = sess.model;
+              logLlmUsage({
+                source: "chat",
+                api: model?.api ?? null,
+                modelId: model?.id ?? null,
+                provider: model?.provider ?? null,
+                usage,
+                costRates: model?.cost,
+              } as any);
+              hub.eventBus.emit({
+                type: "token_usage",
+                usage,
+                modelId: model?.id ?? null,
+                modelProvider: model?.provider ?? null,
+              }, sessionPath);
+            }
+          }
+        } catch (_) { /* 统计失败不阻塞主流程 */ }
+      }
+
       persistConsumedTurnInputs(sessionPath, ss, persistedEntries);
       emitStreamEvent(sessionPath, ss, {
         type: "turn_end",

@@ -5153,6 +5153,9 @@ export class SessionCoordinator {
     const reason = this._normalizeAbortReason(options, "abort");
     const pending = this._getRuntimeValueForPath(this._prePromptAbortControllers, sessionPath);
     if (pending) {
+      // preflight 窗口的中止不补发 turn_end：promptSession 尚未运行，本轮
+      // turn input 还没落入 branch，合成 turn_end 会把上一轮的 entry id
+      // 错绑到本轮的乐观消息上。
       pending.abort();
       this._deleteRuntimeValueForPath(this._prePromptAbortControllers, sessionPath);
       this._cleanupAbortedSessionSidecars(sessionPath, reason);
@@ -5649,6 +5652,12 @@ export class SessionCoordinator {
     const session = entry.session;
     const spShort = sessionPath ? path.basename(sessionPath) : "(anon)";
     entry.lastTouchedAt = Date.now();
+
+    // 中止路径补发 turn_end：下面的 unsub 会抢在 SDK 自己的 turn_end 之前断流，
+    // 前端就永远等不到 entry id 回绑（重试/fork/重写按钮的唯一数据源）。
+    // 必须在 _sessions 删除之前发出——chat 路由的 turn_end handler 要通过
+    // getSessionByPath 读 in-memory branch 才能算出 entry id（事件总线同步分发）。
+    this._d.emitEvent?.({ type: "turn_end", aborted: true, reason }, sessionPath);
 
     this._clearRuntimePressureTimer(sessionPath);
     this._deleteRuntimeValueForPath(this._hibernatedSessionMeta, sessionPath);
