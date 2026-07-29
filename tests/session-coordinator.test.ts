@@ -6060,7 +6060,6 @@ describe("SessionCoordinator session reminders", () => {
   it("returns false for reminder state operations on an unknown session path", () => {
     const coordinator = makeCoordinator(makeAgent(), new EnvChangeLedger());
     expect(coordinator.consumeRenderedSessionReminderBlock("/missing.jsonl", {
-      observedAt: 1,
       throughSeq: 0,
       compactionRevision: 0,
     })).toBe(false);

@@ -23,7 +23,6 @@ function freshSessionEntry(overrides: Record<string, unknown> = {}) {
 function render(
   entry: any,
   ledger: EnvChangeLedger,
-  now = Date.now(),
   isZh = true,
   recipientAgentId = "agent-a",
   unavailableToolNames: string[] = [],
@@ -31,7 +30,6 @@ function render(
   return collectReminderBlock({
     sessionEntry: entry,
     ledger,
-    now,
     isZh,
     recipientAgentId,
     unavailableToolNames,
@@ -84,7 +82,6 @@ describe("collectReminderBlock", () => {
     const result = render(
       freshSessionEntry(),
       ledger,
-      Date.now(),
       true,
       "agent-a",
       ["mcp_zeta", "mcp_alpha", "mcp_alpha"],
@@ -101,9 +98,7 @@ describe("collectReminderBlock", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["likes tea", "lives in Kyoto"] },
     });
-    const now = new Date("2026-07-05T14:05:00Z").getTime();
-
-    const result = render(freshSessionEntry(), ledger, now, false);
+    const result = render(freshSessionEntry(), ledger, false);
     expect(REMINDER_BLOCK_PREFIX).toBe("[hana_reminder");
     expect(REMINDER_BLOCK_END).toBe("[/hana_reminder]");
     expect(result?.block).toBe(
@@ -115,9 +110,8 @@ describe("collectReminderBlock", () => {
 
   it("does not render a time line even for a brand-new session entry", () => {
     const emptyLedger = new EnvChangeLedger();
-    const now = new Date("2026-07-05T14:05:00Z").getTime();
 
-    expect(render(freshSessionEntry(), emptyLedger, now)).toBeNull();
+    expect(render(freshSessionEntry(), emptyLedger)).toBeNull();
 
     const ledger = new EnvChangeLedger();
     ledger.append({
@@ -125,7 +119,7 @@ describe("collectReminderBlock", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["likes tea"] },
     });
-    const result = render(freshSessionEntry(), ledger, now);
+    const result = render(freshSessionEntry(), ledger);
 
     expect(result?.block).toContain("likes tea");
     expect(result?.block).not.toContain("当前时间");
@@ -139,9 +133,7 @@ describe("collectReminderBlock", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["likes tea"] },
     });
-    const now = new Date("2026-07-05T14:05:00Z").getTime();
-
-    const result = render(freshSessionEntry(), ledger, now, false);
+    const result = render(freshSessionEntry(), ledger, false);
 
     expect(result?.block.split("\n")[0]).toBe("[hana_reminder]");
     expect(result?.block).not.toContain("2026-07-05");
@@ -156,8 +148,8 @@ describe("collectReminderBlock", () => {
       payload: { addedLines: ["agent-a private fact"] },
     });
 
-    const agentA = render(freshSessionEntry(), ledger, Date.now(), true, "agent-a");
-    const agentB = render(freshSessionEntry(), ledger, Date.now(), true, "agent-b");
+    const agentA = render(freshSessionEntry(), ledger, true, "agent-a");
+    const agentB = render(freshSessionEntry(), ledger, true, "agent-b");
 
     expect(agentA?.block).toContain("agent-a private fact");
     expect(agentB).toBeNull();
@@ -171,7 +163,7 @@ describe("collectReminderBlock", () => {
       payload: { addedLines: ["agent-a only"] },
     });
 
-    expect(render(freshSessionEntry(), ledger, Date.now(), true, "agent-b")).toBeNull();
+    expect(render(freshSessionEntry(), ledger, true, "agent-b")).toBeNull();
   });
 
   it("replays environment changes from the session baseline after compaction", () => {
@@ -210,7 +202,7 @@ describe("collectReminderBlock", () => {
       reminderCompactionRevision: 1,
     });
 
-    const result = render(entry, ledger, Date.now(), true, "agent-a");
+    const result = render(entry, ledger, true, "agent-a");
 
     expect(result?.block).toContain("上下文已压缩");
     expect(result?.block).toContain("agent-a replay");
@@ -225,7 +217,7 @@ describe("collectReminderBlock", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["x".repeat(500)] },
     });
-    const result = render(freshSessionEntry(), ledger, new Date("2026-07-05T14:05:00Z").getTime());
+    const result = render(freshSessionEntry(), ledger);
     const header = `${REMINDER_BLOCK_PREFIX}]\n`;
     const body = result!.block.slice(header.length, -(`\n${REMINDER_BLOCK_END}`.length));
 
@@ -233,6 +225,13 @@ describe("collectReminderBlock", () => {
     expect(body.length).toBe(300);
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result!.receipt)).toBe(true);
+    expect(Object.keys(result!.receipt).sort()).toEqual([
+      "baseUnavailableRevision",
+      "compactionRevision",
+      "consumeBlockState",
+      "throughSeq",
+      "unavailableToolNames",
+    ]);
   });
 });
 
@@ -298,9 +297,8 @@ describe("reminder receipt consumption", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["rendered"] },
     });
-    const now = Date.now();
     const entry = freshSessionEntry();
-    const rendered = render(entry, ledger, now)!;
+    const rendered = render(entry, ledger)!;
 
     ledger.append({
       type: "memory_facts",
@@ -309,7 +307,7 @@ describe("reminder receipt consumption", () => {
     });
     applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
 
-    const next = render(entry, ledger, now + 1);
+    const next = render(entry, ledger);
     expect(next?.block).not.toContain("rendered");
     expect(next?.block).toContain("later");
   });
@@ -326,10 +324,9 @@ describe("reminder receipt consumption", () => {
       scope: { kind: "agent", agentId: "agent-b" },
       payload: { addedLines: ["b-hidden"] },
     });
-    const now = Date.now();
     const entry = freshSessionEntry();
 
-    const first = render(entry, ledger, now, true, "agent-a")!;
+    const first = render(entry, ledger, true, "agent-a")!;
     expect(first.block).toContain("a-first");
     expect(first.block).not.toContain("b-hidden");
     expect(first.receipt.throughSeq).toBe(2);
@@ -346,29 +343,28 @@ describe("reminder receipt consumption", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["a-later"] },
     });
-    const second = render(entry, ledger, now + 1, true, "agent-a")!;
+    const second = render(entry, ledger, true, "agent-a")!;
     expect(second.block).toContain("a-later");
     expect(second.block).not.toContain("b-later-hidden");
     expect(second.block).not.toContain("a-first");
     expect(second.receipt.throughSeq).toBe(4);
     applyReminderConsumption({ sessionEntry: entry, receipt: second.receipt });
     expect(entry.reminderEnvCursor).toBe(4);
-    expect(render(entry, ledger, now + 2, true, "agent-a")).toBeNull();
+    expect(render(entry, ledger, true, "agent-a")).toBeNull();
   });
 
   it("does not clear a compaction revision created after render", () => {
     const ledger = new EnvChangeLedger();
-    const now = Date.now();
     const entry = freshSessionEntry({
       reminderCompactionRevision: 1,
     });
-    const rendered = render(entry, ledger, now)!;
+    const rendered = render(entry, ledger)!;
 
     entry.reminderCompactionRevision = 2;
     applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
 
     expect(entry.reminderConsumedCompactionRevision).toBe(1);
-    expect(render(entry, ledger, now + 1)?.block).toContain("上下文已压缩");
+    expect(render(entry, ledger)?.block).toContain("上下文已压缩");
   });
 
   it("advances all represented state monotonically", () => {
@@ -378,12 +374,11 @@ describe("reminder receipt consumption", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["demo"] },
     });
-    const now = Date.now();
     const entry = freshSessionEntry({
       reminderCompactionRevision: 2,
       reminderConsumedCompactionRevision: 1,
     });
-    const rendered = render(entry, ledger, now)!;
+    const rendered = render(entry, ledger)!;
     applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
 
     expect(entry).toMatchObject({
@@ -391,29 +386,27 @@ describe("reminder receipt consumption", () => {
       reminderCompactionRevision: 2,
       reminderConsumedCompactionRevision: 2,
     });
-    expect(render(entry, ledger, now + 1)).toBeNull();
+    expect(render(entry, ledger)).toBeNull();
   });
 
   it("repeats a failed outage, accepts it once, and does not repeat the same outage", () => {
     const ledger = new EnvChangeLedger();
-    const now = Date.now();
     const entry = freshSessionEntry();
 
-    const failed = render(entry, ledger, now, true, "agent-a", ["mcp_calendar"]);
+    const failed = render(entry, ledger, true, "agent-a", ["mcp_calendar"]);
     expect(failed?.block).toContain("mcp_calendar");
-    expect(render(entry, ledger, now + 1, true, "agent-a", ["mcp_calendar"])?.block)
+    expect(render(entry, ledger, true, "agent-a", ["mcp_calendar"])?.block)
       .toContain("mcp_calendar");
 
     applyReminderConsumption({ sessionEntry: entry, receipt: failed!.receipt });
     expect(entry.reminderAcceptedUnavailableToolNames).toEqual(["mcp_calendar"]);
     expect(entry.reminderUnavailableRevision).toBe(1);
-    expect(render(entry, ledger, now + 2, true, "agent-a", ["mcp_calendar"]))
+    expect(render(entry, ledger, true, "agent-a", ["mcp_calendar"]))
       .toBeNull();
   });
 
   it("silently accepts recovery without consuming time, memory, or compaction state", () => {
     const ledger = new EnvChangeLedger();
-    const now = Date.now();
     const entry = freshSessionEntry({
       reminderEnvCursor: 7,
       reminderEnvStartSeq: 7,
@@ -423,7 +416,7 @@ describe("reminder receipt consumption", () => {
       reminderUnavailableRevision: 1,
     });
 
-    const recovered = render(entry, ledger, now + 1, true, "agent-a", []);
+    const recovered = render(entry, ledger, true, "agent-a", []);
     expect(recovered?.block).toBe("");
     expect(recovered?.receipt.consumeBlockState).toBe(false);
     applyReminderConsumption({ sessionEntry: entry, receipt: recovered!.receipt });
@@ -434,19 +427,18 @@ describe("reminder receipt consumption", () => {
       reminderAcceptedUnavailableToolNames: [],
       reminderUnavailableRevision: 2,
     });
-    expect(render(entry, ledger, now + 2, true, "agent-a", ["mcp_calendar"])?.block)
+    expect(render(entry, ledger, true, "agent-a", ["mcp_calendar"])?.block)
       .toContain("mcp_calendar");
   });
 
   it("removes recovered names and accepts only newly rendered outage names", () => {
     const ledger = new EnvChangeLedger();
-    const now = Date.now();
     const entry = freshSessionEntry({
       reminderAcceptedUnavailableToolNames: ["tool_a", "tool_b"],
       reminderUnavailableRevision: 4,
     });
 
-    const rendered = render(entry, ledger, now, true, "agent-a", ["tool_b", "tool_c"]);
+    const rendered = render(entry, ledger, true, "agent-a", ["tool_b", "tool_c"]);
     expect(rendered?.block).toContain("tool_c");
     expect(rendered?.block).not.toContain("tool_a");
     expect(rendered?.receipt.unavailableToolNames).toEqual(["tool_b", "tool_c"]);
@@ -459,7 +451,6 @@ describe("reminder receipt consumption", () => {
       scope: { kind: "agent", agentId: "agent-a" },
       payload: { addedLines: ["context".repeat(80)] },
     });
-    const now = Date.now();
     const entry = freshSessionEntry();
     const unavailable = Array.from(
       { length: 24 },
@@ -469,7 +460,7 @@ describe("reminder receipt consumption", () => {
 
     for (let turn = 0; turn < 10 && seen.size < unavailable.length; turn += 1) {
       const before = new Set(entry.reminderAcceptedUnavailableToolNames);
-      const rendered = render(entry, ledger, now + turn, true, "agent-a", unavailable)!;
+      const rendered = render(entry, ledger, true, "agent-a", unavailable)!;
       const body = rendered.block.slice(
         rendered.block.indexOf("\n") + 1,
         -(`\n${REMINDER_BLOCK_END}`.length),
@@ -488,15 +479,14 @@ describe("reminder receipt consumption", () => {
     }
 
     expect([...seen].sort()).toEqual([...unavailable].sort());
-    expect(render(entry, ledger, now + 20, true, "agent-a", unavailable)).toBeNull();
+    expect(render(entry, ledger, true, "agent-a", unavailable)).toBeNull();
   });
 
   it("does not let an older accepted receipt roll availability state backwards", () => {
     const ledger = new EnvChangeLedger();
-    const now = Date.now();
     const entry = freshSessionEntry();
-    const staleOutage = render(entry, ledger, now, true, "agent-a", ["tool_old"])!;
-    const newerOutage = render(entry, ledger, now + 1, true, "agent-a", ["tool_new"])!;
+    const staleOutage = render(entry, ledger, true, "agent-a", ["tool_old"])!;
+    const newerOutage = render(entry, ledger, true, "agent-a", ["tool_new"])!;
 
     applyReminderConsumption({ sessionEntry: entry, receipt: newerOutage.receipt });
     applyReminderConsumption({ sessionEntry: entry, receipt: staleOutage.receipt });

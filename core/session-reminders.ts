@@ -88,7 +88,6 @@ export interface ReminderSessionEntry {
 }
 
 export interface SessionReminderReceipt {
-  readonly observedAt: number;
   readonly throughSeq: number;
   readonly compactionRevision: number;
   readonly unavailableToolNames: readonly string[];
@@ -160,14 +159,12 @@ export function collectReminderBlock({
   sessionEntry,
   ledger,
   recipientAgentId,
-  now,
   isZh,
   unavailableToolNames = [],
 }: {
   sessionEntry: ReminderSessionEntry;
   ledger: EnvChangeLedger;
   recipientAgentId: string;
-  now: number;
   isZh: boolean;
   unavailableToolNames?: string[];
 }): RenderedSessionReminderBlock | null {
@@ -236,7 +233,6 @@ export function collectReminderBlock({
   }
 
   const receipt = Object.freeze({
-    observedAt: now,
     throughSeq,
     compactionRevision,
     unavailableToolNames: Object.freeze([...nextAcceptedUnavailableToolNames]),
@@ -262,7 +258,6 @@ export function applyReminderConsumption({
 }): void {
   if (
     !receipt
-    || !Number.isFinite(receipt.observedAt)
     || !Number.isFinite(receipt.throughSeq)
     || !Number.isFinite(receipt.compactionRevision)
     || !Array.isArray(receipt.unavailableToolNames)

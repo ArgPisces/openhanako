@@ -6016,7 +6016,6 @@ export class SessionCoordinator {
       sessionEntry: entry,
       ledger: this._envChangeLedger,
       recipientAgentId,
-      now: Date.now(),
       isZh: getLocale().startsWith("zh"),
       unavailableToolNames: this._computeReminderUnavailableToolNamesForEntry(entry, sessionPath),
     });
