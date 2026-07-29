@@ -2641,6 +2641,7 @@
     "k3": {
       "name": "Kimi K3",
       "context": 1048576,
+      "image": true,
       "reasoning": true,
       "thinkingLevels": ["medium", "high", "max"],
       "thinkingLevelMap": {
@@ -2651,6 +2652,21 @@
         "xhigh": "max"
       },
       "defaultThinkingLevel": "max"
+    },
+    "k3-256k": {
+      "name": "Kimi K3 256K",
+      "context": 262144,
+      "image": true,
+      "reasoning": true,
+      "thinkingLevels": ["medium", "high", "max"],
+      "thinkingLevelMap": {
+        "off": null,
+        "low": "low",
+        "medium": "low",
+        "high": "high",
+        "xhigh": "max"
+      },
+      "defaultThinkingLevel": "high"
     },
     "kimi-for-coding": {
       "name": "Kimi for Coding",

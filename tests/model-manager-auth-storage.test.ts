@@ -366,12 +366,14 @@ describe("ModelManager AuthStorage ownership", () => {
     expect(projected.providers["kimi-coding"].models).toHaveLength(1);
     expect(projected.providers["kimi-coding"].models[0]).toMatchObject({
       id: "k3",
+      input: ["text", "image"],
       reasoning: true,
     });
     expect(manager.availableModels.find((item) => (
       item.provider === "kimi-coding" && item.id === "k3"
     ))).toMatchObject({
       id: "k3",
+      input: ["text", "image"],
       reasoning: true,
       compat: {
         thinkingFormat: "kimi",
@@ -382,6 +384,7 @@ describe("ModelManager AuthStorage ownership", () => {
         },
       },
     });
+    expect(projected.providers["kimi-coding"].models[0].compat).not.toHaveProperty("hanaVideoInput");
     expect(manager.availableModels.some((item) => (
       item.provider === "kimi-coding" && item.id === "kimi-for-coding"
     ))).toBe(false);

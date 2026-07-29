@@ -112,6 +112,7 @@ const KNOWN_MODELS = {
     k3: {
       name: "Kimi K3",
       context: 1048576,
+      image: true,
       reasoning: true,
       thinkingLevels: ["medium", "high", "max"],
       thinkingLevelMap: {
@@ -122,6 +123,21 @@ const KNOWN_MODELS = {
         xhigh: "max",
       },
       defaultThinkingLevel: "max",
+    },
+    "k3-256k": {
+      name: "Kimi K3 256K",
+      context: 262144,
+      image: true,
+      reasoning: true,
+      thinkingLevels: ["medium", "high", "max"],
+      thinkingLevelMap: {
+        off: null,
+        low: "low",
+        medium: "low",
+        high: "high",
+        xhigh: "max",
+      },
+      defaultThinkingLevel: "high",
     },
     "kimi-for-coding": {
       name: "Kimi for Coding",
@@ -803,7 +819,7 @@ describe("syncModels", () => {
     });
   });
 
-  it("projects official K3 metadata without inventing image or output limits", async () => {
+  it("projects official K3 image metadata without inventing video or output limits", async () => {
     const syncModels = await loadSync();
 
     const providers = {
@@ -811,19 +827,19 @@ describe("syncModels", () => {
         base_url: "https://api.kimi.com/coding/v1",
         api: "openai-completions",
         api_key: "sk-test",
-        models: ["k3"],
+        models: ["k3", "k3-256k"],
       },
     };
 
     syncModels(providers, { modelsJsonPath });
 
     const result = JSON.parse(fs.readFileSync(modelsJsonPath, "utf-8"));
-    const model = result.providers["kimi-coding"].models[0];
-    expect(model).toMatchObject({
+    const models = result.providers["kimi-coding"].models;
+    expect(models[0]).toMatchObject({
       id: "k3",
       name: "Kimi K3",
       contextWindow: 1048576,
-      input: ["text"],
+      input: ["text", "image"],
       reasoning: true,
       defaultThinkingLevel: "max",
       thinkingLevelMap: {
@@ -835,8 +851,27 @@ describe("syncModels", () => {
       },
       headers: { "User-Agent": "KimiCLI/1.5" },
     });
-    expect(model).not.toHaveProperty("maxTokens");
-    expect(model).not.toHaveProperty("visionCapabilities");
+    expect(models[1]).toMatchObject({
+      id: "k3-256k",
+      name: "Kimi K3 256K",
+      contextWindow: 262144,
+      input: ["text", "image"],
+      reasoning: true,
+      defaultThinkingLevel: "high",
+      thinkingLevelMap: {
+        off: null,
+        low: "low",
+        medium: "low",
+        high: "high",
+        xhigh: "max",
+      },
+      headers: { "User-Agent": "KimiCLI/1.5" },
+    });
+    for (const model of models) {
+      expect(model).not.toHaveProperty("maxTokens");
+      expect(model).not.toHaveProperty("visionCapabilities");
+      expect(model.compat).not.toHaveProperty("hanaVideoInput");
+    }
   });
 
   it("treats future official Kimi Coding ids as reasoning-capable without borrowing model metadata", async () => {

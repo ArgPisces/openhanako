@@ -354,9 +354,11 @@ describe("known-models dictionary", () => {
 
   it("declares official Kimi K3 metadata while keeping the stable default model", () => {
     const k3 = lookupKnownProvider("kimi-coding", "k3");
+    const k3_256k = lookupKnownProvider("kimi-coding", "k3-256k");
     expect(k3).toMatchObject({
       name: "Kimi K3",
       context: 1048576,
+      image: true,
       reasoning: true,
       thinkingLevels: ["medium", "high", "max"],
       thinkingLevelMap: {
@@ -368,8 +370,25 @@ describe("known-models dictionary", () => {
       },
       defaultThinkingLevel: "max",
     });
-    expect(k3).not.toHaveProperty("image");
+    expect(k3_256k).toMatchObject({
+      name: "Kimi K3 256K",
+      context: 262144,
+      image: true,
+      reasoning: true,
+      thinkingLevels: ["medium", "high", "max"],
+      thinkingLevelMap: {
+        off: null,
+        low: "low",
+        medium: "low",
+        high: "high",
+        xhigh: "max",
+      },
+      defaultThinkingLevel: "high",
+    });
+    expect(k3).not.toHaveProperty("video");
     expect(k3).not.toHaveProperty("maxOutput");
+    expect(k3_256k).not.toHaveProperty("video");
+    expect(k3_256k).not.toHaveProperty("maxOutput");
     expect(defaultModels["kimi-coding"]).toEqual(["kimi-for-coding"]);
   });
 
