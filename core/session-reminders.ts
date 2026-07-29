@@ -16,7 +16,6 @@ import type {
 
 export const REMINDER_BLOCK_PREFIX = "[hana_reminder";
 export const REMINDER_BLOCK_END = "[/hana_reminder]";
-export const TIME_STALENESS_MS = 3 * 60 * 60 * 1000;
 
 // 当前块头是静态的；`at <时间戳>` 是历史 JSONL 里的旧块头，剥离端必须继续认
 const REMINDER_HEADER_LINE_RE = /^\[hana_reminder(?: at \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\]$/;
@@ -82,7 +81,6 @@ export function projectSessionMessageForDisplay(message: any): any {
 export interface ReminderSessionEntry {
   reminderEnvCursor: number;
   reminderEnvStartSeq: number;
-  lastTimeObservedAt: number | null;
   reminderCompactionRevision: number;
   reminderConsumedCompactionRevision: number;
   reminderAcceptedUnavailableToolNames: string[];
@@ -96,8 +94,6 @@ export interface SessionReminderReceipt {
   readonly unavailableToolNames: readonly string[];
   readonly baseUnavailableRevision: number;
   readonly consumeBlockState: boolean;
-  /** 本次渲染是否真的投递了当前时间行；只有它为真才算模型观测到了时间 */
-  readonly timeLineRendered: boolean;
 }
 
 export interface RenderedSessionReminderBlock {
@@ -130,11 +126,6 @@ function formatCompactionLine(isZh: boolean): string {
     : "Context has been compacted; earlier turns were summarized";
 }
 
-function formatTimeLine(now: number, timeZone: string | undefined, isZh: boolean): string {
-  const stamp = formatTimestamp(now, timeZone);
-  return isZh ? `当前时间：${stamp}` : `Current time: ${stamp}`;
-}
-
 function normalizeUnavailableToolNames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value
@@ -165,28 +156,12 @@ function selectUnavailableToolBatch(names: readonly string[], isZh: boolean): st
   return batch;
 }
 
-function formatTimestamp(now: number, timeZone: string | undefined): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    ...(timeZone ? { timeZone } : {}),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(now));
-  const values: Record<string, string> = {};
-  for (const part of parts) values[part.type] = part.value;
-  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}`;
-}
-
 export function collectReminderBlock({
   sessionEntry,
   ledger,
   recipientAgentId,
   now,
   isZh,
-  timeZone,
   unavailableToolNames = [],
 }: {
   sessionEntry: ReminderSessionEntry;
@@ -194,7 +169,6 @@ export function collectReminderBlock({
   recipientAgentId: string;
   now: number;
   isZh: boolean;
-  timeZone?: string;
   unavailableToolNames?: string[];
 }): RenderedSessionReminderBlock | null {
   const normalizedRecipientAgentId = typeof recipientAgentId === "string" ? recipientAgentId.trim() : "";
@@ -245,9 +219,6 @@ export function collectReminderBlock({
     lines.push(`- ${formatMemoryFactsLine(entry.payload as Readonly<MemoryFactsPayload>, isZh)}`);
   }
 
-  const lastTimeObservedAt = sessionEntry.lastTimeObservedAt;
-  const timeLineRendered = lastTimeObservedAt == null || (now - lastTimeObservedAt) > TIME_STALENESS_MS;
-  if (timeLineRendered) lines.push(`- ${formatTimeLine(now, timeZone, isZh)}`);
   if (lines.length === 0 && !availabilityTransition) return null;
 
   let body = lines.join("\n");
@@ -271,10 +242,9 @@ export function collectReminderBlock({
     unavailableToolNames: Object.freeze([...nextAcceptedUnavailableToolNames]),
     baseUnavailableRevision: unavailableRevision,
     consumeBlockState: lines.length > 0,
-    timeLineRendered,
   });
   return Object.freeze({
-    // 块头不带时间戳：时间只经显式时间行投递，由 staleness 策略单独把关
+    // 块头不带时间戳：reminder 不投递时间，模型需要当前时间时调用 current_status(time)
     block: lines.length > 0
       ? `${REMINDER_BLOCK_PREFIX}]\n${body}\n${REMINDER_BLOCK_END}`
       : "",
@@ -298,7 +268,6 @@ export function applyReminderConsumption({
     || !Array.isArray(receipt.unavailableToolNames)
     || !Number.isFinite(receipt.baseUnavailableRevision)
     || typeof receipt.consumeBlockState !== "boolean"
-    || typeof receipt.timeLineRendered !== "boolean"
   ) {
     throw new TypeError("applyReminderConsumption requires a valid reminder receipt");
   }
@@ -315,11 +284,6 @@ export function applyReminderConsumption({
     );
   }
 
-  // 时间观测只由"这次确实渲染了时间行"推进，消费其它提醒不再顺带刷新
-  if (receipt.timeLineRendered) {
-    noteTimeObservedForSession(sessionEntry, receipt.observedAt);
-  }
-
   const currentUnavailableRevision = nonNegativeInteger(
     sessionEntry.reminderUnavailableRevision,
   );
@@ -333,13 +297,4 @@ export function applyReminderConsumption({
       sessionEntry.reminderUnavailableRevision = currentUnavailableRevision + 1;
     }
   }
-}
-
-/** Pure session-state helper used by reminder consumption and current_status(time). */
-export function noteTimeObservedForSession(sessionEntry: ReminderSessionEntry, observedAt: number): void {
-  if (!Number.isFinite(observedAt)) {
-    throw new TypeError("noteTimeObservedForSession requires a finite observedAt");
-  }
-  const current = sessionEntry.lastTimeObservedAt;
-  sessionEntry.lastTimeObservedAt = current == null ? observedAt : Math.max(current, observedAt);
 }

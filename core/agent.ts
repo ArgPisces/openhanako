@@ -579,9 +579,6 @@ export class Agent {
       getSessionFolderScope: (sessionPath) => this._cb?.getEngine?.()?.getSessionFolderScope?.(sessionPath) || null,
       getBridgeContext: (sessionPath) => this._cb?.getEngine?.()?.getBridgeContextForSessionPath?.(sessionPath, { agentId: this.id }) || null,
       listOpenSubagentThreads: (sessionPath) => this._cb?.getSubagentThreadStore?.()?.listOpenDirectBySession?.(sessionPath) || [],
-      onTimeObserved: (sessionPath, observedAt) => (
-        this._cb?.getEngine?.()?.noteSessionTimeObserved?.(sessionPath, observedAt)
-      ),
     });
     // 10. 设置修改工具
     this._updateSettingsTool = createUpdateSettingsTool({
@@ -1264,7 +1261,7 @@ export class Agent {
     // 顺序：平台 → 环境 → 用户档案 → ishiki（依赖 userName）→ 样貌
     //      → 行为指南（任务/经验/工具/安全/网页/设置/技能/团队）
     //      ── cache 分界线 ──
-    //      记忆规则/置顶/记忆 → 当前时间
+    //      记忆规则/置顶/记忆 → 会话开始时间
     //
     // 用户档案和人格段放进静态前缀：userName 已统一走「显式覆盖 → 全局 preferences →
     // 语言兜底」解析，人格文件也改成惰性物化，这两段只在用户自己改档案或换人格时才变，
@@ -1529,7 +1526,10 @@ export class Agent {
       ...(tz ? { timeZone: tz } : {}),
     };
     const dateTime = new Intl.DateTimeFormat("en-US", fmtOpts as any).format(now);
-    parts.push(`\nSession start time: ${dateTime}`);
+    parts.push(`\nSession started at: ${dateTime}`);
+    parts.push(isZh
+      ? "这是会话开始时刻的快照，不会随对话推进更新。需要知道现在的时间时，用 current_status 工具查 time。"
+      : "This is a snapshot from when the session started and does not advance. When you need the current time, call the current_status tool with key \"time\".");
     parts.push(isZh
       ? "你的一天从 04:00 开始。04:00 之前的对话属于前一天。"
       : "Your day starts at 04:00. Conversations before 04:00 belong to the previous day.");

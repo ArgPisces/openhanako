@@ -29,8 +29,9 @@ export const SESSION_CAPABILITY_FINGERPRINT_VERSION = 1;
  * emits, zh + en — see core/agent.ts buildSystemPrompt):
  *  - Memory block: from the "## 记忆使用规则" / "## Memory Rules" heading
  *    (includes "# 置顶记忆" / "# Pinned Memories" and "# 记忆" / "# Memory"
- *    sections) up to the trailing legacy "Current date and time:" or current
- *    "Session start time:" clock line.
+ *    sections) up to the trailing clock line, whether it carries a legacy
+ *    "Current date and time:" / "Session start time:" label or the current
+ *    "Session started at:" one.
  *    memory.md is recompiled in the background and pinned.md is writable by
  *    the agent mid-conversation.
  *  - Appearance summary: "## 你的样子" / "## Your Appearance" up to the
@@ -54,16 +55,16 @@ export const SESSION_CAPABILITY_FINGERPRINT_VERSION = 1;
  * behavior sections. Current workspace instructions live in the frozen append
  * snapshot and are never hot-renewed by this system-prompt fingerprint.
  */
-const MEMORY_SEAM_PATTERN = /\n+(?:## (?:记忆使用规则|Memory Rules)\n[\s\S]*?\n+)?(?=(?:Current date and time|Session start time): )/g;
+const MEMORY_SEAM_PATTERN = /\n+(?:## (?:记忆使用规则|Memory Rules)\n[\s\S]*?\n+)?(?=(?:Current date and time|Session start time|Session started at): )/g;
 const APPEARANCE_SEAM_PATTERN = /\n+(?:## (?:你的样子|Your Appearance)\n[\s\S]*?\n+)?(?=## (?:工作台|Workspace|工作区说明|Workspace Instructions|文件与命令工具使用|Tool Use For Files And Commands)\n)/g;
-const CLOCK_LINE_PATTERN = /^(?:Current date and time|Session start time): .*$/gm;
+const CLOCK_LINE_PATTERN = /^(?:Current date and time|Session start time|Session started at): .*$/gm;
 
 export function normalizeSystemPromptForFingerprint(systemPrompt) {
   const text = typeof systemPrompt === "string" ? systemPrompt : String(systemPrompt ?? "");
   return text
     .replace(MEMORY_SEAM_PATTERN, "\n\n")
     .replace(APPEARANCE_SEAM_PATTERN, "\n\n")
-    .replace(CLOCK_LINE_PATTERN, "Session start time: <normalized>");
+    .replace(CLOCK_LINE_PATTERN, "Session started at: <normalized>");
 }
 
 /**

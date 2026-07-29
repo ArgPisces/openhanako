@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:3ee23e1fbc06c574c1af02607c140ceace97ab340eb98f8a5d3758c69a587b5b",
+  "payloadFingerprint": "sha256:284804a593abb4c12fef0f149116bc1e096dd128e70fcb5d19890547a245db6e",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Builtin plugins no longer register a skills/ directory; this only changes runtime skill path registration and leaves the installed manifest, install receipt, backup, and source-package directory layouts untouched.",
-    "payloadFingerprint": "sha256:3ee23e1fbc06c574c1af02607c140ceace97ab340eb98f8a5d3758c69a587b5b"
+    "compatibilityReason": "Removing the session time-observation field only shifts line numbers of existing persistence call sites in the session coordinator; no store schema, record shape, or on-disk layout changes.",
+    "payloadFingerprint": "sha256:284804a593abb4c12fef0f149116bc1e096dd128e70fcb5d19890547a245db6e"
   },
   "schemas": [
     {
@@ -3230,7 +3230,7 @@
         {
           "contract": "core/session-coordinator.ts Hana metadata extensions",
           "module": "core/session-coordinator.ts",
-          "sourceHash": "sha256:08cb27f9027f487fea22c006fb9d6f69d856a60607c55a41533d7e40bdb5dbec"
+          "sourceHash": "sha256:1008dec9298fd25986dbe08072dba3ae7f5ff978cc315d260a060c9359019fb6"
         },
         {
           "contract": "core/session-jsonl-file.ts repair contract",
@@ -3892,7 +3892,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2227,
+      "line": 2226,
       "reason": "Creates the user skill root.",
       "sourceFile": "core/engine.ts",
       "storeId": "skill-state"
@@ -3900,7 +3900,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 2409,
+      "line": 2408,
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-jsonl"
@@ -3908,7 +3908,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2463,
+      "line": 2462,
       "reason": "Creates the plugin development source root.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-development-state"
@@ -5372,7 +5372,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 2755,
+      "line": 2751,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5380,7 +5380,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2903,
+      "line": 2899,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5388,7 +5388,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 3180,
+      "line": 3176,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5396,7 +5396,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 3224,
+      "line": 3220,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5404,7 +5404,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 3226,
+      "line": 3222,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5412,7 +5412,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 3340,
+      "line": 3336,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5420,7 +5420,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 3345,
+      "line": 3341,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5428,7 +5428,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 4158,
+      "line": 4153,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5436,7 +5436,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 4259,
+      "line": 4254,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5444,7 +5444,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 6698,
+      "line": 6683,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5452,7 +5452,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 6886,
+      "line": 6871,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5460,7 +5460,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 7218,
+      "line": 7203,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5468,7 +5468,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 7227,
+      "line": 7212,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5476,7 +5476,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 7249,
+      "line": 7234,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5484,7 +5484,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 7259,
+      "line": 7244,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5492,7 +5492,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 7307,
+      "line": 7292,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5500,7 +5500,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 7345,
+      "line": 7330,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5508,7 +5508,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 7417,
+      "line": 7402,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5516,7 +5516,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 7418,
+      "line": 7403,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5524,7 +5524,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 7593,
+      "line": 7578,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5532,7 +5532,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 7594,
+      "line": 7579,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5540,7 +5540,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 7610,
+      "line": 7595,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5548,7 +5548,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 7702,
+      "line": 7687,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5556,7 +5556,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 7713,
+      "line": 7698,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"
@@ -5564,7 +5564,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 7718,
+      "line": 7703,
       "reason": "Creates, repairs, archives, restores, or appends session JSONL locators.",
       "sourceFile": "core/session-coordinator.ts",
       "storeId": "session-jsonl"

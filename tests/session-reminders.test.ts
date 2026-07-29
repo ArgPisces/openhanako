@@ -3,18 +3,15 @@ import { EnvChangeLedger } from "../core/env-change-ledger.ts";
 import {
   applyReminderConsumption,
   collectReminderBlock,
-  noteTimeObservedForSession,
   REMINDER_BLOCK_END,
   REMINDER_BLOCK_PREFIX,
   stripSessionReminderBlocks,
-  TIME_STALENESS_MS,
 } from "../core/session-reminders.ts";
 
 function freshSessionEntry(overrides: Record<string, unknown> = {}) {
   return {
     reminderEnvCursor: 0,
     reminderEnvStartSeq: 0,
-    lastTimeObservedAt: Date.now(),
     reminderCompactionRevision: 0,
     reminderConsumedCompactionRevision: 0,
     reminderAcceptedUnavailableToolNames: [],
@@ -36,7 +33,6 @@ function render(
     ledger,
     now,
     isZh,
-    timeZone: "UTC",
     recipientAgentId,
     unavailableToolNames,
   });
@@ -98,7 +94,7 @@ describe("collectReminderBlock", () => {
     expect(result?.receipt.unavailableToolNames).toEqual(["mcp_alpha", "mcp_zeta"]);
   });
 
-  it("renders memory facts, English copy, and a 24-hour timezone timestamp", () => {
+  it("renders memory facts with English copy", () => {
     const ledger = new EnvChangeLedger();
     ledger.append({
       type: "memory_facts",
@@ -107,15 +103,33 @@ describe("collectReminderBlock", () => {
     });
     const now = new Date("2026-07-05T14:05:00Z").getTime();
 
-    const result = render(freshSessionEntry({ lastTimeObservedAt: null }), ledger, now, false);
+    const result = render(freshSessionEntry(), ledger, now, false);
     expect(REMINDER_BLOCK_PREFIX).toBe("[hana_reminder");
     expect(REMINDER_BLOCK_END).toBe("[/hana_reminder]");
     expect(result?.block).toBe(
       "[hana_reminder]\n"
       + "- New memory facts recorded: likes tea; lives in Kyoto\n"
-      + "- Current time: 2026-07-05 14:05\n"
       + "[/hana_reminder]",
     );
+  });
+
+  it("does not render a time line even for a brand-new session entry", () => {
+    const emptyLedger = new EnvChangeLedger();
+    const now = new Date("2026-07-05T14:05:00Z").getTime();
+
+    expect(render(freshSessionEntry(), emptyLedger, now)).toBeNull();
+
+    const ledger = new EnvChangeLedger();
+    ledger.append({
+      type: "memory_facts",
+      scope: { kind: "agent", agentId: "agent-a" },
+      payload: { addedLines: ["likes tea"] },
+    });
+    const result = render(freshSessionEntry(), ledger, now);
+
+    expect(result?.block).toContain("likes tea");
+    expect(result?.block).not.toContain("当前时间");
+    expect(result?.block).not.toContain("Current time");
   });
 
   it("never exposes wall-clock time through the block header", () => {
@@ -127,7 +141,7 @@ describe("collectReminderBlock", () => {
     });
     const now = new Date("2026-07-05T14:05:00Z").getTime();
 
-    const result = render(freshSessionEntry({ lastTimeObservedAt: now }), ledger, now, false);
+    const result = render(freshSessionEntry(), ledger, now, false);
 
     expect(result?.block.split("\n")[0]).toBe("[hana_reminder]");
     expect(result?.block).not.toContain("2026-07-05");
@@ -160,15 +174,6 @@ describe("collectReminderBlock", () => {
     expect(render(freshSessionEntry(), ledger, Date.now(), true, "agent-b")).toBeNull();
   });
 
-  it("uses strict greater-than for the three-hour time threshold", () => {
-    const ledger = new EnvChangeLedger();
-    const now = Date.now();
-    expect(render(freshSessionEntry({ lastTimeObservedAt: now - TIME_STALENESS_MS }), ledger, now)).toBeNull();
-    expect(render(freshSessionEntry({ lastTimeObservedAt: now - TIME_STALENESS_MS - 1 }), ledger, now)?.block)
-      .toContain("当前时间");
-    expect(render(freshSessionEntry({ lastTimeObservedAt: null }), ledger, now)?.block).toContain("当前时间");
-  });
-
   it("replays environment changes from the session baseline after compaction", () => {
     const ledger = new EnvChangeLedger();
     ledger.append({
@@ -180,7 +185,6 @@ describe("collectReminderBlock", () => {
       reminderEnvCursor: 1,
       reminderEnvStartSeq: 0,
       reminderCompactionRevision: 1,
-      lastTimeObservedAt: Date.now(),
     });
 
     const result = render(entry, ledger);
@@ -204,7 +208,6 @@ describe("collectReminderBlock", () => {
       reminderEnvCursor: 2,
       reminderEnvStartSeq: 0,
       reminderCompactionRevision: 1,
-      lastTimeObservedAt: Date.now(),
     });
 
     const result = render(entry, ledger, Date.now(), true, "agent-a");
@@ -288,56 +291,6 @@ describe("stripSessionReminderBlocks", () => {
 });
 
 describe("reminder receipt consumption", () => {
-  it("does not mark time observed when the block carried no time line", () => {
-    const ledger = new EnvChangeLedger();
-    ledger.append({
-      type: "memory_facts",
-      scope: { kind: "agent", agentId: "agent-a" },
-      payload: { addedLines: ["likes tea"] },
-    });
-    const now = Date.now();
-    const observedAt = now - 1000;
-    const entry = freshSessionEntry({ lastTimeObservedAt: observedAt });
-
-    const rendered = render(entry, ledger, now)!;
-    expect(rendered.block).toContain("likes tea");
-    expect(rendered.block).not.toContain("当前时间");
-    expect(rendered.receipt.timeLineRendered).toBe(false);
-
-    applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
-
-    expect(entry.lastTimeObservedAt).toBe(observedAt);
-    expect(entry.reminderEnvCursor).toBe(1);
-  });
-
-  it("marks time observed only when the time line was actually rendered", () => {
-    const ledger = new EnvChangeLedger();
-    const now = Date.now();
-    const entry = freshSessionEntry({ lastTimeObservedAt: now - TIME_STALENESS_MS - 1 });
-
-    const rendered = render(entry, ledger, now)!;
-    expect(rendered.block).toContain("当前时间");
-    expect(rendered.receipt.timeLineRendered).toBe(true);
-
-    applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
-
-    expect(entry.lastTimeObservedAt).toBe(rendered.receipt.observedAt);
-  });
-
-  it("rejects a receipt without a timeLineRendered flag", () => {
-    const ledger = new EnvChangeLedger();
-    const now = Date.now();
-    const entry = freshSessionEntry({ lastTimeObservedAt: now });
-    const rendered = render(entry, ledger, now, true, "agent-a", ["mcp_calendar"])!;
-    const { timeLineRendered, ...withoutFlag } = rendered.receipt as any;
-
-    expect(timeLineRendered).toBe(false);
-    expect(() => applyReminderConsumption({
-      sessionEntry: entry,
-      receipt: withoutFlag,
-    })).toThrow(/valid reminder receipt/);
-  });
-
   it("does not consume a ledger event appended after render", () => {
     const ledger = new EnvChangeLedger();
     ledger.append({
@@ -346,7 +299,7 @@ describe("reminder receipt consumption", () => {
       payload: { addedLines: ["rendered"] },
     });
     const now = Date.now();
-    const entry = freshSessionEntry({ lastTimeObservedAt: now });
+    const entry = freshSessionEntry();
     const rendered = render(entry, ledger, now)!;
 
     ledger.append({
@@ -374,7 +327,7 @@ describe("reminder receipt consumption", () => {
       payload: { addedLines: ["b-hidden"] },
     });
     const now = Date.now();
-    const entry = freshSessionEntry({ lastTimeObservedAt: now });
+    const entry = freshSessionEntry();
 
     const first = render(entry, ledger, now, true, "agent-a")!;
     expect(first.block).toContain("a-first");
@@ -408,7 +361,6 @@ describe("reminder receipt consumption", () => {
     const now = Date.now();
     const entry = freshSessionEntry({
       reminderCompactionRevision: 1,
-      lastTimeObservedAt: now,
     });
     const rendered = render(entry, ledger, now)!;
 
@@ -417,19 +369,6 @@ describe("reminder receipt consumption", () => {
 
     expect(entry.reminderConsumedCompactionRevision).toBe(1);
     expect(render(entry, ledger, now + 1)?.block).toContain("上下文已压缩");
-  });
-
-  it("does not move a current_status observation backwards when consuming an old receipt", () => {
-    const ledger = new EnvChangeLedger();
-    const renderedAt = Date.now();
-    const observedLater = renderedAt + 10_000;
-    const entry = freshSessionEntry({ lastTimeObservedAt: null });
-    const rendered = render(entry, ledger, renderedAt)!;
-
-    noteTimeObservedForSession(entry, observedLater);
-    applyReminderConsumption({ sessionEntry: entry, receipt: rendered.receipt });
-
-    expect(entry.lastTimeObservedAt).toBe(observedLater);
   });
 
   it("advances all represented state monotonically", () => {
@@ -441,7 +380,6 @@ describe("reminder receipt consumption", () => {
     });
     const now = Date.now();
     const entry = freshSessionEntry({
-      lastTimeObservedAt: null,
       reminderCompactionRevision: 2,
       reminderConsumedCompactionRevision: 1,
     });
@@ -450,7 +388,6 @@ describe("reminder receipt consumption", () => {
 
     expect(entry).toMatchObject({
       reminderEnvCursor: 1,
-      lastTimeObservedAt: now,
       reminderCompactionRevision: 2,
       reminderConsumedCompactionRevision: 2,
     });
@@ -460,7 +397,7 @@ describe("reminder receipt consumption", () => {
   it("repeats a failed outage, accepts it once, and does not repeat the same outage", () => {
     const ledger = new EnvChangeLedger();
     const now = Date.now();
-    const entry = freshSessionEntry({ lastTimeObservedAt: now });
+    const entry = freshSessionEntry();
 
     const failed = render(entry, ledger, now, true, "agent-a", ["mcp_calendar"]);
     expect(failed?.block).toContain("mcp_calendar");
@@ -480,7 +417,6 @@ describe("reminder receipt consumption", () => {
     const entry = freshSessionEntry({
       reminderEnvCursor: 7,
       reminderEnvStartSeq: 7,
-      lastTimeObservedAt: now,
       reminderCompactionRevision: 2,
       reminderConsumedCompactionRevision: 2,
       reminderAcceptedUnavailableToolNames: ["mcp_calendar"],
@@ -490,12 +426,10 @@ describe("reminder receipt consumption", () => {
     const recovered = render(entry, ledger, now + 1, true, "agent-a", []);
     expect(recovered?.block).toBe("");
     expect(recovered?.receipt.consumeBlockState).toBe(false);
-    expect(recovered?.receipt.timeLineRendered).toBe(false);
     applyReminderConsumption({ sessionEntry: entry, receipt: recovered!.receipt });
 
     expect(entry).toMatchObject({
       reminderEnvCursor: 7,
-      lastTimeObservedAt: now,
       reminderConsumedCompactionRevision: 2,
       reminderAcceptedUnavailableToolNames: [],
       reminderUnavailableRevision: 2,
@@ -508,7 +442,6 @@ describe("reminder receipt consumption", () => {
     const ledger = new EnvChangeLedger();
     const now = Date.now();
     const entry = freshSessionEntry({
-      lastTimeObservedAt: now,
       reminderAcceptedUnavailableToolNames: ["tool_a", "tool_b"],
       reminderUnavailableRevision: 4,
     });
@@ -527,7 +460,7 @@ describe("reminder receipt consumption", () => {
       payload: { addedLines: ["context".repeat(80)] },
     });
     const now = Date.now();
-    const entry = freshSessionEntry({ lastTimeObservedAt: now });
+    const entry = freshSessionEntry();
     const unavailable = Array.from(
       { length: 24 },
       (_, index) => `mcp_connector_${String(index).padStart(2, "0")}_${"x".repeat(18)}`,
@@ -561,7 +494,7 @@ describe("reminder receipt consumption", () => {
   it("does not let an older accepted receipt roll availability state backwards", () => {
     const ledger = new EnvChangeLedger();
     const now = Date.now();
-    const entry = freshSessionEntry({ lastTimeObservedAt: now });
+    const entry = freshSessionEntry();
     const staleOutage = render(entry, ledger, now, true, "agent-a", ["tool_old"])!;
     const newerOutage = render(entry, ledger, now + 1, true, "agent-a", ["tool_new"])!;
 

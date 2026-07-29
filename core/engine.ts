@@ -1380,7 +1380,6 @@ export class HanaEngine {
     return this._sessionCoord.consumeRenderedSessionReminderBlock(p, receipt);
   }
   consumeSessionReminderBlock(p) { return this._sessionCoord.consumeSessionReminderBlock(p); }
-  noteSessionTimeObserved(p, observedAt) { return this._sessionCoord.noteSessionTimeObserved(p, observedAt); }
   get focusSessionPath() { return this._sessionCoord.currentSessionPath; }
   getMessages(p) { return this._sessionCoord.getSessionByPath(p)?.messages ?? []; }
   getSessionWorkspaceFolders(p = this.currentSessionPath) {

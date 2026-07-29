@@ -5891,7 +5891,6 @@ describe("SessionCoordinator session reminders", () => {
     const sessionPath = path.join(agent.sessionDir, "fresh.jsonl");
     mockSessionAt(sessionPath);
     const coordinator = makeCoordinator(agent, ledger);
-    const before = Date.now();
 
     await coordinator.createSession(null, "/tmp/workspace", false);
 
@@ -5904,8 +5903,6 @@ describe("SessionCoordinator session reminders", () => {
       reminderAcceptedUnavailableToolNames: [],
       reminderUnavailableRevision: 0,
     });
-    expect(entry.lastTimeObservedAt).toBeGreaterThanOrEqual(before);
-    expect(entry.lastTimeObservedAt).toBeLessThanOrEqual(Date.now());
     expect(coordinator.renderSessionReminderBlock(sessionPath)).toBeNull();
   });
 
@@ -5956,7 +5953,7 @@ describe("SessionCoordinator session reminders", () => {
     expect(coordinator.renderSessionReminderBlock(sessionPath)).toBeNull();
   });
 
-  it("keeps newer compaction and time observations when consuming an older receipt", async () => {
+  it("keeps a newer compaction revision when consuming an older receipt", async () => {
     const ledger = new EnvChangeLedger();
     const agent = makeAgent();
     const sessionPath = path.join(agent.sessionDir, "monotonic.jsonl");
@@ -5964,47 +5961,18 @@ describe("SessionCoordinator session reminders", () => {
     const coordinator = makeCoordinator(agent, ledger);
     await coordinator.createSession(null, "/tmp/workspace", false);
     const entry = coordinator._getSessionEntryByPath(sessionPath);
-    entry.lastTimeObservedAt = null;
     coordinator._markSessionCompacted(sessionPath);
     const rendered = coordinator.renderSessionReminderBlock(sessionPath)!;
 
     coordinator._markSessionCompacted(sessionPath);
-    const laterObservation = rendered.receipt.observedAt + 10_000;
-    expect(coordinator.noteSessionTimeObserved(sessionPath, laterObservation)).toBe(true);
     coordinator.consumeRenderedSessionReminderBlock(sessionPath, rendered.receipt);
 
-    expect(entry.lastTimeObservedAt).toBe(laterObservation);
     expect(entry.reminderCompactionRevision).toBe(2);
     expect(entry.reminderConsumedCompactionRevision).toBe(1);
     expect(coordinator.renderSessionReminderBlock(sessionPath)?.block).toContain("上下文已压缩");
   });
 
-  it("sets cold restored sessions to observe time on the first message only when a frozen prompt is reused", async () => {
-    const ledger = new EnvChangeLedger();
-    const agent = makeAgent();
-    const sessionPath = path.join(agent.sessionDir, "restored.jsonl");
-    const sessionManager = mockSessionAt(sessionPath);
-    const coordinator = makeCoordinator(agent, ledger);
-    vi.spyOn(coordinator as any, "_readSessionCapabilitySnapshot").mockReturnValue({
-      toolNames: [],
-      promptSnapshot: {
-        version: 1,
-        systemPrompt: "FROZEN",
-        appendSystemPrompt: [],
-        skillsResult: { skills: [], diagnostics: [] },
-        agentsFilesResult: { agentsFiles: [] },
-      },
-    });
-
-    await coordinator.createSession(sessionManager, "/tmp/workspace", false, null, { restore: true });
-
-    const entry = coordinator._getSessionEntryByPath(sessionPath);
-    expect(entry.lastTimeObservedAt).toBeNull();
-    expect(coordinator.renderSessionReminderBlock(sessionPath)?.block).toContain("当前时间");
-    expect(createAgentSessionMock.mock.calls[0][0].resourceLoader.getSystemPrompt()).toBe("FROZEN");
-  });
-
-  it("preserves same-process cursors and revisions but resets time for a frozen runtime", async () => {
+  it("preserves same-process cursors and revisions for a frozen runtime", async () => {
     const ledger = new EnvChangeLedger();
     const agent = makeAgent();
     const sessionPath = path.join(agent.sessionDir, "hibernated.jsonl");
@@ -6023,7 +5991,6 @@ describe("SessionCoordinator session reminders", () => {
     const reminderState = {
       reminderEnvCursor: 4,
       reminderEnvStartSeq: 2,
-      lastTimeObservedAt: 1234,
       reminderCompactionRevision: 5,
       reminderConsumedCompactionRevision: 3,
       reminderAcceptedUnavailableToolNames: ["mcp_calendar"],
@@ -6035,10 +6002,7 @@ describe("SessionCoordinator session reminders", () => {
       reminderState,
     });
 
-    expect(coordinator._getSessionEntryByPath(sessionPath)).toMatchObject({
-      ...reminderState,
-      lastTimeObservedAt: null,
-    });
+    expect(coordinator._getSessionEntryByPath(sessionPath)).toMatchObject(reminderState);
   });
 
   it("keeps a valid reminder ahead of provider-only beforeUser context", async () => {
@@ -6100,6 +6064,5 @@ describe("SessionCoordinator session reminders", () => {
       throughSeq: 0,
       compactionRevision: 0,
     })).toBe(false);
-    expect(coordinator.noteSessionTimeObserved("/missing.jsonl", 1)).toBe(false);
   });
 });

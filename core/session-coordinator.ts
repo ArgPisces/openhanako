@@ -24,7 +24,6 @@ import { evaluateSessionHealth, repairOrphanToolResultEntriesInFile } from "./se
 import {
   applyReminderConsumption,
   collectReminderBlock,
-  noteTimeObservedForSession,
   REMINDER_BLOCK_END,
   REMINDER_BLOCK_PREFIX,
 } from "./session-reminders.ts";
@@ -2397,9 +2396,6 @@ export class SessionCoordinator {
       reminderEnvStartSeq: preserveFrozenPromptReminderState
         ? (reminderState.reminderEnvStartSeq ?? reminderBaselineSeq)
         : reminderBaselineSeq,
-      // A reused frozen prompt contains an old session-start clock. Every
-      // restored runtime therefore observes time again on its first message.
-      lastTimeObservedAt: restoredPromptSnapshot ? null : Date.now(),
       reminderCompactionRevision: hasPreviousReminderState
         ? (reminderState.reminderCompactionRevision ?? 0)
         : 0,
@@ -3430,7 +3426,6 @@ export class SessionCoordinator {
     const forkReminderState = sourceReminderEntry ? {
       reminderEnvCursor: sourceReminderEntry.reminderEnvCursor,
       reminderEnvStartSeq: sourceReminderEntry.reminderEnvStartSeq,
-      lastTimeObservedAt: sourceReminderEntry.lastTimeObservedAt,
       reminderCompactionRevision: sourceReminderEntry.reminderCompactionRevision,
       reminderConsumedCompactionRevision: sourceReminderEntry.reminderConsumedCompactionRevision,
       reminderAcceptedUnavailableToolNames: Array.isArray(sourceReminderEntry.reminderAcceptedUnavailableToolNames)
@@ -5776,7 +5771,6 @@ export class SessionCoordinator {
       toolNames: Array.isArray(entry.toolNames) ? [...entry.toolNames] : entry.toolNames,
       reminderEnvCursor: entry.reminderEnvCursor,
       reminderEnvStartSeq: entry.reminderEnvStartSeq,
-      lastTimeObservedAt: entry.lastTimeObservedAt,
       reminderCompactionRevision: entry.reminderCompactionRevision,
       reminderConsumedCompactionRevision: entry.reminderConsumedCompactionRevision,
       reminderAcceptedUnavailableToolNames: Array.isArray(entry.reminderAcceptedUnavailableToolNames)
@@ -6024,7 +6018,6 @@ export class SessionCoordinator {
       recipientAgentId,
       now: Date.now(),
       isZh: getLocale().startsWith("zh"),
-      timeZone: this._d.getPrefs?.()?.getTimezone?.(),
       unavailableToolNames: this._computeReminderUnavailableToolNamesForEntry(entry, sessionPath),
     });
   }
@@ -6042,14 +6035,6 @@ export class SessionCoordinator {
     if (!rendered) return null;
     this.consumeRenderedSessionReminderBlock(sessionPath, rendered.receipt);
     return rendered.block;
-  }
-
-  noteSessionTimeObserved(sessionPath: any, observedAt: any) {
-    if (!sessionPath) return false;
-    const entry = this._getSessionEntryByPath(sessionPath);
-    if (!entry) return false;
-    noteTimeObservedForSession(entry, observedAt);
-    return true;
   }
 
   preflightSessionInput(sessionPath: any) {

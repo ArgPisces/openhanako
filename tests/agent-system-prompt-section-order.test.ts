@@ -89,7 +89,7 @@ describe("system prompt section order", () => {
       "## 记忆使用规则",
       "# 置顶记忆",
       "MEMORY-MARKER",
-      "Session start time:",
+      "Session started at:",
     ]);
 
     expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
@@ -109,7 +109,7 @@ describe("system prompt section order", () => {
       "## Memory Rules",
       "# Pinned Memories",
       "MEMORY-MARKER",
-      "Session start time:",
+      "Session started at:",
     ]);
 
     expect(indexes).toEqual([...indexes].sort((a, b) => a - b));

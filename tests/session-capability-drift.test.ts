@@ -104,7 +104,7 @@ function buildPromptFixture({
   pinned?: string;
   memory?: string;
   date?: string;
-  clockLabel?: "Current date and time" | "Session start time";
+  clockLabel?: "Current date and time" | "Session start time" | "Session started at";
   locale?: string;
   workspaceInstructions?: string;
 } = {}) {
@@ -292,11 +292,24 @@ describe("normalizeSystemPromptForFingerprint — dynamic segments (#1624 C1)", 
 
   it("normalizes every clock line, not just the first (M4)", () => {
     const normalized = normalizeSystemPromptForFingerprint(
-      "Current date and time: Monday, June 8, 2026\nmiddle\nSession start time: Thursday, June 11, 2026",
+      "Current date and time: Monday, June 8, 2026\nmiddle\nSession start time: Thursday, June 11, 2026"
+      + "\ntail\nSession started at: Friday, June 12, 2026",
     );
     expect(normalized).not.toContain("June 8, 2026");
     expect(normalized).not.toContain("June 11, 2026");
-    expect(normalized.match(/Session start time: <normalized>/g)).toHaveLength(2);
+    expect(normalized).not.toContain("June 12, 2026");
+    expect(normalized.match(/Session started at: <normalized>/g)).toHaveLength(3);
+  });
+
+  it("treats the renamed clock label as the same prompt as an older frozen one", () => {
+    const oldFrozen = buildPromptFixture({ clockLabel: "Session start time" });
+    const renamed = buildPromptFixture({ clockLabel: "Session started at" });
+
+    expect(oldFrozen).not.toBe(renamed);
+    expect(normalizeSystemPromptForFingerprint(oldFrozen))
+      .toBe(normalizeSystemPromptForFingerprint(renamed));
+    expect(computeSessionCapabilityFingerprint({ toolNames: ["read"], systemPrompt: oldFrozen }))
+      .toBe(computeSessionCapabilityFingerprint({ toolNames: ["read"], systemPrompt: renamed }));
   });
 });
 
