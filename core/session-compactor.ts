@@ -18,6 +18,7 @@ import {
   buildCacheStrategyMetadata,
 } from "../lib/llm/cache-strategy-contract.ts";
 import { stableSerialize } from "../lib/llm/cache-prefix-contract.ts";
+import { estimateTextTokens } from "../lib/llm/estimate-text-tokens.ts";
 import { runCachePreservingCompactionAgentRun } from "../lib/llm/cache-preserving-compaction-agent-run.ts";
 import {
   normalizeProviderContextMessages,
@@ -259,10 +260,7 @@ function textBlock(text: string) {
   return { type: "text" as const, text };
 }
 
-function estimateTextTokens(text) {
-  if (typeof text !== "string" || text.length === 0) return 0;
-  return Math.ceil(text.length / 4);
-}
+export { estimateTextTokens };
 
 export function getCachePreservingCompactionMaxTokens(preparation) {
   return Math.max(512, Math.floor((preparation?.settings?.reserveTokens ?? 4096) * 0.8));

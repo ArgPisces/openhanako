@@ -298,6 +298,7 @@
     "lib/llm/cache-prefix-contract.ts",
     "lib/llm/cache-preserving-compaction-agent-run.ts",
     "lib/llm/cache-strategy-contract.ts",
+    "lib/llm/estimate-text-tokens.ts",
     "lib/llm/prompt-layout.ts",
     "lib/llm/provider-cache-affinity.ts",
     "lib/llm/provider-client.ts",
