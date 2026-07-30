@@ -735,6 +735,27 @@ export class PreferencesManager {
     return prefs.plugin_dev_tools.enabled;
   }
 
+  /**
+   * 读取内置/插件工具的延迟加载开关（全局，默认关闭）。
+   *
+   * 默认关闭是刻意的：内置工具是 Agent 的基本能力，把它们移出前缀会改变
+   * 每个 session 的既有行为。外部 MCP 工具默认延迟，内置工具需要显式 opt-in。
+   */
+  getBuiltinToolDeferEnabled() {
+    return this._cache.builtin_tool_defer?.enabled === true;
+  }
+
+  /** 保存内置/插件工具的延迟加载开关 */
+  setBuiltinToolDeferEnabled(value) {
+    const prefs = this._mutableCopy();
+    prefs.builtin_tool_defer = {
+      ...(prefs.builtin_tool_defer || {}),
+      enabled: value === true,
+    };
+    this.savePreferences(prefs);
+    return prefs.builtin_tool_defer.enabled;
+  }
+
   /** 读取用户手动禁用的插件 ID 列表 */
   getDisabledPlugins() {
     return this._cache.disabled_plugins || [];

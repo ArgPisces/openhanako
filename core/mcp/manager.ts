@@ -33,8 +33,16 @@ export const MCP_TOOL_NAMESPACE = "mcp";
 // name are the on-disk compatibility surface — do not rename them.
 const MCP_CONFIG_KEY = "mcp";
 
+// Deferred loading defaults. A config written before defer existed carries
+// neither field, and both defaults reproduce the behaviour we want for those
+// users: defer is on, and it only engages once a session would otherwise carry
+// more than ten MCP tool schemas in its cacheable prefix.
+const DEFAULT_DEFER_THRESHOLD = 10;
+
 const DEFAULT_CONFIG = {
   enabled: false,
+  deferEnabled: true,
+  deferThreshold: DEFAULT_DEFER_THRESHOLD,
   connectors: [],
   servers: [],
 };
@@ -150,6 +158,25 @@ export function resolveMcpToolPermissionKind(policy: any, liveAnnotations: any =
   return "review";
 }
 
+// A pin keeps one tool in the prefix even when its connector is deferred.
+// Only an explicit `true` pins: anything else, including "yes" and 1, is
+// dropped so a malformed value cannot quietly enlarge the prefix.
+function normalizePinnedTools(value) {
+  if (!isPlainObject(value)) return {};
+  const normalized = {};
+  for (const [toolName, pinned] of Object.entries(value)) {
+    if (!toolName) continue;
+    if (pinned === true) normalized[toolName] = true;
+  }
+  return normalized;
+}
+
+function normalizeDeferThreshold(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : DEFAULT_DEFER_THRESHOLD;
+}
+
 function normalizeConnector(connector, fallbackId = "") {
   if (!connector || typeof connector !== "object") return null;
   const id = sanitizeId(connector.id || fallbackId);
@@ -202,6 +229,9 @@ function normalizeConnector(connector, fallbackId = "") {
     // Only an explicit `true` opts in; a truthy non-boolean must not be
     // coerced into an implicit grant.
     trustReadOnlyHint: connector.trustReadOnlyHint === true,
+    // Read-time compatibility: connectors saved before deferred loading existed
+    // have no pins, which is exactly the default.
+    pinnedTools: normalizePinnedTools(connector.pinnedTools),
     tools,
   };
 }
@@ -229,6 +259,10 @@ export function normalizeMcpConfig(value) {
   return {
     ...DEFAULT_CONFIG,
     enabled: input.enabled === true,
+    // Only an explicit false opts out, so a config that predates defer keeps
+    // the new default without a write-time migration.
+    deferEnabled: input.deferEnabled !== false,
+    deferThreshold: normalizeDeferThreshold(input.deferThreshold),
     connectors,
     servers: connectors,
   };
