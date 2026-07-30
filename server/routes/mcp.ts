@@ -38,6 +38,12 @@ export function createMcpRoute(engine) {
 
   sub.get("/state", currentState);
 
+  sub.get("/apps", (c) => {
+    const rt = runtime();
+    if (!rt) return c.json({ error: "not initialized" }, 503);
+    return c.json({ apps: rt.listApps(), state: rt.getState() });
+  });
+
   async function setGlobalEnabled(c) {
     const rt = runtime();
     if (!rt) return c.json({ error: "not initialized" }, 503);
@@ -152,6 +158,57 @@ export function createMcpRoute(engine) {
   sub.post("/connectors/:id/refresh-tools", (c) => connectorAction(c, "refresh-tools"));
   sub.post("/servers/:id/refresh-tools", (c) => connectorAction(c, "refresh-tools"));
 
+  async function launchApp(c) {
+    const rt = runtime();
+    if (!rt) return c.json({ error: "not initialized" }, 503);
+    try {
+      const body = await readOptionalJson(c);
+      return c.json(rt.launchApp(c.req.param("id"), c.req.param("toolName"), {
+        launchInput: body?.launchInput ?? body?.input ?? {},
+      }));
+    } catch (err) {
+      return jsonError(c, err);
+    }
+  }
+
+  async function readResource(c) {
+    const rt = runtime();
+    if (!rt) return c.json({ error: "not initialized" }, 503);
+    const uri = c.req.query("uri") || "";
+    if (!uri) return c.json({ error: "uri is required" }, 400);
+    try {
+      const result = await rt.readResource(c.req.param("id"), uri);
+      const content = selectResourceContent(result, uri);
+      if (!content) return c.json({ error: "resource content not found" }, 404);
+      return resourceContentResponse(content);
+    } catch (err) {
+      return jsonError(c, err);
+    }
+  }
+
+  async function callAppTool(c) {
+    const rt = runtime();
+    if (!rt) return c.json({ error: "not initialized" }, 503);
+    try {
+      const body = await readOptionalJson(c);
+      const result = await rt.callAppTool(
+        c.req.param("id"),
+        c.req.param("toolName"),
+        body?.arguments ?? body?.args ?? body?.input ?? {},
+      );
+      return c.json({ result });
+    } catch (err) {
+      return jsonError(c, err);
+    }
+  }
+
+  sub.post("/connectors/:id/apps/:toolName/launch", launchApp);
+  sub.post("/servers/:id/apps/:toolName/launch", launchApp);
+  sub.get("/connectors/:id/resources", readResource);
+  sub.get("/servers/:id/resources", readResource);
+  sub.post("/connectors/:id/app-tools/:toolName/call", callAppTool);
+  sub.post("/servers/:id/app-tools/:toolName/call", callAppTool);
+
   sub.put("/agents/:agentId/connectors/:id", updateAgentConnector);
   sub.put("/agents/:agentId/servers/:id", updateAgentConnector);
 
@@ -220,4 +277,55 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+async function readOptionalJson(c) {
+  const contentType = c.req.header("content-type") || "";
+  if (!contentType.includes("application/json")) return {};
+  try {
+    return await c.req.json();
+  } catch {
+    throw new Error("invalid JSON request body");
+  }
+}
+
+function jsonError(c, err) {
+  const message = err?.message || "MCP request failed";
+  return c.json({ error: message }, statusForError(message));
+}
+
+function statusForError(message) {
+  if (/not initialized/i.test(message)) return 503;
+  if (/not found|content not found/i.test(message)) return 404;
+  if (/not visible|does not expose/i.test(message)) return 403;
+  if (/not running|disabled globally/i.test(message)) return 409;
+  if (/must start with ui:\/\/|uri is required|invalid JSON request body/i.test(message)) return 400;
+  return 502;
+}
+
+function selectResourceContent(result, uri) {
+  const contents = Array.isArray(result?.contents) ? result.contents : [];
+  if (!contents.length) return null;
+  const html = contents.find((item) => contentMimeType(item).startsWith("text/html"));
+  if (html) return html;
+  return contents.find((item) => item?.uri === uri) || contents[0] || null;
+}
+
+function resourceContentResponse(content) {
+  const mimeType = contentMimeType(content) || "text/plain; charset=utf-8";
+  const headers = { "Content-Type": mimeType };
+  if (typeof content.text === "string") {
+    return new Response(content.text, { status: 200, headers });
+  }
+  if (typeof content.blob === "string") {
+    return new Response(Buffer.from(content.blob, "base64"), { status: 200, headers });
+  }
+  return new Response(JSON.stringify({ error: "resource content has no text or blob" }), {
+    status: 502,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function contentMimeType(content) {
+  return typeof content?.mimeType === "string" ? content.mimeType : "";
 }

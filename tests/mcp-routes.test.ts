@@ -23,6 +23,9 @@ function fakeMcp(overrides: any = {}) {
     completeOAuth: vi.fn(async () => ({ status: "done" })),
     getOAuthStatus: vi.fn(() => ({ status: "pending" })),
     startOAuth: vi.fn(async () => ({ sessionId: "s1", url: "https://auth.example.com/authorize" })),
+    listApps: vi.fn(() => []),
+    readResource: vi.fn(async () => ({ contents: [] })),
+    callAppTool: vi.fn(async () => ({ content: [] })),
     ...overrides,
   };
 }
@@ -111,6 +114,50 @@ describe("MCP first-class routes", () => {
 
     expect(res.status).toBe(200);
     expect(mcp.getState).toHaveBeenCalled();
+  });
+
+  it("serves an app's ui:// resource with the connector's own mime type", async () => {
+    const mcp = fakeMcp({
+      readResource: vi.fn(async () => ({
+        contents: [{ uri: "ui://board/main", mimeType: "text/html", text: "<h1>board</h1>" }],
+      })),
+    });
+
+    const res = await createApp(mcp).request(
+      `/api/mcp/connectors/acme/resources?uri=${encodeURIComponent("ui://board/main")}`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toBe("<h1>board</h1>");
+  });
+
+  it("rejects a resource read outside the ui:// scheme with 400", async () => {
+    const mcp = fakeMcp({
+      readResource: vi.fn(async () => {
+        throw new Error("MCP app resource uri must start with ui://");
+      }),
+    });
+
+    const res = await createApp(mcp).request(
+      `/api/mcp/connectors/acme/resources?uri=${encodeURIComponent("https://evil.test/steal")}`,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("maps an app-visibility refusal to 403", async () => {
+    const mcp = fakeMcp({
+      callAppTool: vi.fn(async () => {
+        throw new Error('MCP connector tool "acme/private" is not visible to apps');
+      }),
+    });
+
+    const res = await createApp(mcp).request("/api/mcp/connectors/acme/app-tools/private/call", {
+      method: "POST",
+    });
+
+    expect(res.status).toBe(403);
   });
 
   it("reports 503 while the manager is not initialized", async () => {

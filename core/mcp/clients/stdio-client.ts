@@ -107,6 +107,10 @@ export class McpStdioClient {
     }, { timeout: requestTimeoutMs(this.server) });
   }
 
+  async readResource(uri) {
+    return this.request("resources/read", { uri }, { timeout: requestTimeoutMs(this.server) });
+  }
+
   request(method, params: any = {}, { timeout = 30_000 } = {}) {
     if (!this.running) throw new Error("MCP server is not running");
     const id = this._nextId++;

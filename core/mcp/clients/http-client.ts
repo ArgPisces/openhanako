@@ -294,6 +294,10 @@ export class McpStreamableHttpClient {
     });
   }
 
+  async readResource(uri) {
+    return this.request("resources/read", { uri });
+  }
+
   async request(method, params: any = {}, opts = {}) {
     if (!this.running) throw new Error("MCP connector is not running");
     try {
@@ -555,6 +559,10 @@ export class McpLegacySseClient {
     });
   }
 
+  async readResource(uri) {
+    return this.request("resources/read", { uri });
+  }
+
   async request(method, params: any = {}, { timeout = 30_000 } = {}) {
     if (!this.running) throw new Error("MCP connector is not running");
     try {
@@ -801,6 +809,10 @@ export class McpAutoHttpClient {
 
   async callTool(name, args) {
     return this.client.callTool(name, args);
+  }
+
+  async readResource(uri) {
+    return this.client.readResource(uri);
   }
 
   async stop() {

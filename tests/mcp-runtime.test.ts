@@ -689,6 +689,124 @@ describe("MCP runtime policy", () => {
   });
 });
 
+// App-capable connectors: a tool may carry a `ui://` resource that renders its
+// own interface, declared through either the native `_meta.ui` shape or the
+// `openai/outputTemplate` dialect.
+describe("MCP app resources", () => {
+  const APP_TOOL = {
+    name: "board",
+    title: "Board",
+    description: "Interactive board",
+    _meta: { ui: { resourceUri: "ui://board/main" } },
+  };
+
+  function managerWith(tools) {
+    const stored = {
+      enabled: true,
+      connectors: [{ id: "acme", name: "Acme", url: "https://mcp.acme.test/mcp", tools }],
+    };
+    return createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-apps-test"),
+      config: { get: vi.fn(() => stored), set: vi.fn() },
+      log: console,
+    });
+  }
+
+  it("passes a tool's _meta through to the published tool definition", () => {
+    const runtime = managerWith([APP_TOOL]);
+    runtime.registerCachedTools();
+
+    const [app] = runtime.listApps();
+    expect(app).toMatchObject({
+      connectorId: "acme",
+      toolName: "board",
+      resourceUri: "ui://board/main",
+      _meta: { ui: { resourceUri: "ui://board/main" } },
+    });
+  });
+
+  it("recognizes the openai/outputTemplate dialect as an app resource", () => {
+    const runtime = managerWith([{
+      name: "sheet",
+      _meta: { "openai/outputTemplate": "ui://sheet/main" },
+    }]);
+
+    expect(runtime.listApps()).toEqual([
+      expect.objectContaining({ toolName: "sheet", resourceUri: "ui://sheet/main" }),
+    ]);
+  });
+
+  it("ignores a resource uri that is not a ui:// resource", () => {
+    const runtime = managerWith([{
+      name: "sneaky",
+      _meta: { ui: { resourceUri: "file:///etc/passwd" } },
+    }]);
+
+    expect(runtime.listApps()).toEqual([]);
+  });
+
+  it("refuses to read a resource uri outside the ui:// scheme", async () => {
+    const runtime = managerWith([APP_TOOL]);
+    runtime.clients.set("acme", { running: true, readResource: vi.fn() });
+
+    await expect(runtime.readResource("acme", "https://evil.test/steal"))
+      .rejects.toThrow(/must start with ui:\/\//);
+  });
+
+  it("reads a ui:// resource through the connector client", async () => {
+    const runtime = managerWith([APP_TOOL]);
+    const readResource = vi.fn(async () => ({
+      contents: [{ uri: "ui://board/main", mimeType: "text/html", text: "<h1>board</h1>" }],
+    }));
+    runtime.clients.set("acme", { running: true, readResource });
+
+    const result = await runtime.readResource("acme", "ui://board/main");
+
+    expect(readResource).toHaveBeenCalledWith("ui://board/main");
+    expect(result.contents[0].text).toBe("<h1>board</h1>");
+  });
+
+  it("keeps a model-only tool out of the app list and refuses app tool calls", async () => {
+    const runtime = managerWith([{
+      name: "private",
+      _meta: { ui: { resourceUri: "ui://private/main", visibility: ["model"] } },
+    }]);
+
+    expect(runtime.listApps()).toEqual([]);
+    await expect(runtime.callAppTool("acme", "private", {}))
+      .rejects.toThrow(/not visible to apps/);
+  });
+
+  it("attaches an app card to the tool result of an app-capable tool", async () => {
+    const runtime = managerWith([APP_TOOL]);
+    const request = vi.fn(async (type) => (type === "agent:config"
+      ? { config: { mcp: { connectors: { acme: { enabled: true, tools: { board: true } } } } } }
+      : {}));
+    await runtime.start({ request });
+    runtime.clients.set("acme", {
+      running: true,
+      callTool: vi.fn(async () => ({ content: [{ type: "text", text: "done" }] })),
+    });
+    runtime.registerCachedTools();
+
+    const tool = runtime.getAllTools().find((item) => item.name === "mcp_acme_board");
+    const result = await tool.execute("call-7", { q: 1 }, null, undefined, {
+      agentId: "hana",
+      sessionId: "sess_1",
+    });
+
+    expect(result.details.mcpAppCard).toMatchObject({
+      type: "mcp_app",
+      connectorId: "acme",
+      toolName: "board",
+      resourceUri: "ui://board/main",
+      toolCallId: "call-7",
+      sourceAgentId: "hana",
+      sourceSessionId: "sess_1",
+    });
+  });
+});
+
 describe("MCP connectors status tool", () => {
   // The agent-facing name: the manager namespaces every tool it publishes.
   const STATUS_TOOL_PUBLIC_NAME = `mcp_${MCP_CONNECTORS_STATUS_TOOL_NAME}`;

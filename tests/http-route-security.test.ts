@@ -347,8 +347,22 @@ describe("HTTP route security policy", () => {
         principal: null,
       })).toMatchObject({ allowed: true });
 
+      // Invoking a connector tool for an app surface is a real third-party side
+      // effect, so it is owner-only rather than a settings scope.
+      expect(classifyHttpRoute({
+        method: "POST",
+        path: `${prefix}/connectors/acme/app-tools/board/call`,
+      })).toMatchObject({ kind: "studio_owner" });
+      expect(authorizeHttpRoute({
+        method: "POST",
+        path: `${prefix}/connectors/acme/app-tools/board/call`,
+        principal: writer,
+      })).toMatchObject({ allowed: false });
+
       for (const [method, path] of [
         ["GET", `${prefix}/state`],
+        ["GET", `${prefix}/apps`],
+        ["GET", `${prefix}/connectors/acme/resources`],
         ["GET", `${prefix}/oauth/poll/session_1`],
       ]) {
         expect(authorizeHttpRoute({ method, path, principal: reader }))
@@ -370,6 +384,7 @@ describe("HTTP route security policy", () => {
         ["PUT", `${prefix}/agents/hana/connectors/github`],
         ["POST", `${prefix}/connectors/github/oauth/start`],
         ["POST", `${prefix}/connectors/github/oauth/logout`],
+        ["POST", `${prefix}/connectors/acme/apps/board/launch`],
       ]) {
         expect(authorizeHttpRoute({ method, path, principal: writer }))
           .toMatchObject({ allowed: true });

@@ -59,9 +59,13 @@ const STATUS_CONNECTING = "connecting";
 const STATUS_RECONNECTING = "reconnecting";
 const STATUS_NEEDS_AUTH = "needs-auth";
 
+// A tool with no declared visibility is offered to both the model and to app
+// surfaces; an explicit `_meta.ui.visibility` array narrows that.
+const DEFAULT_TOOL_VISIBILITY = Object.freeze(["model", "app"]);
+
 function normalizeTool(tool) {
   if (!tool || typeof tool.name !== "string" || !tool.name) return null;
-  return {
+  const normalized: any = {
     name: tool.name,
     title: typeof tool.title === "string" ? tool.title : tool.name,
     description: typeof tool.description === "string" ? tool.description : "",
@@ -69,6 +73,9 @@ function normalizeTool(tool) {
       ? tool.inputSchema
       : { type: "object", properties: {} },
   };
+  if (tool.outputSchema && typeof tool.outputSchema === "object") normalized.outputSchema = tool.outputSchema;
+  if (isPlainObject(tool._meta)) normalized._meta = tool._meta;
+  return normalized;
 }
 
 function normalizeConnector(connector, fallbackId = "") {
@@ -330,6 +337,8 @@ export function createMcpToolDefinition({
   getGlobalEnabled,
   getAgentConfig,
   callTool,
+  app = null,
+  visibility = DEFAULT_TOOL_VISIBILITY,
   probeLiveAvailability = null,
 }) {
   const name = toMcpToolId(connectorId, toolName);
@@ -354,15 +363,23 @@ export function createMcpToolDefinition({
         ? { reminderLiveAvailabilityProbe: probeLiveAvailability }
         : {}),
     },
-    isEnabledForAgentConfig: (agentConfig) => isMcpToolEnabledForAgentConfig(agentConfig, {
-      globalEnabled: getGlobalEnabled(),
-      connectorId,
-      serverId: connectorId,
-      toolName,
-    }),
-    execute: async (_toolCallId, params, runtimeCtx: any = {}) => {
+    isEnabledForAgentConfig: (agentConfig) => toolVisibilityIncludes(visibility, "model")
+      && isMcpToolEnabledForAgentConfig(agentConfig, {
+        globalEnabled: getGlobalEnabled(),
+        connectorId,
+        serverId: connectorId,
+        toolName,
+      }),
+    execute: async (toolCallId, params, runtimeCtx: any = {}) => {
       if (getGlobalEnabled() !== true) {
         return mcpToolError("MCP is disabled globally. Enable Connectors in Settings before calling this tool.", {
+          connectorId,
+          serverId: connectorId,
+          toolName,
+        });
+      }
+      if (!toolVisibilityIncludes(visibility, "model")) {
+        return mcpToolError(`MCP connector tool "${connectorId}/${toolName}" is not visible to the model.`, {
           connectorId,
           serverId: connectorId,
           toolName,
@@ -383,7 +400,16 @@ export function createMcpToolDefinition({
         });
       }
       try {
-        return normalizeMcpToolResult(await callTool(connectorId, toolName, params || {}));
+        const result = normalizeMcpToolResult(await callTool(connectorId, toolName, params || {}));
+        return app?.resourceUri ? appendMcpAppCard(result, {
+          ...app,
+          invocationId: stringOrEmpty(toolCallId),
+          toolCallId: stringOrEmpty(toolCallId),
+          launchInput: params || {},
+          sourceSessionPath: stringOrEmpty(runtimeCtx.sessionPath),
+          sourceSessionId: stringOrEmpty(runtimeCtx.sessionId),
+          sourceAgentId: stringOrEmpty(runtimeCtx.agentId),
+        }) : result;
       } catch (err) {
         return mcpToolError(`MCP connector tool "${connectorId}/${toolName}" failed: ${err.message}`, {
           connectorId,
@@ -931,6 +957,65 @@ export class McpManager {
     return connector.tools;
   }
 
+  /** Every connector tool that exposes an app resource and is visible to apps. */
+  listApps({ connectorId = null }: any = {}) {
+    const config = this.getConfig();
+    return config.connectors
+      .filter((connector) => !connectorId || connector.id === connectorId)
+      .flatMap((connector) => appsForConnector(connector));
+  }
+
+  launchApp(connectorId, toolName, { launchInput = {} }: any = {}) {
+    if (!this.getConfig().enabled) throw new Error("MCP connectors are disabled globally");
+    const app = this._requireApp(connectorId, toolName);
+    return {
+      type: "mcp_app",
+      connectorId: app.connectorId,
+      serverId: app.connectorId,
+      toolName: app.toolName,
+      title: app.title,
+      description: app.description,
+      resourceUri: app.resourceUri,
+      visibility: app.visibility,
+      launchInput,
+      binding: {
+        kind: "mcp-app",
+        connectorId: app.connectorId,
+        serverId: app.connectorId,
+        toolName: app.toolName,
+        resourceUri: app.resourceUri,
+        resourceUrl: `/api/mcp/connectors/${encodeURIComponent(app.connectorId)}/resources?uri=${encodeURIComponent(app.resourceUri)}`,
+        callToolUrl: `/api/mcp/connectors/${encodeURIComponent(app.connectorId)}/app-tools/${encodeURIComponent(app.toolName)}/call`,
+      },
+      app,
+    };
+  }
+
+  async readResource(connectorId, uri) {
+    const resourceUri = stringOrEmpty(uri);
+    if (!isUiResourceUri(resourceUri)) throw new Error("MCP app resource uri must start with ui://");
+    const config = this.getConfig();
+    if (!config.enabled) throw new Error("MCP connectors are disabled globally");
+    if (!config.connectors.some((connector) => connector.id === connectorId)) {
+      throw new Error(`MCP connector "${connectorId}" not found`);
+    }
+    const client = this.clients.get(connectorId);
+    if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
+    if (typeof client.readResource !== "function") {
+      throw new Error(`MCP connector "${connectorId}" does not support resources/read`);
+    }
+    return client.readResource(resourceUri);
+  }
+
+  async callAppTool(connectorId, toolName, args) {
+    this._requireAppVisibleTool(connectorId, toolName);
+    const config = this.getConfig();
+    if (!config.enabled) throw new Error("MCP connectors are disabled globally");
+    const client = this.clients.get(connectorId);
+    if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
+    return client.callTool(toolName, args || {});
+  }
+
   async callTool(connectorId, toolName, args) {
     const config = this.getConfig();
     if (!config.enabled) throw new Error("MCP connectors are disabled globally");
@@ -960,6 +1045,8 @@ export class McpManager {
           toolName: tool.name,
           description: tool.description || `${connector.name}: ${tool.title || tool.name}`,
           inputSchema: tool.inputSchema,
+          app: appCardForConnectorTool(connector, tool),
+          visibility: toolVisibility(tool),
           getGlobalEnabled: () => this.getConfig().enabled,
           getAgentConfig: (agentId) => this.getAgentConfig(agentId),
           callTool: (connectorId, toolName, args) => this.callTool(connectorId, toolName, args),
@@ -1373,12 +1460,124 @@ export class McpManager {
     await this.stopConnector(connectorId);
     return saved.connectors.find((item) => item.id === connectorId);
   }
+
+  _requireApp(connectorId, toolName) {
+    const connector = this.getConfig().connectors.find((item) => item.id === connectorId);
+    if (!connector) throw new Error(`MCP connector "${connectorId}" not found`);
+    const tool = connector.tools.find((item) => item.name === toolName);
+    if (!tool) throw new Error(`MCP connector tool "${connectorId}/${toolName}" not found`);
+    const app = appForConnectorTool(connector, tool);
+    if (!app?.resourceUri) throw new Error(`MCP connector tool "${connectorId}/${toolName}" does not expose an app resource`);
+    if (!toolVisibilityIncludes(app.visibility, "app")) {
+      throw new Error(`MCP connector tool "${connectorId}/${toolName}" is not visible to apps`);
+    }
+    return app;
+  }
+
+  _requireAppVisibleTool(connectorId, toolName) {
+    const connector = this.getConfig().connectors.find((item) => item.id === connectorId);
+    if (!connector) throw new Error(`MCP connector "${connectorId}" not found`);
+    const tool = connector.tools.find((item) => item.name === toolName);
+    if (!tool) throw new Error(`MCP connector tool "${connectorId}/${toolName}" not found`);
+    const visibility = toolVisibility(tool);
+    if (!toolVisibilityIncludes(visibility, "app")) {
+      throw new Error(`MCP connector tool "${connectorId}/${toolName}" is not visible to apps`);
+    }
+    return tool;
+  }
 }
 
 function isPlainObject(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
+}
+
+// Attach the app card to a tool result so the caller can render the connector's
+// own UI resource alongside the textual result.
+function appendMcpAppCard(result, appCard) {
+  const existingDetails = result?.details;
+  const details = isPlainObject(existingDetails) ? { ...existingDetails } : {};
+  return {
+    ...result,
+    details: {
+      ...details,
+      mcpAppCard: {
+        type: "mcp_app",
+        connectorId: appCard.connectorId,
+        serverId: appCard.connectorId,
+        toolName: appCard.toolName,
+        resourceUri: appCard.resourceUri,
+        invocationId: appCard.invocationId || appCard.toolCallId || "",
+        toolCallId: appCard.toolCallId || appCard.invocationId || "",
+        launchInput: appCard.launchInput || {},
+        title: appCard.title || appCard.toolName,
+        description: appCard.description || "",
+        sourceSessionPath: appCard.sourceSessionPath || "",
+        sourceSessionId: appCard.sourceSessionId || "",
+        sourceAgentId: appCard.sourceAgentId || "",
+      },
+    },
+  };
+}
+
+function appsForConnector(connector) {
+  return (connector.tools || [])
+    .map((tool) => appForConnectorTool(connector, tool))
+    .filter((app) => app && toolVisibilityIncludes(app.visibility, "app"));
+}
+
+function appForConnectorTool(connector, tool) {
+  const resourceUri = toolResourceUri(tool);
+  if (!resourceUri) return null;
+  const visibility = toolVisibility(tool);
+  return {
+    connectorId: connector.id,
+    serverId: connector.id,
+    toolName: tool.name,
+    title: tool.title || tool.name,
+    description: tool.description || "",
+    resourceUri,
+    visibility,
+    inputSchema: tool.inputSchema || { type: "object", properties: {} },
+    ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+    ...(tool._meta ? { _meta: tool._meta } : {}),
+  };
+}
+
+function appCardForConnectorTool(connector, tool) {
+  const app = appForConnectorTool(connector, tool);
+  if (!app || !toolVisibilityIncludes(app.visibility, "app")) return null;
+  return app;
+}
+
+// Two dialects declare the same thing — the connector's own `_meta.ui.resourceUri`
+// and the `openai/outputTemplate` key — so both are accepted.
+function toolResourceUri(tool) {
+  const meta = isPlainObject(tool?._meta) ? tool._meta : {};
+  const ui = isPlainObject(meta.ui) ? meta.ui : {};
+  const uri = stringOrEmpty(ui.resourceUri) || stringOrEmpty(meta["openai/outputTemplate"]);
+  return isUiResourceUri(uri) ? uri : "";
+}
+
+// Only ui:// resources may be fetched through the app resource endpoint: it is
+// the boundary that keeps a connector from pointing the reader at arbitrary URIs.
+function isUiResourceUri(uri) {
+  return typeof uri === "string" && uri.startsWith("ui://");
+}
+
+function toolVisibility(tool) {
+  const meta = isPlainObject(tool?._meta) ? tool._meta : {};
+  const ui = isPlainObject(meta.ui) ? meta.ui : {};
+  if (!Object.prototype.hasOwnProperty.call(ui, "visibility")) return [...DEFAULT_TOOL_VISIBILITY];
+  const raw = ui.visibility;
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.map((item) => stringOrEmpty(item)).filter(Boolean))];
+}
+
+function toolVisibilityIncludes(visibility, value) {
+  const normalized = Array.isArray(visibility) ? visibility : DEFAULT_TOOL_VISIBILITY;
+  return normalized.includes(value);
 }
 
 // Classify a reconnect/start error as auth-terminal (re-auth required, retrying
@@ -1508,6 +1707,7 @@ function publicConnector({ connector, status, error = "" }) {
     ...connector,
     status,
     error,
+    apps: appsForConnector(connector),
     env: redactRecord(connector.env),
     headers: redactRecord(connector.headers),
     authorizationToken: connector.authorizationToken ? "********" : "",

@@ -130,6 +130,7 @@ export function classifyHttpRoute({ method = "GET", path = "" } = {}) {
   if (isSkillSettingsWriteRoute(verb, routePath)) return scoped("settings.write");
   if (isMcpSettingsReadRoute(verb, routePath)) return scoped("settings.read");
   if (isMcpSettingsWriteRoute(verb, routePath)) return scoped("settings.write");
+  if (isMcpAppToolCallRoute(verb, routePath)) return STUDIO_OWNER;
   if (isMediaSubmitRoute(verb, routePath)) return scoped("chat");
   if (isImageGenerationReadRoute(verb, routePath)) return scoped("settings.read");
   if (isImageGenerationWriteRoute(verb, routePath)) return scoped("settings.write");
@@ -511,6 +512,8 @@ function isMcpSettingsReadRoute(verb, routePath) {
   const sub = mcpSubPath(routePath);
   if (!sub) return false;
   return sub === "/state"
+    || sub === "/apps"
+    || /^\/(?:connectors|servers)\/[^/]+\/resources$/.test(sub)
     || /^\/oauth\/poll\/[^/]+$/.test(sub);
 }
 
@@ -523,7 +526,18 @@ function isMcpSettingsWriteRoute(verb, routePath) {
   if (verb === "POST" && /^\/(?:connectors|servers)\/[^/]+\/(?:start|stop|refresh-tools)$/.test(sub)) return true;
   if (verb === "PUT" && /^\/agents\/[^/]+\/(?:connectors|servers)\/[^/]+$/.test(sub)) return true;
   if (verb === "POST" && /^\/(?:connectors|servers)\/[^/]+\/oauth\/(?:start|logout)$/.test(sub)) return true;
+  if (verb === "POST" && /^\/(?:connectors|servers)\/[^/]+\/apps\/[^/]+\/launch$/.test(sub)) return true;
   return false;
+}
+
+// Invoking a connector tool on behalf of an app surface is a real side effect
+// against a third-party server, so it stays owner-only rather than riding on a
+// settings scope.
+function isMcpAppToolCallRoute(verb, routePath) {
+  if (verb !== "POST") return false;
+  const sub = mcpSubPath(routePath);
+  if (!sub) return false;
+  return /^\/(?:connectors|servers)\/[^/]+\/app-tools\/[^/]+\/call$/.test(sub);
 }
 
 function isImageGenerationReadRoute(verb, routePath) {
