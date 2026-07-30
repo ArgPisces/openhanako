@@ -2462,9 +2462,36 @@
       "reason": "Reached via esbuild source module graph, imported by core/session-coordinator.ts (import-statement)."
     },
     {
+      "path": "core/session-compaction-runtime.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/bridge-session-manager.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/session-coordinator.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "hub/agent-executor.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/bridge-session-manager.ts (import-statement); core/session-coordinator.ts (import-statement); hub/agent-executor.ts (import-statement)."
+    },
+    {
       "path": "core/session-compactor.ts",
       "inputType": "source-graph",
       "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/session-compaction-runtime.ts",
+          "kind": "import-statement"
+        },
         {
           "root": "server-bootstrap",
           "from": "core/bridge-session-manager.ts",
@@ -2491,7 +2518,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/bridge-session-manager.ts (import-statement); core/session-coordinator.ts (import-statement); core/engine.ts (import-statement); +2 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-compaction-runtime.ts (import-statement); core/bridge-session-manager.ts (import-statement); core/session-coordinator.ts (import-statement); +3 more importer(s)."
     },
     {
       "path": "core/session-coordinator.ts",
@@ -4167,6 +4194,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/desktop-session-submit.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/session-coordinator.ts",
           "kind": "import-statement"
         },
@@ -4201,7 +4233,7 @@
           "kind": "dynamic-import"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/tools/web-search.ts (import-statement); lib/tools/browser-tool.ts (import-statement); core/session-coordinator.ts (import-statement); +6 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/tools/web-search.ts (import-statement); lib/tools/browser-tool.ts (import-statement); core/desktop-session-submit.ts (import-statement); +7 more importer(s)."
     },
     {
       "path": "lib/browser/browser-transport.ts",
@@ -4609,6 +4641,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/session-compaction-runtime.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/bridge-session-manager.ts",
           "kind": "import-statement"
         },
@@ -4963,7 +5000,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); lib/desk/cron-store.ts (import-statement); core/studio-cron-service.ts (import-statement); +79 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); lib/desk/cron-store.ts (import-statement); core/studio-cron-service.ts (import-statement); +80 more importer(s)."
     },
     {
       "path": "lib/default-models.json",
@@ -6710,6 +6747,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/session-compaction-runtime.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/session-teardown.ts",
           "kind": "import-statement"
         },
@@ -6924,7 +6966,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +48 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +49 more importer(s)."
     },
     {
       "path": "lib/pi-sdk/search-tools.ts",
@@ -112188,9 +112230,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9611,
+    "totalFiles": 9612,
     "byInputType": {
-      "source-graph": 633,
+      "source-graph": 634,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }
