@@ -26,7 +26,9 @@ import {
   collectReminderBlock,
   REMINDER_BLOCK_END,
   REMINDER_BLOCK_PREFIX,
+  resolveReferenceBudgetTokens,
 } from "./session-reminders.ts";
+import { diffCatalogNames, formatCatalogChangeLines } from "./tool-catalog.ts";
 import { createModuleLogger } from "../lib/debug-log.ts";
 import { BrowserManager } from "../lib/browser/browser-manager.ts";
 import { t, getLocale } from "../lib/i18n.ts";
@@ -94,6 +96,7 @@ import {
 import { SessionListProjectionCache } from "./session-list-projection-cache.ts";
 import {
   buildLlmContextCachePrefixContract,
+  hashCacheContractValue,
   diffCachePrefixContracts,
   summarizeCachePrefixContract,
 } from "../lib/llm/cache-prefix-contract.ts";
@@ -2093,7 +2096,11 @@ export class SessionCoordinator {
     const agentToolsSnapshot = typeof agent.getToolsSnapshot === "function"
       ? agent.getToolsSnapshot(toolSnapshotOptions)
       : agent.tools;
-    const { tools: sessionTools, customTools: sessionCustomTools } = this._d.buildTools(
+    const {
+      tools: sessionTools,
+      customTools: sessionCustomTools,
+      toolCatalogManifest: sessionToolCatalogManifest = null,
+    } = this._d.buildTools(
       effectiveCwd,
       agentToolsSnapshot,
       {
@@ -2102,6 +2109,8 @@ export class SessionCoordinator {
         authorizedFolders: folderScope.authorizedFolders,
         getAuthorizedFolders: () => this.getSessionAuthorizedFolders(sessionPathRef.current || sessionPathForMeta),
         agentDir: agent.agentDir,
+        // Sizes the deferred-tool listing against the model this session froze.
+        modelContextWindowTokens: effectiveModel?.contextWindow ?? null,
       },
     );
     const sessionOpts: any = {
@@ -2409,6 +2418,18 @@ export class SessionCoordinator {
       reminderUnavailableRevision: hasPreviousReminderState
         ? (reminderState.reminderUnavailableRevision ?? 0)
         : 0,
+      // A restored session keeps what it was already told; only a session that
+      // has never been handed a listing should receive one.
+      reminderReferenceDelivered: hasPreviousReminderState
+        ? reminderState.reminderReferenceDelivered === true
+        : false,
+      reminderAcceptedCatalogFingerprint: hasPreviousReminderState
+        ? (reminderState.reminderAcceptedCatalogFingerprint ?? null)
+        : null,
+      reminderAcceptedCatalogNames: hasPreviousReminderState
+        && Array.isArray(reminderState.reminderAcceptedCatalogNames)
+        ? [...reminderState.reminderAcceptedCatalogNames]
+        : [],
     };
 
     Object.assign(sessionEntry, {
@@ -2452,6 +2473,10 @@ export class SessionCoordinator {
       // snapshot, so it dies with the runtime and the user is asked again after
       // a restart. That is the fail-closed direction for a permission grant.
       sessionAllowedInvocationCapabilities: new Set(),
+      // The deferred-tool listing for the tool set this session just froze.
+      // Owned by the entry because it describes that frozen set, not the
+      // engine's current view of the world.
+      toolCatalogManifest: sessionToolCatalogManifest,
       ...initialReminderState,
       lastTouchedAt: Date.now(),
       unsub,
@@ -3437,6 +3462,13 @@ export class SessionCoordinator {
         ? [...sourceReminderEntry.reminderAcceptedUnavailableToolNames]
         : [],
       reminderUnavailableRevision: sourceReminderEntry.reminderUnavailableRevision,
+      // The fork carries the source's transcript, which already contains the
+      // listing, so re-injecting it would repeat text the branch can see.
+      reminderReferenceDelivered: sourceReminderEntry.reminderReferenceDelivered === true,
+      reminderAcceptedCatalogFingerprint: sourceReminderEntry.reminderAcceptedCatalogFingerprint ?? null,
+      reminderAcceptedCatalogNames: Array.isArray(sourceReminderEntry.reminderAcceptedCatalogNames)
+        ? [...sourceReminderEntry.reminderAcceptedCatalogNames]
+        : [],
     } : null;
     if (
       this.isSessionStreaming(sourceSessionPath)
@@ -5822,6 +5854,14 @@ export class SessionCoordinator {
         ? [...entry.reminderAcceptedUnavailableToolNames]
         : [],
       reminderUnavailableRevision: entry.reminderUnavailableRevision,
+      // Without these, a woken session would be handed its tool listing a
+      // second time and re-told about catalog changes it already saw.
+      reminderReferenceDelivered: entry.reminderReferenceDelivered === true,
+      reminderAcceptedCatalogFingerprint: entry.reminderAcceptedCatalogFingerprint ?? null,
+      reminderAcceptedCatalogNames: Array.isArray(entry.reminderAcceptedCatalogNames)
+        ? [...entry.reminderAcceptedCatalogNames]
+        : [],
+      toolCatalogManifest: entry.toolCatalogManifest || null,
       contextUsage: entry.session?.getContextUsage?.() || null,
       hibernatedAt: Date.now(),
     });
@@ -6057,13 +6097,60 @@ export class SessionCoordinator {
     if (!recipientAgentId) {
       throw new Error("renderSessionReminderBlock: session Agent ownership is unavailable");
     }
+    const isZh = getLocale().startsWith("zh");
+    const manifest = entry.toolCatalogManifest;
     return collectReminderBlock({
       sessionEntry: entry,
       ledger: this._envChangeLedger,
       recipientAgentId,
-      isZh: getLocale().startsWith("zh"),
+      isZh,
       unavailableToolNames: this._computeReminderUnavailableToolNamesForEntry(entry, sessionPath),
+      // The listing belongs to this session's entry, not to the engine: it
+      // describes the tool set this session froze at creation.
+      referenceText: typeof manifest?.text === "string" ? manifest.text : "",
+      referenceBudgetTokens: this._referenceBudgetTokensForEntry(entry),
+      catalogBroadcast: this._computeCatalogBroadcastForEntry(entry, isZh),
     });
+  }
+
+  /**
+   * The budget the listing was sized against when this session was built. Using
+   * the recorded value keeps the render from truncating a tier that was chosen
+   * against a larger context.
+   */
+  _referenceBudgetTokensForEntry(entry: any) {
+    const recorded = entry?.toolCatalogManifest?.budgetTokens;
+    if (typeof recorded === "number" && Number.isFinite(recorded) && recorded > 0) return recorded;
+    return resolveReferenceBudgetTokens(entry?.session?.model?.contextWindow ?? null);
+  }
+
+  /**
+   * Whether this session should be told the catalog changed shape.
+   *
+   * The comparison is against what this session has already accepted, not
+   * against its original listing, so a session that has been told once about a
+   * change is not told again, and a further change still surfaces. Sessions
+   * that never received a listing have nothing to compare and stay silent.
+   */
+  _computeCatalogBroadcastForEntry(entry: any, isZh: boolean) {
+    const snapshot = entry?.toolCatalogManifest;
+    if (!snapshot) return null;
+    const liveNames = this._d.getLiveToolCatalogNames?.();
+    if (!Array.isArray(liveNames)) return null;
+
+    const liveFingerprint = hashCacheContractValue(liveNames);
+    const acceptedFingerprint = typeof entry.reminderAcceptedCatalogFingerprint === "string"
+      ? entry.reminderAcceptedCatalogFingerprint
+      : snapshot.fingerprint;
+    if (liveFingerprint === acceptedFingerprint) return null;
+
+    const baseNames = Array.isArray(entry.reminderAcceptedCatalogNames)
+      && entry.reminderAcceptedCatalogNames.length > 0
+      ? entry.reminderAcceptedCatalogNames
+      : (Array.isArray(snapshot.names) ? snapshot.names : []);
+    const lines = formatCatalogChangeLines(diffCatalogNames(baseNames, liveNames), isZh);
+    if (lines.length === 0) return null;
+    return { lines, fingerprint: liveFingerprint, names: [...liveNames] };
   }
 
   consumeRenderedSessionReminderBlock(sessionPath: any, receipt: any) {

@@ -162,6 +162,9 @@ export interface ReminderSessionEntry {
   reminderUnavailableRevision: number;
   /** Set once the session has been handed its deferred-tool listing. */
   reminderReferenceDelivered?: boolean;
+  /** The catalog shape this session has already been told about. */
+  reminderAcceptedCatalogFingerprint?: string | null;
+  reminderAcceptedCatalogNames?: string[];
 }
 
 export interface SessionReminderReceipt {
@@ -175,6 +178,9 @@ export interface SessionReminderReceipt {
    * that never defer tools keep the exact receipt shape they always had.
    */
   readonly deliverReference?: boolean;
+  /** Present only when this render broadcasts a catalog change. */
+  readonly catalogFingerprint?: string;
+  readonly catalogNames?: readonly string[];
 }
 
 export interface RenderedSessionReminderBlock {
@@ -245,6 +251,7 @@ export function collectReminderBlock({
   unavailableToolNames = [],
   referenceText = "",
   referenceBudgetTokens = 0,
+  catalogBroadcast = null,
 }: {
   sessionEntry: ReminderSessionEntry;
   ledger: EnvChangeLedger;
@@ -254,6 +261,12 @@ export function collectReminderBlock({
   /** Reference material to hand over once, such as a deferred-tool listing. */
   referenceText?: string;
   referenceBudgetTokens?: number;
+  /**
+   * A catalog change the session has not been told about yet. Its lines go
+   * through the ordinary broadcast channel, character limit and all: the
+   * session is being told something moved, not handed a new listing.
+   */
+  catalogBroadcast?: { lines: string[]; fingerprint: string; names: string[] } | null;
 }): RenderedSessionReminderBlock | null {
   const normalizedRecipientAgentId = typeof recipientAgentId === "string" ? recipientAgentId.trim() : "";
   if (!normalizedRecipientAgentId) {
@@ -298,6 +311,8 @@ export function collectReminderBlock({
   if (hasNewOutage) {
     lines.push(`- ${formatUnavailableToolsLine(renderedUnavailableToolNames, isZh)}`);
   }
+  const broadcastLines = Array.isArray(catalogBroadcast?.lines) ? catalogBroadcast.lines : [];
+  for (const line of broadcastLines) lines.push(`- ${line}`);
   if (hasPendingCompaction) lines.push(`- ${formatCompactionLine(isZh)}`);
   for (const entry of memoryFactsEntries(entries)) {
     lines.push(`- ${formatMemoryFactsLine(entry.payload as Readonly<MemoryFactsPayload>, isZh)}`);
@@ -333,6 +348,12 @@ export function collectReminderBlock({
     baseUnavailableRevision: unavailableRevision,
     consumeBlockState: lines.length > 0,
     ...(pendingReference ? { deliverReference: true } : {}),
+    ...(broadcastLines.length > 0 && catalogBroadcast
+      ? {
+          catalogFingerprint: catalogBroadcast.fingerprint,
+          catalogNames: Object.freeze([...catalogBroadcast.names]),
+        }
+      : {}),
   });
   const reminderBlock = lines.length > 0
     // 块头不带时间戳：reminder 不投递时间，模型需要当前时间时调用 current_status(time)
@@ -370,6 +391,13 @@ export function applyReminderConsumption({
 
   if (receipt.deliverReference === true) {
     sessionEntry.reminderReferenceDelivered = true;
+  }
+
+  if (typeof receipt.catalogFingerprint === "string" && receipt.catalogFingerprint) {
+    sessionEntry.reminderAcceptedCatalogFingerprint = receipt.catalogFingerprint;
+    sessionEntry.reminderAcceptedCatalogNames = Array.isArray(receipt.catalogNames)
+      ? [...receipt.catalogNames]
+      : [];
   }
 
   if (receipt.consumeBlockState) {

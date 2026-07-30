@@ -153,11 +153,23 @@ const DEFAULT_TOOL_DEFER_THRESHOLD = 10;
  * schemas: a reworded description is not news worth interrupting a session for.
  */
 function buildToolCatalogManifestSnapshot(catalog, modelContextWindowTokens) {
-  const names = catalog.names();
-  const { tier, text } = catalog.manifest(resolveReferenceBudgetTokens(modelContextWindowTokens));
+  // Only MCP-origin names are fingerprinted. Those are the ones a connector
+  // refresh can change underneath a running session; builtin rows move only
+  // when the application itself changes, and including them here would make a
+  // builtin-defer session look like it had lost every tool.
+  const names = catalog.all()
+    .filter((entry) => entry.origin === "mcp")
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+  const budgetTokens = resolveReferenceBudgetTokens(modelContextWindowTokens);
+  const { tier, text } = catalog.manifest(budgetTokens);
   return {
     text,
     tier,
+    // Carried so the session renders against the budget the tier was chosen
+    // for, rather than re-deriving it from whatever model state is reachable
+    // at render time.
+    budgetTokens,
     fingerprint: hashCacheContractValue(names),
     names,
   };
@@ -477,6 +489,7 @@ export class HanaEngine {
       getResourceLoader: () => this._resourceLoader,
       getSkills: () => this._skills,
       buildTools: (cwd, ct, opts) => this.buildTools(cwd, ct, opts),
+      getLiveToolCatalogNames: () => this.getLiveToolCatalogNames(),
       emitEvent: (e, sp) => this._emitEvent(e, sp),
       emitDevLog: (t, l) => this.emitDevLog(t, l),
       getHomeCwd: (agentId) => this.getHomeCwd(agentId),
@@ -2643,12 +2656,7 @@ export class HanaEngine {
       ? config.deferThreshold
       : DEFAULT_TOOL_DEFER_THRESHOLD;
 
-    const mcpEntries = typeof this._mcp?.getCatalogEntries === "function"
-      ? (this._mcp.getCatalogEntries() || [])
-      : [];
-    const publishedMcpNames = new Set((mcpTools || []).map((tool) => tool?.name));
-    // Only tools that are actually published this run can be deferred.
-    const liveMcpEntries = mcpEntries.filter((entry) => publishedMcpNames.has(`mcp_${entry.name}`));
+    const liveMcpEntries = this._liveMcpCatalogEntries(mcpTools);
 
     const builtinDeferEnabled = this._prefs?.getBuiltinToolDeferEnabled?.() === true;
     const builtinEntries = builtinDeferEnabled
@@ -2707,6 +2715,34 @@ export class HanaEngine {
       entry.origin === "builtin" ? entry.name : `mcp_${entry.name}`
     )));
     return { catalog, bridgeTools, deferredToolNames };
+  }
+
+  /**
+   * Catalog rows for the MCP tools currently published. Only tools that are
+   * actually published can be deferred, so a row in config that never made it
+   * to a live listing is not a catalog entry.
+   */
+  _liveMcpCatalogEntries(mcpTools = null) {
+    const entries = typeof this._mcp?.getCatalogEntries === "function"
+      ? (this._mcp.getCatalogEntries() || [])
+      : [];
+    const published = new Set(
+      (Array.isArray(mcpTools) ? mcpTools : (this._mcp?.getAllTools?.() || []))
+        .map((tool) => tool?.name),
+    );
+    return entries.filter((entry) => published.has(`mcp_${entry.name}`));
+  }
+
+  /**
+   * The catalog's tool names as they stand right now, for a session to compare
+   * against the listing it was given. Returns null when there is no MCP manager
+   * to ask, which reads as "no basis to claim anything changed".
+   */
+  getLiveToolCatalogNames() {
+    if (!this._mcp) return null;
+    return this._liveMcpCatalogEntries()
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right));
   }
 
   buildTools(cwd, customTools, opts: any = {}) {
