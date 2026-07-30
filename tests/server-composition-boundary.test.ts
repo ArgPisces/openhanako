@@ -30,7 +30,8 @@ const root = process.cwd();
 // Part 1 — sorted mount-call inventory snapshot.
 //
 // Golden list captured from server/index.ts *before* the composition
-// split (43 `app.route(prefix, headExpression)` call sites, sorted). Every
+// split (43 `app.route(prefix, headExpression)` call sites, sorted), plus
+// route factories added since. Every
 // entry is `${prefix} :: ${firstIdentifierOfSecondArg}` — enough to prove
 // "same factory mounted at the same prefix", independent of exactly how
 // many lines its (unchanged) argument object spans or which file now
@@ -61,6 +62,9 @@ const PRE_REFACTOR_MOUNT_CALLS = Object.freeze([
   '"/api" :: createExperimentsRoute',
   '"/api" :: createFsRoute',
   '"/api" :: createInputDraftsRoute',
+  // Added after the split: the MCP surface used to reach the app through the
+  // generic plugin route proxy, so it had no factory of its own here.
+  '"/api" :: createMcpRoute',
   '"/api" :: createMediaRoute',
   '"/api" :: createMobileWorkbenchRoute',
   '"/api" :: createModelsRoute',
@@ -94,7 +98,7 @@ function extractMountCalls(filePath: string): string[] {
 }
 
 describe("composition boundary behavior lock: sorted mount-call inventory", () => {
-  it("server/index.ts + composition/open-root.ts + composition/full-root.ts together mount exactly the same 43 route factories, at the same prefixes, as the pre-refactor server/index.ts", () => {
+  it("server/index.ts + composition/open-root.ts + composition/full-root.ts together mount exactly the expected route factories, at the same prefixes, as the pre-refactor server/index.ts", () => {
     const combined = [
       ...extractMountCalls(path.join(root, "server", "index.ts")),
       ...extractMountCalls(path.join(root, "server", "composition", "open-root.ts")),

@@ -1,18 +1,22 @@
-export default function registerMcpRoutes(app, ctx) {
-  const runtime = () => ctx._mcpRuntime;
+import { Hono } from "hono";
 
-  async function agentConfig(agentId) {
-    if (!agentId) return {};
-    const result = await ctx.bus.request("agent:config", { agentId });
-    if (result?.error) throw new Error(result.error);
-    return result?.config || {};
-  }
+/**
+ * HTTP surface for the MCP connector manager.
+ *
+ * The sub-app is mounted twice: at `/mcp` (first-class) and at `/plugins/mcp`
+ * (the path this API lived on while MCP shipped as a bundled plugin). The alias
+ * keeps already-installed clients and previously issued OAuth redirect URIs
+ * working; both mounts serve the identical handlers.
+ */
+export function createMcpRoute(engine) {
+  const sub = new Hono();
+  const runtime = () => engine?.mcp;
 
   async function currentState(c) {
     const rt = runtime();
     if (!rt) return c.json({ error: "not initialized" }, 503);
     const agentId = c.req.query("agentId") || c.get("agentId") || null;
-    const config = await agentConfig(agentId);
+    const config = await rt.getAgentConfig(agentId);
     return c.json(rt.getState(config));
   }
 
@@ -21,16 +25,18 @@ export default function registerMcpRoutes(app, ctx) {
     await rt?._markCapabilitySnapshotsStale?.(payload);
   }
 
+  // The callback always points at the first-class path. The legacy path stays
+  // routable for redirect URIs issued before the move.
   function redirectUriForRequest(c) {
     const url = new URL(c.req.url);
-    return new URL("/api/plugins/mcp/oauth/callback", url.origin).href;
+    return new URL("/api/mcp/oauth/callback", url.origin).href;
   }
 
   function htmlPage(title, body) {
     return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,-apple-system,sans-serif;padding:32px;line-height:1.5;color:#333;background:#faf8f2"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p></body>`;
   }
 
-  app.get("/state", currentState);
+  sub.get("/state", currentState);
 
   async function setGlobalEnabled(c) {
     const rt = runtime();
@@ -41,13 +47,12 @@ export default function registerMcpRoutes(app, ctx) {
       await markCapabilitySnapshotsStale({ reason: "mcp.global.enabled" });
       return currentState(c);
     } catch (err) {
-      ctx.log.error(`set global enabled failed: ${err.message}`);
       return c.json({ error: err.message }, 400);
     }
   }
 
-  app.put("/settings/enabled", setGlobalEnabled);
-  app.put("/enabled", setGlobalEnabled);
+  sub.put("/settings/enabled", setGlobalEnabled);
+  sub.put("/enabled", setGlobalEnabled);
 
   async function addConnector(c) {
     const rt = runtime();
@@ -133,22 +138,22 @@ export default function registerMcpRoutes(app, ctx) {
     }
   }
 
-  app.post("/connectors", addConnector);
-  app.post("/servers", addConnector);
-  app.put("/connectors/:id", updateConnector);
-  app.put("/servers/:id", updateConnector);
-  app.delete("/connectors/:id", removeConnector);
-  app.delete("/servers/:id", removeConnector);
+  sub.post("/connectors", addConnector);
+  sub.post("/servers", addConnector);
+  sub.put("/connectors/:id", updateConnector);
+  sub.put("/servers/:id", updateConnector);
+  sub.delete("/connectors/:id", removeConnector);
+  sub.delete("/servers/:id", removeConnector);
 
-  app.post("/connectors/:id/start", (c) => connectorAction(c, "start"));
-  app.post("/servers/:id/start", (c) => connectorAction(c, "start"));
-  app.post("/connectors/:id/stop", (c) => connectorAction(c, "stop"));
-  app.post("/servers/:id/stop", (c) => connectorAction(c, "stop"));
-  app.post("/connectors/:id/refresh-tools", (c) => connectorAction(c, "refresh-tools"));
-  app.post("/servers/:id/refresh-tools", (c) => connectorAction(c, "refresh-tools"));
+  sub.post("/connectors/:id/start", (c) => connectorAction(c, "start"));
+  sub.post("/servers/:id/start", (c) => connectorAction(c, "start"));
+  sub.post("/connectors/:id/stop", (c) => connectorAction(c, "stop"));
+  sub.post("/servers/:id/stop", (c) => connectorAction(c, "stop"));
+  sub.post("/connectors/:id/refresh-tools", (c) => connectorAction(c, "refresh-tools"));
+  sub.post("/servers/:id/refresh-tools", (c) => connectorAction(c, "refresh-tools"));
 
-  app.put("/agents/:agentId/connectors/:id", updateAgentConnector);
-  app.put("/agents/:agentId/servers/:id", updateAgentConnector);
+  sub.put("/agents/:agentId/connectors/:id", updateAgentConnector);
+  sub.put("/agents/:agentId/servers/:id", updateAgentConnector);
 
   async function startOAuth(c) {
     const rt = runtime();
@@ -173,12 +178,12 @@ export default function registerMcpRoutes(app, ctx) {
     }
   }
 
-  app.post("/connectors/:id/oauth/start", startOAuth);
-  app.post("/servers/:id/oauth/start", startOAuth);
-  app.post("/connectors/:id/oauth/logout", logoutOAuth);
-  app.post("/servers/:id/oauth/logout", logoutOAuth);
+  sub.post("/connectors/:id/oauth/start", startOAuth);
+  sub.post("/servers/:id/oauth/start", startOAuth);
+  sub.post("/connectors/:id/oauth/logout", logoutOAuth);
+  sub.post("/servers/:id/oauth/logout", logoutOAuth);
 
-  app.get("/oauth/callback", async (c) => {
+  sub.get("/oauth/callback", async (c) => {
     const rt = runtime();
     if (!rt) return c.html(htmlPage("MCP Connector OAuth", "MCP runtime is not initialized."), 503);
     const url = new URL(c.req.url);
@@ -194,11 +199,19 @@ export default function registerMcpRoutes(app, ctx) {
     }
   });
 
-  app.get("/oauth/poll/:sessionId", (c) => {
+  sub.get("/oauth/poll/:sessionId", (c) => {
     const rt = runtime();
     if (!rt) return c.json({ error: "not initialized" }, 503);
     return c.json(rt.getOAuthStatus(c.req.param("sessionId")));
   });
+
+  const app = new Hono();
+  app.route("/mcp", sub);
+  // Legacy alias. It is registered here, ahead of the generic
+  // /plugins/:pluginId/* proxy, so these paths never fall through to a plugin
+  // lookup that would now miss.
+  app.route("/plugins/mcp", sub);
+  return app;
 }
 
 function escapeHtml(value) {

@@ -37,6 +37,7 @@ import { createBridgeRoute } from "../routes/bridge.ts";
 import { createAuthRoute } from "../routes/auth.ts";
 import { createConfirmRoute } from "../routes/confirm.ts";
 import { createMediaRoute } from "../routes/media.ts";
+import { createMcpRoute } from "../routes/mcp.ts";
 import { createPluginsRoute } from "../routes/plugins.ts";
 import { createCheckpointsRoute } from "../routes/checkpoints.ts";
 import { createCommandsRoute } from "../routes/commands.ts";
@@ -117,6 +118,9 @@ export function registerOpenRoutes(app: Hono, ctx: CompositionContext): void {
   app.route("/api", createAuthRoute(engine));
   app.route("/api", createConfirmRoute(confirmStore, engine));
   app.route("/api", createMediaRoute(engine));
+  // Must precede the plugin routes: it owns the /api/plugins/mcp alias, which
+  // would otherwise be swallowed by the generic plugin proxy.
+  app.route("/api", createMcpRoute(engine));
   app.route("/api", createPluginsRoute(engine));
   app.route("/api", createCheckpointsRoute(engine));
   app.route("/api", createCommandsRoute(engine));

@@ -411,10 +411,10 @@ describe("plugin management API", () => {
         const body = await c.req.json();
         return c.json({ routed: "plugin", enabled: body.enabled === true });
       });
-      engine.pluginManager.routeRegistry.set("mcp", pluginApp);
+      engine.pluginManager.routeRegistry.set("settings-plug", pluginApp);
       const app = createApp(engine);
 
-      const res = await app.request("/api/plugins/mcp/settings/enabled", {
+      const res = await app.request("/api/plugins/settings-plug/settings/enabled", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: true }),

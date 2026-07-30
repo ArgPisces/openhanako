@@ -335,40 +335,47 @@ describe("HTTP route security policy", () => {
     const writer = devicePrincipal(["settings.read", "settings.write"]);
     const chatOnly = devicePrincipal(["chat"]);
 
-    expect(classifyHttpRoute({ method: "GET", path: "/api/plugins/mcp/oauth/callback" }))
-      .toMatchObject({ kind: "public" });
-    expect(authorizeHttpRoute({
-      method: "GET",
-      path: "/api/plugins/mcp/oauth/callback",
-      principal: null,
-    })).toMatchObject({ allowed: true });
+    // MCP is served at /api/mcp and at the legacy /api/plugins/mcp alias by the
+    // very same handlers, so both must be classified identically — an alias that
+    // classified more loosely would be an authentication bypass.
+    for (const prefix of ["/api/mcp", "/api/plugins/mcp"]) {
+      expect(classifyHttpRoute({ method: "GET", path: `${prefix}/oauth/callback` }))
+        .toMatchObject({ kind: "public" });
+      expect(authorizeHttpRoute({
+        method: "GET",
+        path: `${prefix}/oauth/callback`,
+        principal: null,
+      })).toMatchObject({ allowed: true });
 
-    for (const [method, path] of [
-      ["GET", "/api/plugins/mcp/state"],
-      ["GET", "/api/plugins/mcp/oauth/poll/session_1"],
-    ]) {
-      expect(authorizeHttpRoute({ method, path, principal: reader }))
-        .toMatchObject({ allowed: true });
-      expect(authorizeHttpRoute({ method, path, principal: chatOnly }))
-        .toMatchObject({ allowed: false, error: "insufficient_scope" });
-    }
+      for (const [method, path] of [
+        ["GET", `${prefix}/state`],
+        ["GET", `${prefix}/oauth/poll/session_1`],
+      ]) {
+        expect(authorizeHttpRoute({ method, path, principal: reader }))
+          .toMatchObject({ allowed: true });
+        expect(authorizeHttpRoute({ method, path, principal: chatOnly }))
+          .toMatchObject({ allowed: false, error: "insufficient_scope" });
+      }
 
-    for (const [method, path] of [
-      ["PUT", "/api/plugins/mcp/settings/enabled"],
-      ["POST", "/api/plugins/mcp/connectors"],
-      ["PUT", "/api/plugins/mcp/connectors/github"],
-      ["DELETE", "/api/plugins/mcp/connectors/github"],
-      ["POST", "/api/plugins/mcp/connectors/github/start"],
-      ["POST", "/api/plugins/mcp/connectors/github/stop"],
-      ["POST", "/api/plugins/mcp/connectors/github/refresh-tools"],
-      ["PUT", "/api/plugins/mcp/agents/hana/connectors/github"],
-      ["POST", "/api/plugins/mcp/connectors/github/oauth/start"],
-      ["POST", "/api/plugins/mcp/connectors/github/oauth/logout"],
-    ]) {
-      expect(authorizeHttpRoute({ method, path, principal: writer }))
-        .toMatchObject({ allowed: true });
-      expect(authorizeHttpRoute({ method, path, principal: reader }))
-        .toMatchObject({ allowed: false, error: "insufficient_scope" });
+      for (const [method, path] of [
+        ["PUT", `${prefix}/settings/enabled`],
+        ["PUT", `${prefix}/enabled`],
+        ["POST", `${prefix}/connectors`],
+        ["POST", `${prefix}/servers`],
+        ["PUT", `${prefix}/connectors/github`],
+        ["DELETE", `${prefix}/connectors/github`],
+        ["POST", `${prefix}/connectors/github/start`],
+        ["POST", `${prefix}/connectors/github/stop`],
+        ["POST", `${prefix}/connectors/github/refresh-tools`],
+        ["PUT", `${prefix}/agents/hana/connectors/github`],
+        ["POST", `${prefix}/connectors/github/oauth/start`],
+        ["POST", `${prefix}/connectors/github/oauth/logout`],
+      ]) {
+        expect(authorizeHttpRoute({ method, path, principal: writer }))
+          .toMatchObject({ allowed: true });
+        expect(authorizeHttpRoute({ method, path, principal: reader }))
+          .toMatchObject({ allowed: false, error: "insufficient_scope" });
+      }
     }
   });
 

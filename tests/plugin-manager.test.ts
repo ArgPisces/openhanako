@@ -129,6 +129,10 @@ describe("loadAll", () => {
       await pm.loadAll();
 
       const diagnosticsById = new Map(pm.getDiagnostics().map((entry) => [entry.id, entry]));
+      // MCP is a core module owned by the engine, not a plugin: the plugin host
+      // must not discover it at all.
+      expect(diagnosticsById.has("mcp")).toBe(false);
+      expect(pm.routeRegistry.has("mcp")).toBe(false);
       for (const id of ["media", "jimeng-cli", "beautify", "office"]) {
         expect(diagnosticsById.get(id)).toMatchObject({
           id,

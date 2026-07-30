@@ -12,7 +12,7 @@ import {
   toMcpToolId,
 } from "../core/mcp/manager.ts";
 import { McpHttpError } from "../core/mcp/clients/http-client.ts";
-import registerMcpRoutes from "../plugins/mcp/routes/api.ts";
+import { createMcpRoute } from "../server/routes/mcp.ts";
 
 /**
  * Build a manager with an in-memory config store. Production injects the
@@ -574,9 +574,9 @@ describe("MCP runtime policy", () => {
     });
     await runtime.start({ request });
     const app = new Hono();
-    registerMcpRoutes(app, { _mcpRuntime: runtime, bus: { request }, log: console });
+    app.route("/api", createMcpRoute({ mcp: runtime } as any));
 
-    const res = await app.request("/settings/enabled", {
+    const res = await app.request("/api/mcp/settings/enabled", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled: true }),
@@ -612,9 +612,9 @@ describe("MCP runtime policy", () => {
     });
     await runtime.start({ request });
     const app = new Hono();
-    registerMcpRoutes(app, { _mcpRuntime: runtime, bus: { request }, log: console });
+    app.route("/api", createMcpRoute({ mcp: runtime } as any));
 
-    const res = await app.request("/agents/hana/connectors/github", {
+    const res = await app.request("/api/mcp/agents/hana/connectors/github", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tools: { search: true } }),
