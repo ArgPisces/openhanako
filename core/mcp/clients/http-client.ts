@@ -6,9 +6,19 @@ import {
   resolveProxyForUrl,
 } from "../../../shared/network-proxy.ts";
 import {
+  MCP_ERA_LEGACY,
+  MCP_ERA_MODERN,
+  MCP_META_CLIENT_CAPABILITIES,
+  MCP_META_CLIENT_INFO,
+  MCP_META_PROTOCOL_VERSION,
+  MCP_PROTOCOL_VERSION_2026_07_28,
   MCP_PROTOCOL_VERSION_HEADER,
   headersWithoutMcpProtocolVersion,
+  mcpEraForProtocolVersion,
+  negotiateMcpProtocolVersion,
+  readDiscoverSupportedVersions,
   resolveInitialMcpProtocolVersion,
+  resolvePinnedMcpProtocolVersion,
 } from "./protocol-version.ts";
 import {
   isJsonRpcResponse,
@@ -19,6 +29,33 @@ import {
 const STREAMABLE_ACCEPT = "application/json, text/event-stream";
 const SSE_ACCEPT = "text/event-stream";
 const FALLBACK_STATUSES = new Set([400, 404, 405]);
+
+const MCP_CLIENT_INFO = { name: "hana", title: "Hana", version: "0.1.0" };
+
+// Capabilities we advertise on every stateless request. A server may only ask
+// us for input of a kind we declared here.
+const MODERN_CLIENT_CAPABILITIES = {};
+
+// Attach the per-request protocol fields the stateless revision requires. The
+// header mirror of the protocol version must match this value exactly, so both
+// are derived from the same argument.
+function withModernRequestMeta(payload, protocolVersion, capabilities) {
+  const source = payload?.params && typeof payload.params === "object" && !Array.isArray(payload.params)
+    ? payload.params
+    : {};
+  return {
+    ...payload,
+    params: {
+      ...source,
+      _meta: {
+        ...(source as any)._meta,
+        [MCP_META_PROTOCOL_VERSION]: protocolVersion,
+        [MCP_META_CLIENT_INFO]: MCP_CLIENT_INFO,
+        [MCP_META_CLIENT_CAPABILITIES]: capabilities,
+      },
+    },
+  };
+}
 
 export class McpHttpError extends Error {
   declare body: any;
@@ -209,8 +246,11 @@ export class McpStreamableHttpClient {
   declare endpoint: any;
   declare fetchImpl: any;
   declare getAuthToken: any;
+  declare era: any;
   declare initialProtocolVersion: any;
   declare log: any;
+  declare negotiatedProtocolVersion: any;
+  declare pinnedProtocolVersion: any;
   declare onClose: any;
   declare protocolVersion: any;
   declare refreshAuthToken: any;
@@ -238,8 +278,22 @@ export class McpStreamableHttpClient {
     this._initialized = false;
     this._stopping = false;
     this.sessionId = "";
-    this.initialProtocolVersion = resolveInitialMcpProtocolVersion({ headers: connectorHeaders(server) });
+    const headers = connectorHeaders(server);
+    this.initialProtocolVersion = resolveInitialMcpProtocolVersion({
+      headers,
+      protocolVersion: server?.protocolVersion,
+    });
     this.protocolVersion = this.initialProtocolVersion;
+    // An operator-pinned version is an instruction, not a hint: it selects the
+    // track outright and suppresses the probe.
+    this.pinnedProtocolVersion = resolvePinnedMcpProtocolVersion({
+      headers,
+      protocolVersion: server?.protocolVersion,
+    });
+    // "" until proven. Determined once per client instance and then reused, so
+    // one connection never re-probes.
+    this.era = this.pinnedProtocolVersion ? mcpEraForProtocolVersion(this.pinnedProtocolVersion) : "";
+    this.negotiatedProtocolVersion = "";
   }
 
   get running() {
@@ -252,12 +306,58 @@ export class McpStreamableHttpClient {
     this._closed = false;
     this._stopping = false;
     try {
-      await this.initialize();
+      await this._establish();
       this._initialized = true;
     } catch (err) {
       this._closed = true;
       this._initialized = false;
       throw err;
+    }
+  }
+
+  // Decide the era once, then connect accordingly. The stateless track has
+  // nothing to establish: no handshake, no session, so a successful probe is
+  // itself the whole connect.
+  async _establish() {
+    if (!this.era) this.era = await this._probeServerEra();
+    if (this.era === MCP_ERA_MODERN) {
+      this.protocolVersion = this._modernProtocolVersion();
+      this.sessionId = "";
+      return;
+    }
+    await this.initialize();
+  }
+
+  _modernProtocolVersion() {
+    return this.negotiatedProtocolVersion || this.pinnedProtocolVersion || MCP_PROTOCOL_VERSION_2026_07_28;
+  }
+
+  // Ask the server what it speaks. Only a well-formed DiscoverResult naming a
+  // version we implement proves a modern server; a transport failure, an odd
+  // shape, or a version list we cannot satisfy all mean "assume legacy and
+  // handshake". Guessing modern on a doubtful answer would strand the connector
+  // with no usable fallback, so the doubt always resolves toward the old path.
+  async _probeServerEra() {
+    try {
+      const result = await this._postJsonRpc({
+        jsonrpc: "2.0",
+        id: this._nextId++,
+        method: "server/discover",
+        params: {},
+      }, { era: MCP_ERA_MODERN });
+      const supported = readDiscoverSupportedVersions(result);
+      const negotiated = supported ? negotiateMcpProtocolVersion(supported) : "";
+      if (!negotiated) {
+        this.log.debug?.(
+          `[mcp:${this.server.id}] discovery did not establish a supported stateless version; using the handshake`,
+        );
+        return MCP_ERA_LEGACY;
+      }
+      this.negotiatedProtocolVersion = negotiated;
+      return MCP_ERA_MODERN;
+    } catch (err) {
+      this.log.debug?.(`[mcp:${this.server.id}] discovery probe failed (${err.message}); using the handshake`);
+      return MCP_ERA_LEGACY;
     }
   }
 
@@ -417,14 +517,24 @@ export class McpStreamableHttpClient {
     }
   }
 
-  async _headers({ sessionId = this.sessionId, includeJson = true, initializing = false }: any = {}) {
+  async _headers({
+    sessionId = this.sessionId,
+    includeJson = true,
+    initializing = false,
+    era = this.era,
+  }: any = {}) {
+    const modern = era === MCP_ERA_MODERN;
     const headers = {
       ...headersWithoutMcpProtocolVersion(connectorHeaders(this.server)),
       Accept: STREAMABLE_ACCEPT,
-      [MCP_PROTOCOL_VERSION_HEADER]: this.protocolVersion || this.initialProtocolVersion || MCP_PROTOCOL_VERSION,
+      [MCP_PROTOCOL_VERSION_HEADER]: modern
+        ? this._modernProtocolVersion()
+        : (this.protocolVersion || this.initialProtocolVersion || MCP_PROTOCOL_VERSION),
     };
     if (includeJson) headers["Content-Type"] = "application/json";
-    if (sessionId && !initializing) headers["MCP-Session-Id"] = sessionId;
+    // Sessions exist only on the legacy track; the stateless revision removed
+    // them outright, so a modern request must never carry one.
+    if (!modern && sessionId && !initializing) headers["MCP-Session-Id"] = sessionId;
     // Prefer the runtime's freshest token (handles near-expiry refresh out of
     // band); fall back to the connector snapshot when no callback is injected.
     const token = await requestAuthToken(this.server, this.getAuthToken);
@@ -455,12 +565,17 @@ export class McpStreamableHttpClient {
     });
   }
 
-  async _postJsonRpc(payload, { initializing = false } = {}) {
+  async _postJsonRpc(payload, { initializing = false, era = this.era } = {}) {
+    // Validate what the caller handed us, so a diagnostic points at the caller's
+    // own field path rather than at protocol metadata we added underneath.
     assertValidUnicodeBoundary(payload);
+    const body = era === MCP_ERA_MODERN
+      ? withModernRequestMeta(payload, this._modernProtocolVersion(), MODERN_CLIENT_CAPABILITIES)
+      : payload;
     const response = await fetchWithTimeout(this.fetchImpl, this.endpoint, {
       method: "POST",
-      headers: await this._headers({ initializing }),
-      body: JSON.stringify(payload),
+      headers: await this._headers({ initializing, era }),
+      body: JSON.stringify(body),
     }, requestTimeoutMs(this.server));
     if (initializing) {
       const sessionId = responseHeader(response, "MCP-Session-Id");

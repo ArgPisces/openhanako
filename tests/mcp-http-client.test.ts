@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { MCP_PROTOCOL_VERSION } from "../core/mcp/clients/stdio-client.ts";
+import { MCP_PROTOCOL_VERSION_2026_07_28 } from "../core/mcp/clients/protocol-version.ts";
 import {
   McpAutoHttpClient,
   McpHttpError,
@@ -33,6 +34,34 @@ function requestBody(init) {
   return init?.body ? JSON.parse(String(init.body)) : null;
 }
 
+// A real pre-2026-07-28 server does not implement server/discover. It answers
+// the era probe with a plain HTTP rejection that carries no recognizable modern
+// JSON-RPC error, which is exactly the signal that sends the client back to the
+// initialize handshake.
+function legacyDiscoverRejection() {
+  return new Response("Not Found", { status: 404 });
+}
+
+// A 2026-07-28 server answers the probe with the versions it speaks.
+function modernDiscoverResult(body, { supportedVersions = [MCP_PROTOCOL_VERSION_2026_07_28] } = {}) {
+  return jsonResponse({
+    jsonrpc: "2.0",
+    id: body.id,
+    result: {
+      resultType: "complete",
+      supportedVersions,
+      capabilities: { tools: {} },
+      _meta: {
+        "io.modelcontextprotocol/serverInfo": { name: "ExampleServer", version: "1.0.0" },
+      },
+    },
+  });
+}
+
+function requestMeta(body) {
+  return body?.params?._meta || {};
+}
+
 describe("MCP HTTP clients", () => {
   it("uses Streamable HTTP JSON-RPC POST with bearer auth and session headers", async () => {
     const requests = [];
@@ -46,6 +75,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": "session-a" } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list") {
         return jsonResponse({
@@ -77,16 +107,149 @@ describe("MCP HTTP clients", () => {
     expect(tools).toEqual([{ name: "search", inputSchema: { type: "object" } }]);
     expect(result.content[0].text).toBe("ok");
     expect(requests.map(r => r.body?.method)).toEqual([
+      "server/discover",
       "initialize",
       "notifications/initialized",
       "tools/list",
       "tools/call",
     ]);
-    expect(headerValue(requests[0].init.headers, "Accept")).toBe("application/json, text/event-stream");
-    expect(headerValue(requests[0].init.headers, "Content-Type")).toBe("application/json");
-    expect(headerValue(requests[0].init.headers, "Authorization")).toBe("Bearer token-123");
-    expect(headerValue(requests[2].init.headers, "MCP-Protocol-Version")).toBe(MCP_PROTOCOL_VERSION);
-    expect(headerValue(requests[2].init.headers, "MCP-Session-Id")).toBe("session-a");
+    const initialize = requests[1];
+    const list = requests[3];
+    expect(headerValue(initialize.init.headers, "Accept")).toBe("application/json, text/event-stream");
+    expect(headerValue(initialize.init.headers, "Content-Type")).toBe("application/json");
+    expect(headerValue(initialize.init.headers, "Authorization")).toBe("Bearer token-123");
+    expect(headerValue(list.init.headers, "MCP-Protocol-Version")).toBe(MCP_PROTOCOL_VERSION);
+    expect(headerValue(list.init.headers, "MCP-Session-Id")).toBe("session-a");
+  });
+
+  it("skips the handshake entirely against a 2026-07-28 server and carries per-request metadata", async () => {
+    const requests = [];
+    const fetchImpl = vi.fn(async (url, init) => {
+      const body = requestBody(init);
+      requests.push({ url: String(url), init, body });
+      if (body?.method === "server/discover") return modernDiscoverResult(body);
+      if (body?.method === "tools/list") {
+        return jsonResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { resultType: "complete", tools: [{ name: "search" }] },
+        });
+      }
+      throw new Error(`unexpected method ${body?.method}`);
+    });
+
+    const client = new McpStreamableHttpClient({
+      id: "modern",
+      url: "https://mcp.example.com/mcp",
+    }, { fetchImpl });
+
+    await client.start();
+    const tools = await client.listTools();
+
+    expect(tools).toEqual([{ name: "search" }]);
+    // No initialize, no notifications/initialized, no session: the probe is the
+    // only thing that precedes ordinary business traffic.
+    expect(requests.map(r => r.body?.method)).toEqual(["server/discover", "tools/list"]);
+    expect(client.protocolVersion).toBe(MCP_PROTOCOL_VERSION_2026_07_28);
+    expect(client.sessionId).toBe("");
+
+    const list = requests.at(-1);
+    expect(headerValue(list.init.headers, "MCP-Protocol-Version")).toBe(MCP_PROTOCOL_VERSION_2026_07_28);
+    expect(headerValue(list.init.headers, "MCP-Session-Id")).toBeFalsy();
+    expect(requestMeta(list.body)["io.modelcontextprotocol/protocolVersion"]).toBe(MCP_PROTOCOL_VERSION_2026_07_28);
+    expect(requestMeta(list.body)["io.modelcontextprotocol/clientInfo"]).toMatchObject({ name: "hana" });
+    expect(requestMeta(list.body)["io.modelcontextprotocol/clientCapabilities"]).toBeTypeOf("object");
+  });
+
+  it("falls back to the legacy handshake when the probe is not a valid DiscoverResult", async () => {
+    // Each entry is a way the probe can fail to prove a modern server. Every one
+    // of them must land on the initialize handshake rather than guessing modern.
+    const malformed = [
+      () => { throw new Error("network down"); },
+      (body) => jsonResponse({ jsonrpc: "2.0", id: body.id, result: { resultType: "complete" } }),
+      (body) => jsonResponse({ jsonrpc: "2.0", id: body.id, result: { resultType: "complete", supportedVersions: [] } }),
+      (body) => jsonResponse({ jsonrpc: "2.0", id: body.id, result: { resultType: "complete", supportedVersions: "2026-07-28" } }),
+      (body) => jsonResponse({ jsonrpc: "2.0", id: body.id, result: { resultType: "complete", supportedVersions: [42] } }),
+      (body) => jsonResponse({ jsonrpc: "2.0", id: body.id, result: { resultType: "complete", supportedVersions: ["2025-11-25"] } }),
+      () => legacyDiscoverRejection(),
+    ];
+
+    for (const probeResponse of malformed) {
+      const requests = [];
+      const fetchImpl = vi.fn(async (url, init) => {
+        const body = requestBody(init);
+        requests.push(body);
+        if (body?.method === "server/discover") return probeResponse(body);
+        if (body?.method === "initialize") {
+          return jsonResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
+          }, { headers: { "MCP-Session-Id": "session-a" } });
+        }
+        if (body?.method === "notifications/initialized") return emptyResponse();
+        if (body?.method === "tools/list") {
+          return jsonResponse({ jsonrpc: "2.0", id: body.id, result: { tools: [] } });
+        }
+        throw new Error(`unexpected method ${body?.method}`);
+      });
+
+      const client = new McpStreamableHttpClient({
+        id: "legacy",
+        url: "https://mcp.example.com/mcp",
+      }, { fetchImpl });
+
+      await client.start();
+      await client.listTools();
+
+      expect(requests.map(r => r?.method)).toEqual([
+        "server/discover",
+        "initialize",
+        "notifications/initialized",
+        "tools/list",
+      ]);
+      expect(client.sessionId).toBe("session-a");
+      expect(requestMeta(requests.at(-1))["io.modelcontextprotocol/protocolVersion"]).toBeUndefined();
+    }
+  });
+
+  it("skips the probe when the connector pins a protocol version", async () => {
+    async function connect(protocolVersion) {
+      const requests = [];
+      const fetchImpl = vi.fn(async (url, init) => {
+        const body = requestBody(init);
+        requests.push(body);
+        if (body?.method === "initialize") {
+          return jsonResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { protocolVersion, capabilities: {} },
+          }, { headers: { "MCP-Session-Id": "session-a" } });
+        }
+        if (body?.method === "notifications/initialized") return emptyResponse();
+        if (body?.method === "tools/list") {
+          return jsonResponse({ jsonrpc: "2.0", id: body.id, result: { tools: [] } });
+        }
+        throw new Error(`unexpected method ${body?.method}`);
+      });
+      const client = new McpStreamableHttpClient({
+        id: "pinned",
+        url: "https://mcp.example.com/mcp",
+        protocolVersion,
+      }, { fetchImpl });
+      await client.start();
+      await client.listTools();
+      return requests.map(r => r?.method);
+    }
+
+    // Pinned modern: straight onto the stateless track, no probe, no handshake.
+    expect(await connect(MCP_PROTOCOL_VERSION_2026_07_28)).toEqual(["tools/list"]);
+    // Pinned legacy: straight onto the handshake, no probe.
+    expect(await connect(MCP_PROTOCOL_VERSION)).toEqual([
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+    ]);
   });
 
   it("sends custom connector headers while preserving protocol headers", async () => {
@@ -101,6 +264,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       return jsonResponse({
         jsonrpc: "2.0",
@@ -140,6 +304,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list") {
         return jsonResponse({ jsonrpc: "2.0", id: body.id, result: { tools: [] } });
@@ -247,6 +412,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": `session-${initializeCount}` } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list" && headerValue(init.headers, "MCP-Session-Id") === "session-1" && !expiredOnce) {
         expiredOnce = true;
@@ -291,6 +457,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": `session-${initializeCount}` } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list" && headerValue(init.headers, "MCP-Session-Id") === "session-1" && !expiredOnce) {
         expiredOnce = true;
@@ -332,6 +499,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: "2026-01-01", capabilities: {} },
         }, { headers: { "MCP-Session-Id": "session-a" } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list") {
         return jsonResponse({
@@ -371,6 +539,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       throw new Error(`unexpected method ${body?.method}`);
     });
@@ -385,6 +554,7 @@ describe("MCP HTTP clients", () => {
       .rejects.toThrow(/invalid Unicode.*params\.arguments\.q/i);
 
     expect(requests.map((request) => request.body?.method)).toEqual([
+      "server/discover",
       "initialize",
       "notifications/initialized",
     ]);
@@ -472,6 +642,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/call") {
         const stream = [
@@ -590,6 +761,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": "session-a" } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list" && initialized) {
         return jsonResponse({ error: "boom" }, { status: 503 });
@@ -623,6 +795,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": "session-a" } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list" && initialized) {
         return jsonResponse({ error: "unauthorized" }, { status: 401 });
@@ -657,6 +830,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": `session-${initializeCount}` } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/list" && headerValue(init.headers, "MCP-Session-Id") === "session-1" && !expiredOnce) {
         expiredOnce = true;
@@ -706,6 +880,7 @@ describe("MCP HTTP clients", () => {
           headers: { "Content-Type": "text/event-stream" },
         });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (String(url) === "https://legacy.example.com/sse" && body?.method === "initialize") {
         return jsonResponse({ error: "not found" }, { status: 404 });
       }
@@ -750,6 +925,7 @@ describe("MCP HTTP clients", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": "session-a" } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       if (body?.method === "tools/call" && initialized) {
         return jsonResponse({ error: "gateway down" }, { status: 502 });
@@ -786,6 +962,7 @@ describe("MCP Streamable HTTP OAuth self-heal", () => {
           result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
         }, { headers: { "MCP-Session-Id": "session-a" } });
       }
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
       if (body?.method === "notifications/initialized") return emptyResponse();
       return extra(body, init);
     };

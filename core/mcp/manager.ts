@@ -1619,6 +1619,12 @@ function omitKeys(source, keys) {
   );
 }
 
+// Transport and protocol era are orthogonal: this picks the transport only.
+// Which protocol revision gets spoken over that transport is settled inside the
+// client, by probing the server (or by an operator-pinned protocolVersion), so
+// naming a transport here never pins a connector to the legacy handshake. The
+// deprecated HTTP+SSE transport is the one exception — it predates the stateless
+// endpoint and has nothing to negotiate.
 function createDefaultClient(connector, opts) {
   if (connector.transport === "stdio") return new McpStdioClient(connector, opts);
   if (connector.transport === "streamable-http") return new McpStreamableHttpClient(connector, opts);
