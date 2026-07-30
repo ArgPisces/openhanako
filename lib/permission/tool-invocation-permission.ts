@@ -381,6 +381,64 @@ function normalizeSideEffectValue(value: unknown, depth: number, count: number):
   return { ok: true, value: output, count: nextCount };
 }
 
+/**
+ * Host-held capability delegation.
+ *
+ * By default a tool may only declare a capability inside its own namespace:
+ * `<its own local name>.<action>`. That rule is what stops one tool from
+ * claiming another's session-level grant, since the capability string is the
+ * entire key a grant is stored under.
+ *
+ * A bridge tool legitimately needs to break that rule: `mcp_call` resolves a
+ * real target at call time and must produce the target's capability, so that a
+ * grant issued for a tool means the same thing whether the model reached it
+ * directly or through the bridge.
+ *
+ * The trust anchor is object identity, not anything the tool says about
+ * itself. Only code holding the actual tool object can register it, the
+ * registry lives here rather than on the tool, and a structural copy of a
+ * registered tool is not registered. A tool that declares a delegation field on
+ * itself gains nothing.
+ */
+const capabilityDelegates = new WeakMap<object, (capability: string, action: string) => boolean>();
+
+export function registerToolCapabilityDelegate(
+  tool: object,
+  predicate: (capability: string, action: string) => boolean,
+): void {
+  if (!tool || (typeof tool !== "object" && typeof tool !== "function")) {
+    throw new TypeError("registerToolCapabilityDelegate requires a tool object");
+  }
+  if (typeof predicate !== "function") {
+    throw new TypeError("registerToolCapabilityDelegate requires a predicate function");
+  }
+  capabilityDelegates.set(tool, predicate);
+}
+
+export function unregisterToolCapabilityDelegate(tool: object): boolean {
+  if (!tool || (typeof tool !== "object" && typeof tool !== "function")) return false;
+  return capabilityDelegates.delete(tool);
+}
+
+/**
+ * A delegated capability is accepted only when the host registered this exact
+ * object and its predicate returns literally true. A throwing or non-boolean
+ * predicate fails closed, matching the rest of this module.
+ */
+function capabilityIsDelegated(
+  tool: Record<string, unknown>,
+  capability: string,
+  action: string,
+): boolean {
+  const predicate = capabilityDelegates.get(tool as object);
+  if (typeof predicate !== "function") return false;
+  try {
+    return predicate(capability, action) === true;
+  } catch {
+    return false;
+  }
+}
+
 function invocationToolName(tool: Record<string, unknown>) {
   const nameProperty = readOwnDataProperty(tool, "name");
   if (!nameProperty.ok || !nameProperty.present) return null;
@@ -512,7 +570,14 @@ function normalizeDescriptor(
   const capabilityToolName = invocationToolName(tool);
   const capability = normalizeStableString(descriptorInput.capability, 256);
   const expectedCapability = capabilityToolName ? `${capabilityToolName}.${action}` : null;
-  if (!capability || !expectedCapability || capability !== expectedCapability) {
+  // A capability outside the tool's own namespace is refused unless the host
+  // registered this exact object as a delegate and its predicate accepts. An
+  // empty or malformed capability is refused either way.
+  if (
+    !capability
+    || ((!expectedCapability || capability !== expectedCapability)
+      && !capabilityIsDelegated(tool, capability, action))
+  ) {
     return failure({
       toolName,
       reason: "unknown_capability",

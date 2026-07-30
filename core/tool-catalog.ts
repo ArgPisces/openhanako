@@ -23,7 +23,14 @@ import { estimateTextTokens } from "../lib/llm/estimate-text-tokens.ts";
 export type ToolCatalogOrigin = "mcp" | "builtin";
 
 export interface ToolCatalogEntryInput {
+  /**
+   * The catalog-wide identity, and the base of the tool's capability string.
+   * For MCP tools this is the same id the direct-load path uses, so a session
+   * grant means the same thing whichever path reached the tool.
+   */
   name: string;
+  /** The name the owning server knows, used when forwarding a call. */
+  toolName?: string;
   description?: string;
   paramsSummary?: string;
   serverId: string;
@@ -36,6 +43,7 @@ export interface ToolCatalogEntryInput {
 
 export interface ToolCatalogEntry {
   readonly name: string;
+  readonly toolName: string;
   readonly description: string;
   readonly paramsSummary: string;
   readonly serverId: string;
@@ -56,6 +64,7 @@ export interface ToolCatalogManifest {
 }
 
 export interface ToolCatalogDescription {
+  readonly toolName: string;
   readonly schema: unknown;
   readonly paramsSummary: string;
   readonly serverId: string;
@@ -136,6 +145,7 @@ function normalizeEntry(input: ToolCatalogEntryInput): ToolCatalogEntry {
   }
   return Object.freeze({
     name,
+    toolName: normalizeText(input.toolName) || name,
     description: normalizeText(input.description),
     paramsSummary: normalizeText(input.paramsSummary),
     serverId,
@@ -282,6 +292,7 @@ export class ToolCatalog {
     }
     return Object.freeze({
       name: entry.name,
+      toolName: entry.toolName,
       description: entry.description,
       schema,
       paramsSummary: entry.paramsSummary,
