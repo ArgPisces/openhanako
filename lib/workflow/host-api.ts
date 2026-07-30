@@ -7,10 +7,14 @@ import {
   assertNodeWriteScopeDeclared,
   resolveNodeFolderScope,
 } from "./node-folder-scope.ts";
+import { DEFAULT_RUN_LIMITS, isRetryableNodeError, retryDelayMs } from "./run-limits.ts";
 
 export const WORKFLOW_RUNTIME_CONTRACT = Symbol.for("hana.workflow.runtimeContract");
 
-const AGENT_OPTION_KEYS = new Set(["label", "model", "agentType", "toolFilter", "access", "schema", "writeFolders"]);
+const AGENT_OPTION_KEYS = new Set(["label", "model", "agentType", "toolFilter", "access", "schema", "writeFolders", "retries"]);
+
+/** 节点重试次数硬上限：脚本写多少都不允许超过，避免一个坏节点把整条 run 拖死。 */
+const MAX_NODE_RETRIES = 5;
 
 function normalizeAgentOptions(rawOpts) {
   if (rawOpts == null) return {};
@@ -21,7 +25,7 @@ function normalizeAgentOptions(rawOpts) {
     if (!AGENT_OPTION_KEYS.has(key)) {
       throw new Error(
         `workflow agent() unsupported option "${key}". ` +
-        "Use agent(prompt, { label?, model?, agentType?, access?, writeFolders?, schema?, toolFilter? }); " +
+        "Use agent(prompt, { label?, model?, agentType?, access?, writeFolders?, schema?, toolFilter?, retries? }); " +
         "put the task instructions in the first prompt argument.",
       );
     }
@@ -29,8 +33,31 @@ function normalizeAgentOptions(rawOpts) {
   if (rawOpts.access != null && rawOpts.access !== "read" && rawOpts.access !== "write") {
     throw new Error('workflow agent() access must be "read" or "write".');
   }
+  if (rawOpts.retries != null && (!Number.isInteger(rawOpts.retries) || rawOpts.retries < 0)) {
+    throw new Error("workflow agent() retries must be a non-negative integer.");
+  }
   assertNodeWriteFoldersShape(rawOpts.writeFolders, rawOpts.access);
   return rawOpts;
+}
+
+/**
+ * 把一次尝试的原始失败翻译成带正确重试语义的错误。
+ *
+ * 三种收场必须区分清楚，否则要么该重试的不重试，要么该死的不死：
+ * - 父 signal 已 abort：整条 workflow 被叫停，节点没有第二次机会。
+ * - 节点自己的超时：只有这一个节点卡住，换一次还有机会。消息措辞刻意避开
+ *   "中止 / aborted"——run-limits 的分类器按词判定，带上这些词就会被判成不可重试。
+ * - 其余：原样上抛，由分类器决定。
+ */
+function classifyNodeFailure(err, { signal, nodeAbort, nodeTimeoutMs }) {
+  if (signal?.aborted) return new Error("workflow 已中止");
+  if (nodeAbort.signal.aborted) {
+    return Object.assign(
+      new Error(`节点超时（${nodeTimeoutMs}ms）：节点未在时限内完成`),
+      { cause: err },
+    );
+  }
+  return err;
 }
 
 function normalizeAgentPrompt(prompt) {
@@ -105,19 +132,21 @@ function createWorkflowRuntimeContract() {
  *   replayJournal?: import("./journal.ts").WorkflowJournal|null,
  *   runWorkflow?: (script: string, args?: any) => Promise<any>,
  *   parentFolderScope?: { sandboxFolders?: string[] }|null,
+ *   runLimits?: { nodeTimeoutMs?: number, nodeRetries?: number },
  * }} deps
  * @returns {{ agent: Function, parallel: Function, pipeline: Function, log: Function, phase: Function, workflow: Function, budget: any, args: any }}
  */
 export function createHostApi(deps) {
-  const { executeIsolated, baseIsoOpts, limiter, signal, budget, args, resolveAgentId, parentFolderScope } = deps;
+  const { executeIsolated, baseIsoOpts, limiter, signal, budget, args, resolveAgentId, parentFolderScope, runLimits } = deps;
   const onAgentEvent = typeof deps.onAgentEvent === "function" ? deps.onAgentEvent : () => {};
+  const onProgress = typeof deps.onProgress === "function" ? deps.onProgress : () => {};
   const journal = deps.journal || null;
   const replayJournal = deps.replayJournal || null;
   const runtimeContract = createWorkflowRuntimeContract();
   let nodeSeq = 0;
   let currentPhase = null;
 
-  function agent(prompt, rawOpts: { label?: string; model?: string; agentType?: string; toolFilter?: any; access?: "read"|"write"; writeFolders?: string[]; schema?: any } = {}) {
+  function agent(prompt, rawOpts: { label?: string; model?: string; agentType?: string; toolFilter?: any; access?: "read"|"write"; writeFolders?: string[]; schema?: any; retries?: number } = {}) {
     const normalizedPrompt = normalizeAgentPrompt(prompt);
     const opts = normalizeAgentOptions(rawOpts);
 
@@ -211,35 +240,91 @@ export function createHostApi(deps) {
           childSessionPath: sp,
         });
 
-        let structured = null;
-        let finalPrompt = normalizedPrompt;
-        if (opts.schema) {
-          structured = createStructuredOutputTool(opts.schema);
-          isoOpts.extraCustomTools = [...(isoOpts.extraCustomTools || []), structured.tool];
-          finalPrompt = normalizedPrompt + "\n\n完成后必须调用一次 structured_output 工具，返回严格符合所需 schema 的结果。";
-        }
+        const finalPrompt = opts.schema
+          ? normalizedPrompt + "\n\n完成后必须调用一次 structured_output 工具，返回严格符合所需 schema 的结果。"
+          : normalizedPrompt;
 
         const journalKey = journal ? WorkflowJournal.computeKey(normalizedPrompt, opts) : null;
 
-        try {
-          const res = await executeIsolated(finalPrompt, isoOpts);
-          if (res?.error) throw new Error(`agent 失败: ${res.error}`);
-          let result;
-          if (structured) {
-            const out = structured.getResult();
-            if (out === undefined) throw new Error("agent 未调用 structured_output 返回结构化结果");
-            result = out;
-          } else {
-            result = res?.replyText ?? "";
+        const limits = { ...DEFAULT_RUN_LIMITS, ...(runLimits || {}) };
+        const maxRetries = Math.min(
+          Number.isInteger(opts.retries) ? opts.retries : limits.nodeRetries,
+          MAX_NODE_RETRIES,
+        );
+
+        /**
+         * 一次尝试。节点级超时用独立 AbortController，链到父 signal 上：
+         * 超时只杀这一个节点（可重试），父 abort 杀整条 run（不可重试）。
+         * structured_output 工具每次尝试新建一份，否则失败尝试写进去的残留会被下一次读到。
+         */
+        const attemptOnce = async () => {
+          const attemptIsoOpts = { ...isoOpts };
+          let structured = null;
+          if (opts.schema) {
+            structured = createStructuredOutputTool(opts.schema);
+            attemptIsoOpts.extraCustomTools = [...(isoOpts.extraCustomTools || []), structured.tool];
           }
-          onAgentEvent({ phase: "done", nodeId, threadId, threadKind });
-          if (journalKey) journal.record(seq, journalKey, result, "ok");
-          return result;
-        } catch (err) {
-          onAgentEvent({ phase: "fail", nodeId, threadId, threadKind });
-          if (journalKey) journal.record(seq, journalKey, null, "error");
-          throw err;
+
+          const nodeAbort = new AbortController();
+          const onParentAbort = () => nodeAbort.abort();
+          if (signal) signal.addEventListener("abort", onParentAbort, { once: true });
+          const nodeTimer = setTimeout(() => nodeAbort.abort(), limits.nodeTimeoutMs);
+          if (typeof (nodeTimer as any).unref === "function") (nodeTimer as any).unref();
+          attemptIsoOpts.signal = nodeAbort.signal;
+
+          try {
+            let res;
+            try {
+              res = await executeIsolated(finalPrompt, attemptIsoOpts);
+            } catch (err) {
+              throw classifyNodeFailure(err, { signal, nodeAbort, nodeTimeoutMs: limits.nodeTimeoutMs });
+            }
+            if (res?.error) {
+              throw classifyNodeFailure(
+                new Error(`agent 失败: ${res.error}`),
+                { signal, nodeAbort, nodeTimeoutMs: limits.nodeTimeoutMs },
+              );
+            }
+            if (structured) {
+              const out = structured.getResult();
+              if (out === undefined) throw new Error("agent 未调用 structured_output 返回结构化结果");
+              return out;
+            }
+            return res?.replyText ?? "";
+          } finally {
+            clearTimeout(nodeTimer);
+            if (signal) signal.removeEventListener("abort", onParentAbort);
+          }
+        };
+
+        let lastErr = null;
+        for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+          if (signal?.aborted) throw lastErr ?? new Error("workflow 已中止");
+          try {
+            const result = await attemptOnce();
+            onAgentEvent({ phase: "done", nodeId, threadId, threadKind });
+            if (journalKey) journal.record(seq, journalKey, result, "ok", { attempts: attempt });
+            return result;
+          } catch (err) {
+            lastErr = err;
+            const retryable = !signal?.aborted && attempt <= maxRetries && isRetryableNodeError(err);
+            if (!retryable) {
+              onAgentEvent({ phase: "fail", nodeId, threadId, threadKind });
+              if (journalKey) journal.record(seq, journalKey, null, "error", { attempts: attempt, error: String((err as any)?.message || err) });
+              throw err;
+            }
+            const delay = retryDelayMs(attempt);
+            onProgress({
+              type: "log",
+              message: `节点 ${label || nodeId} 第 ${attempt} 次失败，${Math.round(delay / 1000)}s 后重试: ${String((err as any)?.message || err).slice(0, 120)}`,
+            });
+            await new Promise((r) => {
+              const t = setTimeout(r, delay);
+              if (typeof (t as any).unref === "function") (t as any).unref();
+            });
+          }
         }
+        throw lastErr;
       });
     };
 
@@ -294,7 +379,6 @@ export function createHostApi(deps) {
     return deps.runWorkflow(script, childArgs);
   }
 
-  const onProgress = typeof deps.onProgress === "function" ? deps.onProgress : () => {};
   function log(message) {
     const seq = ++nodeSeq;
     const stepNodeId = `step-${seq}`;

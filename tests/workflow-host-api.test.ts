@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { createHostApi } from "../lib/workflow/host-api.ts";
 import { createLimiter } from "../lib/workflow/concurrency.ts";
 
@@ -17,8 +17,12 @@ export function makeDeps( over: any = {}) {
     resolveAgentId: over.resolveAgentId,
     onAgentEvent: over.onAgentEvent,
     parentFolderScope: over.parentFolderScope,
+    runLimits: over.runLimits,
+    journal: over.journal,
   };
 }
+
+afterEach(() => { vi.useRealTimers(); });
 
 describe("host api - agent()", () => {
   it("调 executeIsolated 并返回 replyText", async () => {
@@ -92,7 +96,11 @@ describe("host api - agent()", () => {
   });
 
   it("executeIsolated 返回 error 时抛错", async () => {
-    const api = createHostApi(makeDeps({ executeIsolated: async () => ({ replyText: "", error: "模型挂了" }) }));
+    // nodeRetries: 0 — 本用例只钉"error 会变成抛错"，不走重试退避（默认会重试 2 次）。
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => ({ replyText: "", error: "模型挂了" }),
+      runLimits: { nodeRetries: 0 },
+    }));
     await expect(api.agent("x")).rejects.toThrow(/模型挂了/);
   });
 
@@ -109,7 +117,10 @@ describe("host api - agent()", () => {
   });
 
   it("带 schema 但子 agent 没调工具时抛错", async () => {
-    const api = createHostApi(makeDeps({ executeIsolated: async () => ({ replyText: "forgot", error: null }) }));
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => ({ replyText: "forgot", error: null }),
+      runLimits: { nodeRetries: 0 },
+    }));
     await expect(api.agent("x", { schema: { type: "object" } })).rejects.toThrow(/未调用 structured_output/);
   });
 
@@ -204,6 +215,7 @@ describe("host api - agent()", () => {
     const api = createHostApi(makeDeps({
       onAgentEvent: (e) => evts.push(e),
       executeIsolated: async () => ({ replyText: "", error: "boom" }),
+      runLimits: { nodeRetries: 0 },
     }));
     await expect(api.agent("p")).rejects.toThrow(/boom/);
     expect(evts.filter((e) => e.phase === "fail")).toHaveLength(1);
@@ -216,6 +228,169 @@ describe("host api - agent()", () => {
     await api.agent("a");
     await api.agent("b");
     expect(ids).toEqual(["node-1", "node-2"]);
+  });
+});
+
+describe("host api - agent() 节点重试与超时", () => {
+  it("瞬时错误自动重试：失败 1 次后成功，executeIsolated 被调 2 次", async () => {
+    vi.useFakeTimers();
+    let n = 0;
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => (++n === 1 ? { replyText: "", error: "502 Bad Gateway" } : { replyText: "ok", error: null }),
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 60_000 },
+    }));
+    // agent() 返回惰性 Proxy：必须先消费（.then）才真正开跑，否则推时钟推的是空气。
+    const p = api.agent("do", { access: "read" }).then((v) => v);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(p).resolves.toBe("ok");
+    expect(n).toBe(2);
+    vi.useRealTimers();
+  });
+
+  it("非重试错误（aborted 语义）只调 1 次即失败", async () => {
+    let n = 0;
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => { n++; return { replyText: "", error: "aborted" }; },
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 60_000 },
+    }));
+    await expect(api.agent("do", { access: "read" })).rejects.toThrowError(/aborted/);
+    expect(n).toBe(1);
+  });
+
+  it("opts.retries: 0 关闭重试", async () => {
+    let n = 0;
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => { n++; return { replyText: "", error: "flaky" }; },
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 60_000 },
+    }));
+    await expect(api.agent("do", { access: "read", retries: 0 } as any)).rejects.toThrowError(/flaky/);
+    expect(n).toBe(1);
+  });
+
+  it("opts.retries 被 clamp 到 5", async () => {
+    vi.useFakeTimers();
+    let n = 0;
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => { n++; return { replyText: "", error: "flaky" }; },
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 60_000 },
+    }));
+    const p = api.agent("do", { access: "read", retries: 99 } as any).catch((e) => e);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    const err = await p;
+    vi.useRealTimers();
+    expect(String(err?.message)).toMatch(/flaky/);
+    expect(n).toBe(6); // 1 次首发 + 5 次重试
+  });
+
+  it("拒绝非法 retries（负数 / 非整数）", () => {
+    const api = createHostApi(makeDeps());
+    expect(() => api.agent("do", { access: "read", retries: -1 } as any)).toThrowError(/retries/);
+    expect(() => api.agent("do", { access: "read", retries: 1.5 } as any)).toThrowError(/retries/);
+  });
+
+  it("节点超时：executeIsolated 悬挂 → nodeTimeoutMs 后该节点收到 abort 并按可重试处理", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const api = createHostApi(makeDeps({
+      executeIsolated: (_p, o) => new Promise((resolve, reject) => {
+        calls++;
+        if (calls === 2) { resolve({ replyText: "ok", error: null }); return; }
+        o.signal?.addEventListener("abort", () => reject(new Error("node aborted by timeout")), { once: true });
+      }),
+      runLimits: { nodeRetries: 1, nodeTimeoutMs: 30_000 },
+    }));
+    const p = api.agent("do", { access: "read" }).then((v) => v);
+    await vi.advanceTimersByTimeAsync(30_000 + 10_000);
+    await expect(p).resolves.toBe("ok");
+    expect(calls).toBe(2);
+    vi.useRealTimers();
+  });
+
+  it("父 signal abort 时在飞节点收到 abort（abort 链路打通）", async () => {
+    const ac = new AbortController();
+    const seen: AbortSignal[] = [];
+    const api = createHostApi(makeDeps({
+      signal: ac.signal,
+      executeIsolated: (_p, o) => new Promise((_res, rej) => {
+        seen.push(o.signal);
+        o.signal?.addEventListener("abort", () => rej(new Error("child saw abort")), { once: true });
+      }),
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 600_000 },
+    }));
+    const p = api.agent("do", { access: "read" }).catch((e) => e);
+    await new Promise((r) => setTimeout(r, 0));
+    ac.abort();
+    const err = await p;
+    expect(seen[0]?.aborted).toBe(true);
+    expect(String(err?.message)).toMatch(/中止|abort/i);
+  });
+
+  it("journal 错误条目带 error 消息与 attempts（经 deps.journal 注入验证）", async () => {
+    const records: any[] = [];
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => ({ replyText: "", error: "flaky" }),
+      runLimits: { nodeRetries: 1, nodeTimeoutMs: 60_000 },
+      journal: { record: (seq, key, result, status, extra) => records.push({ seq, status, ...extra }) },
+    }));
+    vi.useFakeTimers();
+    const p = api.agent("do", { access: "read" }).catch(() => null);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await p;
+    vi.useRealTimers();
+    expect(records.at(-1)).toMatchObject({ status: "error", attempts: 2 });
+    expect(String(records.at(-1).error)).toContain("flaky");
+  });
+
+  it("journal 成功条目带 attempts（重试后成功记真实次数）", async () => {
+    const records: any[] = [];
+    let n = 0;
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => (++n === 1 ? { replyText: "", error: "flaky" } : { replyText: "ok", error: null }),
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 60_000 },
+      journal: { record: (seq, key, result, status, extra) => records.push({ seq, status, ...extra }) },
+    }));
+    vi.useFakeTimers();
+    const p = api.agent("do", { access: "read" }).then((v) => v);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await p;
+    vi.useRealTimers();
+    expect(records.at(-1)).toMatchObject({ status: "ok", attempts: 2 });
+  });
+
+  it("重试时 schema 节点拿到全新 structured_output 工具，不复用上一次尝试的残留", async () => {
+    vi.useFakeTimers();
+    let n = 0;
+    const api = createHostApi(makeDeps({
+      executeIsolated: async (_p, o) => {
+        n++;
+        const tool = o.extraCustomTools.find((t) => t.name === "structured_output");
+        await tool.execute("c", { n });
+        return n === 1 ? { replyText: "", error: "flaky" } : { replyText: "", error: null };
+      },
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 60_000 },
+    }));
+    const p = api.agent("count", { access: "read", schema: { type: "object", properties: { n: { type: "number" } } } }).then((v) => v);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(p).resolves.toEqual({ n: 2 });
+    vi.useRealTimers();
+  });
+
+  it("重试只发一次 start / 一次 done，不重复登记节点", async () => {
+    vi.useFakeTimers();
+    let n = 0;
+    const evts: any[] = [];
+    const api = createHostApi(makeDeps({
+      executeIsolated: async () => (++n === 1 ? { replyText: "", error: "flaky" } : { replyText: "ok", error: null }),
+      runLimits: { nodeRetries: 2, nodeTimeoutMs: 60_000 },
+      onAgentEvent: (e) => evts.push(e),
+    }));
+    const p = api.agent("do", { access: "read" }).then((v) => v);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await p;
+    vi.useRealTimers();
+    expect(evts.filter((e) => e.phase === "start")).toHaveLength(1);
+    expect(evts.filter((e) => e.phase === "done")).toHaveLength(1);
+    expect(evts.filter((e) => e.phase === "fail")).toHaveLength(0);
   });
 });
 
