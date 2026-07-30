@@ -8219,7 +8219,27 @@ export class SessionCoordinator {
       let finalErrorMessage = null;
       const sessionFiles = [];
       const toolErrors = [];
+      // 中止请求是"粘性"的：SDK 在 agent run 还没起来时 abort 是空操作，而
+      // session.prompt() 进入 agent 循环前还有一段异步准备（扩展回调、压缩检查）。
+      // 落在这段窗口里的 abort 若不补发，子 session 会照常跑完全程——报了死却不死。
+      // 因此这里记账，并在 run 开跑后（第一个事件到达即证明）补发一次。
+      let abortRequested = false;
+      let abortRedelivered = false;
+      const deliverSessionAbort = () => {
+        // session.abort() 是异步的；丢掉它的 promise 会让失败变成未处理 rejection。
+        try {
+          Promise.resolve(session.abort()).catch((err) =>
+            log.warn(`executeIsolated abort failed: ${err?.message || err}`),
+          );
+        } catch (err) {
+          log.warn(`executeIsolated abort failed: ${err?.message || err}`);
+        }
+      };
       const unsub = session.subscribe((event) => {
+        if (abortRequested && !abortRedelivered) {
+          abortRedelivered = true;
+          deliverSessionAbort();
+        }
         const parentSessionPath = typeof opts.parentSessionPath === "string" && opts.parentSessionPath.trim()
           ? opts.parentSessionPath
           : null;
@@ -8311,7 +8331,10 @@ export class SessionCoordinator {
         });
       };
 
-      const abortHandler = () => session.abort();
+      const abortHandler = () => {
+        abortRequested = true;
+        deliverSessionAbort();
+      };
       opts.signal?.addEventListener("abort", abortHandler, { once: true });
 
       if (opts.signal?.aborted) {
@@ -8334,7 +8357,14 @@ export class SessionCoordinator {
       const sessionPath = session.sessionManager?.getSessionFile?.() || null;
       const leafEntryId = session.sessionManager?.getBranch?.()?.at?.(-1)?.id || null;
       const finalReplyText = stripClosedInternalNarrationBlocks(replyText || finalAssistantText);
-      const completionError = isolatedCompletionError(finalStopReason, finalErrorMessage);
+      // 中止的返回形态与入口早退保持一致（error: "aborted"），调用方只需认这一个词。
+      // 第二个条件覆盖"中止得太早、一轮都没跑完"——此时没有 stopReason 可读，但确实是被中止的。
+      // 反过来，已经正常跑完（stopReason=stop）的结果不会因为随后到达的 abort 被丢掉。
+      const runWasAborted = finalStopReason === "aborted"
+        || (opts.signal?.aborted === true && !finalStopReason);
+      const completionError = runWasAborted
+        ? "aborted"
+        : isolatedCompletionError(finalStopReason, finalErrorMessage);
 
       if (!opts.persist && !isResumedSession && sessionPath) {
         // 非 persist 的临时 session 文件清理 best-effort：删不掉不影响返回结果。

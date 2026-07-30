@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:5e0b881477a9afe6a7eb103330d0487c173e00c2540d76e51564af11b75a7afb",
+  "payloadFingerprint": "sha256:7dcb74653fb08d67c9b30c2cf109336a8e2ab3b4dc123999cd7e73975a8a02bf",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2919,8 +2919,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Workflow run-limits work edited lib/workflow/journal.ts (owning module of the workflow-state journal) and lib/tools/workflow-tool.ts, and added lib/workflow/run-limits.ts. The workflow journal JSONL entry gains two optional additive fields (error, attempts) written only on the record path; the reader keys on nodeSeq/key/result/status alone, so old journals resume unchanged and new journals stay readable by the old reader. No field was removed, renamed, or retyped, and no store gained or lost a site. run-limits.ts is a pure in-memory module with no store. All remaining inventory diffs are line drift from these edits.",
-    "payloadFingerprint": "sha256:5e0b881477a9afe6a7eb103330d0487c173e00c2540d76e51564af11b75a7afb"
+    "compatibilityReason": "executeIsolated mid-run abort work edited core/session-coordinator.ts only. No persisted shape changed: the edit adds in-memory abort bookkeeping (a sticky abort request plus one guarded re-delivery) and converges the returned error string for aborted isolated runs to \"aborted\". No store gained, lost, renamed, or retyped a field, and the isolated session cleanup and manifest tombstone paths are untouched. All remaining inventory diffs are line drift from that edit.",
+    "payloadFingerprint": "sha256:7dcb74653fb08d67c9b30c2cf109336a8e2ab3b4dc123999cd7e73975a8a02bf"
   },
   "schemas": [
     {
@@ -3278,7 +3278,7 @@
         {
           "contract": "core/session-coordinator.ts Hana metadata extensions",
           "module": "core/session-coordinator.ts",
-          "sourceHash": "sha256:292c5db7a042ce21461686a03c15206b32e11d4c5cad96a060904fc61110010d"
+          "sourceHash": "sha256:e5331c720d37b0647333c249da2361b179b25b2cdd321c8545dba904367cb3a8"
         },
         {
           "contract": "core/session-jsonl-file.ts repair contract",
