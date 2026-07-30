@@ -2691,6 +2691,7 @@
     "reload": "새로고침",
     "newTab": "새 탭",
     "closeTab": "탭 닫기",
+    "emptyWorkspace": "열린 탭이 없어요",
     "emergencyStop": "AI 제어 긴급 중지",
     "backgroundHint": "백그라운드 브라우저 실행 중, 클릭하여 보기",
     "background": "백그라운드 브라우저"

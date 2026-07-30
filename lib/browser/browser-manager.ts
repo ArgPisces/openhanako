@@ -167,6 +167,18 @@ export class BrowserManager {
 
     // 注册消息处理器（IPC 立即生效，WS 在 attach 时生效）
     this._transport.onMessage((msg) => {
+      // viewer 直连主进程的标签页增删会绕过 server，主进程把快照推回来防止状态漂移。
+      // 空 tabs 是合法状态（空标签组仍是活着的 workspace），不改 running。
+      if (msg?.type === "browser-workspace-sync" && msg.sessionPath) {
+        const entry = this._getSessionEntry(msg.sessionPath);
+        if (!entry) return;
+        const tabs = Array.isArray(msg.workspace?.tabs) ? msg.workspace.tabs : [];
+        entry.tabs = tabs.map((tab) => createBrowserTab(tab));
+        entry.activeTabId = msg.workspace?.activeTabId || entry.tabs[0]?.tabId || null;
+        // 空标签组没有 url（徽章因此隐藏），不保留上一个标签页的地址
+        entry.url = activeBrowserTab(entry)?.url || null;
+        return;
+      }
       if (msg?.type === "browser-result" && this._pending.has(msg.id)) {
         const entry = this._pending.get(msg.id);
         this._pending.delete(msg.id);
@@ -1174,6 +1186,8 @@ export class BrowserManager {
    */
   async thumbnail(sessionPath) {
     if (!this.isRunning(sessionPath)) return null;
+    // 空标签组没有可截图的 tab：直接返回 null，别让 "No browser instance" 把 session 标成 unhealthy
+    if (!activeBrowserTab(this._getSessionEntry(sessionPath))) return null;
     try {
       const result = await this._sendSessionCmd("thumbnail", { sessionPath });
       return assertBrowserImageBase64(result?.base64, "thumbnail");

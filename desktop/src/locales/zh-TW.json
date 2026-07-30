@@ -2691,6 +2691,7 @@
     "reload": "重新整理",
     "newTab": "新標籤頁",
     "closeTab": "關閉標籤頁",
+    "emptyWorkspace": "沒有開啟的分頁",
     "emergencyStop": "緊急停止 AI 控制",
     "backgroundHint": "後台瀏覽器運行中，點擊查看",
     "background": "後台瀏覽器"

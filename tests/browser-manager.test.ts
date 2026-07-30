@@ -445,7 +445,14 @@ describe("BrowserManager explicit sessionPath", () => {
 
   it("does not send further commands for an unavailable browser session", async () => {
     const manager = new BrowserManager();
-    manager._sessions.set(SP1, { running: true, url: "https://example.com", headless: false });
+    // running 的 entry 在生产里必然带标签页（空标签组走 workspace-sync，见下方用例）
+    manager._sessions.set(SP1, {
+      running: true,
+      url: "https://example.com",
+      headless: false,
+      activeTabId: "tab-1",
+      tabs: [{ tabId: "tab-1", url: "https://example.com" }],
+    });
     manager._sendCmd = vi.fn().mockRejectedValue(
       new Error("Object has been destroyed"),
     );
@@ -459,7 +466,13 @@ describe("BrowserManager explicit sessionPath", () => {
 
   it("launch() clears an unavailable stale view before creating a fresh browser", async () => {
     const manager = new BrowserManager();
-    manager._sessions.set(SP1, { running: true, url: "https://example.com", headless: false });
+    manager._sessions.set(SP1, {
+      running: true,
+      url: "https://example.com",
+      headless: false,
+      activeTabId: "tab-1",
+      tabs: [{ tabId: "tab-1", url: "https://example.com" }],
+    });
     manager._sendCmd = vi.fn().mockRejectedValue(
       new Error("No browser instance for session /sessions/session-1.json"),
     );
@@ -924,5 +937,87 @@ describe("browser authorization revocation", () => {
     expect(manager.isBrowserAuthorizationRevoked(null)).toBe(false);
     manager.clearBrowserAuthorizationRevocation(null);
     expect(manager.isBrowserAuthorizationRevoked(null)).toBe(false);
+  });
+});
+
+/** 触发 BrowserManager 在 constructor 里注册的 transport 消息处理器（IPC / WS 两种传输都覆盖）。 */
+function emitTransportMessage(manager: any, msg: any) {
+  const handler = manager._transport?._handler || manager._transport?._boundListener;
+  if (!handler) throw new Error("transport message handler not registered");
+  handler(msg);
+}
+
+describe("browser workspace sync from the desktop viewer", () => {
+  it("applies a workspace snapshot pushed by the main process", () => {
+    const manager = new BrowserManager({});
+    manager._setSessionEntry(SP1, {
+      running: true,
+      activeTabId: "tab-1",
+      url: "https://one.example.com",
+      tabs: [{ tabId: "tab-1", title: "One", url: "https://one.example.com" }],
+    });
+
+    emitTransportMessage(manager, {
+      type: "browser-workspace-sync",
+      sessionPath: SP1,
+      workspace: {
+        sessionPath: SP1,
+        activeTabId: "tab-2",
+        tabs: [
+          { tabId: "tab-1", title: "One", url: "https://one.example.com" },
+          { tabId: "tab-2", title: "Two", url: "https://two.example.com" },
+        ],
+      },
+    });
+
+    expect(manager.getTabs(SP1).map((tab: any) => tab.tabId)).toEqual(["tab-1", "tab-2"]);
+    expect(manager.activeTab(SP1)?.tabId).toBe("tab-2");
+    expect(manager.currentUrl(SP1)).toBe("https://two.example.com");
+  });
+
+  it("keeps the session running when the synced workspace has no tabs", () => {
+    const manager = new BrowserManager({});
+    manager._setSessionEntry(SP1, {
+      running: true,
+      activeTabId: "tab-1",
+      url: "https://one.example.com",
+      tabs: [{ tabId: "tab-1", title: "One", url: "https://one.example.com" }],
+    });
+
+    emitTransportMessage(manager, {
+      type: "browser-workspace-sync",
+      sessionPath: SP1,
+      workspace: { sessionPath: SP1, activeTabId: null, tabs: [] },
+    });
+
+    // 空标签组仍是活着的 workspace：running 不变，只是没有 url
+    expect(manager.isRunning(SP1)).toBe(true);
+    expect(manager.getTabs(SP1)).toEqual([]);
+    expect(manager.activeTab(SP1)).toBeNull();
+    expect(manager.currentUrl(SP1)).toBeNull();
+  });
+
+  it("ignores a sync for a session that has no live entry", () => {
+    const manager = new BrowserManager({});
+    emitTransportMessage(manager, {
+      type: "browser-workspace-sync",
+      sessionPath: SP2,
+      workspace: { sessionPath: SP2, activeTabId: "tab-9", tabs: [{ tabId: "tab-9" }] },
+    });
+    expect(manager._getSessionEntry(SP2)).toBeNull();
+  });
+
+  it("returns null from thumbnail without sending a command when the tab group is empty", async () => {
+    const manager = new BrowserManager({});
+    manager._setSessionEntry(SP1, {
+      running: true,
+      activeTabId: null,
+      url: null,
+      tabs: [],
+    });
+    manager._sendCmd = vi.fn(async () => ({ base64: "nope" }));
+
+    expect(await manager.thumbnail(SP1)).toBeNull();
+    expect(manager._sendCmd).not.toHaveBeenCalled();
   });
 });

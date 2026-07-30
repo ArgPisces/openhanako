@@ -215,7 +215,19 @@ export function BrowserViewerApp() {
       </div>
 
       {/* Card shadow frame (WebContentsView sits on top) */}
-      <div className="card-frame" />
+      <div className="card-frame">
+        {tabs.length === 0 && (
+          <div className="browser-empty-state">
+            <p className="browser-empty-text">{tr('browser.emptyWorkspace', 'No open tabs')}</p>
+            <button
+              className="browser-empty-action"
+              onClick={() => hana?.browserNewTab?.(sessionPath)}
+            >
+              {tr('browser.newTab', 'New Tab')}
+            </button>
+          </div>
+        )}
+      </div>
     </>
   );
 }

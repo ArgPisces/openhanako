@@ -2691,6 +2691,7 @@
     "reload": "Reload",
     "newTab": "New Tab",
     "closeTab": "Close tab",
+    "emptyWorkspace": "No open tabs",
     "emergencyStop": "Emergency stop AI control",
     "backgroundHint": "Background browser running, click to view",
     "background": "Background browser"

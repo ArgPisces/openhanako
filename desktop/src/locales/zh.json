@@ -2691,6 +2691,7 @@
     "reload": "刷新",
     "newTab": "新标签页",
     "closeTab": "关闭标签页",
+    "emptyWorkspace": "没有打开的标签页",
     "emergencyStop": "紧急停止 AI 控制",
     "backgroundHint": "后台浏览器运行中，点击查看",
     "background": "后台浏览器"

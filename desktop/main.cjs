@@ -3375,17 +3375,6 @@ function _ensureBrowserForSession(sessionPath, tabId = null) {
   return view;
 }
 
-function _ensureBrowserTabForSession(sessionPath, tabId = null) {
-  const workspace = _ensureBrowserWorkspace(sessionPath);
-  let tab = tabId ? workspace.tabs.get(tabId) : _activeBrowserTabRecord(workspace);
-  if (!tab) {
-    tab = _createBrowserTabRecord(sessionPath, { tabId });
-    workspace.tabs.set(tab.tabId, tab);
-    workspace.activeTabId = tab.tabId;
-  }
-  return tab;
-}
-
 function _ensureBrowser() {
   return _ensureBrowserForSession(null);
 }
@@ -3453,14 +3442,14 @@ function _bindBrowserViewLifecycle(view, sessionPath) {
 
 function _removeBrowserTabRecord(view) {
   if (!view) return null;
-  for (const [key, workspace] of _browserViews) {
+  for (const workspace of _browserViews.values()) {
     for (const [tabId, tab] of workspace.tabs) {
       if (tab.view !== view) continue;
       workspace.tabs.delete(tabId);
       if (workspace.activeTabId === tabId) {
         workspace.activeTabId = workspace.tabs.keys().next().value || null;
       }
-      if (workspace.tabs.size === 0) _browserViews.delete(key);
+      // 空标签组保留：崩溃/销毁路径同样只摘掉 tab，session 的 workspace 继续存在。
       return { workspace, tabId };
     }
   }
@@ -3930,16 +3919,19 @@ async function handleBrowserCommand(cmd, params) {
       workspace.tabs.delete(params.tabId);
       try { if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close(); } catch {}
       if (workspace.tabs.size === 0) {
-        _browserViews.delete(_browserWorkspaceKey(sp));
+        // 关掉最后一个标签页不销毁 workspace：session 的标签组保留为空组，viewer 显示空态。
+        // 「运行中」的语义以 workspace 是否存在为准，所以这里不广播 running:false。
+        workspace.activeTabId = null;
         if (browserViewerWindow && !browserViewerWindow.isDestroyed()) {
           browserViewerWindow.webContents.send("browser-update", {
-            running: false,
             sessionPath: sp,
             activeTabId: null,
             tabs: [],
+            canGoBack: false,
+            canGoForward: false,
           });
         }
-        return { activeTabId: null, tabs: [] };
+        return _serializeBrowserWorkspace(workspace);
       }
       workspace.activeTabId = nextTabId && workspace.tabs.has(nextTabId)
         ? nextTabId
@@ -4196,6 +4188,25 @@ async function handleBrowserCommand(cmd, params) {
   }
 }
 
+/** 浏览器命令通道的当前连接：viewer 直连主进程改动标签页后，用它把快照同步回 server */
+let _browserCmdWs = null;
+
+/**
+ * 把某个 session 的标签组快照推给 server 的 BrowserManager。
+ * viewer 的新建/关闭标签页走 IPC 直达主进程、绕过 server，不同步会让 server 状态漂移。
+ */
+function _syncWorkspaceToServer(sessionPath) {
+  if (!_browserCmdWs || _browserCmdWs.readyState !== 1) return;
+  const workspace = _getBrowserWorkspace(sessionPath);
+  try {
+    _browserCmdWs.send(JSON.stringify({
+      type: "browser-workspace-sync",
+      sessionPath,
+      workspace: workspace ? _serializeBrowserWorkspace(workspace) : null,
+    }));
+  } catch {}
+}
+
 /** 通过 WebSocket 监听 server 的浏览器命令 */
 function setupBrowserCommands() {
   if (!serverPort || !serverToken) return;
@@ -4206,6 +4217,7 @@ function setupBrowserCommands() {
 
   function connect() {
     ws = new WebSocket(url);
+    _browserCmdWs = ws;
     ws.on("open", () => {
       console.log("[desktop] Browser control WS connected");
     });
@@ -4234,6 +4246,7 @@ function setupBrowserCommands() {
       }
     });
     ws.on("close", () => {
+      if (_browserCmdWs === ws) _browserCmdWs = null;
       if (!isQuitting) {
         setTimeout(connect, 2000);
       }
@@ -5099,10 +5112,22 @@ wrapIpcBestEffortHandler("open-browser-viewer", async (_event, theme, payload) =
     return;
   }
 
-  const workspace = _ensureBrowserWorkspace(sp);
-  const tab = _ensureBrowserTabForSession(sp);
-  workspace.activeTabId = tab.tabId;
-  _switchActiveBrowserTab(sp, tab.tabId);
+  // 打开 viewer 不替用户建标签页：有标签就切过去，空标签组渲染空态等用户点 +。
+  const workspace = _getBrowserWorkspace(sp);
+  const activeTab = _activeBrowserTabRecord(workspace);
+  if (activeTab) {
+    _switchActiveBrowserTab(sp, activeTab.tabId);
+    return;
+  }
+  if (browserViewerWindow && !browserViewerWindow.isDestroyed()) {
+    browserViewerWindow.webContents.send("browser-update", {
+      sessionPath: sp,
+      activeTabId: null,
+      tabs: [],
+      canGoBack: false,
+      canGoForward: false,
+    });
+  }
 });
 wrapIpcBestEffortHandler("browser-go-back", (_event, sessionPath) => {
   const view = _getViewForSession(_resolveBrowserIpcSessionPath(sessionPath));
@@ -5117,19 +5142,23 @@ wrapIpcBestEffortHandler("browser-reload", (_event, sessionPath) => {
   if (view) view.webContents.reload();
 });
 wrapIpcBestEffortHandler("browser-new-tab", async (_event, sessionPath) => {
-  await _openUrlInNewBrowserTab(_resolveBrowserIpcSessionPath(sessionPath), null);
+  const sp = _resolveBrowserIpcSessionPath(sessionPath);
+  await _openUrlInNewBrowserTab(sp, null);
+  _syncWorkspaceToServer(sp);
 });
 wrapIpcBestEffortHandler("browser-switch-tab", (_event, tabId, sessionPath) => {
   if (typeof tabId !== "string" || !tabId) return;
   _switchActiveBrowserTab(_resolveBrowserIpcSessionPath(sessionPath), tabId);
 });
-wrapIpcBestEffortHandler("browser-close-tab", (_event, tabId, sessionPath) => {
+wrapIpcBestEffortHandler("browser-close-tab", async (_event, tabId, sessionPath) => {
   if (typeof tabId !== "string" || !tabId) return;
   const sp = _resolveBrowserIpcSessionPath(sessionPath);
-  return handleBrowserCommand("closeTab", {
+  const result = await handleBrowserCommand("closeTab", {
     sessionPath: sp,
     tabId,
   });
+  _syncWorkspaceToServer(sp);
+  return result;
 });
 wrapIpcBestEffortHandler("close-browser-viewer", () => {
   if (browserViewerWindow && !browserViewerWindow.isDestroyed()) browserViewerWindow.close();

@@ -2691,6 +2691,7 @@
     "reload": "再読み込み",
     "newTab": "新しいタブ",
     "closeTab": "タブを閉じる",
+    "emptyWorkspace": "開いているタブはありません",
     "emergencyStop": "AI制御の緊急停止",
     "backgroundHint": "バックグラウンドブラウザ実行中、クリックして表示",
     "background": "バックグラウンドブラウザ"
