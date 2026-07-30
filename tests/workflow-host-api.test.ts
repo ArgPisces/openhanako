@@ -33,48 +33,51 @@ describe("host api - agent()", () => {
   });
 
   it("inherits permission and non-interactive approval policy into workflow agent nodes", async () => {
-    const calls = [];
+    const calls: any[] = [];
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-wf-inherit-"));
+    const ws = path.join(root, "ws");
+    fs.mkdirSync(ws, { recursive: true });
     const api = createHostApi(makeDeps({
       baseIsoOpts: {
-        agentId: "a1",
-        parentSessionPath: "/s.jsonl",
-        cwd: "/w",
-        permissionMode: "auto",
-        approvalPolicy: "deny_on_prompt",
-        allowHumanApproval: false,
+        agentId: "a1", parentSessionPath: "/s.jsonl", cwd: "/w",
+        permissionMode: "auto", approvalPolicy: "deny_on_prompt", allowHumanApproval: false,
       },
+      parentFolderScope: { sandboxFolders: [ws] },
       executeIsolated: async (_p, o) => { calls.push(o); return { replyText: "hello", error: null }; },
     }));
 
-    await api.agent("do it");
+    await api.agent("do it", { writeFolders: [ws] });
 
     expect(calls[0]).toMatchObject({
       permissionMode: "auto",
       approvalPolicy: "deny_on_prompt",
       allowHumanApproval: false,
     });
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it("supports workflow node access narrowing without exceeding the parent permission mode", async () => {
-    const calls = [];
+    const calls: any[] = [];
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-wf-narrow-"));
+    const ws = path.join(root, "ws");
+    fs.mkdirSync(ws, { recursive: true });
     const api = createHostApi(makeDeps({
       baseIsoOpts: {
-        agentId: "a1",
-        parentSessionPath: "/s.jsonl",
-        cwd: "/w",
-        permissionMode: "ask",
-        approvalPolicy: "deny_on_prompt",
-        allowHumanApproval: false,
+        agentId: "a1", parentSessionPath: "/s.jsonl", cwd: "/w",
+        permissionMode: "ask", approvalPolicy: "deny_on_prompt", allowHumanApproval: false,
       },
+      parentFolderScope: { sandboxFolders: [ws] },
       executeIsolated: async (_p, o) => { calls.push(o); return { replyText: "hello", error: null }; },
     }));
 
     await api.agent("read", { access: "read" });
-    await api.agent("write", { access: "write" });
+    await api.agent("write", { access: "write", writeFolders: [ws] });
 
     expect(calls[0].permissionMode).toBe("read_only");
     expect(calls[1].permissionMode).toBe("ask");
     expect(calls[1].approvalPolicy).toBe("deny_on_prompt");
+    expect(calls[1].cwd).toBe(fs.realpathSync(ws));
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it("opts.model / opts.agentType 透传与解析", async () => {
@@ -167,6 +170,8 @@ describe("host api - agent()", () => {
         agentId: "a1",
         parentSessionPath: "/s.jsonl",
         cwd: "/w",
+        // 本用例只关心 threadId 透传，父档只读以豁免 writeFolders default-deny。
+        permissionMode: "read_only",
         subagentTaskId: "workflow-1",
       },
       onAgentEvent: (e) => evts.push(e),

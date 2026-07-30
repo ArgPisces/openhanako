@@ -33,6 +33,7 @@ describe("workflow tool", () => {
     const runStore = makeRunStore();
     const exec = vi.fn(async () => ({ replyText: "bug", error: null }));
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: exec, getAgentId: () => "a1", emitEvent: () => {},
       getDeferredStore: () => store, getSubagentRunStore: () => runStore,
     });
@@ -57,31 +58,37 @@ describe("workflow tool", () => {
 
   it("后台跑完 resolve 合成结果到 deferred store，子 agent isoOpts 带 subagentTaskId", async () => {
     const store = makeStore();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-wf-auto-"));
+    const ws = path.join(root, "ws");
+    fs.mkdirSync(ws, { recursive: true });
     const exec = vi.fn(async () => ({ replyText: "bug", error: null }));
     const tool = createWorkflowTool({
       executeIsolated: exec, getAgentId: () => "a1", emitEvent: () => {},
       getSessionPermissionMode: () => "auto",
+      getSessionFolderScope: () => ({ cwd: ws, workspaceFolders: [], authorizedFolders: [], sandboxFolders: [ws] }),
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
     });
     const res = await tool.execute(
       "c1",
-      { script: META + `const o=[]; while(o.length<2){o.push(await agent('x'))} return o` },
+      { script: META + `const o=[]; const wf=[${JSON.stringify(ws)}]; while(o.length<2){o.push(await agent('x', { writeFolders: wf }))} return o` },
       undefined, undefined, makeCtx()
     ) as any;
     await flush();
     expect(store.resolve).toHaveBeenCalledWith(res.details.taskId, JSON.stringify(["bug", "bug"], null, 2));
     // 脚本内 agent() 派出的子 session 关联到这个 workflow task
     expect((exec.mock.calls[0] as any)[1]).toMatchObject({
-      agentId: "a1", parentSessionPath: "/s.jsonl", cwd: "/w",
+      agentId: "a1", parentSessionPath: "/s.jsonl", cwd: fs.realpathSync(ws),
       subagentContext: true, subagentTaskId: res.details.taskId, emitEvents: true,
       permissionMode: "auto", approvalPolicy: "deny_on_prompt", allowHumanApproval: false,
     });
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it("workflow node session 持久化到 workflow-sessions/<runId>，ActivityHub 记录的 child path 不指向 ephemeral", async () => {
     const store = makeStore();
     const seenPersistDirs = [];
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async (_p, o) => {
         seenPersistDirs.push(o.persist);
         o.onSessionReady?.(`${o.persist}/child.jsonl`);
@@ -108,6 +115,7 @@ describe("workflow tool", () => {
     const hub = { upsert: vi.fn((e) => { upserts.push({ ...e }); return e; }) };
     const exec = vi.fn(async () => ({ replyText: "bug", error: null }));
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: exec,
       getAgentId: () => "a1",
       emitEvent: () => {},
@@ -149,6 +157,7 @@ describe("workflow tool", () => {
   it("脚本头非法时同步返回 toolError，不派后台任务", async () => {
     const store = makeStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({}), emitEvent: () => {},
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
     });
@@ -160,6 +169,7 @@ describe("workflow tool", () => {
   it("rejects declarative meta.nodes workflows before dispatching a no-op background task (#1639)", async () => {
     const store = makeStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({}), emitEvent: () => {},
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
     });
@@ -173,6 +183,7 @@ describe("workflow tool", () => {
     const store = makeStore();
     const runStore = makeRunStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({ replyText: "", error: "boom" }), emitEvent: () => {},
       getDeferredStore: () => store, getSubagentRunStore: () => runStore,
     });
@@ -187,6 +198,7 @@ describe("workflow tool", () => {
     const store = makeStore();
     const runStore = makeRunStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({ replyText: "ok", error: null }),
       emitEvent: () => {},
       getDeferredStore: () => store,
@@ -204,6 +216,7 @@ describe("workflow tool", () => {
   it("deferred 基础设施不可用时同步兜底执行，直接返回 result", async () => {
     const exec = vi.fn(async () => ({ replyText: "bug", error: null }));
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: exec, getAgentId: () => "a1", emitEvent: () => {},
       // 不提供 getDeferredStore → 同步兜底
     });
@@ -218,6 +231,7 @@ describe("workflow tool", () => {
 
   it("同步执行路径返回 undefined 时返回 toolError", async () => {
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({ replyText: "ok", error: null }),
       emitEvent: () => {},
       // 不提供 getDeferredStore → 同步兜底
@@ -230,6 +244,7 @@ describe("workflow tool", () => {
     const evts = [];
     const store = makeStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({ replyText: "ok", error: null }),
       emitEvent: (e, sp) => evts.push({ e, sp }),
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
@@ -248,6 +263,7 @@ describe("workflow tool", () => {
   it("派出时 details 带 startedAt（inline 概览块算时长用）", async () => {
     const store = makeStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({ replyText: "ok", error: null }), emitEvent: () => {},
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
     });
@@ -259,6 +275,7 @@ describe("workflow tool", () => {
     const evts = [];
     const store = makeStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({ replyText: "ok", error: null }),
       emitEvent: (e, sp) => evts.push({ e, sp }),
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
@@ -276,6 +293,7 @@ describe("workflow tool", () => {
     const evts = [];
     const store = makeStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => ({ replyText: "", error: "boom" }),
       emitEvent: (e) => evts.push(e),
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
@@ -291,6 +309,7 @@ describe("workflow tool", () => {
     vi.useFakeTimers();
     const store = makeStore();
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async () => new Promise(() => {}),
       emitEvent: () => {},
       getDeferredStore: () => store,
@@ -317,6 +336,7 @@ describe("workflow tool", () => {
     const upserts = [];
     const hub = { upsert: (e) => { upserts.push({ ...e }); return e; } };
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async (p, o) => { o.onSessionReady?.("/child.jsonl"); return { replyText: "x", error: null }; },
       getAgentId: () => "a1", emitEvent: () => {},
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
@@ -339,6 +359,7 @@ describe("workflow tool", () => {
       finishRun: vi.fn(),
     };
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async (p, o) => { o.onSessionReady?.("/child.jsonl"); return { replyText: "x", error: null }; },
       getAgentId: () => "a1", emitEvent: () => {},
       getDeferredStore: () => store,
@@ -386,6 +407,7 @@ describe("workflow tool", () => {
       }),
     };
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: async (p, o) => {
         o.onSessionReady?.("/child-moved.jsonl", { sessionId: "sess_child", sessionPath: "/child-moved.jsonl" });
         return { replyText: "x", error: null };
@@ -416,6 +438,7 @@ describe("workflow tool", () => {
       return { replyText: "x", error: null };
     });
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: exec,
       getAgentId: () => "a1",
       emitEvent: () => {},
@@ -445,6 +468,7 @@ describe("workflow tool", () => {
     };
     const exec = vi.fn(async () => ({ replyText: "ok", error: null }));
     const tool = createWorkflowTool({
+      getSessionPermissionMode: () => "read_only",
       executeIsolated: exec,
       getAgentId: () => "a1",
       emitEvent: () => {},
