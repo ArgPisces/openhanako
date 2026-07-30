@@ -10,6 +10,11 @@ import {
   headersWithoutMcpProtocolVersion,
   resolveInitialMcpProtocolVersion,
 } from "./protocol-version.ts";
+import {
+  isJsonRpcResponse,
+  isJsonRpcServerRequest,
+  methodNotFoundResponse,
+} from "./jsonrpc.ts";
 
 const STREAMABLE_ACCEPT = "application/json, text/event-stream";
 const SSE_ACCEPT = "text/event-stream";
@@ -109,14 +114,6 @@ async function responseText(response) {
   } catch {
     return "";
   }
-}
-
-function isJsonRpcResponse(message) {
-  if (!message || typeof message !== "object" || message.jsonrpc !== "2.0" || message.id == null) return false;
-  if (Object.prototype.hasOwnProperty.call(message, "method")) return false;
-  const hasResult = Object.prototype.hasOwnProperty.call(message, "result");
-  const hasError = Object.prototype.hasOwnProperty.call(message, "error");
-  return hasResult !== hasError;
 }
 
 function methodErrorMessage(status, body) {
@@ -435,6 +432,29 @@ export class McpStreamableHttpClient {
     return headers;
   }
 
+  // We implement no server-initiated methods, so answer with -32601 rather than
+  // leaving the server blocked on a reply. Best effort: this is a courtesy
+  // reply on a side channel, and its failure must not disturb the request whose
+  // stream carried it, so a failed delivery is logged and goes no further.
+  _rejectServerRequest(message) {
+    this.log.debug?.(
+      `[mcp:${this.server.id}] rejected unsupported server request "${message.method}" (id ${message.id})`,
+    );
+    const body = JSON.stringify(methodNotFoundResponse(message.id, message.method));
+    (async () => {
+      const headers = await this._headers();
+      await fetchWithTimeout(this.fetchImpl, this.endpoint, {
+        method: "POST",
+        headers,
+        body,
+      }, requestTimeoutMs(this.server));
+    })().catch((err) => {
+      this.log.debug?.(
+        `[mcp:${this.server.id}] could not deliver method-not-found for "${message.method}": ${err.message}`,
+      );
+    });
+  }
+
   async _postJsonRpc(payload, { initializing = false } = {}) {
     assertValidUnicodeBoundary(payload);
     const response = await fetchWithTimeout(this.fetchImpl, this.endpoint, {
@@ -463,6 +483,10 @@ export class McpStreamableHttpClient {
       for (const event of parseSseEvents(text)) {
         if (!event.data) continue;
         const message = JSON.parse(event.data);
+        if (isJsonRpcServerRequest(message)) {
+          this._rejectServerRequest(message);
+          continue;
+        }
         if (isJsonRpcResponse(message) && message.id === payload.id) return rpcResult(message);
       }
       throw new Error(`MCP response for "${payload.method}" was not found in SSE stream`);
@@ -734,6 +758,10 @@ export class McpLegacySseClient {
       this.log.warn?.(`[mcp:${this.server.id}] ignored invalid SSE JSON: ${err.message}`);
       return;
     }
+    if (isJsonRpcServerRequest(message)) {
+      this._rejectServerRequest(message);
+      return;
+    }
     if (!isJsonRpcResponse(message)) return;
     const pending = this._pending.get(message.id);
     if (!pending) {
@@ -746,6 +774,19 @@ export class McpLegacySseClient {
     } catch (err) {
       pending.reject(err);
     }
+  }
+
+  // See McpStreamableHttpClient._rejectServerRequest: answer -32601 instead of
+  // dropping the request, and never let the courtesy reply's failure escape.
+  _rejectServerRequest(message) {
+    this.log.debug?.(
+      `[mcp:${this.server.id}] rejected unsupported server request "${message.method}" (id ${message.id})`,
+    );
+    this._postMessage(methodNotFoundResponse(message.id, message.method)).catch((err) => {
+      this.log.debug?.(
+        `[mcp:${this.server.id}] could not deliver method-not-found for "${message.method}": ${err.message}`,
+      );
+    });
   }
 
   async _postMessage(payload) {

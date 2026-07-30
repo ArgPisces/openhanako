@@ -59,6 +59,7 @@
     "core/local-provider-plugin-store.ts",
     "core/local-user-account.ts",
     "core/mcp/clients/http-client.ts",
+    "core/mcp/clients/jsonrpc.ts",
     "core/mcp/clients/oauth.ts",
     "core/mcp/clients/protocol-version.ts",
     "core/mcp/clients/stdio-client.ts",

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { isJsonRpcServerRequest, methodNotFoundResponse } from "./jsonrpc.ts";
 
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
 
@@ -178,6 +179,20 @@ export class McpStdioClient {
     this.onClose({ reason, expected });
   }
 
+  _rejectServerRequest(message) {
+    this.log.debug?.(
+      `[mcp:${this.server.id}] rejected unsupported server request "${message.method}" (id ${message.id})`,
+    );
+    if (!this.running) return;
+    try {
+      this._send(methodNotFoundResponse(message.id, message.method));
+    } catch (err) {
+      this.log.debug?.(
+        `[mcp:${this.server.id}] could not deliver method-not-found for "${message.method}": ${err.message}`,
+      );
+    }
+  }
+
   _send(payload) {
     const line = JSON.stringify(payload);
     this.process.stdin.write(line + "\n", "utf-8");
@@ -203,6 +218,13 @@ export class McpStdioClient {
   }
 
   _handleMessage(message) {
+    // A server-initiated request carries a method alongside its id. We serve
+    // none of them, so answer -32601 rather than leaving the server blocked on
+    // a reply that never comes. Notifications (no id) fall through untouched.
+    if (isJsonRpcServerRequest(message)) {
+      this._rejectServerRequest(message);
+      return;
+    }
     if (message?.id == null) return;
     const pending = this._pending.get(message.id);
     if (!pending) return;

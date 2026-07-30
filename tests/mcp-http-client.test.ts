@@ -430,6 +430,81 @@ describe("MCP HTTP clients", () => {
     expect(client._queued.size).toBe(0);
   });
 
+  it("answers an inbound legacy SSE server request with method-not-found instead of dropping it", async () => {
+    const posted = [];
+    const fetchImpl = vi.fn(async (url, init: any = {}) => {
+      posted.push(requestBody(init));
+      return emptyResponse();
+    });
+    const client = new McpLegacySseClient({
+      id: "legacy",
+      url: "https://legacy.example.com/sse",
+    }, { fetchImpl });
+    client.messageEndpoint = "https://legacy.example.com/messages";
+    client._closed = false;
+
+    client._handleSseEvent({
+      event: "message",
+      data: JSON.stringify({ jsonrpc: "2.0", id: 99, method: "elicitation/create", params: {} }),
+    });
+    await vi.waitFor(() => expect(posted.length).toBe(1));
+
+    // A server-initiated request is not a response. It must never be filed in
+    // the response queue, and leaving it unanswered strands the server waiting
+    // forever — say "method not found" out loud instead.
+    expect(client._queued.size).toBe(0);
+    expect(posted[0]).toEqual({
+      jsonrpc: "2.0",
+      id: 99,
+      error: { code: -32601, message: "Method not found: elicitation/create" },
+    });
+  });
+
+  it("answers an inbound server request on a Streamable HTTP SSE reply stream", async () => {
+    const posted = [];
+    const fetchImpl = vi.fn(async (url, init: any = {}) => {
+      const body = requestBody(init);
+      posted.push(body);
+      if (body?.method === "initialize") {
+        return jsonResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
+        });
+      }
+      if (body?.method === "notifications/initialized") return emptyResponse();
+      if (body?.method === "tools/call") {
+        const stream = [
+          `data: ${JSON.stringify({ jsonrpc: "2.0", id: 4242, method: "elicitation/create", params: {} })}\n\n`,
+          `data: ${JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "ok" }] } })}\n\n`,
+        ].join("");
+        return new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
+      return emptyResponse();
+    });
+
+    const client = new McpStreamableHttpClient({
+      id: "stateful",
+      url: "https://mcp.example.com/mcp",
+    }, { fetchImpl });
+
+    await client.start();
+    const result = await client.callTool("search", { q: "hana" });
+
+    expect(result).toEqual({ content: [{ type: "text", text: "ok" }] });
+    await vi.waitFor(() => {
+      expect(posted.some((body) => body?.error?.code === -32601)).toBe(true);
+    });
+    expect(posted.find((body) => body?.error)).toEqual({
+      jsonrpc: "2.0",
+      id: 4242,
+      error: { code: -32601, message: "Method not found: elicitation/create" },
+    });
+  });
+
   it("resets running to false and reports an unexpected close when the SSE stream ends", async () => {
     const onClose = vi.fn();
     const fetchImpl = vi.fn(async () => emptyResponse());

@@ -1049,6 +1049,23 @@
       "reason": "Reached via esbuild source module graph, imported by core/mcp/clients/oauth.ts (import-statement); core/mcp/manager.ts (import-statement)."
     },
     {
+      "path": "core/mcp/clients/jsonrpc.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/stdio-client.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/http-client.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/mcp/clients/stdio-client.ts (import-statement); core/mcp/clients/http-client.ts (import-statement)."
+    },
+    {
       "path": "core/mcp/clients/oauth.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112080,9 +112097,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9607,
+    "totalFiles": 9608,
     "byInputType": {
-      "source-graph": 629,
+      "source-graph": 630,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }
