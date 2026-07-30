@@ -164,8 +164,38 @@ describe("desktop browser viewer window state", () => {
     expect(source).toContain('case "close"');
     expect(source).toContain('for (const tab of workspace.tabs.values())');
     expect(source).toContain('_detachActiveBrowserView({ view: active.view');
-    expect(source).toContain('_detachActiveBrowserView({ view, sessionPath: sp || _currentBrowserSession, hideIfVisible: true })');
     expect(source).toContain('case "destroyView"');
     expect(source).toContain('_detachActiveBrowserView({ view, sessionPath: null, destroy: true, hideIfVisible: true, reason: "emergency-stop" })');
+  });
+
+  it("lets a session switch suspend without hiding the viewer window", () => {
+    const source = fs.readFileSync(MAIN_PATH, "utf-8");
+    const suspend = caseBody(source, "suspend");
+
+    // 切换会话时 viewer 保持可见，随后的 viewerShowSession 重绘目标 session
+    expect(suspend).toContain("keepViewerVisible");
+    expect(suspend).toContain("hideIfVisible: params.keepViewerVisible !== true");
+  });
+
+  it("repaints the viewer for the target session without changing window visibility", () => {
+    const source = fs.readFileSync(MAIN_PATH, "utf-8");
+    const showSession = caseBody(source, "viewerShowSession");
+
+    expect(source).toContain("const _browserSessionTitles = new Map()");
+    expect(showSession).toContain("_browserSessionTitles.set(");
+    expect(showSession).toContain("_switchActiveBrowserTab(sp, activeTab.tabId)");
+    expect(showSession).toContain('webContents.send("browser-update"');
+    expect(showSession).toContain("sessionTitle");
+    // 永不自动弹窗：只重绘，不改变可见性
+    expect(showSession).not.toContain("browserViewerWindow.show()");
+    expect(showSession).not.toContain("browserViewerWindow.hide()");
+  });
+
+  it("labels every viewer update with the session title", () => {
+    const source = fs.readFileSync(MAIN_PATH, "utf-8");
+    const body = functionBody(source, "_notifyViewerUrl");
+
+    expect(body).toContain("sessionTitle");
+    expect(body).toContain("_browserSessionTitles.get(");
   });
 });

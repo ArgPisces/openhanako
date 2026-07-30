@@ -32,6 +32,7 @@ const browserManagerMock = {
     running: browserManagerMock.isRunning(sp),
     url: browserManagerMock.currentUrl(sp),
   })),
+  notifyViewerSession: vi.fn(async (_sp: string, _title?: string | null) => {}),
   closeBrowserForSession: vi.fn(),
   getBrowserSessions: vi.fn(() => ({})),
   getBrowserSessionStates: vi.fn(() => ({})),
@@ -76,6 +77,7 @@ describe("sessions route", () => {
     browserManagerMock._sessions.clear();
     browserManagerMock._sessions.set("/tmp/agents/a/sessions/old.jsonl", { running: true, url: "https://before.example.com" });
     browserManagerMock.suspendForSession.mockClear();
+    browserManagerMock.notifyViewerSession.mockClear();
     browserManagerMock.resumeForSession.mockClear();
     browserManagerMock.resumeForSessionIfAvailable.mockClear();
     browserManagerMock.closeBrowserForSession.mockClear();
@@ -150,7 +152,13 @@ describe("sessions route", () => {
 
     const data = await res.json();
     expect(res.status).toBe(200);
-    expect(browserManagerMock.suspendForSession).toHaveBeenCalledWith("/tmp/agents/a/sessions/old.jsonl");
+    // 切换时 viewer 保持可见，由随后的 notifyViewerSession 重绘目标 session
+    expect(browserManagerMock.suspendForSession).toHaveBeenCalledWith(
+      "/tmp/agents/a/sessions/old.jsonl",
+      { keepViewerVisible: true },
+    );
+    expect(browserManagerMock.notifyViewerSession.mock.calls.at(-1)?.[0])
+      .toBe("/tmp/agents/a/sessions/new.jsonl");
     expect(browserManagerMock.resumeForSessionIfAvailable).toHaveBeenCalledWith("/tmp/agents/a/sessions/new.jsonl");
     expect(browserManagerMock.resumeForSession).toHaveBeenCalledWith("/tmp/agents/a/sessions/new.jsonl");
     expect(data.browserRunning).toBe(true); // resumeForSession sets it running

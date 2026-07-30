@@ -880,18 +880,36 @@ export class BrowserManager {
    * 挂起浏览器：从窗口上摘下来，但不销毁（页面状态完全保留）
    * 同时写入冷保存，确保重启后也能恢复
    * @param {string} sessionPath - 目标 session 路径
+   * @param {object} [options]
+   * @param {boolean} [options.keepViewerVisible] - 挂起后不隐藏 viewer 窗口。
+   *   会话切换用：窗口保持可见，由随后的 notifyViewerSession 重绘目标 session。
    */
-  async suspendForSession(sessionPath) {
+  async suspendForSession(sessionPath, { keepViewerVisible = false } = {}) {
     const entry = this._getSessionEntry(sessionPath);
     if (!entry || !this.isRunning(sessionPath)) return;
 
     this._saveColdWorkspace(sessionPath, entry);
     log.log(`挂起浏览器 ${sessionPath}`);
-    try { await this._sendCmd("suspend", { sessionPath }); } catch {}
+    try { await this._sendCmd("suspend", { sessionPath, keepViewerVisible }); } catch {}
 
     // 挂起完成，冷状态已写磁盘，从 Map 中移除避免僵尸条目累积
     this._deleteSessionEntry(sessionPath);
     this._removeLru(sessionPath);
+  }
+
+  /**
+   * 通知 viewer 现在展示哪个 session 的标签页组（不改变窗口可见性）。
+   * 没有 browser host 的环境（server / PWA）里 transport 未连接，静默跳过。
+   * @param {string} sessionPath - 目标 session 路径
+   * @param {string|null} [title] - 会话标题，显示在 viewer 工具栏
+   */
+  async notifyViewerSession(sessionPath, title = null) {
+    if (!sessionPath) return;
+    try {
+      await this._sendCmd("viewerShowSession", { sessionPath, title }, 10000);
+    } catch (err) {
+      log.warn(`viewerShowSession failed: ${_errorMessage(err)}`);
+    }
   }
 
   /**

@@ -54,6 +54,20 @@
             align-items: center;
             -webkit-app-region: drag;
         }
+        /* 会话标识：说明这个 viewer 正在看哪个会话的浏览器 */
+        .browser-session-label {
+            flex: 0 1 auto;
+            min-width: 0;
+            max-width: 132px;
+            margin-right: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 12px;
+            line-height: 1;
+            color: var(--text-light);
+            -webkit-app-region: drag;
+        }
         .browser-tab-list {
             flex: 0 1 auto;
             min-width: 0;

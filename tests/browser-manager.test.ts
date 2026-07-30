@@ -1020,4 +1020,55 @@ describe("browser workspace sync from the desktop viewer", () => {
     expect(await manager.thumbnail(SP1)).toBeNull();
     expect(manager._sendCmd).not.toHaveBeenCalled();
   });
+
+  it("suspend can keep the viewer visible for a follow-up session switch", async () => {
+    const manager = new BrowserManager({});
+    manager._setSessionEntry(SP1, {
+      running: true,
+      activeTabId: "t1",
+      tabs: [{ tabId: "t1", url: "https://a.example" }],
+    });
+    manager._loadColdState = vi.fn(() => ({}));
+    manager._saveColdState = vi.fn();
+    const sent: any[] = [];
+    manager._sendCmd = vi.fn(async (cmd, params) => { sent.push({ cmd, params }); return {}; });
+
+    await manager.suspendForSession(SP1, { keepViewerVisible: true });
+
+    expect(sent[0]).toMatchObject({ cmd: "suspend", params: { sessionPath: SP1, keepViewerVisible: true } });
+  });
+
+  it("suspend hides the viewer by default", async () => {
+    const manager = new BrowserManager({});
+    manager._setSessionEntry(SP1, {
+      running: true,
+      activeTabId: "t1",
+      tabs: [{ tabId: "t1", url: "https://a.example" }],
+    });
+    manager._loadColdState = vi.fn(() => ({}));
+    manager._saveColdState = vi.fn();
+    const sent: any[] = [];
+    manager._sendCmd = vi.fn(async (cmd, params) => { sent.push({ cmd, params }); return {}; });
+
+    await manager.suspendForSession(SP1);
+
+    expect(sent[0]).toMatchObject({ cmd: "suspend", params: { sessionPath: SP1, keepViewerVisible: false } });
+  });
+
+  it("notifyViewerSession sends the viewerShowSession command and swallows transport errors", async () => {
+    const manager = new BrowserManager({});
+    manager._sendCmd = vi.fn(async () => { throw new Error("not connected"); });
+
+    await expect(manager.notifyViewerSession(SP1, "标题")).resolves.toBeUndefined();
+    expect(manager._sendCmd).toHaveBeenCalledWith("viewerShowSession", { sessionPath: SP1, title: "标题" }, 10000);
+  });
+
+  it("notifyViewerSession does nothing without a session path", async () => {
+    const manager = new BrowserManager({});
+    manager._sendCmd = vi.fn(async () => ({}));
+
+    await manager.notifyViewerSession(null);
+
+    expect(manager._sendCmd).not.toHaveBeenCalled();
+  });
 });

@@ -2299,7 +2299,8 @@ export function createSessionsRoute(engine, hub = null) {
       const bm = BrowserManager.instance();
       const suspendPath = oldSessionPath;
       if (suspendPath && bm.isRunning(suspendPath)) {
-        await bm.suspendForSession(suspendPath);
+        // viewer 开着就让它跟着切，不再因为切换会话把窗口藏起来
+        await bm.suspendForSession(suspendPath, { keepViewerVisible: true });
       }
 
       await engine.switchSession(sessionPath);
@@ -2309,6 +2310,10 @@ export function createSessionsRoute(engine, hub = null) {
       const browserResume = await resumeBrowserForSessionSwitch(bm, sessionPath);
 
       const session = engine.getSessionByPath(sessionPath);
+
+      // viewer 跟随：无论是否 resume 成功都告知 viewer 当前 session（没有标签页组就显示空态）。
+      // 不改变窗口可见性，viewer 没开着时这条通知只更新标题缓存。
+      void bm.notifyViewerSession(sessionPath, session?.title || null);
 
       // 从 manifest 归属解析 agentId，避免依赖 engine 焦点指针的时序。
       // switchSession 只接受 agents/{id}/sessions/*.jsonl 布局的路径，归属要么

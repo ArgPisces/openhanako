@@ -513,6 +513,8 @@ export interface BrowserViewerUpdate {
   running?: boolean;
   reason?: string | null;
   sessionPath?: string | null;
+  /** 当前展示的会话标题（viewer 工具栏用；null = 未知） */
+  sessionTitle?: string | null;
   activeTabId?: string | null;
   tabs?: BrowserViewerTab[];
 }

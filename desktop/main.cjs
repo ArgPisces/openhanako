@@ -373,6 +373,7 @@ let _browserWebView = null;        // 当前活跃的 WebContentsView
 const _browserViews = new Map();   // sessionPath -> BrowserWorkspace; BrowserWorkspace.tabs: tabId -> WebContentsView
 let _currentBrowserSession = null; // 当前浏览器绑定的 sessionPath
 let _currentBrowserTabId = null;   // 当前浏览器绑定的 tabId
+const _browserSessionTitles = new Map(); // workspaceKey -> session title（viewer 工具栏显示"在看谁的浏览器"）
 let _browserAcceptCookies = true;
 const _browserCookiePolicyInstalledPartitions = new Set();
 
@@ -3658,6 +3659,7 @@ function _notifyViewerUrl(url) {
       canGoBack: _browserWebView.webContents.canGoBack(),
       canGoForward: _browserWebView.webContents.canGoForward(),
       sessionPath: _currentBrowserSession,
+      sessionTitle: _browserSessionTitles.get(_browserWorkspaceKey(_currentBrowserSession)) || null,
       activeTabId: _currentBrowserTabId || serialized.activeTabId,
       tabs: serialized.tabs,
     });
@@ -3836,11 +3838,41 @@ async function handleBrowserCommand(cmd, params) {
     }
 
     // ── suspend ──（从窗口摘下来，但不销毁，页面状态完全保留）
+    // keepViewerVisible：会话切换用。窗口保持可见，viewer 会短暂收到 running:false 清空 UI，
+    // 紧随其后的 viewerShowSession 立刻重绘目标 session 的标签页组或空态。
     case "suspend": {
       const sp = params.sessionPath;
       const view = sp ? _getViewForSession(sp) : _browserWebView;
       if (view && view === _browserWebView) {
-        _detachActiveBrowserView({ view, sessionPath: sp || _currentBrowserSession, hideIfVisible: true });
+        _detachActiveBrowserView({
+          view,
+          sessionPath: sp || _currentBrowserSession,
+          hideIfVisible: params.keepViewerVisible !== true,
+        });
+      }
+      return {};
+    }
+
+    // ── viewerShowSession ──（viewer 显示指定 session 的标签页组；无组则空态。不改变窗口可见性）
+    case "viewerShowSession": {
+      const sp = params.sessionPath || null;
+      if (typeof params.title === "string" && params.title.trim()) {
+        _browserSessionTitles.set(_browserWorkspaceKey(sp), params.title.trim());
+      }
+      if (!browserViewerWindow || browserViewerWindow.isDestroyed()) return {};
+      const workspace = _getBrowserWorkspace(sp);
+      const activeTab = _activeBrowserTabRecord(workspace);
+      if (activeTab) {
+        _switchActiveBrowserTab(sp, activeTab.tabId);
+      } else {
+        browserViewerWindow.webContents.send("browser-update", {
+          sessionPath: sp,
+          sessionTitle: _browserSessionTitles.get(_browserWorkspaceKey(sp)) || null,
+          activeTabId: null,
+          tabs: [],
+          canGoBack: false,
+          canGoForward: false,
+        });
       }
       return {};
     }
