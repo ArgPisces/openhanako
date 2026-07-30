@@ -32,6 +32,7 @@ import { collectMediaItems } from "../lib/tools/media-details.ts";
 import { formatSettingsUpdateText } from "../lib/tools/settings-update-result.ts";
 import { materializeBridgeInboundFiles } from "../lib/session-files/bridge-inbound-files.ts";
 import { serializeSessionFile } from "../lib/session-files/session-file-response.ts";
+import { BrowserManager } from "../lib/browser/browser-manager.ts";
 
 /**
  * 非桌面来源（bridge /rc 等）用户消息的来源元信息持久化条目类型。
@@ -72,6 +73,22 @@ function renderPendingReminderBlock(engine: any, sessionPath: string) {
 function consumeRenderedReminderBlock(engine: any, sessionPath: string, rendered: any): void {
   if (!rendered || rendered.alreadyConsumed || rendered.receipt == null) return;
   engine.consumeRenderedSessionReminderBlock?.(sessionPath, rendered.receipt);
+}
+
+/**
+ * 用户急停浏览器后，该 session 的浏览器授权被标记为已撤销，agent 再调浏览器
+ * 会拿到"用户已停止授权"的结果。收到新的用户消息说明用户又开口了，撤销标记
+ * 到此为止，下一轮里 agent 可以重新使用浏览器。
+ *
+ * 解除失败不阻断投递：这只是放宽一个限制，失败最多让 agent 多被拒一轮，
+ * 不该因此丢掉用户消息。
+ */
+function liftBrowserAuthorizationRevocation(sessionPath: string): void {
+  try {
+    BrowserManager.instance().clearBrowserAuthorizationRevocation(sessionPath);
+  } catch (err) {
+    console.warn(`[desktop-session-submit] lifting browser authorization revocation failed for ${sessionPath}: ${(err as any)?.message || err}`);
+  }
 }
 
 /**
@@ -208,6 +225,8 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
   if (typeof engine.isSessionStreaming === "function" && engine.isSessionStreaming(sessionPath)) {
     throw new Error("session_busy");
   }
+
+  liftBrowserAuthorizationRevocation(sessionPath);
 
   pendingDesktopSessionSubmissions.add(submissionKey);
   try {
@@ -440,6 +459,9 @@ export async function submitDesktopSessionInterjection(engine: any, opts: {
   if (typeof engine.isSessionStreaming === "function" && !engine.isSessionStreaming(sessionPath)) {
     return submitDesktopSessionMessage(engine, opts);
   }
+
+  // 转交分支之后再解除：走 submitDesktopSessionMessage 时由它自己解除，避免重复。
+  liftBrowserAuthorizationRevocation(sessionPath);
 
   const session = await engine.ensureSessionLoaded(sessionPath);
   if (!session) {
