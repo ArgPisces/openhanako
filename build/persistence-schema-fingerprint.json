@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:ea891ddb492731d2b9c21163cc6daac76842da2c7147b5425ef00b37b0fb7031",
+  "payloadFingerprint": "sha256:46cecc0bb76b268ec9437856f2c3f70b435b69d9a24dc171b164833223242f24",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2919,8 +2919,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Browser lifecycle work edited desktop/main.cjs (owning module of desktop-window-version-state); the compaction and cache-prefix work edited core/session-coordinator.ts (owning module of the session-jsonl Hana metadata extensions and session-sidecars contracts). None of these changed a persisted shape: the browser changes only touch in-memory WebContentsView workspaces plus the existing browser-sessions.json cold format, mid-run compaction reuses the existing custom-message entry shape, and cache prefix drift renewal is in-memory contract behavior. All site mapping diffs are pure line drift from these edits.",
-    "payloadFingerprint": "sha256:ea891ddb492731d2b9c21163cc6daac76842da2c7147b5425ef00b37b0fb7031"
+    "compatibilityReason": "Workflow node write-scope work edited lib/tools/workflow-tool.ts (owning module of the workflow-state journal construction site) and added lib/workflow/node-folder-scope.ts. No persisted shape changed: the new module is a pure in-memory path validator with no store, and the workflow journal keeps its existing JSONL entry shape. The only inventory diff is line drift of the existing workflow journal construction site.",
+    "payloadFingerprint": "sha256:46cecc0bb76b268ec9437856f2c3f70b435b69d9a24dc171b164833223242f24"
   },
   "schemas": [
     {
@@ -8324,7 +8324,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 209,
+      "line": 218,
       "reason": "Writes workflow journal, session, or activity state.",
       "sourceFile": "lib/tools/workflow-tool.ts",
       "storeId": "workflow-state"

@@ -505,6 +505,7 @@
     "lib/workflow/host-api.ts",
     "lib/workflow/journal.ts",
     "lib/workflow/meta.ts",
+    "lib/workflow/node-folder-scope.ts",
     "lib/workflow/sandbox.ts",
     "lib/workflow/structured-output.ts",
     "lib/yuan",

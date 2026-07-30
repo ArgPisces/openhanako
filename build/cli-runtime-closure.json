@@ -2833,6 +2833,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/workflow/node-folder-scope.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/session-coordinator.ts",
           "kind": "import-statement"
         },
@@ -2877,7 +2882,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); core/preferences-manager.ts (import-statement); core/bridge-session-manager.ts (import-statement); +13 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); core/preferences-manager.ts (import-statement); core/bridge-session-manager.ts (import-statement); +14 more importer(s)."
     },
     {
       "path": "core/session-project-catalog-store.ts",
@@ -9854,6 +9859,18 @@
         }
       ],
       "reason": "Reached via esbuild source module graph, imported by lib/workflow/sandbox.ts (import-statement); lib/tools/workflow-tool.ts (import-statement)."
+    },
+    {
+      "path": "lib/workflow/node-folder-scope.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/workflow/host-api.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/workflow/host-api.ts (import-statement)."
     },
     {
       "path": "lib/workflow/sandbox.ts",
@@ -112230,9 +112247,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9612,
+    "totalFiles": 9613,
     "byInputType": {
-      "source-graph": 634,
+      "source-graph": 635,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

@@ -506,7 +506,7 @@ return "done";`;
     const script = META + `return await agent('x', { writeFolders: [${JSON.stringify(sub)}] })`;
     await tool.execute("c1", { script }, undefined, undefined, makeCtx());
     await flush();
-    expect(exec.mock.calls[0][1]).toMatchObject({
+    expect((exec.mock.calls[0] as any)[1]).toMatchObject({
       cwd: fs.realpathSync(sub),
       workspaceFolders: [],
       authorizedFolders: [],
