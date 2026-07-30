@@ -47,7 +47,6 @@ describe('SettingsContent tab heading', () => {
     useSettingsStore.setState({
       activeTab: 'experiments',
       platformName: 'darwin',
-      pluginSettingsTabs: [],
       ready: true,
     } as never);
   });
@@ -72,7 +71,6 @@ describe('SettingsContent tab heading', () => {
     useSettingsStore.setState({
       activeTab: 'browser',
       platformName: 'darwin',
-      pluginSettingsTabs: [],
       ready: true,
       settingsSnapshot: {
         status: 'ready',

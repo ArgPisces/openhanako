@@ -194,7 +194,6 @@ function applySettingsSnapshot(snapshot: SettingsSnapshot, resourceKey: string, 
     pluginAllowFullAccess: snapshot.plugins?.allowFullAccess === true,
     pluginDevToolsEnabled: snapshot.plugins?.devToolsEnabled === true,
     pluginUserDir: snapshot.plugins?.userDir || '',
-    pluginSettingsTabs: Array.isArray(snapshot.plugins?.settingsTabs) ? snapshot.plugins.settingsTabs : [],
   });
 }
 
@@ -243,7 +242,6 @@ export async function loadSettingsSnapshot(options: { retainSameKeyData?: boolea
       pluginAllowFullAccess: undefined,
       pluginDevToolsEnabled: undefined,
       pluginUserDir: '',
-      pluginSettingsTabs: [],
     }),
   });
 
@@ -301,12 +299,8 @@ export async function loadPluginSettings() {
     pluginDevToolsEnabled: store.pluginSettingsStatus === 'idle' ? undefined : store.pluginDevToolsEnabled,
   });
   try {
-    const [settingsRes, tabsRes] = await Promise.all([
-      hanaFetch('/api/plugins/settings'),
-      hanaFetch('/api/plugins/settings-tabs'),
-    ]);
+    const settingsRes = await hanaFetch('/api/plugins/settings');
     const data = await settingsRes.json();
-    const tabs = await tabsRes.json();
     if (data.error) throw new Error(data.error);
     store.set({
       pluginSettingsStatus: 'ready',
@@ -314,7 +308,6 @@ export async function loadPluginSettings() {
       pluginAllowFullAccess: data.allow_full_access === true,
       pluginDevToolsEnabled: data.plugin_dev_tools_enabled === true,
       pluginUserDir: data.plugins_dir || '',
-      pluginSettingsTabs: Array.isArray(tabs) ? tabs : [],
     });
   } catch (err) {
     console.error('[plugins] load settings failed:', err);

@@ -59,7 +59,6 @@ function resetState() {
     pluginAllowFullAccess: undefined,
     pluginDevToolsEnabled: undefined,
     pluginUserDir: '',
-    pluginSettingsTabs: [],
     set: vi.fn((patch: Record<string, unknown>) => Object.assign(mockState, patch)),
     getSettingsAgentId: () => mockState.settingsAgentId || mockState.currentAgentId,
     showToast: vi.fn(),
@@ -286,7 +285,6 @@ describe('settings actions', () => {
     expect(mockState.pluginSettingsStatus).toBe('ready');
     expect(mockState.pluginAllowFullAccess).toBe(true);
     expect(mockState.pluginDevToolsEnabled).toBe(true);
-    expect(mockState.pluginSettingsTabs).toHaveLength(1);
   });
 
   it('clears same-owner stale snapshot data while a fresh settings snapshot is loading', async () => {
@@ -301,7 +299,6 @@ describe('settings actions', () => {
     mockState.pluginAllowFullAccess = false;
     mockState.pluginDevToolsEnabled = false;
     mockState.pluginUserDir = '/old/plugins';
-    mockState.pluginSettingsTabs = [{ pluginId: 'old', id: 'old-tab', title: 'Old', nativeComponent: 'OldSettings' }];
     mockState.settingsSnapshot = {
       key: 'local:snapshot:agent-a',
       status: 'ready',
@@ -358,7 +355,6 @@ describe('settings actions', () => {
     expect(mockState.currentPins).toEqual([]);
     expect(mockState.pluginAllowFullAccess).toBeUndefined();
     expect(mockState.pluginDevToolsEnabled).toBeUndefined();
-    expect(mockState.pluginSettingsTabs).toEqual([]);
 
     resolveSnapshot(jsonResponse({
       agentId: 'agent-a',
