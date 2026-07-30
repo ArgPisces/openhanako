@@ -109,6 +109,47 @@ function normalizeToolPermissions(value) {
   return normalized;
 }
 
+/**
+ * Decide the permission kind for a single MCP tool invocation.
+ *
+ * `policy` carries the connector's permission mode and read-only trust toggle
+ * plus this tool's own override. `liveAnnotations` is the tool's annotations as
+ * last reported by the running server, or undefined when no live tool listing
+ * has been seen for it in this process.
+ *
+ * The rules, in precedence order:
+ *   1. A server-declared destructive tool is never silently approved, even when
+ *      the user explicitly allowed it. Known danger outranks authorization.
+ *   2. An explicit user grant needs no evidence from the server, so an empty
+ *      annotation side table does not weaken it.
+ *   3. An implicit grant (trustReadOnlyHint) needs fresh evidence: it applies
+ *      only when the running server actually declared readOnlyHint. With no
+ *      live annotations this fails closed to review, because the alternative is
+ *      trusting a claim nobody made this run.
+ *
+ * Shared seam: the `mcp_call` bridge resolves a target tool at call time and
+ * must route its decision through this function rather than restating the
+ * rules, so the two paths cannot drift.
+ */
+export function resolveMcpToolPermissionKind(policy: any, liveAnnotations: any = undefined) {
+  if (normalizePermissionMode(policy?.permissionMode) !== "allowlist") return "review";
+
+  const annotations = isPlainObject(liveAnnotations) ? liveAnnotations : null;
+
+  // Rule 1: known-destructive is a hard veto over every grant below.
+  if (annotations?.destructiveHint === true) return "review";
+
+  // Rule 2: an explicit decision by the user, either direction, is honoured
+  // without consulting the server's self-description.
+  if (policy?.toolPermission === "allow") return "read";
+  if (policy?.toolPermission === "review") return "review";
+
+  // Rule 3: implicit trust requires a live read-only declaration.
+  if (policy?.trustReadOnlyHint === true && annotations?.readOnlyHint === true) return "read";
+
+  return "review";
+}
+
 function normalizeConnector(connector, fallbackId = "") {
   if (!connector || typeof connector !== "object") return null;
   const id = sanitizeId(connector.id || fallbackId);
@@ -380,7 +421,12 @@ export function createMcpToolDefinition({
   app = null,
   visibility = DEFAULT_TOOL_VISIBILITY,
   probeLiveAvailability = null,
-}) {
+  // Both are read at decision time, not at registration time, so a policy
+  // change in settings or a fresh tool listing takes effect without
+  // re-registering the tool. Absent both, the tool reviews every invocation.
+  getPermissionPolicy = () => ({}),
+  getLiveAnnotations = () => undefined,
+}: any) {
   const name = toMcpToolId(connectorId, toolName);
   return {
     name,
@@ -390,7 +436,7 @@ export function createMcpToolDefinition({
     sessionPermission: {
       resolveInvocation: () => ({
         action: "invoke",
-        kind: "review",
+        kind: resolveMcpToolPermissionKind(getPermissionPolicy(), getLiveAnnotations()),
         capability: `${name}.invoke`,
       }),
     },
@@ -554,6 +600,19 @@ export class McpManager {
     // in memory only: a hint describes one live response, so persisting it
     // would let it outlive the answer it describes.
     this.toolListFreshness = new Map();
+    // Per-connector tool annotations (readOnlyHint / destructiveHint / ...) as
+    // last reported by the running server, keyed connectorId -> toolName.
+    //
+    // Deliberately in memory only. These feed the decision to silently approve
+    // an invocation, so persisting them would make a locally writable file the
+    // trust input: a stale or hand-edited entry claiming readOnlyHint could
+    // authorize a tool that is no longer read-only. Keeping them live means an
+    // implicit grant must re-earn its evidence every process start.
+    //
+    // Not cleared on disconnect: within one process the last live values stay
+    // usable, which keeps a flapping connector from oscillating between
+    // policies. A restart starts empty, which fails closed.
+    this._runtimeToolAnnotations = new Map();
     // Explicit per-connector intent. The single source of truth for "does the
     // user want this connector running?" — never inferred from clients.has(id).
     // Only desiredStates.get(id) === "running" permits auto-reconnect.
@@ -646,6 +705,7 @@ export class McpManager {
       status: this.connectorStatusFor(connector.id),
       error: this.clientErrors.get(connector.id) || "",
       toolListFreshness: this.toolListFreshness.get(connector.id) || null,
+      toolAnnotations: this._runtimeToolAnnotations.get(connector.id) || null,
     }));
     return {
       enabled: config.enabled,
@@ -1011,6 +1071,10 @@ export class McpManager {
     if (!client?.running) throw new Error(`MCP connector "${id}" is not running`);
     const tools = await client.listTools();
     this.toolListFreshness.set(id, client.toolListFreshness ?? null);
+    // Capture annotations from the raw wire objects, before normalizeTool
+    // projects them away on the way to disk. This is the only point where the
+    // live, server-declared annotations exist.
+    this._captureRuntimeToolAnnotations(id, tools);
     const config = this.getConfig();
     const connector = config.connectors.find((s) => s.id === id);
     if (!connector) throw new Error(`MCP connector "${id}" not found`);
@@ -1022,6 +1086,27 @@ export class McpManager {
       connectorId: id,
     });
     return connector.tools;
+  }
+
+  /**
+   * Replace one connector's annotation side table from a live tool listing.
+   *
+   * Wholesale replacement is intended: a tool that no longer declares an
+   * annotation must lose the old one, otherwise a stale readOnlyHint would keep
+   * granting implicit approval after the server stopped claiming it.
+   */
+  _captureRuntimeToolAnnotations(connectorId, wireTools) {
+    const table = new Map();
+    for (const tool of Array.isArray(wireTools) ? wireTools : []) {
+      if (!tool || typeof tool.name !== "string" || !tool.name) continue;
+      if (isPlainObject(tool.annotations)) table.set(tool.name, tool.annotations);
+    }
+    this._runtimeToolAnnotations.set(connectorId, table);
+  }
+
+  /** Live annotations for one tool, or undefined when none have been seen. */
+  getRuntimeToolAnnotations(connectorId, toolName) {
+    return this._runtimeToolAnnotations.get(connectorId)?.get(toolName);
   }
 
   /** Every connector tool that exposes an app resource and is visible to apps. */
@@ -1234,6 +1319,17 @@ export class McpManager {
             tool.name,
             agentConfig,
           ),
+          // Re-read the connector from config on every decision so a policy
+          // edit in settings applies to already-registered tools.
+          getPermissionPolicy: () => {
+            const current = this.getConfig().connectors.find((item) => item.id === connector.id);
+            return {
+              permissionMode: current?.permissionMode,
+              toolPermission: current?.toolPermissions?.[tool.name],
+              trustReadOnlyHint: current?.trustReadOnlyHint,
+            };
+          },
+          getLiveAnnotations: () => this.getRuntimeToolAnnotations(connector.id, tool.name),
         });
         tools.push(this._publishTool(definition));
       }
@@ -1887,9 +1983,16 @@ function connectorClientFingerprint(connector) {
   });
 }
 
-function publicConnector({ connector, status, error = "", toolListFreshness = null }) {
+function publicConnector({ connector, status, error = "", toolListFreshness = null, toolAnnotations = null }: any) {
   return {
     ...connector,
+    // Live annotations ride along the runtime view only, so surfaces can badge
+    // a tool read-only or destructive. They are never part of the persisted
+    // connector: saveConfig normalizes through normalizeTool, which drops them.
+    tools: (connector.tools || []).map((tool) => {
+      const annotations = toolAnnotations?.get(tool.name);
+      return annotations ? { ...tool, annotations } : tool;
+    }),
     status,
     error,
     toolListFreshness,

@@ -9,6 +9,7 @@ import {
   createMcpToolDefinition,
   isMcpToolEnabledForAgentConfig,
   normalizeMcpConfig,
+  resolveMcpToolPermissionKind,
   toMcpToolId,
 } from "../core/mcp/manager.ts";
 import { McpHttpError } from "../core/mcp/clients/http-client.ts";
@@ -1663,6 +1664,224 @@ describe("MCP runtime OAuth persistence", () => {
       connected: true,
       scope: "files:read offline_access",
       expiresAt: stored.connectors[0].oauth.expiresAt,
+    });
+  });
+
+  describe("tool invocation permission resolution", () => {
+    // One row per decision-matrix line. `annotations: undefined` means the
+    // runtime side table has no live entry for this tool.
+    const MATRIX: Array<{
+      row: string;
+      policy: any;
+      annotations: any;
+      expected: string;
+    }> = [
+      {
+        row: "review-all reviews everything regardless of hints or overrides",
+        policy: { permissionMode: "review-all", toolPermission: "allow", trustReadOnlyHint: true },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+        expected: "review",
+      },
+      {
+        row: "allowlist + explicit allow + non-destructive passes",
+        policy: { permissionMode: "allowlist", toolPermission: "allow" },
+        annotations: { destructiveHint: false },
+        expected: "read",
+      },
+      {
+        row: "allowlist + no override + untrusted read-only reviews",
+        policy: { permissionMode: "allowlist", trustReadOnlyHint: false },
+        annotations: { readOnlyHint: false },
+        expected: "review",
+      },
+      {
+        row: "allowlist + trusted read-only hint passes",
+        policy: { permissionMode: "allowlist", trustReadOnlyHint: true },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+        expected: "read",
+      },
+      {
+        row: "allowlist + read-only hint but trust disabled reviews",
+        policy: { permissionMode: "allowlist", trustReadOnlyHint: false },
+        annotations: { readOnlyHint: true },
+        expected: "review",
+      },
+      {
+        row: "destructive vetoes an explicit allow",
+        policy: { permissionMode: "allowlist", toolPermission: "allow" },
+        annotations: { destructiveHint: true },
+        expected: "review",
+      },
+      // The three annotation-absence rows: explicit grants need no evidence,
+      // implicit ones need fresh evidence, known danger vetoes either.
+      {
+        row: "explicit allow still passes with an empty side table",
+        policy: { permissionMode: "allowlist", toolPermission: "allow" },
+        annotations: undefined,
+        expected: "read",
+      },
+      {
+        row: "trustReadOnlyHint fails closed with an empty side table",
+        policy: { permissionMode: "allowlist", trustReadOnlyHint: true },
+        annotations: undefined,
+        expected: "review",
+      },
+      {
+        row: "explicit allow is vetoed by a live destructive annotation",
+        policy: { permissionMode: "allowlist", toolPermission: "allow", trustReadOnlyHint: true },
+        annotations: { readOnlyHint: true, destructiveHint: true },
+        expected: "review",
+      },
+      {
+        row: "an explicit review override outranks the read-only trust toggle",
+        policy: { permissionMode: "allowlist", toolPermission: "review", trustReadOnlyHint: true },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+        expected: "review",
+      },
+    ];
+
+    for (const { row, policy, annotations, expected } of MATRIX) {
+      it(row, () => {
+        expect(resolveMcpToolPermissionKind(policy, annotations)).toBe(expected);
+      });
+    }
+
+    it("defaults to review for an empty policy", () => {
+      expect(resolveMcpToolPermissionKind({}, undefined)).toBe("review");
+      expect(resolveMcpToolPermissionKind(undefined, undefined)).toBe("review");
+    });
+
+    it("keeps the diagnostics tool read-only regardless of connector policy", () => {
+      const definition = createMcpConnectorsStatusToolDefinition({
+        getState: () => ({ enabled: true, connectors: [] }),
+        getGlobalEnabled: () => true,
+      });
+      expect(definition.sessionPermission.resolveInvocation()).toEqual({
+        action: "read",
+        kind: "read",
+        capability: "connectors_status.read",
+      });
+    });
+
+    it("always carries the invoke capability on the descriptor", () => {
+      // Session-scoped pre-authorization keys off this string, so it must be
+      // present on every descriptor whatever the policy decides.
+      for (const policy of [
+        { permissionMode: "review-all" },
+        { permissionMode: "allowlist", toolPermission: "allow" },
+      ]) {
+        const definition = createMcpToolDefinition({
+          serverId: "acme",
+          connectorId: "acme",
+          toolName: "search",
+          inputSchema: { type: "object" },
+          getGlobalEnabled: () => true,
+          getAgentConfig: async () => ({}),
+          callTool: vi.fn(),
+          getPermissionPolicy: () => policy,
+          getLiveAnnotations: () => undefined,
+        });
+        expect(definition.sessionPermission.resolveInvocation()).toMatchObject({
+          action: "invoke",
+          capability: "acme_search.invoke",
+        });
+      }
+    });
+
+    it("defaults a definition built without a policy to review", () => {
+      const definition = createMcpToolDefinition({
+        serverId: "acme",
+        connectorId: "acme",
+        toolName: "search",
+        inputSchema: { type: "object" },
+        getGlobalEnabled: () => true,
+        getAgentConfig: async () => ({}),
+        callTool: vi.fn(),
+      });
+      expect(definition.sessionPermission.resolveInvocation().kind).toBe("review");
+    });
+
+    async function runtimeWithAnnotations({ connector, annotations }) {
+      let stored: any = {
+        enabled: true,
+        connectors: [{ id: "acme", name: "Acme", url: "https://mcp.example.com/mcp", ...connector }],
+      };
+      const set = vi.fn();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-annotations"),
+        // Persist writes back so the refreshed tool list is visible to
+        // getConfig(), the way the on-disk store behaves in production.
+        config: {
+          get: vi.fn(() => stored),
+          set: (key, value) => {
+            stored = value;
+            set(key, value);
+          },
+        },
+        log: console,
+      }, {
+        clientFactory: () => ({
+          running: true,
+          start: vi.fn(async () => {}),
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => [{
+            name: "search",
+            inputSchema: { type: "object" },
+            ...(annotations ? { annotations } : {}),
+          }]),
+        }),
+      });
+      await runtime.startConnector("acme");
+      await runtime.refreshTools("acme");
+      return { runtime, set };
+    }
+
+    function kindOf(runtime) {
+      const tool = runtime.getAllTools().find((item) => item.name === "mcp_acme_search");
+      return tool.sessionPermission.resolveInvocation().kind;
+    }
+
+    it("resolves live annotations through the manager side table", async () => {
+      const trusted = await runtimeWithAnnotations({
+        connector: { permissionMode: "allowlist", trustReadOnlyHint: true },
+        annotations: { readOnlyHint: true },
+      });
+      expect(kindOf(trusted.runtime)).toBe("read");
+
+      const destructive = await runtimeWithAnnotations({
+        connector: { permissionMode: "allowlist", toolPermissions: { search: "allow" } },
+        annotations: { destructiveHint: true },
+      });
+      expect(kindOf(destructive.runtime)).toBe("review");
+
+      // No live annotations at all: implicit trust has no evidence to lean on.
+      const bare = await runtimeWithAnnotations({
+        connector: { permissionMode: "allowlist", trustReadOnlyHint: true },
+        annotations: null,
+      });
+      expect(kindOf(bare.runtime)).toBe("review");
+    });
+
+    it("surfaces live annotations in public state without persisting them", async () => {
+      const { runtime, set } = await runtimeWithAnnotations({
+        connector: { permissionMode: "allowlist" },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+      });
+
+      const [connector] = runtime.getState().connectors;
+      expect(connector.tools[0].annotations).toEqual({ readOnlyHint: true, destructiveHint: false });
+
+      // Annotations describe one live listing. Persisting them would make a
+      // locally writable file the trust input for silent approval, so no write
+      // may ever contain them.
+      for (const [, value] of set.mock.calls) {
+        expect(JSON.stringify(value)).not.toContain("readOnlyHint");
+        expect(JSON.stringify(value)).not.toContain("annotations");
+      }
+
+      // Even feeding public state back through saveConfig strips them.
+      runtime.saveConfig({ enabled: true, connectors: runtime.getState().connectors });
+      expect(JSON.stringify(set.mock.calls.at(-1)[1])).not.toContain("readOnlyHint");
     });
   });
 
