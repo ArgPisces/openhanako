@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:46cecc0bb76b268ec9437856f2c3f70b435b69d9a24dc171b164833223242f24",
+  "payloadFingerprint": "sha256:5e0b881477a9afe6a7eb103330d0487c173e00c2540d76e51564af11b75a7afb",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2919,8 +2919,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Workflow node write-scope work edited lib/tools/workflow-tool.ts (owning module of the workflow-state journal construction site) and added lib/workflow/node-folder-scope.ts. No persisted shape changed: the new module is a pure in-memory path validator with no store, and the workflow journal keeps its existing JSONL entry shape. The only inventory diff is line drift of the existing workflow journal construction site.",
-    "payloadFingerprint": "sha256:46cecc0bb76b268ec9437856f2c3f70b435b69d9a24dc171b164833223242f24"
+    "compatibilityReason": "Workflow run-limits work edited lib/workflow/journal.ts (owning module of the workflow-state journal) and lib/tools/workflow-tool.ts, and added lib/workflow/run-limits.ts. The workflow journal JSONL entry gains two optional additive fields (error, attempts) written only on the record path; the reader keys on nodeSeq/key/result/status alone, so old journals resume unchanged and new journals stay readable by the old reader. No field was removed, renamed, or retyped, and no store gained or lost a site. run-limits.ts is a pure in-memory module with no store. All remaining inventory diffs are line drift from these edits.",
+    "payloadFingerprint": "sha256:5e0b881477a9afe6a7eb103330d0487c173e00c2540d76e51564af11b75a7afb"
   },
   "schemas": [
     {
@@ -3460,7 +3460,7 @@
       "contract": "WorkflowJournal append protocol and WorkflowActivityStore runtime reader",
       "kind": "directory-contract",
       "module": "lib/workflow/journal.ts",
-      "sourceHash": "sha256:9d634d64d4e08a101555095a98f8cf72310cafccf750a56f65cf6703152f77f2",
+      "sourceHash": "sha256:6b5eb3c5b0ad03bfca4123d3925cb07ef9a13fb83531ea9ae7bfa187fefa10b9",
       "storeId": "workflow-state"
     }
   ],
@@ -8324,7 +8324,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 218,
+      "line": 226,
       "reason": "Writes workflow journal, session, or activity state.",
       "sourceFile": "lib/tools/workflow-tool.ts",
       "storeId": "workflow-state"
@@ -8372,7 +8372,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 103,
+      "line": 111,
       "reason": "Writes workflow journal, session, or activity state.",
       "sourceFile": "lib/workflow/journal.ts",
       "storeId": "workflow-state"
@@ -8380,7 +8380,7 @@
     {
       "exemptionId": null,
       "kind": "append-file",
-      "line": 104,
+      "line": 112,
       "reason": "Writes workflow journal, session, or activity state.",
       "sourceFile": "lib/workflow/journal.ts",
       "storeId": "workflow-state"

@@ -9873,6 +9873,23 @@
       "reason": "Reached via esbuild source module graph, imported by lib/workflow/host-api.ts (import-statement)."
     },
     {
+      "path": "lib/workflow/run-limits.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/workflow/host-api.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/tools/workflow-tool.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/workflow/host-api.ts (import-statement); lib/tools/workflow-tool.ts (import-statement)."
+    },
+    {
       "path": "lib/workflow/sandbox.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112247,9 +112264,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9613,
+    "totalFiles": 9614,
     "byInputType": {
-      "source-graph": 635,
+      "source-graph": 636,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

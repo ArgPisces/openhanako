@@ -7800,7 +7800,7 @@
     },
     {
       "sourceFile": "lib/tools/workflow-tool.ts",
-      "line": 218,
+      "line": 226,
       "kind": "persistent-store-constructor",
       "excerpt": "new WorkflowJournal(journalPath(jDir, taskId))",
       "reason": "Writes workflow journal, session, or activity state.",
@@ -7854,7 +7854,7 @@
     },
     {
       "sourceFile": "lib/workflow/journal.ts",
-      "line": 103,
+      "line": 111,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(this._path), { recursive: true })",
       "reason": "Writes workflow journal, session, or activity state.",
@@ -7863,7 +7863,7 @@
     },
     {
       "sourceFile": "lib/workflow/journal.ts",
-      "line": 104,
+      "line": 112,
       "kind": "append-file",
       "excerpt": "fs.appendFileSync(this._path, JSON.stringify(entry) + \"\\n\")",
       "reason": "Writes workflow journal, session, or activity state.",
