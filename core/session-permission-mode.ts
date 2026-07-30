@@ -273,6 +273,20 @@ function classifyResolvedToolInvocation(mode, toolName, context) {
   if (routineIsHostPreAuthorized) {
     return { action: "allow" };
   }
+  // Session-scoped pre-authorization, granted by an explicit user decision
+  // earlier in this same session. Unlike the routine list above this is
+  // kind-agnostic: a "review" descriptor is precisely what the user was asked
+  // about, so honouring the grant only for routine work would make it useless.
+  // The capability string is the whole key, so a grant never widens past the
+  // exact invocation it was issued for.
+  const invocationIsSessionPreAuthorized =
+    typeof invocation.capability === "string"
+    && !!invocation.capability
+    && Array.isArray(context?.preAuthorizedInvocationCapabilities)
+    && context.preAuthorizedInvocationCapabilities.includes(invocation.capability);
+  if (invocationIsSessionPreAuthorized) {
+    return { action: "allow" };
+  }
   if (mode === SESSION_PERMISSION_MODES.OPERATE) return { action: "allow" };
   if (mode === SESSION_PERMISSION_MODES.READ_ONLY) return blockedByReadOnly(toolName, context);
   // Codex-style Auto: actions already contained by the current workspace and

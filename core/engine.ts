@@ -1847,6 +1847,11 @@ export class HanaEngine {
   setSessionPermissionModeForSession(sessionPath, mode, options) { return this._sessionCoord.setSessionPermissionMode(sessionPath, mode, options); }
   setCurrentSessionPermissionMode(mode) { return this._sessionCoord.setCurrentSessionPermissionMode(mode); }
   setPendingSessionPermissionMode(mode) { return this._sessionCoord.setPendingPermissionMode(mode); }
+  allowSessionInvocationCapability(ref, capability) { return this._sessionCoord.allowInvocationCapability(ref, capability); }
+  // Read on every permission decision, including on engines built without a
+  // session coordinator. No coordinator means no session ever granted anything,
+  // so an empty list is the accurate answer and the fail-closed one.
+  getSessionAllowedInvocationCapabilities(sessionPath) { return this._sessionCoord?.getAllowedInvocationCapabilities(sessionPath) || []; }
   getSessionPermissionModeDefault() { return this._sessionCoord.getPermissionModeDefault(); }
   setSessionPermissionModeDefault(mode) { return this._sessionCoord.setPermissionModeDefault(mode); }
   get accessMode() { return this._sessionCoord.getAccessMode(); }
@@ -2839,7 +2844,19 @@ export class HanaEngine {
       ? opts.getPermissionMode
       : (sessionPath) => this.getSessionPermissionMode(sessionPath);
     // 拦截上下文（如 { isSubagent }）：classify 据此做与 mode 无关的固定边界（防自递归等）。
-    const permissionContext = opts.permissionContext || null;
+    //
+    // The session's capability grants are exposed as a getter rather than a
+    // snapshot: the permission wrapper spreads this object on every tool call,
+    // so a grant issued mid-session applies to the very next call without
+    // rebuilding the tool set. getSessionPath() resolves the session this tool
+    // set was built for, so a grant can never leak into another session.
+    const readSessionGrants = (sessionPath) => this.getSessionAllowedInvocationCapabilities(sessionPath);
+    const permissionContext = {
+      ...(opts.permissionContext || {}),
+      get preAuthorizedInvocationCapabilities() {
+        return readSessionGrants(getSessionPath());
+      },
+    };
     result = {
       ...result,
       tools: wrapWithSessionPermission(result.tools, {

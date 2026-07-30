@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { safeJson } from "../hono-helpers.ts";
+import { createRequestContext } from "../http/boundary.ts";
 
 /**
  * HTTP surface for the MCP connector manager.
@@ -37,6 +39,45 @@ export function createMcpRoute(engine) {
   }
 
   sub.get("/state", currentState);
+
+  // Grant one tool invocation for the rest of this session. The capability
+  // string comes from the permission descriptor the user was just asked about,
+  // so a grant never widens past that exact invocation. Nothing is persisted:
+  // the grant dies with the session runtime.
+  sub.post("/session-permissions", async (c) => {
+    try {
+      const requestContext = createRequestContext(c, engine);
+      const body = await safeJson(c);
+      const sessionId = typeof body?.sessionId === "string" ? body.sessionId.trim() : "";
+      const capability = typeof body?.capability === "string" ? body.capability.trim() : "";
+      if (!sessionId) return c.json({ error: "missing_param", param: "sessionId" }, 400);
+      if (!capability) return c.json({ error: "missing_param", param: "capability" }, 400);
+
+      const manifest = engine.getSessionManifest?.(sessionId) || null;
+      const sessionPath = manifest?.currentLocator?.path || null;
+      if (!sessionPath) return c.json({ error: "session_manifest_not_found" }, 404);
+
+      if (requestContext.authPrincipal?.kind !== "unknown") {
+        if (typeof requestContext.authorize !== "function") {
+          return c.json({ error: "insufficient_scope", reason: "missing_policy" }, 403);
+        }
+        const auth = requestContext.authorize("sessions.write", {
+          kind: "session",
+          studioId: requestContext.studioId,
+          sessionPath,
+        });
+        if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
+      }
+
+      const result = engine.allowSessionInvocationCapability({ sessionId, sessionPath }, capability);
+      return c.json(result);
+    } catch (err: any) {
+      return c.json(
+        { error: err?.code || "session_permission_grant_failed", message: err?.message || String(err) },
+        err?.status || 500,
+      );
+    }
+  });
 
   sub.get("/apps", (c) => {
     const rt = runtime();

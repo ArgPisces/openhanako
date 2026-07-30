@@ -108927,6 +108927,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "server/routes/mcp.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "server/routes/resource-io.ts",
           "kind": "import-statement"
         },
@@ -108951,7 +108956,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by server/routes/mobile-workbench.ts (import-statement); server/routes/sessions.ts (import-statement); server/routes/models.ts (import-statement); +20 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by server/routes/mobile-workbench.ts (import-statement); server/routes/sessions.ts (import-statement); server/routes/models.ts (import-statement); +21 more importer(s)."
     },
     {
       "path": "server/http/boundary.ts",
@@ -108979,6 +108984,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "server/routes/mcp.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "server/routes/resources.ts",
           "kind": "import-statement"
         },
@@ -108988,7 +108998,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by server/routes/mobile-workbench.ts (import-statement); server/routes/chat.ts (import-statement); server/routes/sessions.ts (import-statement); +3 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by server/routes/mobile-workbench.ts (import-statement); server/routes/chat.ts (import-statement); server/routes/sessions.ts (import-statement); +4 more importer(s)."
     },
     {
       "path": "server/http/capability-guard.ts",

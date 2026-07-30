@@ -544,6 +544,7 @@ export class McpManager {
   declare Client: any;
   declare clientErrors: any;
   declare toolListFreshness: any;
+  declare _runtimeToolAnnotations: Map<string, Map<string, any>>;
   declare _getConfirmStore: any;
   declare _emitEvent: any;
   declare clientFactory: any;

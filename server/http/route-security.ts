@@ -128,6 +128,7 @@ export function classifyHttpRoute({ method = "GET", path = "" } = {}) {
   if (isSettingsWriteRoute(verb, routePath)) return scoped("settings.write");
   if (isSkillSettingsReadRoute(verb, routePath)) return scoped("settings.read");
   if (isSkillSettingsWriteRoute(verb, routePath)) return scoped("settings.write");
+  if (isMcpSessionPermissionRoute(verb, routePath)) return scoped("chat");
   if (isMcpSettingsReadRoute(verb, routePath)) return scoped("settings.read");
   if (isMcpSettingsWriteRoute(verb, routePath)) return scoped("settings.write");
   if (isMcpAppToolCallRoute(verb, routePath)) return STUDIO_OWNER;
@@ -528,6 +529,21 @@ function isMcpSettingsWriteRoute(verb, routePath) {
   if (verb === "POST" && /^\/(?:connectors|servers)\/[^/]+\/oauth\/(?:start|logout)$/.test(sub)) return true;
   if (verb === "POST" && /^\/(?:connectors|servers)\/[^/]+\/apps\/[^/]+\/launch$/.test(sub)) return true;
   return false;
+}
+
+// Granting a tool invocation for one session changes that session's permission
+// state, not the connector's stored settings, so it rides the session scope
+// rather than settings.write.
+//
+// Classified "chat" for the same reason /api/sessions is: at this layer the
+// principal still carries its raw scopes, and the finer sessions.write is only
+// minted later by scope expansion. The handler performs the real
+// sessions.write capability check once it has resolved the session. Without an
+// entry here the route would fall through to studio-owner and shut out every
+// remote client.
+function isMcpSessionPermissionRoute(verb, routePath) {
+  if (verb !== "POST") return false;
+  return mcpSubPath(routePath) === "/session-permissions";
 }
 
 // Invoking a connector tool on behalf of an app surface is a real side effect

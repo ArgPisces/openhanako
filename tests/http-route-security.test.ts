@@ -347,6 +347,26 @@ describe("HTTP route security policy", () => {
         principal: null,
       })).toMatchObject({ allowed: true });
 
+      // Granting a session-scoped tool invocation changes session permission
+      // state, not connector settings, so it travels with the session scope
+      // rather than settings.write, exactly like /api/sessions. The handler
+      // still runs the finer sessions.write capability check once it has
+      // resolved the session.
+      expect(classifyHttpRoute({ method: "POST", path: `${prefix}/session-permissions` }))
+        .toMatchObject({ kind: "scope", scope: "chat" });
+      expect(authorizeHttpRoute({
+        method: "POST",
+        path: `${prefix}/session-permissions`,
+        principal: chatOnly,
+      })).toMatchObject({ allowed: true });
+      // A settings writer with no session access must not be able to widen a
+      // session's permissions.
+      expect(authorizeHttpRoute({
+        method: "POST",
+        path: `${prefix}/session-permissions`,
+        principal: devicePrincipal(["settings.read", "settings.write"]),
+      })).toMatchObject({ allowed: false, error: "insufficient_scope" });
+
       // Invoking a connector tool for an app surface is a real third-party side
       // effect, so it is owner-only rather than a settings scope.
       expect(classifyHttpRoute({

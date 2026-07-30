@@ -362,4 +362,100 @@ describe("session permission modes", () => {
     expect(classifySessionPermission({ mode: "ask", toolName: "pin_memory", context: { isSubagent: true } }))
       .toMatchObject({ action: "deny", code: "ACTION_BLOCKED_IN_SUBAGENT" });
   });
+
+  describe("session-scoped invocation pre-authorization", () => {
+    const reviewInvocation = {
+      action: "invoke",
+      kind: "review",
+      capability: "mcp_acme_search.invoke",
+    };
+
+    it("allows a pre-authorized capability whatever the declared kind", () => {
+      // The whole point of the session grant is that it outranks the kind:
+      // a "review" descriptor is exactly what the user was asked about.
+      for (const mode of ["auto", "ask"]) {
+        expect(classifySessionPermission({
+          mode,
+          toolName: "mcp_acme_search",
+          context: {
+            toolInvocation: reviewInvocation,
+            preAuthorizedInvocationCapabilities: ["mcp_acme_search.invoke"],
+          },
+        })).toEqual({ action: "allow" });
+      }
+
+      const routineInvocation = {
+        action: "post",
+        kind: "routine",
+        capability: "channel_reply.post",
+        target: { type: "channel", id: "ch_team" },
+      };
+      expect(classifySessionPermission({
+        mode: "auto",
+        toolName: "channel_reply",
+        context: {
+          toolInvocation: routineInvocation,
+          preAuthorizedInvocationCapabilities: ["channel_reply.post"],
+        },
+      })).toEqual({ action: "allow" });
+    });
+
+    it("leaves every existing branch untouched when the capability does not match", () => {
+      for (const preAuthorizedInvocationCapabilities of [
+        undefined,
+        [],
+        ["mcp_other_tool.invoke"],
+        // A non-array must be ignored rather than throwing or coercing.
+        "mcp_acme_search.invoke" as any,
+      ]) {
+        expect(classifySessionPermission({
+          mode: "auto",
+          toolName: "mcp_acme_search",
+          context: { toolInvocation: reviewInvocation, preAuthorizedInvocationCapabilities },
+        })).toMatchObject({ action: "review" });
+        expect(classifySessionPermission({
+          mode: "ask",
+          toolName: "mcp_acme_search",
+          context: { toolInvocation: reviewInvocation, preAuthorizedInvocationCapabilities },
+        })).toMatchObject({ action: "prompt" });
+        expect(classifySessionPermission({
+          mode: "read_only",
+          toolName: "mcp_acme_search",
+          context: { toolInvocation: reviewInvocation, preAuthorizedInvocationCapabilities },
+        })).toMatchObject({ action: "deny", code: "ACTION_BLOCKED_BY_READ_ONLY" });
+        expect(classifySessionPermission({
+          mode: "operate",
+          toolName: "mcp_acme_search",
+          context: { toolInvocation: reviewInvocation, preAuthorizedInvocationCapabilities },
+        })).toEqual({ action: "allow" });
+      }
+    });
+
+    it("keeps the routine pre-authorization list independent", () => {
+      const routineInvocation = {
+        action: "post",
+        kind: "routine",
+        capability: "channel_reply.post",
+        target: { type: "channel", id: "ch_team" },
+      };
+      // The existing routine list still works on its own,
+      expect(classifySessionPermission({
+        mode: "auto",
+        toolName: "channel_reply",
+        context: {
+          toolInvocation: routineInvocation,
+          preAuthorizedRoutineCapabilities: ["channel_reply.post"],
+        },
+      })).toEqual({ action: "allow" });
+      // and it still does not grant anything to a review-kind invocation.
+      expect(classifySessionPermission({
+        mode: "auto",
+        toolName: "mcp_acme_search",
+        context: {
+          toolInvocation: reviewInvocation,
+          preAuthorizedRoutineCapabilities: ["mcp_acme_search.invoke"],
+        },
+      })).toMatchObject({ action: "review" });
+    });
+  });
 });

@@ -857,10 +857,14 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     format: "json",
     schemaSource: runtimeSource(
       "core/mcp/manager.ts",
-      "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults)",
+      "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, "
+      + "per-connector permission policy defaults)",
     ),
     openEntry: ["Engine constructor via McpManager"],
-    migrationEntry: ["normalizeMcpConfig read-time normalization (servers→connectors alias)"],
+    migrationEntry: [
+      "normalizeMcpConfig read-time normalization (servers→connectors alias)",
+      "normalizeMcpConfig read-time permission policy defaults (permissionMode/toolPermissions/trustReadOnlyHint)",
+    ],
     checkpointPolicy: "Single JSON config; checkpoint the whole file.",
     restorePolicy: "Restore the whole file; read-time normalization absorbs older shapes.",
     // The directory name predates the move to core/mcp and stays put: it is

@@ -2447,6 +2447,11 @@ export class SessionCoordinator {
       // #1624：session 级提示数据，归属 sessionEntry（this._sessions 由 _sessionRuntimeKeyForPath 以 sessionId 优先键控，sessionPath 仅为兼容退化键），不挂 agent/engine
       capabilityDrift,
       capabilityDriftDismissedFingerprint: restoredDriftDismissedFingerprint,
+      // Invocation capabilities the user granted for this session only. Runtime
+      // state by design: it reaches neither writeSessionMeta nor the manifest
+      // snapshot, so it dies with the runtime and the user is asked again after
+      // a restart. That is the fail-closed direction for a permission grant.
+      sessionAllowedInvocationCapabilities: new Set(),
       ...initialReminderState,
       lastTouchedAt: Date.now(),
       unsub,
@@ -5487,6 +5492,46 @@ export class SessionCoordinator {
     this._pendingPermissionMode = nextMode;
     this._emitPermissionModeChanged(nextMode, null);
     return { ok: true, mode: nextMode, enabled: isReadOnlyPermissionMode(nextMode) };
+  }
+
+  /**
+   * Grant one invocation capability for the remaining life of this session's
+   * runtime.
+   *
+   * Contrast with permission mode, which is persisted twice (session meta and
+   * the manifest snapshot). A session grant is deliberately neither: it answers
+   * "allow this for now", not "remember this". An unloaded session is an error
+   * rather than a silent no-op, because a grant the caller believes was
+   * recorded but that vanished is worse than a visible failure.
+   */
+  allowInvocationCapability(ref: any, capability: any) {
+    const normalized = typeof capability === "string" ? capability.trim() : "";
+    if (!normalized) {
+      const error: any = new Error("allow invocation capability: capability is required");
+      error.code = "invalid_capability";
+      error.status = 400;
+      throw error;
+    }
+    const { sessionId, sessionPath } = this._resolveSessionWriteRef(ref, "allow invocation capability");
+    const entry = this._getSessionEntryByPath(sessionPath);
+    if (!entry) {
+      const error: any = new Error("allow invocation capability: session runtime is not loaded");
+      error.code = "session_not_loaded";
+      error.status = 409;
+      throw error;
+    }
+    if (!(entry.sessionAllowedInvocationCapabilities instanceof Set)) {
+      entry.sessionAllowedInvocationCapabilities = new Set();
+    }
+    entry.sessionAllowedInvocationCapabilities.add(normalized);
+    return { ok: true, sessionId, capability: normalized };
+  }
+
+  /** Capabilities granted for this session, as a plain array for the classifier. */
+  getAllowedInvocationCapabilities(sessionPath: any) {
+    const entry = this._getSessionEntryByPath(sessionPath);
+    const granted = entry?.sessionAllowedInvocationCapabilities;
+    return granted instanceof Set ? [...granted] : [];
   }
 
   _applyPermissionModeToEntry(sessionPath: any, entry: any, nextMode: any) {

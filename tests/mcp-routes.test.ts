@@ -167,4 +167,90 @@ describe("MCP first-class routes", () => {
     const res = await app.request("/api/mcp/state");
     expect(res.status).toBe(503);
   });
+
+  describe("session-scoped permission grants", () => {
+    function createSessionApp(overrides: any = {}) {
+      const allowSessionInvocationCapability = overrides.allowSessionInvocationCapability
+        || vi.fn((ref, capability) => ({ ok: true, sessionId: ref.sessionId, capability }));
+      const engine = {
+        mcp: fakeMcp(),
+        getSessionManifest: overrides.getSessionManifest
+          || vi.fn((sessionId) => (sessionId === "sess_1"
+            ? { sessionId, currentLocator: { path: "/agents/owner/sessions/a.jsonl" } }
+            : null)),
+        allowSessionInvocationCapability,
+      };
+      const app = new Hono();
+      app.route("/api", createMcpRoute(engine as any));
+      return { app, engine, allowSessionInvocationCapability };
+    }
+
+    function post(app, body) {
+      return app.request("/api/mcp/session-permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("grants a capability to the addressed session", async () => {
+      const { app, allowSessionInvocationCapability } = createSessionApp();
+
+      const res = await post(app, { sessionId: "sess_1", capability: "mcp_acme_search.invoke" });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true, capability: "mcp_acme_search.invoke" });
+      // The session is addressed by identity, and the resolved locator rides
+      // along so the coordinator never has to re-derive it.
+      expect(allowSessionInvocationCapability).toHaveBeenCalledWith(
+        { sessionId: "sess_1", sessionPath: "/agents/owner/sessions/a.jsonl" },
+        "mcp_acme_search.invoke",
+      );
+    });
+
+    it("is reachable through the legacy alias", async () => {
+      const { app } = createSessionApp();
+      const res = await app.request("/api/plugins/mcp/session-permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: "sess_1", capability: "mcp_acme_search.invoke" }),
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("rejects a request missing either field", async () => {
+      const { app, allowSessionInvocationCapability } = createSessionApp();
+
+      expect((await post(app, { capability: "mcp_acme_search.invoke" })).status).toBe(400);
+      expect((await post(app, { sessionId: "sess_1" })).status).toBe(400);
+      expect((await post(app, { sessionId: "sess_1", capability: "   " })).status).toBe(400);
+      expect(allowSessionInvocationCapability).not.toHaveBeenCalled();
+    });
+
+    it("reports an unknown session as not found rather than granting", async () => {
+      const { app, allowSessionInvocationCapability } = createSessionApp();
+
+      const res = await post(app, { sessionId: "sess_missing", capability: "mcp_acme_search.invoke" });
+
+      expect(res.status).toBe(404);
+      expect(await res.json()).toMatchObject({ error: "session_manifest_not_found" });
+      expect(allowSessionInvocationCapability).not.toHaveBeenCalled();
+    });
+
+    it("surfaces the coordinator's status for an unloaded session", async () => {
+      const { app } = createSessionApp({
+        allowSessionInvocationCapability: vi.fn(() => {
+          const error: any = new Error("allow invocation capability: session runtime is not loaded");
+          error.code = "session_not_loaded";
+          error.status = 409;
+          throw error;
+        }),
+      });
+
+      const res = await post(app, { sessionId: "sess_1", capability: "mcp_acme_search.invoke" });
+
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ error: "session_not_loaded" });
+    });
+  });
 });
