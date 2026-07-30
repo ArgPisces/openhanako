@@ -136,6 +136,7 @@ function makeBudget(ledger, taskId, budgetTotal) {
  *   getSessionPath?: () => string|null,
  *   getSessionIdForPath?: (sessionPath: string|null) => string|null,
  *   getSessionPermissionMode?: (sessionPath: string|null) => string|null,
+ *   getSessionFolderScope?: (sessionPath: string) => { cwd?: string|null, workspaceFolders?: string[], authorizedFolders?: string[], sandboxFolders?: string[] }|null,
  *   getParentCwd?: () => string|null,
  *   getAgentId?: () => string|undefined,
  *   emitEvent?: (event: object, sessionPath: string|null) => void,
@@ -162,6 +163,13 @@ export function createWorkflowTool(deps) {
       const parentPermissionMode = parentSessionPath
         ? (deps.getSessionPermissionMode?.(parentSessionPath) || null)
         : null;
+      // 父会话 folder scope：节点 writeFolders 的 attenuation 上界。
+      // 无 session（sync 兜底）时以 cwd 为唯一写根；两者皆缺则节点声明 writeFolders 会 fail-closed。
+      const sessionFolderScope = parentSessionPath
+        ? (deps.getSessionFolderScope?.(parentSessionPath) || null)
+        : null;
+      const parentFolderScope = sessionFolderScope
+        ?? (cwd ? { cwd, workspaceFolders: [], authorizedFolders: [], sandboxFolders: [cwd] } : null);
 
       // 先静态校验脚本头：非法脚本同步报错，不派后台任务
       // （禁止非用户预期 fallback：不把非法输入伪装成"已派出"）。
@@ -184,7 +192,7 @@ export function createWorkflowTool(deps) {
       // deferred 基础设施不可用（或无 parent session）→ 同步兜底执行，调用方直接拿结果。
       // 与 subagent 一致：这是基础设施缺失时的等价行为，不是静默降级。
       if (!store || !parentSessionPath) {
-        return _syncRun(deps, params, meta, { agentId, cwd, parentSessionPath, parentPermissionMode });
+        return _syncRun(deps, params, meta, { agentId, cwd, parentSessionPath, parentPermissionMode, parentFolderScope });
       }
 
       const taskId = `workflow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -250,6 +258,7 @@ export function createWorkflowTool(deps) {
           resolveAgentId: deps.resolveAgentId,
           journal,
           replayJournal,
+          parentFolderScope,
         });
         return runWorkflowScript(childScript, childHostApi, {
           signal: controller.signal,
@@ -270,6 +279,7 @@ export function createWorkflowTool(deps) {
         journal,
         replayJournal,
         runWorkflow,
+        parentFolderScope,
       });
 
       // fire-and-forget：不 await。后台跑完 resolve/fail 写入 deferred store，
@@ -380,7 +390,7 @@ function buildAgentEventHandler({ taskId, parentSessionId, parentSessionPath, su
 }
 
 /** deferred 基础设施不可用时同步执行，保留原同步语义（调用方直接拿合成结果）。 */
-async function _syncRun(deps, params, meta, { agentId, cwd, parentSessionPath, parentPermissionMode }) {
+async function _syncRun(deps, params, meta, { agentId, cwd, parentSessionPath, parentPermissionMode, parentFolderScope }) {
   const limiter = makeLimiter();
   const ledger = deps.getUsageLedger?.();
   const budgetTotal = params.args?.budgetTokens ?? null;
@@ -404,6 +414,7 @@ async function _syncRun(deps, params, meta, { agentId, cwd, parentSessionPath, p
     budget: makeBudget(ledger, null, budgetTotal),
     args: params.args,
     resolveAgentId: deps.resolveAgentId,
+    parentFolderScope,
   });
   try {
     const { result } = await runWorkflowScript(params.script, hostApi, { deadlineMs: WORKFLOW_DEADLINE_MS });

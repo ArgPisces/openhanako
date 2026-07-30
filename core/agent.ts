@@ -687,6 +687,8 @@ export class Agent {
       },
       getSessionPath: () => this._cb?.getCurrentSessionPath?.(),
       getSessionPermissionMode: (sp) => this._cb?.getSessionPermissionMode?.(sp) ?? null,
+      // 节点 writeFolders 的 attenuation 上界：父 session 的 folder scope。
+      getSessionFolderScope: (sp) => this._cb?.getEngine?.()?.getSessionFolderScope?.(sp) || null,
       getParentCwd: () => this._cb?.getCwd?.() || null,
       getAgentId: () => this.id,
       emitEvent: (event, sp) => this._cb?.emitEvent?.(event, sp),

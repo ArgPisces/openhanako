@@ -1,4 +1,6 @@
 // tests/workflow-tool.test.js
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkflowTool } from "../lib/tools/workflow-tool.ts";
@@ -460,5 +462,75 @@ return "done";`;
     expect(stepEntries.length).toBeGreaterThanOrEqual(2); // log + parallel
     expect(stepEntries.some((e) => e.stepKind === "log")).toBe(true);
     expect(stepEntries.some((e) => e.stepKind === "parallel")).toBe(true);
+  });
+
+  it("execute 把父 session folder scope 传给 host api：节点 writeFolders 生效", async () => {
+    const store = makeStore();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-wf-tool-"));
+    const ws = path.join(root, "ws");
+    const sub = path.join(ws, "out");
+    fs.mkdirSync(sub, { recursive: true });
+    const exec = vi.fn(async () => ({ replyText: "ok", error: null }));
+    const tool = createWorkflowTool({
+      executeIsolated: exec, getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "auto",
+      getSessionFolderScope: (sp) => (sp === "/s.jsonl"
+        ? { cwd: ws, workspaceFolders: [], authorizedFolders: [], sandboxFolders: [ws] }
+        : null),
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    const script = META + `return await agent('x', { writeFolders: [${JSON.stringify(sub)}] })`;
+    await tool.execute("c1", { script }, undefined, undefined, makeCtx());
+    await flush();
+    expect(exec.mock.calls[0][1]).toMatchObject({
+      cwd: fs.realpathSync(sub),
+      workspaceFolders: [],
+      authorizedFolders: [],
+    });
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("节点 writeFolders 越出父 scope → workflow 以失败收场（deferred fail，不静默裁剪）", async () => {
+    const store = makeStore();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-wf-tool-esc-"));
+    const ws = path.join(root, "ws");
+    const outside = path.join(root, "outside");
+    fs.mkdirSync(ws, { recursive: true });
+    fs.mkdirSync(outside, { recursive: true });
+    const tool = createWorkflowTool({
+      executeIsolated: async () => ({ replyText: "ok", error: null }),
+      getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "auto",
+      getSessionFolderScope: () => ({ cwd: ws, workspaceFolders: [], authorizedFolders: [], sandboxFolders: [ws] }),
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    const script = META + `return await agent('x', { writeFolders: [${JSON.stringify(outside)}] })`;
+    const res = await tool.execute("c1", { script }, undefined, undefined, makeCtx()) as any;
+    await flush();
+    expect(store.resolve).not.toHaveBeenCalled();
+    expect(store.fail).toHaveBeenCalledWith(
+      res.details.taskId,
+      expect.stringContaining("escapes the parent session folder scope"),
+    );
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("写能力节点未声明 writeFolders → workflow 失败，fail 消息含纠正指引", async () => {
+    const store = makeStore();
+    const tool = createWorkflowTool({
+      executeIsolated: async () => ({ replyText: "ok", error: null }),
+      getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "auto",
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    const res = await tool.execute(
+      "c1", { script: META + `return await agent('x')` }, undefined, undefined, makeCtx(),
+    ) as any;
+    await flush();
+    expect(store.resolve).not.toHaveBeenCalled();
+    expect(store.fail).toHaveBeenCalledWith(
+      res.details.taskId,
+      expect.stringContaining("resumeFromRunId"),
+    );
   });
 });
