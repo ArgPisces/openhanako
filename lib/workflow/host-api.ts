@@ -2,10 +2,15 @@
 import { createStructuredOutputTool } from "./structured-output.ts";
 import { WorkflowJournal } from "./journal.ts";
 import { resolveSubagentToolAccess } from "../tools/subagent-tool-policy.ts";
+import {
+  assertNodeWriteFoldersShape,
+  assertNodeWriteScopeDeclared,
+  resolveNodeFolderScope,
+} from "./node-folder-scope.ts";
 
 export const WORKFLOW_RUNTIME_CONTRACT = Symbol.for("hana.workflow.runtimeContract");
 
-const AGENT_OPTION_KEYS = new Set(["label", "model", "agentType", "toolFilter", "access", "schema"]);
+const AGENT_OPTION_KEYS = new Set(["label", "model", "agentType", "toolFilter", "access", "schema", "writeFolders"]);
 
 function normalizeAgentOptions(rawOpts) {
   if (rawOpts == null) return {};
@@ -16,7 +21,7 @@ function normalizeAgentOptions(rawOpts) {
     if (!AGENT_OPTION_KEYS.has(key)) {
       throw new Error(
         `workflow agent() unsupported option "${key}". ` +
-        "Use agent(prompt, { label?, model?, agentType?, access?, schema?, toolFilter? }); " +
+        "Use agent(prompt, { label?, model?, agentType?, access?, writeFolders?, schema?, toolFilter? }); " +
         "put the task instructions in the first prompt argument.",
       );
     }
@@ -24,6 +29,7 @@ function normalizeAgentOptions(rawOpts) {
   if (rawOpts.access != null && rawOpts.access !== "read" && rawOpts.access !== "write") {
     throw new Error('workflow agent() access must be "read" or "write".');
   }
+  assertNodeWriteFoldersShape(rawOpts.writeFolders, rawOpts.access);
   return rawOpts;
 }
 
@@ -98,11 +104,12 @@ function createWorkflowRuntimeContract() {
  *   journal?: import("./journal.ts").WorkflowJournal|null,
  *   replayJournal?: import("./journal.ts").WorkflowJournal|null,
  *   runWorkflow?: (script: string, args?: any) => Promise<any>,
+ *   parentFolderScope?: { sandboxFolders?: string[] }|null,
  * }} deps
  * @returns {{ agent: Function, parallel: Function, pipeline: Function, log: Function, phase: Function, workflow: Function, budget: any, args: any }}
  */
 export function createHostApi(deps) {
-  const { executeIsolated, baseIsoOpts, limiter, signal, budget, args, resolveAgentId } = deps;
+  const { executeIsolated, baseIsoOpts, limiter, signal, budget, args, resolveAgentId, parentFolderScope } = deps;
   const onAgentEvent = typeof deps.onAgentEvent === "function" ? deps.onAgentEvent : () => {};
   const journal = deps.journal || null;
   const replayJournal = deps.replayJournal || null;
@@ -110,7 +117,7 @@ export function createHostApi(deps) {
   let nodeSeq = 0;
   let currentPhase = null;
 
-  function agent(prompt, rawOpts: { label?: string; model?: string; agentType?: string; toolFilter?: any; access?: "read"|"write"; schema?: any } = {}) {
+  function agent(prompt, rawOpts: { label?: string; model?: string; agentType?: string; toolFilter?: any; access?: "read"|"write"; writeFolders?: string[]; schema?: any } = {}) {
     const normalizedPrompt = normalizeAgentPrompt(prompt);
     const opts = normalizeAgentOptions(rawOpts);
 
@@ -123,6 +130,16 @@ export function createHostApi(deps) {
     const threadId = parentTaskId ? `${parentTaskId}::${nodeId}` : null;
     const threadKind = threadId ? "workflow_node" : null;
     const label = typeof opts.label === "string" && opts.label ? opts.label : null;
+
+    // default-deny：写能力节点必须点名写作用域。调用点同步判定（opts 此刻完全已知），
+    // 拒绝发生在 spawn 子 session 之前；错误消息即给编排模型的纠正指引。
+    assertNodeWriteScopeDeclared({
+      writeFolders: opts.writeFolders ?? null,
+      access: opts.access ?? null,
+      parentPermissionMode: baseIsoOpts.permissionMode || null,
+      nodeId,
+      label,
+    });
 
     const startAgentNode = async () => {
       // ── journal 回放：cache hit 不消耗 limiter slot，瞬间返回 ──
@@ -158,6 +175,16 @@ export function createHostApi(deps) {
           isoOpts.permissionMode = toolAccess.permissionMode;
           if (toolAccess.customToolFilter) isoOpts.toolFilter = toolAccess.customToolFilter;
           if (toolAccess.builtinToolFilter) isoOpts.builtinFilter = toolAccess.builtinToolFilter;
+        }
+        if (opts.writeFolders != null) {
+          // attenuation：写作用域收窄到声明白名单；cwd 是沙盒写根，必须一并收进白名单第一项。
+          const nodeScope = resolveNodeFolderScope({
+            writeFolders: opts.writeFolders,
+            parentFolderScope: parentFolderScope || null,
+          });
+          isoOpts.cwd = nodeScope.cwd;
+          isoOpts.workspaceFolders = nodeScope.workspaceFolders;
+          isoOpts.authorizedFolders = nodeScope.authorizedFolders;
         }
         if (opts.model) isoOpts.model = opts.model;
         let nodeAgentId = isoOpts.agentId ?? null;

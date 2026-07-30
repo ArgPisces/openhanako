@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import { createHostApi } from "../lib/workflow/host-api.ts";
 import { createLimiter } from "../lib/workflow/concurrency.ts";
 
 export function makeDeps( over: any = {}) {
   return {
     executeIsolated: over.executeIsolated || (async () => ({ replyText: "ok", error: null })),
-    baseIsoOpts: over.baseIsoOpts || { agentId: "a1", parentSessionPath: "/s.jsonl", cwd: "/w" },
+    baseIsoOpts: over.baseIsoOpts || { agentId: "a1", parentSessionPath: "/s.jsonl", cwd: "/w", permissionMode: "read_only" },
     limiter: over.limiter || createLimiter({ maxConcurrent: 4, maxTotal: 100 }),
     signal: over.signal,
     onProgress: over.onProgress || (() => {}),
@@ -13,6 +16,7 @@ export function makeDeps( over: any = {}) {
     args: over.args,
     resolveAgentId: over.resolveAgentId,
     onAgentEvent: over.onAgentEvent,
+    parentFolderScope: over.parentFolderScope,
   };
 }
 
@@ -290,5 +294,79 @@ describe("host api - parallel / pipeline / log / phase", () => {
     // parallel 本身 catch → null，不抛外层，但整体仍然 done（parallel 本身成功完成）
     const done = evts.find((e) => e.phase === "done" && e.stepKind === "parallel");
     expect(done).toBeTruthy();
+  });
+});
+
+describe("host api - agent() writeFolders", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-wf-hostapi-"));
+  const parentRoot = path.join(root, "ws");
+  const sub = path.join(parentRoot, "docs");
+  const outside = path.join(root, "outside");
+  for (const d of [parentRoot, sub, outside]) fs.mkdirSync(d, { recursive: true });
+  const operableBase = {
+    agentId: "a1", parentSessionPath: "/s.jsonl", cwd: "/w", permissionMode: "auto",
+  };
+  afterAll(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  it("writeFolders 收窄 isoOpts 的 cwd/workspaceFolders/authorizedFolders", async () => {
+    const calls: any[] = [];
+    const api = createHostApi(makeDeps({
+      baseIsoOpts: { ...operableBase },
+      executeIsolated: async (_p, o) => { calls.push(o); return { replyText: "ok", error: null }; },
+      parentFolderScope: { sandboxFolders: [parentRoot] },
+    }));
+    await api.agent("do", { writeFolders: [sub] });
+    expect(calls[0].cwd).toBe(fs.realpathSync(sub));
+    expect(calls[0].workspaceFolders).toEqual([]);
+    expect(calls[0].authorizedFolders).toEqual([]);
+  });
+
+  it("default-deny：写能力节点未声明 writeFolders 在调用点同步拒绝，消息含纠正指引", () => {
+    const api = createHostApi(makeDeps({ baseIsoOpts: { ...operableBase } }));
+    let err: any = null;
+    try { api.agent("do"); } catch (e) { err = e; }
+    expect(err?.code).toBe("WRITE_FOLDERS_REQUIRED");
+    expect(err?.message).toContain("writeFolders");
+    expect(err?.message).toContain("resumeFromRunId");
+  });
+
+  it('access:"read" 节点无需声明（豁免）', async () => {
+    const calls: any[] = [];
+    const api = createHostApi(makeDeps({
+      baseIsoOpts: { ...operableBase },
+      executeIsolated: async (_p, o) => { calls.push(o); return { replyText: "ok", error: null }; },
+    }));
+    await api.agent("scan", { access: "read" });
+    expect(calls[0].permissionMode).toBe("read_only");
+  });
+
+  it("父会话只读时裸 agent() 豁免且 folder 入参保持继承（回归）", async () => {
+    const calls: any[] = [];
+    const api = createHostApi(makeDeps({
+      executeIsolated: async (_p, o) => { calls.push(o); return { replyText: "ok", error: null }; },
+      parentFolderScope: { sandboxFolders: [parentRoot] },
+    }));
+    await api.agent("do");
+    expect(calls[0].cwd).toBe("/w");
+    expect(calls[0].workspaceFolders).toBeUndefined();
+    expect(calls[0].authorizedFolders).toBeUndefined();
+  });
+
+  it('writeFolders 与 access:"read" 冲突在调用点同步抛错', () => {
+    const api = createHostApi(makeDeps({ baseIsoOpts: { ...operableBase }, parentFolderScope: { sandboxFolders: [parentRoot] } }));
+    expect(() => api.agent("do", { access: "read", writeFolders: [sub] }))
+      .toThrowError(/access:"read"/);
+  });
+
+  it("越出父 scope 在 await 时报错（attenuation）", async () => {
+    const api = createHostApi(makeDeps({ baseIsoOpts: { ...operableBase }, parentFolderScope: { sandboxFolders: [parentRoot] } }));
+    await expect(api.agent("do", { writeFolders: [outside] }))
+      .rejects.toThrowError(/escapes the parent session folder scope/);
+  });
+
+  it("父 scope 缺失时 writeFolders fail-closed", async () => {
+    const api = createHostApi(makeDeps({ baseIsoOpts: { ...operableBase } }));
+    await expect(api.agent("do", { writeFolders: [sub] }))
+      .rejects.toThrowError(/parent session folder scope/);
   });
 });
