@@ -899,3 +899,30 @@ describe("BrowserManager multi-instance", () => {
     expect(manager._removeColdUrl).toHaveBeenCalledWith(SP1);
   });
 });
+
+describe("browser authorization revocation", () => {
+  it("keys revocation by session identity and clears per session", () => {
+    const manager = new BrowserManager({
+      getSessionIdForPath: (sessionPath: string) => (sessionPath === SP1 ? "sess-1" : null),
+    });
+
+    expect(manager.isBrowserAuthorizationRevoked(SP1)).toBe(false);
+    manager.revokeBrowserAuthorization(SP1);
+    expect(manager.isBrowserAuthorizationRevoked(SP1)).toBe(true);
+    // 同一 session identity 的 legacy path 键也命中
+    expect(manager.isBrowserAuthorizationRevoked("sess-1")).toBe(true);
+    // 其它 session 不受影响
+    expect(manager.isBrowserAuthorizationRevoked(SP2)).toBe(false);
+
+    manager.clearBrowserAuthorizationRevocation(SP1);
+    expect(manager.isBrowserAuthorizationRevoked(SP1)).toBe(false);
+  });
+
+  it("revocation without sessionPath is a no-op", () => {
+    const manager = new BrowserManager({});
+    manager.revokeBrowserAuthorization(null);
+    expect(manager.isBrowserAuthorizationRevoked(null)).toBe(false);
+    manager.clearBrowserAuthorizationRevocation(null);
+    expect(manager.isBrowserAuthorizationRevoked(null)).toBe(false);
+  });
+});

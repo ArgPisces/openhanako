@@ -2438,9 +2438,11 @@ export function createSessionsRoute(engine, hub = null) {
   // 关闭指定 session 的浏览器
   route.post("/browser/close-session", async (c) => {
     const body = await safeJson(c);
-    const { sessionPath } = body;
+    const { sessionPath, revoke } = body;
     if (!sessionPath) return c.json({ error: "missing sessionPath" });
     const bm = BrowserManager.instance();
+    // 急停（revoke）不只是关窗，还要撤销该 session 的 agent 浏览器授权。
+    if (revoke === true) bm.revokeBrowserAuthorization(sessionPath);
     await bm.closeBrowserForSession(sessionPath);
     hub?.eventBus?.emit?.({ type: "browser_status", running: false, url: null }, sessionPath);
     return c.json({ ok: true, sessions: bm.getBrowserSessionStates() });

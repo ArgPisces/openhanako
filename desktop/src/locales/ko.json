@@ -2776,6 +2776,7 @@
     "fetchError": "가져오기 오류: {msg}",
     "browserError": "오류: {msg}",
     "browserAlreadyRunning": "브라우저가 이미 실행 중이에요",
+    "browserAuthorizationRevoked": "사용자가 브라우저 사용 권한을 중단했어요",
     "browserLaunched": "브라우저를 시작했어요",
     "browserNotRunning": "브라우저가 실행되고 있지 않아요",
     "browserClosed": "브라우저를 닫았어요",

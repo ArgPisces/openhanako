@@ -2781,6 +2781,7 @@
     "fetchError": "Fetch error: {msg}",
     "browserError": "Error: {msg}",
     "browserAlreadyRunning": "Browser is already running",
+    "browserAuthorizationRevoked": "The user has revoked authorization to use the browser.",
     "browserLaunched": "Browser launched",
     "browserNotRunning": "Browser is not running",
     "browserClosed": "Browser closed",

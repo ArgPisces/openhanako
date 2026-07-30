@@ -3675,7 +3675,7 @@ function _notifyViewerUrl(url) {
   }
 }
 
-async function closeBrowserSessionViaServer(sessionPath) {
+async function closeBrowserSessionViaServer(sessionPath, { revoke = false } = {}) {
   if (!sessionPath) throw new Error("No active browser session");
   if (!serverPort || !serverToken) throw new Error("Server is not ready");
   const res = await fetch(`http://127.0.0.1:${serverPort}/api/browser/close-session`, {
@@ -3684,7 +3684,7 @@ async function closeBrowserSessionViaServer(sessionPath) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${serverToken}`,
     },
-    body: JSON.stringify({ sessionPath }),
+    body: JSON.stringify({ sessionPath, revoke }),
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) {
@@ -5138,7 +5138,8 @@ wrapIpcBestEffortHandler("browser-emergency-stop", (_event, sessionPath) => {
   const sp = _resolveBrowserIpcSessionPath(sessionPath);
   // 有 session 归属时必须经过 server 的 BrowserManager，保持 UI 和运行时状态一致。
   if (sp) {
-    return closeBrowserSessionViaServer(sp);
+    // 急停语义 = 销毁浏览器 + 撤销 agent 的浏览器授权，直到用户下一条消息。
+    return closeBrowserSessionViaServer(sp, { revoke: true });
   }
   // 兼容无 sessionPath 的旧浏览器实例：没有 server 状态可同步，只能本地清理。
   const view = _getViewForSession(null);

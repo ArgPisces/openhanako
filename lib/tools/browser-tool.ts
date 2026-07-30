@@ -268,6 +268,15 @@ export function createBrowserTool(getSessionPath: any, options: {
       try {
         const sessionPath = resolveSessionPath(ctx);
 
+        // 用户急停后，本 session 的浏览器授权被撤销：返回正常结果告知模型停手，不再触碰浏览器。
+        if (browser.isBrowserAuthorizationRevoked?.(sessionPath)) {
+          return toolOk(t("error.browserAuthorizationRevoked"), {
+            status: "authorization_revoked",
+            running: false,
+            url: null,
+          });
+        }
+
         switch (params.action) {
 
           // ── start ──
@@ -450,6 +459,15 @@ export function createBrowserTool(getSessionPath: any, options: {
         }
       } catch (error) {
         const sessionPath = resolveSessionPath(ctx);
+        // 用户在操作飞行途中急停：失败源于授权被撤销，返回拒绝通知而非报错，模型不应重试。
+        if (browser.isBrowserAuthorizationRevoked?.(sessionPath)) {
+          logAction(sessionPath, params.action, params, "authorization_revoked");
+          return toolOk(t("error.browserAuthorizationRevoked"), {
+            status: "authorization_revoked",
+            running: false,
+            url: null,
+          });
+        }
         logAction(sessionPath, params.action, params, null, error.message);
         return browserError(t("error.browserActionFailed", { msg: error.message }), {
           action: params.action,

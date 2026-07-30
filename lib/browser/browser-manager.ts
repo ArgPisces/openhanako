@@ -152,12 +152,14 @@ export class BrowserManager {
   declare _getSessionIdForPath: any;
   declare _sessions: any;
   declare _transport: any;
+  declare _revokedSessions: any;
   constructor({ getSessionIdForPath = null }: any = {}) {
     this._getSessionIdForPath = typeof getSessionIdForPath === "function" ? getSessionIdForPath : null;
     this._sessions = new Map(); // session identity key → { sessionPath, running, url, headless }
     this._lruOrder = [];        // session identity key[], 最近使用的在末尾
     this._headless = false;     // 全局后台模式标记
     this._pending = new Map();  // id → { resolve, reject, timer }
+    this._revokedSessions = new Set(); // session identity key，用户急停后拒绝 agent 再次使用浏览器
     this._browserPreferences = normalizeBrowserPreferences({});
 
     // 根据环境选择 transport：fork 模式用 IPC，spawn 模式用 WS
@@ -955,6 +957,30 @@ export class BrowserManager {
     // 从冷保存中移除
     this._removeColdUrl(sessionPath);
     log.log(`已关闭 session 浏览器 ${sessionPath}`);
+  }
+
+  /**
+   * 用户急停后，标记该 session 的浏览器授权已被撤销（per-session，键为 session identity）。
+   * 撤销期间 agent 的 browser 工具调用直接返回"用户已停止授权"，不再触碰浏览器。
+   * @param {string} sessionPath - 目标 session 路径
+   */
+  revokeBrowserAuthorization(sessionPath) {
+    if (!sessionPath) return;
+    this._revokedSessions.add(this._sessionKeyForPath(sessionPath));
+  }
+
+  /** 解除该 session 的浏览器授权拒绝标记 */
+  clearBrowserAuthorizationRevocation(sessionPath) {
+    if (!sessionPath) return;
+    const key = this._sessionKeyForPath(sessionPath);
+    this._revokedSessions.delete(key);
+    if (key !== sessionPath) this._revokedSessions.delete(sessionPath);
+  }
+
+  /** 该 session 的浏览器授权是否已被用户撤销 */
+  isBrowserAuthorizationRevoked(sessionPath) {
+    if (!sessionPath) return false;
+    return this._revokedSessions.has(this._sessionKeyForPath(sessionPath));
   }
 
   _applyWorkspaceResult(sessionPath, result: any = {}, options: any = {}) {

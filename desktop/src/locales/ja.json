@@ -2776,6 +2776,7 @@
     "fetchError": "取得エラー: {msg}",
     "browserError": "エラー: {msg}",
     "browserAlreadyRunning": "ブラウザは既に実行中です",
+    "browserAuthorizationRevoked": "ユーザーがブラウザ使用の許可を停止しました",
     "browserLaunched": "ブラウザを起動しました",
     "browserNotRunning": "ブラウザは実行されていません",
     "browserClosed": "ブラウザを閉じました",

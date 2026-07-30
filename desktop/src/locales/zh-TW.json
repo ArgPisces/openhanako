@@ -2776,6 +2776,7 @@
     "fetchError": "抓取出錯: {msg}",
     "browserError": "錯誤: {msg}",
     "browserAlreadyRunning": "瀏覽器已在執行中",
+    "browserAuthorizationRevoked": "使用者已停止授權使用瀏覽器",
     "browserLaunched": "瀏覽器已啟動",
     "browserNotRunning": "瀏覽器未在執行",
     "browserClosed": "瀏覽器已關閉",

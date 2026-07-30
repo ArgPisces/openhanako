@@ -218,3 +218,59 @@ describe("browser tool invocation descriptors", () => {
     });
   });
 });
+
+describe("browser tool authorization revocation", () => {
+  const sessionPath = "/sessions/revoked.jsonl";
+
+  function revokedHarness() {
+    const manager = new BrowserManager();
+    manager._setSessionEntry(sessionPath, {
+      running: true,
+      headless: false,
+      activeTabId: "tab-revoked",
+      tabs: [{ tabId: "tab-revoked", title: "Revoked", url: "https://revoked.example" }],
+    });
+    manager.navigate = vi.fn(async () => ({ url: "https://example.com" }));
+    manager.thumbnail = vi.fn(async () => null);
+    vi.spyOn(BrowserManager, "instance").mockReturnValue(manager);
+    return { manager, tool: createBrowserTool(() => sessionPath) };
+  }
+
+  it("returns the revocation notice instead of acting when authorization is revoked", async () => {
+    const { manager, tool } = revokedHarness();
+    manager.isBrowserAuthorizationRevoked = vi.fn(() => true);
+
+    const result: any = await tool.execute(
+      "call-revoked",
+      { action: "navigate", url: "https://example.com" },
+      null,
+      null,
+      { sessionPath },
+    );
+
+    expect(result.details.status).toBe("authorization_revoked");
+    expect(result.details.running).toBe(false);
+    expect(result.isError).toBeUndefined();
+    expect(manager.navigate).not.toHaveBeenCalled();
+  });
+
+  it("maps in-flight failures to the revocation notice when the user stopped the browser", async () => {
+    const { manager, tool } = revokedHarness();
+    manager.isBrowserAuthorizationRevoked = vi.fn(() => false);
+    manager.navigate = vi.fn(async () => {
+      manager.isBrowserAuthorizationRevoked = vi.fn(() => true);
+      throw new Error("Object has been destroyed");
+    });
+
+    const result: any = await tool.execute(
+      "call-revoked-inflight",
+      { action: "navigate", url: "https://example.com" },
+      null,
+      null,
+      { sessionPath },
+    );
+
+    expect(result.details.status).toBe("authorization_revoked");
+    expect(result.isError).toBeUndefined();
+  });
+});
