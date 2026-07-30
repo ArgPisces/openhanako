@@ -33,8 +33,11 @@ const FALLBACK_STATUSES = new Set([400, 404, 405]);
 const MCP_CLIENT_INFO = { name: "hana", title: "Hana", version: "0.1.0" };
 
 // Capabilities we advertise on every stateless request. A server may only ask
-// us for input of a kind we declared here.
-const MODERN_CLIENT_CAPABILITIES = {};
+// us for input of a kind we declared here, so this is what gates whether a tool
+// call can ever come back asking the user a question. Form elicitation is the
+// one interaction we can actually render; sampling, roots and URL-mode
+// elicitation stay undeclared until they have somewhere to go.
+const MODERN_CLIENT_CAPABILITIES = { elicitation: { form: {} } };
 
 // Attach the per-request protocol fields the stateless revision requires. The
 // header mirror of the protocol version must match this value exactly, so both
@@ -542,11 +545,14 @@ export class McpStreamableHttpClient {
     return usable;
   }
 
-  async callTool(name, args) {
-    return this.request("tools/call", {
-      name,
-      arguments: args || {},
-    });
+  // inputResponses/requestState carry a previous round's answers back to the
+  // server. The server keeps no state of its own between rounds, so the retry
+  // must repeat the original arguments and echo the opaque state verbatim.
+  async callTool(name, args, { inputResponses = null, requestState = "" }: any = {}) {
+    const params: any = { name, arguments: args || {} };
+    if (inputResponses) params.inputResponses = inputResponses;
+    if (requestState) params.requestState = requestState;
+    return this.request("tools/call", params);
   }
 
   async readResource(uri) {
@@ -1127,8 +1133,8 @@ export class McpAutoHttpClient {
     return this.client.listTools();
   }
 
-  async callTool(name, args) {
-    return this.client.callTool(name, args);
+  async callTool(name, args, opts: any = {}) {
+    return this.client.callTool(name, args, opts);
   }
 
   async readResource(uri) {

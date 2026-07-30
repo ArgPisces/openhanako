@@ -476,6 +476,27 @@ describe("MCP HTTP clients", () => {
     expect(client.toolListFreshness).toBeNull();
   });
 
+  it("declares form elicitation support and carries input responses on a retry", async () => {
+    const { requests, client, lastFor } = modernServer({ tools: [{ name: "deploy" }] });
+    await client.start();
+    await client.callTool("deploy", { env: "prod" }, {
+      inputResponses: { github_login: { action: "accept", content: { name: "octocat" } } },
+      requestState: "opaque-blob",
+    });
+
+    // A server may only ask for input of a kind we declared.
+    expect(requestMeta(requests[0].body)["io.modelcontextprotocol/clientCapabilities"])
+      .toMatchObject({ elicitation: { form: {} } });
+
+    const call = lastFor("tools/call").body;
+    expect(call.params.name).toBe("deploy");
+    expect(call.params.arguments).toEqual({ env: "prod" });
+    expect(call.params.inputResponses).toEqual({
+      github_login: { action: "accept", content: { name: "octocat" } },
+    });
+    expect(call.params.requestState).toBe("opaque-blob");
+  });
+
   it("sends custom connector headers while preserving protocol headers", async () => {
     const requests = [];
     const fetchImpl = vi.fn(async (url, init) => {

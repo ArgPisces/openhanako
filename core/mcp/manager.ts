@@ -17,6 +17,12 @@ import {
 import { createSettingsUpdate } from "../../lib/tools/settings-update-result.ts";
 import { normalizeToolRuntimeContext } from "../../lib/tools/tool-session.ts";
 import { createPluginConfigStore, normalizePluginConfigSchema } from "../plugin-config.ts";
+import { t } from "../../lib/i18n.ts";
+
+// A server that keeps asking without ever finishing is a loop, not a
+// conversation. Three rounds is generous for a real form flow.
+const MAX_INPUT_REQUIRED_ROUNDS = 3;
+const MCP_ELICITATION_TIMEOUT_MS = 10 * 60 * 1000;
 
 // Agent-facing tool names are namespaced with this prefix. It used to be applied
 // by the plugin host when MCP was a bundled plugin; the manager now owns it so
@@ -400,7 +406,7 @@ export function createMcpToolDefinition({
         });
       }
       try {
-        const result = normalizeMcpToolResult(await callTool(connectorId, toolName, params || {}));
+        const result = normalizeMcpToolResult(await callTool(connectorId, toolName, params || {}, runtimeCtx));
         return app?.resourceUri ? appendMcpAppCard(result, {
           ...app,
           invocationId: stringOrEmpty(toolCallId),
@@ -446,12 +452,20 @@ interface McpManagerOptions {
   fetchImpl?: any;
   /** Test seam: substitute the on-disk config store with an in-memory one. */
   configStore?: any;
+  /** Confirm store for input_required rounds, injected directly (tests). */
+  confirmStore?: any;
+  /** Confirm store accessor, for owners that build it after this manager. */
+  getConfirmStore?: any;
+  /** Session event emitter used to surface the input prompt. */
+  emitEvent?: any;
 }
 
 export class McpManager {
   declare Client: any;
   declare clientErrors: any;
   declare toolListFreshness: any;
+  declare _getConfirmStore: any;
+  declare _emitEvent: any;
   declare clientFactory: any;
   declare clients: any;
   declare connectorStatus: any;
@@ -472,7 +486,17 @@ export class McpManager {
     clientFactory = null,
     fetchImpl = globalThis.fetch,
     configStore = null,
+    confirmStore = null,
+    getConfirmStore = null,
+    emitEvent = null,
   }: McpManagerOptions = {}) {
+    // Optional seams for the input_required loop. Absent, a server asking for
+    // input is refused with a clear reason rather than hanging: we never
+    // pretend to have asked the user. The store is read through a getter
+    // because the engine builds this manager before the store exists.
+    this._getConfirmStore = getConfirmStore
+      || (confirmStore ? () => confirmStore : null);
+    this._emitEvent = typeof emitEvent === "function" ? emitEvent : null;
     this.dataDir = deps.dataDir;
     this.log = deps.log;
     this._configStore = configStore || createPluginConfigStore({
@@ -1025,12 +1049,124 @@ export class McpManager {
     return client.callTool(toolName, args || {});
   }
 
-  async callTool(connectorId, toolName, args) {
+  async callTool(connectorId, toolName, args, runtimeCtx: any = {}) {
     const config = this.getConfig();
     if (!config.enabled) throw new Error("MCP connectors are disabled globally");
     const client = this.clients.get(connectorId);
     if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
-    return client.callTool(toolName, args);
+    const connector = config.connectors.find((entry) => entry.id === connectorId);
+    return this._callToolThroughInputRounds(client, {
+      connectorId,
+      connectorName: connector?.name || connectorId,
+      toolName,
+      args,
+      runtimeCtx,
+    });
+  }
+
+  // A server may answer a tool call by asking for more information instead of
+  // finishing. Each round gathers exactly what it asked for and replays the
+  // original call with the answer; the server carries its own state across in
+  // an opaque blob we echo back untouched.
+  async _callToolThroughInputRounds(client, { connectorId, connectorName, toolName, args, runtimeCtx }) {
+    let extra = null;
+    for (let round = 0; round <= MAX_INPUT_REQUIRED_ROUNDS; round += 1) {
+      const result = await client.callTool(toolName, args, extra || undefined);
+      if (result?.resultType !== "input_required") return result;
+      if (round === MAX_INPUT_REQUIRED_ROUNDS) {
+        throw new Error(
+          `MCP connector "${connectorName}" asked for more input too many times `
+          + `(${MAX_INPUT_REQUIRED_ROUNDS} rounds) without completing "${toolName}".`,
+        );
+      }
+      extra = await this._gatherInputResponses(result, { connectorId, connectorName, toolName, runtimeCtx });
+    }
+    // Unreachable: the loop either returns a result or throws above.
+    throw new Error(`MCP connector "${connectorName}" did not complete "${toolName}".`);
+  }
+
+  async _gatherInputResponses(result, { connectorId, connectorName, toolName, runtimeCtx }) {
+    const requestState = typeof result?.requestState === "string" ? result.requestState : "";
+    const inputRequests = result?.inputRequests;
+    // State but no questions: replay straight away, echoing the state back.
+    if (!inputRequests || typeof inputRequests !== "object" || Array.isArray(inputRequests)) {
+      return requestState ? { requestState } : {};
+    }
+
+    const inputResponses = {};
+    for (const [key, request] of Object.entries(inputRequests)) {
+      const method = (request as any)?.method;
+      const params = (request as any)?.params || {};
+      // We only ever advertise form-mode elicitation, so anything else is a
+      // server ignoring our declared capabilities. Say so instead of guessing.
+      if (method !== "elicitation/create") {
+        throw new Error(
+          `MCP connector "${connectorName}" requested unsupported input of type "${method}" for "${toolName}".`,
+        );
+      }
+      if (params.mode && params.mode !== "form") {
+        throw new Error(
+          `MCP connector "${connectorName}" requested "${params.mode}" mode input for "${toolName}", which is not supported yet.`,
+        );
+      }
+      inputResponses[key] = await this._askUserForElicitation(params, {
+        connectorId,
+        connectorName,
+        toolName,
+        runtimeCtx,
+      });
+    }
+    return requestState ? { inputResponses, requestState } : { inputResponses };
+  }
+
+  async _askUserForElicitation(params, { connectorId, connectorName, toolName, runtimeCtx }) {
+    const confirmStore = this._getConfirmStore?.() || null;
+    const sessionPath = runtimeCtx?.sessionPath || runtimeCtx?.sessionId || null;
+    if (!confirmStore || !sessionPath) {
+      throw new Error(
+        `MCP connector "${connectorName}" asked for input for "${toolName}", but there is no session available to ask in.`,
+      );
+    }
+
+    const message = stringOrEmpty(params?.message);
+    const requestedSchema = params?.requestedSchema || null;
+    const payload = { connectorId, connectorName, toolName, message, requestedSchema };
+    const { confirmId, promise } = confirmStore.create(
+      "mcp_elicitation",
+      payload,
+      sessionPath,
+      MCP_ELICITATION_TIMEOUT_MS,
+    );
+    this._emitEvent?.({
+      type: "session_confirmation",
+      request: {
+        type: "session_confirmation",
+        confirmId,
+        kind: "mcp_elicitation",
+        surface: "input",
+        status: "pending",
+        title: connectorName,
+        body: message,
+        subject: { label: connectorName, detail: toolName },
+        severity: "normal",
+        actions: {
+          confirmLabel: t("approval.confirm"),
+          rejectLabel: t("approval.reject"),
+        },
+        payload,
+      },
+    }, sessionPath);
+
+    const decision = await promise;
+    if (decision?.action !== "confirmed") {
+      // Declining, timing out and aborting are all real outcomes the model must
+      // see. Never swallow them into a retry or an empty answer.
+      throw new Error(
+        `MCP connector "${connectorName}" needed input for "${toolName}", but the request ended as `
+        + `"${decision?.action || "unanswered"}".`,
+      );
+    }
+    return { action: "accept", content: decision?.value ?? {} };
   }
 
   /**
@@ -1058,7 +1194,7 @@ export class McpManager {
           visibility: toolVisibility(tool),
           getGlobalEnabled: () => this.getConfig().enabled,
           getAgentConfig: (agentId) => this.getAgentConfig(agentId),
-          callTool: (connectorId, toolName, args) => this.callTool(connectorId, toolName, args),
+          callTool: (connectorId, toolName, args, runtimeCtx) => this.callTool(connectorId, toolName, args, runtimeCtx),
           probeLiveAvailability: (agentConfig) => this.probeToolLiveAvailability(
             connector.id,
             tool.name,

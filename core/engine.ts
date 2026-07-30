@@ -376,6 +376,11 @@ export class HanaEngine {
     this._mcp = new McpManager({
       dataDir: path.join(this.hanakoHome, "plugin-data", "mcp"),
       log: mcpLog,
+    }, {
+      // A connector tool may come back asking the user a question. The store is
+      // read lazily because it is installed after this manager is built.
+      getConfirmStore: () => this._confirmStore,
+      emitEvent: (event, sessionPath) => this._emitEvent(event, sessionPath),
     });
     this._sessionProjects = new SessionProjectCatalogStore({ userDir: this.userDir });
 

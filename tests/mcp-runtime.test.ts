@@ -462,6 +462,210 @@ describe("MCP runtime policy", () => {
     expect(bare.toolListFreshness).toBeNull();
   });
 
+  describe("input_required tool calls", () => {
+    const ELICIT_REQUEST = {
+      github_login: {
+        method: "elicitation/create",
+        params: {
+          mode: "form",
+          message: "Please provide your GitHub username",
+          requestedSchema: {
+            type: "object",
+            properties: { name: { type: "string" } },
+            required: ["name"],
+          },
+        },
+      },
+    };
+
+    // A confirm store stand-in that hands the test the decision knob, keeping
+    // the assertions on the manager rather than on real timers.
+    function fakeConfirmStore() {
+      const created = [];
+      let resolveCurrent = null;
+      const store = {
+        created,
+        create: vi.fn((kind, payload, sessionRef, timeoutMs) => {
+          created.push({ kind, payload, sessionRef, timeoutMs });
+          return {
+            confirmId: `confirm-${created.length}`,
+            promise: new Promise((resolve) => { resolveCurrent = resolve; }),
+          };
+        }),
+        settle: (decision) => resolveCurrent(decision),
+      };
+      return store;
+    }
+
+    function buildRuntime({ results, confirmStore, emitEvent }) {
+      const stored = {
+        enabled: true,
+        connectors: [{
+          id: "remote",
+          name: "Remote Service",
+          url: "https://mcp.example.com/mcp",
+          tools: [{ name: "deploy", inputSchema: { type: "object" } }],
+        }],
+      };
+      const calls = [];
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
+        config: { get: vi.fn(() => stored), set: vi.fn() },
+        log: console,
+      }, {
+        confirmStore,
+        emitEvent,
+        clientFactory: () => ({
+          running: true,
+          start: vi.fn(async () => {}),
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => [{ name: "deploy", inputSchema: { type: "object" } }]),
+          callTool: vi.fn(async (toolName, args, opts) => {
+            calls.push({ toolName, args, opts });
+            return results[calls.length - 1];
+          }),
+        }),
+      });
+      return { runtime, calls };
+    }
+
+    it("asks the user for the requested input and replays the call with the answer", async () => {
+      const confirmStore = fakeConfirmStore();
+      const emitEvent = vi.fn();
+      const { runtime, calls } = buildRuntime({
+        confirmStore,
+        emitEvent,
+        results: [
+          { resultType: "input_required", inputRequests: ELICIT_REQUEST, requestState: "opaque-blob" },
+          { resultType: "complete", content: [{ type: "text", text: "deployed" }] },
+        ],
+      });
+      await runtime.startConnector("remote");
+
+      const pending = runtime.callTool("remote", "deploy", { env: "prod" }, {
+        sessionPath: "/tmp/session.jsonl",
+      });
+      await vi.waitFor(() => expect(confirmStore.create).toHaveBeenCalled());
+
+      // The waiting card carries what the server asked and why.
+      const [kind, payload, sessionRef, timeoutMs] = confirmStore.create.mock.calls[0];
+      expect(kind).toBe("mcp_elicitation");
+      expect(payload).toMatchObject({
+        toolName: "deploy",
+        message: "Please provide your GitHub username",
+        requestedSchema: ELICIT_REQUEST.github_login.params.requestedSchema,
+      });
+      expect(sessionRef).toBe("/tmp/session.jsonl");
+      expect(timeoutMs).toBe(10 * 60 * 1000);
+
+      const [event] = emitEvent.mock.calls[0];
+      expect(event.type).toBe("session_confirmation");
+      expect(event.request).toMatchObject({
+        kind: "mcp_elicitation",
+        surface: "input",
+      });
+      expect(JSON.stringify(event.request)).toContain("deploy");
+
+      confirmStore.settle({ action: "confirmed", value: { name: "octocat" } });
+      const result = await pending;
+
+      expect(result).toMatchObject({ resultType: "complete" });
+      // The retry repeats the original arguments and adds the answer plus the
+      // server's opaque state, echoed back untouched.
+      expect(calls[1].args).toEqual({ env: "prod" });
+      expect(calls[1].opts).toMatchObject({
+        requestState: "opaque-blob",
+        inputResponses: { github_login: { action: "accept", content: { name: "octocat" } } },
+      });
+    });
+
+    for (const action of ["rejected", "timeout", "aborted"]) {
+      it(`fails loudly with the server name and reason when the user answer is ${action}`, async () => {
+        const confirmStore = fakeConfirmStore();
+        const { runtime, calls } = buildRuntime({
+          confirmStore,
+          emitEvent: vi.fn(),
+          results: [
+            { resultType: "input_required", inputRequests: ELICIT_REQUEST },
+            { resultType: "complete", content: [] },
+          ],
+        });
+        await runtime.startConnector("remote");
+
+        const pending = runtime.callTool("remote", "deploy", {}, { sessionPath: "/tmp/session.jsonl" });
+        await vi.waitFor(() => expect(confirmStore.create).toHaveBeenCalled());
+        confirmStore.settle({ action });
+
+        await expect(pending).rejects.toThrow(/Remote Service/);
+        await expect(pending).rejects.toThrow(new RegExp(action));
+        // No silent retry: the call is not replayed behind the user's back.
+        expect(calls).toHaveLength(1);
+      });
+    }
+
+    it("stops asking after three rounds instead of looping on a server that never settles", async () => {
+      const confirmStore = fakeConfirmStore();
+      const { runtime, calls } = buildRuntime({
+        confirmStore,
+        emitEvent: vi.fn(),
+        results: Array.from({ length: 10 }, () => ({
+          resultType: "input_required",
+          inputRequests: ELICIT_REQUEST,
+        })),
+      });
+      await runtime.startConnector("remote");
+
+      const pending = runtime.callTool("remote", "deploy", {}, { sessionPath: "/tmp/session.jsonl" });
+      const settleWhenAsked = async (times) => {
+        for (let i = 0; i < times; i += 1) {
+          await vi.waitFor(() => expect(confirmStore.create).toHaveBeenCalledTimes(i + 1));
+          confirmStore.settle({ action: "confirmed", value: { name: `round-${i}` } });
+        }
+      };
+      await settleWhenAsked(3);
+
+      await expect(pending).rejects.toThrow(/too many/i);
+      expect(confirmStore.create).toHaveBeenCalledTimes(3);
+      expect(calls.length).toBeLessThanOrEqual(4);
+    });
+
+    it("retries immediately when the server sends state but asks for nothing", async () => {
+      const confirmStore = fakeConfirmStore();
+      const { runtime, calls } = buildRuntime({
+        confirmStore,
+        emitEvent: vi.fn(),
+        results: [
+          { resultType: "input_required", requestState: "just-state" },
+          { resultType: "complete", content: [] },
+        ],
+      });
+      await runtime.startConnector("remote");
+
+      const result = await runtime.callTool("remote", "deploy", {}, { sessionPath: "/tmp/session.jsonl" });
+
+      expect(result).toMatchObject({ resultType: "complete" });
+      expect(confirmStore.create).not.toHaveBeenCalled();
+      expect(calls[1].opts).toMatchObject({ requestState: "just-state" });
+    });
+
+    it("refuses an input request of a kind it never advertised", async () => {
+      const confirmStore = fakeConfirmStore();
+      const { runtime } = buildRuntime({
+        confirmStore,
+        emitEvent: vi.fn(),
+        results: [{
+          resultType: "input_required",
+          inputRequests: { pick: { method: "sampling/createMessage", params: {} } },
+        }],
+      });
+      await runtime.startConnector("remote");
+
+      await expect(runtime.callTool("remote", "deploy", {}, { sessionPath: "/tmp/session.jsonl" }))
+        .rejects.toThrow(/sampling\/createMessage/);
+      expect(confirmStore.create).not.toHaveBeenCalled();
+    });
+  });
+
   it("surfaces connector start errors in public state", async () => {
     const stored = {
       enabled: true,

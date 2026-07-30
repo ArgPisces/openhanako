@@ -2830,7 +2830,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 380,
+      "line": 385,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionProjectCatalogStore({ userDir: this.userDir })",
       "reason": "Constructs draft/project stores.",
@@ -2839,7 +2839,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 613,
+      "line": 618,
       "kind": "persistent-store-constructor",
       "excerpt": "new TaskRegistry({ persistencePath: path.join(this.hanakoHome, \".ephemeral\", \"plugin-tasks.json\"), getSessionIdForPath: (sessionPath) => this.getSessionIdForPath(sessionPath), })",
       "reason": "Constructs the plugin task registry.",
@@ -2848,7 +2848,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1237,
+      "line": 1242,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2857,7 +2857,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1258,
+      "line": 1263,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2866,7 +2866,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2236,
+      "line": 2241,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates the user skill root.",
@@ -2875,7 +2875,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2418,
+      "line": 2423,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
@@ -2884,7 +2884,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2474,
+      "line": 2479,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(pluginDevSourcesDir, { recursive: true })",
       "reason": "Creates the plugin development source root.",
@@ -3244,7 +3244,7 @@
     },
     {
       "sourceFile": "core/mcp/manager.ts",
-      "line": 528,
+      "line": 557,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.dataDir, { recursive: true })",
       "reason": "Sole writer of plugin-data/mcp/config.json.",
