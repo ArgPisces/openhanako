@@ -376,3 +376,42 @@ export class ToolCatalog {
 export function createToolCatalog(): ToolCatalog {
   return new ToolCatalog();
 }
+
+export interface ToolCatalogDiff {
+  readonly added: string[];
+  readonly removed: string[];
+}
+
+/**
+ * Compares two catalog name snapshots. Used to notice that a server's tool
+ * listing changed after a refresh, so the session can be told rather than
+ * silently holding a stale listing.
+ */
+export function diffCatalogNames(before: readonly string[], after: readonly string[]): ToolCatalogDiff {
+  const beforeSet = new Set(Array.isArray(before) ? before : []);
+  const afterSet = new Set(Array.isArray(after) ? after : []);
+  return {
+    added: [...afterSet].filter((name) => !beforeSet.has(name)).sort((l, r) => l.localeCompare(r)),
+    removed: [...beforeSet].filter((name) => !afterSet.has(name)).sort((l, r) => l.localeCompare(r)),
+  };
+}
+
+/**
+ * Renders a catalog change as broadcast lines. These go through the ordinary
+ * reminder channel, which is short by design: the session is being told that
+ * something moved, not handed a new listing. It can search for the details.
+ */
+export function formatCatalogChangeLines(diff: ToolCatalogDiff, isZh: boolean): string[] {
+  const lines: string[] = [];
+  if (diff.added.length > 0) {
+    lines.push(isZh
+      ? `外部工具新增：${diff.added.join("、")}`
+      : `External tools added: ${diff.added.join(", ")}`);
+  }
+  if (diff.removed.length > 0) {
+    lines.push(isZh
+      ? `外部工具移除：${diff.removed.join("、")}`
+      : `External tools removed: ${diff.removed.join(", ")}`);
+  }
+  return lines;
+}
