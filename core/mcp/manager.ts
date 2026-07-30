@@ -15,6 +15,17 @@ import {
   refreshMcpOAuthToken,
 } from "./clients/oauth.ts";
 import { createSettingsUpdate } from "../../lib/tools/settings-update-result.ts";
+import { normalizeToolRuntimeContext } from "../../lib/tools/tool-session.ts";
+import { createPluginConfigStore, normalizePluginConfigSchema } from "../plugin-config.ts";
+
+// Agent-facing tool names are namespaced with this prefix. It used to be applied
+// by the plugin host when MCP was a bundled plugin; the manager now owns it so
+// the names the model sees stay byte-identical after the move to core/mcp.
+export const MCP_TOOL_NAMESPACE = "mcp";
+
+// Config key inside plugin-data/mcp/config.json. Both the key and the directory
+// name are the on-disk compatibility surface — do not rename them.
+const MCP_CONFIG_KEY = "mcp";
 
 const DEFAULT_CONFIG = {
   enabled: false,
@@ -384,22 +395,69 @@ export function createMcpToolDefinition({
   };
 }
 
-export class McpRuntime {
+type McpLogFn = (...args: unknown[]) => void;
+
+export interface McpLogger {
+  info: McpLogFn;
+  warn: McpLogFn;
+  error: McpLogFn;
+  debug?: McpLogFn;
+}
+
+export interface McpManagerDeps {
+  /**
+   * Absolute directory holding config.json. Production passes
+   * `{hanakoHome}/plugin-data/mcp` — the path is a data compatibility surface
+   * inherited from the era when MCP shipped as a bundled plugin.
+   */
+  dataDir: string;
+  log: McpLogger;
+}
+
+interface McpManagerOptions {
+  Client?: any;
+  clientFactory?: any;
+  fetchImpl?: any;
+  /** Test seam: substitute the on-disk config store with an in-memory one. */
+  configStore?: any;
+}
+
+export class McpManager {
   declare Client: any;
   declare clientErrors: any;
   declare clientFactory: any;
   declare clients: any;
   declare connectorStatus: any;
-  declare ctx: any;
+  declare dataDir: string;
+  declare log: any;
   declare desiredStates: any;
   declare establishing: any;
   declare fetchImpl: any;
   declare oauthSessions: any;
   declare reconnectState: any;
   declare refreshInFlight: any;
-  declare toolDisposers: any;
-  constructor(ctx, { Client = null, clientFactory = null, fetchImpl = globalThis.fetch } = {}) {
-    this.ctx = ctx;
+  declare _bus: any;
+  declare _busDisposers: any;
+  declare _configStore: any;
+  declare _tools: any[];
+  constructor(deps: McpManagerDeps, {
+    Client = null,
+    clientFactory = null,
+    fetchImpl = globalThis.fetch,
+    configStore = null,
+  }: McpManagerOptions = {}) {
+    this.dataDir = deps.dataDir;
+    this.log = deps.log;
+    this._configStore = configStore || createPluginConfigStore({
+      dataDir: deps.dataDir,
+      schema: normalizePluginConfigSchema(MCP_TOOL_NAMESPACE, {}),
+    });
+    // The bus is injected by start(bus), never held at construction time: the
+    // engine builds this manager before the bus exists.
+    this._bus = null;
+    this._busDisposers = [];
+    // Agent-facing tool objects, rebuilt wholesale by registerCachedTools().
+    this._tools = [];
     this.Client = Client;
     this.fetchImpl = fetchImpl;
     this.clientFactory = clientFactory || ((connector, opts) => (
@@ -421,28 +479,41 @@ export class McpRuntime {
     // authoritative writer; a transport's onClose firing during this window is
     // ignored so a death never gets handled twice (rejected promise + close).
     this.establishing = new Set();
-    this.toolDisposers = [];
     this.oauthSessions = new Map();
     // In-flight OAuth refresh promises keyed by connector id. Guarantees a single
     // refresh per connector even under concurrent near-expiry / 401 callers.
     this.refreshInFlight = new Map();
   }
 
+  /**
+   * Attach the manager to the message bus and bring cached connectors up.
+   * The bus is assigned before load() runs, because auto-start reaches back
+   * through the bus for agent config and capability-drift notifications.
+   */
+  async start(bus) {
+    this._bus = bus || null;
+    const disposeHandler = bus?.handle?.("mcp:settings-action", (payload) => this.handleSettingsAction(payload));
+    if (typeof disposeHandler === "function") this._busDisposers.push(disposeHandler);
+    await this.load();
+    return () => this.dispose();
+  }
+
   async load() {
-    fs.mkdirSync(this.ctx.dataDir, { recursive: true });
+    fs.mkdirSync(this.dataDir, { recursive: true });
     this.registerCachedTools();
     const config = this.getConfig();
     if (config.enabled) {
       for (const connector of config.connectors.filter((s) => s.autoStart)) {
         this.startConnector(connector.id, { retryInitialFailure: true }).catch((err) => {
-          this.ctx.log.warn(`auto-start failed for ${connector.id}: ${err.message}`);
+          this.log.warn(`auto-start failed for ${connector.id}: ${err.message}`);
         });
       }
     }
   }
 
   async dispose() {
-    for (const dispose of this.toolDisposers.splice(0)) {
+    this._tools = [];
+    for (const dispose of this._busDisposers.splice(0)) {
       try { dispose(); } catch {}
     }
     // Stop trying to reconnect anything: a runtime teardown is a deliberate
@@ -467,12 +538,12 @@ export class McpRuntime {
   }
 
   getConfig() {
-    return normalizeMcpConfig(this.ctx.config.get("mcp"));
+    return normalizeMcpConfig(this._configStore.get(MCP_CONFIG_KEY));
   }
 
   saveConfig(config) {
     const normalized = normalizeMcpConfig(config);
-    this.ctx.config.set("mcp", {
+    this._configStore.set(MCP_CONFIG_KEY, {
       enabled: normalized.enabled,
       connectors: normalized.connectors,
     });
@@ -647,7 +718,7 @@ export class McpRuntime {
     const id = connector.id;
     const holder: any = {};
     holder.client = this.clientFactory(connector, {
-      log: this.ctx.log,
+      log: this.log,
       fetchImpl: this.fetchImpl,
       // OAuth self-heal seams (#1286 ③a, 方案 A). The client holds a connector
       // snapshot, so a refresh written to config never reaches it; these
@@ -778,7 +849,7 @@ export class McpRuntime {
     this.connectorStatus.set(id, STATUS_RECONNECTING);
     const timer = setTimeout(() => {
       this._attemptReconnect(id).catch((err) => {
-        this.ctx.log.warn?.(`mcp reconnect crashed for ${id}: ${err?.message || err}`);
+        this.log.warn?.(`mcp reconnect crashed for ${id}: ${err?.message || err}`);
       });
     }, delay);
     // Don't let a pending reconnect keep the process alive.
@@ -868,15 +939,18 @@ export class McpRuntime {
     return client.callTool(toolName, args);
   }
 
+  /**
+   * Rebuild the agent-facing tool list from the cached connector config.
+   * The whole list is replaced at once: cached tools are a pure projection of
+   * config, so there is no incremental state to reconcile.
+   */
   registerCachedTools() {
-    for (const dispose of this.toolDisposers.splice(0)) {
-      try { dispose(); } catch {}
-    }
+    const tools = [];
     const statusDefinition = createMcpConnectorsStatusToolDefinition({
       getState: () => this.getState(),
       getGlobalEnabled: () => this.getConfig().enabled,
     });
-    this.toolDisposers.push(this.ctx.registerTool(statusDefinition));
+    tools.push(this._publishTool(statusDefinition));
     const config = this.getConfig();
     for (const connector of config.connectors) {
       for (const tool of connector.tools || []) {
@@ -895,14 +969,54 @@ export class McpRuntime {
             agentConfig,
           ),
         });
-        this.toolDisposers.push(this.ctx.registerTool(definition));
+        tools.push(this._publishTool(definition));
       }
     }
+    this._tools = tools;
+  }
+
+  /** Snapshot of the agent-facing MCP tools. The engine composes these into buildTools. */
+  getAllTools() {
+    return [...this._tools];
+  }
+
+  /**
+   * Turn an MCP tool definition into the tool object the engine consumes.
+   *
+   * This reproduces what the plugin host used to do at registration time: it
+   * namespaces the name, keeps the `_pluginId` annotation that tool
+   * categorization and permission classification key off, and adapts the Pi SDK
+   * 5-argument execute convention down to the (toolCallId, params, ctx) shape
+   * the MCP definitions are written against — without that adaptation the third
+   * argument could be an AbortSignal rather than the runtime context.
+   */
+  _publishTool(definition) {
+    const origExecute = definition.execute;
+    const tool: any = {
+      name: `${MCP_TOOL_NAMESPACE}_${definition.name}`,
+      description: definition.description || "",
+      parameters: definition.parameters || { type: "object", properties: {} },
+      execute: async (toolCallId, params, signalOrRuntimeCtx, onUpdate, piCtx) => {
+        const { ctx: runtimeCtx } = normalizeToolRuntimeContext(signalOrRuntimeCtx, piCtx);
+        return normalizeMcpToolResult(await origExecute(toolCallId, params, runtimeCtx));
+      },
+      _pluginId: MCP_TOOL_NAMESPACE,
+    };
+    if (typeof definition.isEnabledForAgentConfig === "function") {
+      tool.isEnabledForAgentConfig = definition.isEnabledForAgentConfig;
+    }
+    if (definition.metadata && typeof definition.metadata === "object") {
+      tool.metadata = { ...definition.metadata };
+    }
+    if (definition.sessionPermission && typeof definition.sessionPermission === "object") {
+      tool.sessionPermission = definition.sessionPermission;
+    }
+    return tool;
   }
 
   async getAgentConfig(agentId) {
-    if (!agentId || !this.ctx.bus?.request) return {};
-    const result = await this.ctx.bus.request("agent:config", { agentId });
+    if (!agentId || !this._bus?.request) return {};
+    const result = await this._bus.request("agent:config", { agentId });
     if (result?.error) throw new Error(result.error);
     return result?.config || {};
   }
@@ -930,7 +1044,7 @@ export class McpRuntime {
         servers: null,
       },
     };
-    const result = await this.ctx.bus.request("agent:update-config", { agentId, partial });
+    const result = await this._bus.request("agent:update-config", { agentId, partial });
     if (result?.error) throw new Error(result.error);
     return result?.config || partial;
   }
@@ -940,11 +1054,11 @@ export class McpRuntime {
   }
 
   async _markCapabilitySnapshotsStale(payload: any = {}) {
-    if (!this.ctx.bus?.request) return null;
+    if (!this._bus?.request) return null;
     try {
-      return await this.ctx.bus.request("session:capability-drift:mark-stale", payload);
+      return await this._bus.request("session:capability-drift:mark-stale", payload);
     } catch (err) {
-      this.ctx.log.warn?.(`mcp capability drift mark skipped: ${err?.message || err}`);
+      this.log.warn?.(`mcp capability drift mark skipped: ${err?.message || err}`);
       return null;
     }
   }
@@ -1470,3 +1584,6 @@ function unmaskRecord(existing, patch) {
 export function configPathForDataDir(dataDir) {
   return path.join(dataDir, "config.json");
 }
+
+/** Historical name of the class, kept so older import sites keep resolving. */
+export { McpManager as McpRuntime };

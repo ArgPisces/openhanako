@@ -1,7 +1,9 @@
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { Hono } from "hono";
 import {
-  McpRuntime,
+  McpManager,
   MCP_CONNECTORS_STATUS_TOOL_NAME,
   createMcpConnectorsStatusToolDefinition,
   createMcpToolDefinition,
@@ -12,9 +14,51 @@ import {
 import { McpHttpError } from "../core/mcp/clients/http-client.ts";
 import registerMcpRoutes from "../plugins/mcp/routes/api.ts";
 
+/**
+ * Build a manager with an in-memory config store. Production injects the
+ * on-disk store; these tests keep config in memory so they can assert exactly
+ * which writes happen.
+ */
+function createManager({ dataDir, config, log = console }: any = {}, options: any = {}) {
+  return new McpManager({ dataDir, log }, { configStore: config, ...options });
+}
+
 describe("MCP runtime policy", () => {
   it("uses stable sanitized tool ids for dynamic MCP tools", () => {
     expect(toMcpToolId("github.com", "search/repositories")).toBe("github_com_search_repositories");
+  });
+
+  it("publishes agent-facing tool names as the mcp namespace plus the sanitized tool id", () => {
+    const stored = {
+      enabled: true,
+      connectors: [{
+        id: "github.com",
+        name: "GitHub",
+        url: "https://mcp.github.com/mcp",
+        tools: [{ name: "search/repositories" }],
+      }],
+    };
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
+      config: { get: vi.fn(() => stored), set: vi.fn() },
+      log: console,
+    });
+
+    runtime.registerCachedTools();
+
+    // These are the exact names the model sees. They must not drift: the
+    // namespace prefix used to be applied by the plugin host, and the ids are
+    // persisted in per-agent enablement config.
+    expect(runtime.getAllTools().map((tool) => tool.name)).toEqual([
+      `mcp_${MCP_CONNECTORS_STATUS_TOOL_NAME}`,
+      `mcp_${toMcpToolId("github_com", "search/repositories")}`,
+    ]);
+    expect(runtime.getAllTools().map((tool) => tool.name)).toEqual([
+      "mcp_connectors_status",
+      "mcp_github_com_search_repositories",
+    ]);
+    // Tool categorization and permission classification both key off this.
+    expect(runtime.getAllTools().every((tool) => tool._pluginId === "mcp")).toBe(true);
   });
 
   it("marks MCP dynamic tools as legacy Pi-signature tools", () => {
@@ -71,7 +115,6 @@ describe("MCP runtime policy", () => {
   });
 
   it("reports ready MCP tools as live for Reminder preflight", () => {
-    const registeredTools = [];
     const stored = {
       enabled: true,
       connectors: [{
@@ -81,19 +124,14 @@ describe("MCP runtime policy", () => {
         tools: [{ name: "search" }],
       }],
     };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: { get: vi.fn(() => stored), set: vi.fn() },
-      registerTool: vi.fn((tool) => {
-        registeredTools.push(tool);
-        return () => {};
-      }),
-      bus: { request: vi.fn() },
       log: console,
     });
     runtime.clients.set("github", { running: true });
     runtime.registerCachedTools();
-    const tool = registeredTools.find((candidate) => candidate.name === "github_search");
+    const tool = runtime.getAllTools().find((candidate) => candidate.name === "mcp_github_search");
     const probe = tool.metadata.reminderLiveAvailabilityProbe;
     const agentConfig = {
       mcp: { connectors: { github: { enabled: true, tools: { search: true } } } },
@@ -103,7 +141,6 @@ describe("MCP runtime policy", () => {
   });
 
   it("reports stopped, needs-auth/revoked, removed, and unavailable transports without side effects", () => {
-    const registeredTools = [];
     let stored = {
       enabled: true,
       connectors: [{
@@ -114,18 +151,13 @@ describe("MCP runtime policy", () => {
       }],
     };
     const setConfig = vi.fn();
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: { get: vi.fn(() => stored), set: setConfig },
-      registerTool: vi.fn((tool) => {
-        registeredTools.push(tool);
-        return () => {};
-      }),
-      bus: { request: vi.fn() },
       log: console,
     });
     runtime.registerCachedTools();
-    const tool = registeredTools.find((candidate) => candidate.name === "github_search");
+    const tool = runtime.getAllTools().find((candidate) => candidate.name === "mcp_github_search");
     const probe = tool.metadata.reminderLiveAvailabilityProbe;
     const enabledAgent = {
       mcp: { connectors: { github: { enabled: true, tools: { search: true } } } },
@@ -166,7 +198,6 @@ describe("MCP runtime policy", () => {
   });
 
   it("reports global and agent MCP disablement through the read-only probe", () => {
-    const registeredTools = [];
     let stored = {
       enabled: true,
       connectors: [{
@@ -176,19 +207,14 @@ describe("MCP runtime policy", () => {
         tools: [{ name: "search" }],
       }],
     };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: { get: vi.fn(() => stored), set: vi.fn() },
-      registerTool: vi.fn((tool) => {
-        registeredTools.push(tool);
-        return () => {};
-      }),
-      bus: { request: vi.fn() },
       log: console,
     });
     runtime.clients.set("github", { running: true });
     runtime.registerCachedTools();
-    const probe = registeredTools.find((candidate) => candidate.name === "github_search")
+    const probe = runtime.getAllTools().find((candidate) => candidate.name === "mcp_github_search")
       .metadata.reminderLiveAvailabilityProbe;
 
     expect(probe({ mcp: { connectors: { github: { enabled: false, tools: { search: true } } } } }))
@@ -320,14 +346,12 @@ describe("MCP runtime policy", () => {
         },
       ],
     };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => stored),
         set: vi.fn(),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: console,
     });
 
@@ -376,14 +400,12 @@ describe("MCP runtime policy", () => {
         },
       ],
     };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => stored),
         set: vi.fn(),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: console,
     });
 
@@ -413,14 +435,12 @@ describe("MCP runtime policy", () => {
         },
       ],
     };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => stored),
         set: vi.fn(),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: console,
     }, {
       clientFactory: () => ({
@@ -443,16 +463,14 @@ describe("MCP runtime policy", () => {
 
   it("executes settings actions through the runtime and returns a settings update", async () => {
     let stored = { enabled: false, connectors: [] };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => stored),
         set: vi.fn((_key, value) => {
           stored = value;
         }),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: console,
     });
 
@@ -507,8 +525,8 @@ describe("MCP runtime policy", () => {
       }
       return {};
     });
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => ({
           enabled: true,
@@ -516,10 +534,9 @@ describe("MCP runtime policy", () => {
         })),
         set: vi.fn(),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request },
       log: console,
     });
+    await runtime.start({ request });
 
     await runtime.handleSettingsAction({
       action: "mcp.agent.tool.enable",
@@ -545,18 +562,17 @@ describe("MCP runtime policy", () => {
       if (type === "session:capability-drift:mark-stale") return { ok: true, marked: 1 };
       return {};
     });
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => stored),
         set: vi.fn((_key, value) => {
           stored = value;
         }),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request },
       log: console,
     });
+    await runtime.start({ request });
     const app = new Hono();
     registerMcpRoutes(app, { _mcpRuntime: runtime, bus: { request }, log: console });
 
@@ -583,8 +599,8 @@ describe("MCP runtime policy", () => {
       if (type === "session:capability-drift:mark-stale") return { ok: true, marked: 1 };
       return {};
     });
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => ({
           enabled: true,
@@ -592,10 +608,9 @@ describe("MCP runtime policy", () => {
         })),
         set: vi.fn(),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request },
       log: console,
     });
+    await runtime.start({ request });
     const app = new Hono();
     registerMcpRoutes(app, { _mcpRuntime: runtime, bus: { request }, log: console });
 
@@ -675,31 +690,23 @@ describe("MCP runtime policy", () => {
 });
 
 describe("MCP connectors status tool", () => {
+  // The agent-facing name: the manager namespaces every tool it publishes.
+  const STATUS_TOOL_PUBLIC_NAME = `mcp_${MCP_CONNECTORS_STATUS_TOOL_NAME}`;
+
   function createStoredRuntime(stored) {
-    const registered = [];
-    const disposed = [];
-    let counter = 0;
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
       config: {
         get: vi.fn(() => stored),
         set: vi.fn(),
       },
-      registerTool: vi.fn((definition) => {
-        const id = counter++;
-        registered.push({ id, definition });
-        return () => { disposed.push(id); };
-      }),
-      bus: { request: vi.fn() },
       log: console,
     });
-    return { runtime, registered, disposed };
+    return { runtime };
   }
 
-  function findStatusTool(registered) {
-    return registered
-      .map((entry) => entry.definition)
-      .find((definition) => definition.name === MCP_CONNECTORS_STATUS_TOOL_NAME);
+  function findStatusTool(runtime) {
+    return runtime.getAllTools().find((tool) => tool.name === STATUS_TOOL_PUBLIC_NAME);
   }
 
   it("registers a read-only connectors-status tool alongside cached tools", () => {
@@ -709,19 +716,24 @@ describe("MCP connectors status tool", () => {
         { id: "github", name: "GitHub", url: "https://mcp.github.com/mcp", tools: [{ name: "search" }] },
       ],
     };
-    const { runtime, registered } = createStoredRuntime(stored);
+    const { runtime } = createStoredRuntime(stored);
 
     runtime.registerCachedTools();
 
-    const statusTool = findStatusTool(registered);
+    const statusTool = findStatusTool(runtime);
     expect(statusTool).toBeTruthy();
-    expect(statusTool.name).toBe(MCP_CONNECTORS_STATUS_TOOL_NAME);
+    expect(statusTool.name).toBe(STATUS_TOOL_PUBLIC_NAME);
     expect(statusTool.sessionPermission.resolveInvocation({})).toEqual({
       action: "read",
       kind: "read",
       capability: "connectors_status.read",
     });
-    expect(statusTool.invocationStyle).toBe("pi_tool");
+    // The definition still declares the legacy Pi signature; the manager bakes
+    // that calling convention into the published tool's execute wrapper.
+    expect(createMcpConnectorsStatusToolDefinition({
+      getState: () => ({}),
+      getGlobalEnabled: () => true,
+    }).invocationStyle).toBe("pi_tool");
     expect(statusTool.metadata).toMatchObject({ kind: "mcp", readOnly: true });
     // Diagnostic tool takes no input.
     expect(statusTool.parameters).toEqual({ type: "object", properties: {} });
@@ -735,9 +747,9 @@ describe("MCP connectors status tool", () => {
         { id: "local", name: "Local", command: "npx", tools: [] },
       ],
     };
-    const { runtime, registered } = createStoredRuntime(stored);
+    const { runtime } = createStoredRuntime(stored);
     runtime.registerCachedTools();
-    const statusTool = findStatusTool(registered);
+    const statusTool = findStatusTool(runtime);
 
     const result = await statusTool.execute("call-1", {}, { agentId: "hana" });
     const payload = JSON.parse(result.content[0].text);
@@ -778,12 +790,12 @@ describe("MCP connectors status tool", () => {
         },
       ],
     };
-    const { runtime, registered } = createStoredRuntime(stored);
+    const { runtime } = createStoredRuntime(stored);
     // Simulate a running client and a recorded error to prove status is sourced live.
     runtime.clients.set("private", { running: true });
     runtime.clientErrors.set("private", "spawn EACCES");
     runtime.registerCachedTools();
-    const statusTool = findStatusTool(registered);
+    const statusTool = findStatusTool(runtime);
 
     const result = await statusTool.execute("call-1", {}, { agentId: "hana" });
     const text = result.content[0].text;
@@ -809,9 +821,9 @@ describe("MCP connectors status tool", () => {
         { id: "github", name: "GitHub", url: "https://mcp.github.com/mcp", tools: [{ name: "search" }] },
       ],
     };
-    const { runtime, registered } = createStoredRuntime(stored);
+    const { runtime } = createStoredRuntime(stored);
     runtime.registerCachedTools();
-    const statusTool = findStatusTool(registered);
+    const statusTool = findStatusTool(runtime);
 
     expect(statusTool.isEnabledForAgentConfig({})).toBe(false);
 
@@ -819,23 +831,42 @@ describe("MCP connectors status tool", () => {
     expect(statusTool.isEnabledForAgentConfig({})).toBe(true);
   });
 
-  it("disposes the status tool together with cached tools", () => {
+  it("replaces the status tool on re-registration instead of accumulating duplicates", () => {
     const stored = {
       enabled: true,
       connectors: [
         { id: "github", name: "GitHub", url: "https://mcp.github.com/mcp", tools: [{ name: "search" }] },
       ],
     };
-    const { runtime, registered, disposed } = createStoredRuntime(stored);
+    const { runtime } = createStoredRuntime(stored);
     runtime.registerCachedTools();
 
-    const statusEntry = registered.find((entry) => entry.definition.name === MCP_CONNECTORS_STATUS_TOOL_NAME);
-    expect(statusEntry).toBeTruthy();
-    expect(disposed).not.toContain(statusEntry.id);
+    const firstStatusTool = findStatusTool(runtime);
+    expect(firstStatusTool).toBeTruthy();
+    const firstNames = runtime.getAllTools().map((tool) => tool.name);
+    expect(firstNames).toEqual([STATUS_TOOL_PUBLIC_NAME, "mcp_github_search"]);
 
-    // Re-registering must dispose the prior status tool disposer.
+    // Re-registering rebuilds the list: the stale tool objects are dropped
+    // rather than left behind alongside the fresh ones.
     runtime.registerCachedTools();
-    expect(disposed).toContain(statusEntry.id);
+    const secondNames = runtime.getAllTools().map((tool) => tool.name);
+    expect(secondNames).toEqual(firstNames);
+    expect(findStatusTool(runtime)).not.toBe(firstStatusTool);
+  });
+
+  it("drops every cached tool on dispose", async () => {
+    const stored = {
+      enabled: true,
+      connectors: [
+        { id: "github", name: "GitHub", url: "https://mcp.github.com/mcp", tools: [{ name: "search" }] },
+      ],
+    };
+    const { runtime } = createStoredRuntime(stored);
+    runtime.registerCachedTools();
+    expect(runtime.getAllTools()).not.toHaveLength(0);
+
+    await runtime.dispose();
+    expect(runtime.getAllTools()).toEqual([]);
   });
 
   it("builds a status definition decoupled from any specific connector", async () => {
@@ -885,14 +916,12 @@ describe("MCP runtime OAuth token refresh", () => {
   function makeRefreshRuntime(connector, { fetchImpl }: any = {}) {
     let current = { enabled: true, connectors: [connector] };
     const setSpy = vi.fn((_key, value) => { current = { ...current, ...value }; });
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-refresh-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-refresh-test"),
       config: {
         get: vi.fn(() => current),
         set: setSpy,
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
     }, { fetchImpl });
     return { runtime, setSpy, getConfig: () => current };
@@ -1113,14 +1142,12 @@ describe("MCP runtime OAuth persistence", () => {
       enabled: true,
       connectors: [{ id: "notion", name: "Notion", url: "https://mcp.example.com/mcp", authType: "oauth" }],
     };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-dcr-test",
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-dcr-test"),
       config: {
         get: vi.fn(() => current),
         set: vi.fn((_key, value) => { current = { ...current, ...value }; }),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
     });
 
@@ -1163,7 +1190,7 @@ describe("MCP runtime OAuth persistence", () => {
       enabled: true,
       connectors: [{ id: "notion", name: "Notion", url: "https://mcp.example.com/mcp", authType: "oauth" }],
     };
-    const runtime = new McpRuntime({
+    const runtime = createManager({
       dataDir: "/tmp/mcp-readback-test",
       config: {
         get: vi.fn(() => current),
@@ -1178,8 +1205,6 @@ describe("MCP runtime OAuth persistence", () => {
           };
         }),
       },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
     });
 
@@ -1257,11 +1282,9 @@ describe("MCP runtime OAuth persistence", () => {
         },
       }],
     };
-    const runtime = new McpRuntime({
+    const runtime = createManager({
       dataDir: "/tmp/mcp-leak-test",
       config: { get: vi.fn(() => stored), set: vi.fn() },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
       log: console,
     });
 

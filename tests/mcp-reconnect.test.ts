@@ -12,8 +12,10 @@
  *   - 扩展状态 connecting/reconnecting/needs-auth 经 getState 透出
  *   - autoReconnect=false 的连接器不重连
  */
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { McpRuntime } from "../core/mcp/manager.ts";
+import { McpManager } from "../core/mcp/manager.ts";
 import { McpHttpError } from "../core/mcp/clients/http-client.ts";
 
 /**
@@ -81,19 +83,19 @@ function makeFakeClientFactory() {
 
 function makeRuntime(stored, factory) {
   let current = stored;
-  const runtime = new McpRuntime({
-    dataDir: "/tmp/mcp-reconnect-test",
-    config: {
+  const runtime = new McpManager({
+    dataDir: path.join(os.tmpdir(), "hana-mcp-reconnect-test"),
+    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  }, {
+    clientFactory: factory,
+    configStore: {
       get: vi.fn(() => current),
       set: vi.fn((_key, value) => {
         // Mirror saveConfig semantics so getConfig() reflects writes.
         current = { ...current, ...value };
       }),
     },
-    registerTool: vi.fn(() => () => {}),
-    bus: { request: vi.fn() },
-    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-  }, { clientFactory: factory });
+  });
   return runtime;
 }
 
@@ -342,13 +344,13 @@ describe("MCP runtime establishing-phase suppression", () => {
     factory.instances = instances;
 
     let current = { enabled: true, connectors: [{ ...STDIO_CONNECTOR }] };
-    const runtime = new McpRuntime({
-      dataDir: "/tmp/mcp-establishing-test",
-      config: { get: () => current, set: (_k, v) => { current = { ...current, ...v }; } },
-      registerTool: vi.fn(() => () => {}),
-      bus: { request: vi.fn() },
+    const runtime = new McpManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-establishing-test"),
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-    }, { clientFactory: factory });
+    }, {
+      clientFactory: factory,
+      configStore: { get: () => current, set: (_k, v) => { current = { ...current, ...v }; } },
+    });
 
     // Manual start fails (the error propagates to the caller as before).
     await expect(runtime.startConnector("local")).rejects.toThrow(/child exited/);
