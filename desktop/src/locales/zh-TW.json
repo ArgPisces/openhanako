@@ -301,7 +301,8 @@
     "screenshotFailed": "截圖儲存失敗",
     "selectedCount": "已選 {count} 則",
     "allDone": "全部完成",
-    "markAllComplete": "全部標記為已完成"
+    "markAllComplete": "全部標記為已完成",
+    "back": "返回"
   },
   "chat": {
     "find": {
@@ -448,7 +449,11 @@
     "referenceDocument": "[参考文档] {path}",
     "mention": {
       "title": "引用內容",
-      "tab": { "files": "檔案", "sessions": "對話", "agents": "助手" },
+      "tab": {
+        "files": "檔案",
+        "sessions": "對話",
+        "agents": "助手"
+      },
       "empty": "沒有符合項目",
       "singleAgent": "每個回合暫時只能邀請一位助手審閱"
     }
@@ -2032,7 +2037,51 @@
       "removeConfirm": "確定移除此連接器？已儲存的 per-agent 開關會保留但不再生效。",
       "agentTitle": "助手配置",
       "agentConnectorDesc": "像技能一樣，只對選中的助手啟用。",
-      "saveError": "儲存失敗"
+      "saveError": "儲存失敗",
+      "enabledAgentsCount": "個助手已啟用",
+      "manage": "管理",
+      "removeTitle": "移除連接器",
+      "connectionTitle": "連線方式",
+      "permissionTitle": "權限",
+      "toolsTitle": "工具",
+      "noTools": "還沒有工具。啟動連接器後重新整理一次即可看到。",
+      "noToolMatches": "沒有符合的工具",
+      "toolSearch": "搜尋工具",
+      "selectAll": "全選",
+      "selectNone": "全不選",
+      "selectInvert": "反選",
+      "badgeReadOnly": "唯讀",
+      "badgeDestructive": "具破壞性",
+      "permissionAllow": "直接放行",
+      "pinTool": "常駐",
+      "permissionMode": "呼叫審批",
+      "permissionModeHint": "預設每次呼叫都經過審查。改為依清單放行後，只有你逐個放行的工具才免審。",
+      "permissionReviewAll": "全部審查",
+      "permissionAllowlist": "依清單放行",
+      "trustReadOnly": "信任唯讀宣告",
+      "trustReadOnlyHint": "是否唯讀由伺服器自行宣告，Hana 無從查證。開啟後，宣告為唯讀的工具不再逐次審查。",
+      "deferTitle": "延遲載入",
+      "deferScopeNote": "以下開關對所有連接器一併生效，不只是這一個。",
+      "deferEnabled": "允許延遲載入",
+      "deferEnabledHint": "工具較多時先給模型一份目錄，用到哪個再取哪個的完整說明。",
+      "deferThreshold": "啟用門檻",
+      "deferThresholdHint": "已啟用的工具數超過此值才走目錄，低於此值全部直接載入。",
+      "agentConnectorEnabled": "對此助手啟用",
+      "oauthWaiting": "等待在瀏覽器中完成授權",
+      "oauthWaitingHint": "授權頁面已在瀏覽器中開啟。完成後這裡會自動更新，也可以隨時取消。",
+      "oauthFailed": "授權失敗",
+      "oauthTimeout": "等待授權逾時",
+      "importEmpty": "沒有解析到任何連接器",
+      "importPreviewHint": "確認要匯入的連接器，取消勾選可以排除其中幾項。",
+      "importParse": "解析",
+      "importConfirm": "匯入 {count} 項",
+      "importItemOk": "已新增",
+      "commandRequired": "缺少啟動指令",
+      "urlRequired": "請填寫網址",
+      "urlInvalid": "網址無法解析，請加上 https:// 這樣的協定前綴",
+      "urlScheme": "網址只支援 http 或 https",
+      "modeSwitchTitle": "切換連線類型",
+      "modeSwitchBody": "本機與遠端用的是兩套設定。切換後另一套的欄位會被清空，正在執行的連線也會中斷。"
     },
     "screenshot": {
       "title": "截圖分享",
@@ -3375,7 +3424,14 @@
       "removeLabel": "移除授权目录"
     },
     "mcpElicitation": {
-      "unsupportedField": "暫不支援的欄位類型"
+      "unsupportedField": "暫不支援的欄位類型",
+      "choose": "請選擇",
+      "requiredMissing": "請填寫標有 * 的必填項"
+    },
+    "mcpTool": {
+      "allowForSession": "本次工作階段不再詢問此工具",
+      "allowAlways": "一律允許此工具",
+      "grantFailed": "無法記住這次授權"
     }
   },
   "auth": {

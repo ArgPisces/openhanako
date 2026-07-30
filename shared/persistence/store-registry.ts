@@ -858,12 +858,13 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     schemaSource: runtimeSource(
       "core/mcp/manager.ts",
       "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, "
-      + "per-connector permission policy defaults)",
+      + "per-connector permission policy defaults, deferred-loading defaults)",
     ),
     openEntry: ["Engine constructor via McpManager"],
     migrationEntry: [
       "normalizeMcpConfig read-time normalization (servers→connectors alias)",
       "normalizeMcpConfig read-time permission policy defaults (permissionMode/toolPermissions/trustReadOnlyHint)",
+      "normalizeMcpConfig read-time deferred-loading defaults (deferEnabled true, deferThreshold 10)",
     ],
     checkpointPolicy: "Single JSON config; checkpoint the whole file.",
     restorePolicy: "Restore the whole file; read-time normalization absorbs older shapes.",

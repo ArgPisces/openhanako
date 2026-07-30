@@ -2,6 +2,28 @@ import type { McpConnectorInput, McpTransport } from './types';
 
 type McpJsonServer = Record<string, unknown>;
 
+/**
+ * Validate a remote connector URL before it is ever sent.
+ *
+ * The server applies the same rule, but its rejection arrives as a toast after
+ * a round trip. Checking here lets the field say what is wrong while the user
+ * is still looking at it. Returns an i18n key, or null when the URL is usable.
+ */
+export function remoteUrlError(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return 'settings.mcp.urlRequired';
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return 'settings.mcp.urlInvalid';
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return 'settings.mcp.urlScheme';
+  }
+  return null;
+}
+
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEADER_KEY = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 

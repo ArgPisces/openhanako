@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:49ef43972b051bdc3134031a86181b3d65685c07745a9e71f5ae2dcb22326771",
+  "payloadFingerprint": "sha256:1b41032cee0c94fd86dea8d4226388b13c395cc9a23130497ed9e05ff30f6386",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -1653,7 +1653,8 @@
       "identityContract": "core/mcp owns plugin-data/mcp exclusively.",
       "migrationEntry": [
         "normalizeMcpConfig read-time normalization (servers→connectors alias)",
-        "normalizeMcpConfig read-time permission policy defaults (permissionMode/toolPermissions/trustReadOnlyHint)"
+        "normalizeMcpConfig read-time permission policy defaults (permissionMode/toolPermissions/trustReadOnlyHint)",
+        "normalizeMcpConfig read-time deferred-loading defaults (deferEnabled true, deferThreshold 10)"
       ],
       "openEntry": [
         "Engine constructor via McpManager"
@@ -1674,7 +1675,7 @@
         "source": "core/mcp/manager.ts"
       },
       "schemaSource": {
-        "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults)",
+        "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
         "kind": "runtime-contract",
         "module": "core/mcp/manager.ts"
       }
@@ -2918,8 +2919,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "No persisted structure changed. The deferred-tool listing a session receives is held on the in-memory session entry and mirrored only into the in-memory hibernation map; it reaches neither session-meta on disk nor any SQLite store. The payload delta is source-site line movement in core/engine.ts and core/session-coordinator.ts from wiring that listing through the build result and the reminder renderer.",
-    "payloadFingerprint": "sha256:49ef43972b051bdc3134031a86181b3d65685c07745a9e71f5ae2dcb22326771"
+    "compatibilityReason": "mcp-config now persists deferEnabled and deferThreshold, which saveConfig previously dropped. Both are additive optional fields; normalizeMcpConfig already supplies the same read-time defaults (deferEnabled true, deferThreshold 10) for configs written without them, so existing files load unchanged and no migration is needed.",
+    "payloadFingerprint": "sha256:1b41032cee0c94fd86dea8d4226388b13c395cc9a23130497ed9e05ff30f6386"
   },
   "schemas": [
     {
@@ -3155,10 +3156,10 @@
       "storeId": "managed-runtime-caches"
     },
     {
-      "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults)",
+      "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:dd25f30045a8c630d6d946e743493d60439521b37a9a6940991bdcb72a7328fc",
+      "sourceHash": "sha256:9981c71ce4d29c1afcb24dd87f80cd315520d35e098b1adf4c65a29486f1a07c",
       "storeId": "mcp-config"
     },
     {

@@ -1070,7 +1070,7 @@
       "schemaSource": {
         "kind": "runtime-contract",
         "module": "core/mcp/manager.ts",
-        "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults)"
+        "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)"
       },
       "schemaContract": {
         "kind": "runtime-source",
@@ -1082,7 +1082,8 @@
       ],
       "migrationEntry": [
         "normalizeMcpConfig read-time normalization (servers→connectors alias)",
-        "normalizeMcpConfig read-time permission policy defaults (permissionMode/toolPermissions/trustReadOnlyHint)"
+        "normalizeMcpConfig read-time permission policy defaults (permissionMode/toolPermissions/trustReadOnlyHint)",
+        "normalizeMcpConfig read-time deferred-loading defaults (deferEnabled true, deferThreshold 10)"
       ],
       "protocolModules": [],
       "firstPossibleOpenPhase": "engine_construct",

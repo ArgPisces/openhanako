@@ -301,7 +301,8 @@
     "screenshotFailed": "Screenshot save failed",
     "selectedCount": "{count} selected",
     "allDone": "All done",
-    "markAllComplete": "Mark all as complete"
+    "markAllComplete": "Mark all as complete",
+    "back": "Back"
   },
   "chat": {
     "find": {
@@ -448,7 +449,11 @@
     "compact": "Compact",
     "mention": {
       "title": "Mention",
-      "tab": { "files": "Files", "sessions": "Conversations", "agents": "Agents" },
+      "tab": {
+        "files": "Files",
+        "sessions": "Conversations",
+        "agents": "Agents"
+      },
       "empty": "No matches",
       "singleAgent": "Only one Agent reviewer can be invited per turn"
     }
@@ -2098,7 +2103,51 @@
       "removeConfirm": "Remove this connector? Saved per-agent switches will remain but no longer take effect.",
       "agentTitle": "Agent Configuration",
       "agentConnectorDesc": "Enable for the selected agent, just like skills.",
-      "saveError": "Save failed"
+      "saveError": "Save failed",
+      "enabledAgentsCount": "agent enabled",
+      "manage": "Manage",
+      "removeTitle": "Remove connector",
+      "connectionTitle": "Connection",
+      "permissionTitle": "Permissions",
+      "toolsTitle": "Tools",
+      "noTools": "No tools yet. Start the connector and refresh once to see them.",
+      "noToolMatches": "No matching tools",
+      "toolSearch": "Search tools",
+      "selectAll": "Select all",
+      "selectNone": "Select none",
+      "selectInvert": "Invert",
+      "badgeReadOnly": "Read-only",
+      "badgeDestructive": "Destructive",
+      "permissionAllow": "Allow without review",
+      "pinTool": "Always loaded",
+      "permissionMode": "Invocation review",
+      "permissionModeHint": "Every call is reviewed by default. Under allowlist, only the tools you allow one by one skip review.",
+      "permissionReviewAll": "Review everything",
+      "permissionAllowlist": "Allowlist",
+      "trustReadOnly": "Trust read-only declarations",
+      "trustReadOnlyHint": "Whether a tool is read-only is the server’s own claim, which Hana cannot verify. Once on, tools declared read-only stop being reviewed each time.",
+      "deferTitle": "Deferred loading",
+      "deferScopeNote": "These switches apply to every connector, not only this one.",
+      "deferEnabled": "Allow deferred loading",
+      "deferEnabledHint": "With many tools, give the model a catalog first and fetch the full description of a tool only when it is needed.",
+      "deferThreshold": "Threshold",
+      "deferThresholdHint": "The catalog is used only above this many enabled tools; below it, every tool is loaded directly.",
+      "agentConnectorEnabled": "Enabled for this agent",
+      "oauthWaiting": "Waiting for authorization in the browser",
+      "oauthWaitingHint": "The authorization page is open in your browser. This updates itself once you finish, and can be cancelled at any time.",
+      "oauthFailed": "Authorization failed",
+      "oauthTimeout": "Timed out waiting for authorization",
+      "importEmpty": "No connectors found",
+      "importPreviewHint": "Confirm what to import. Clear a checkbox to leave that entry out.",
+      "importParse": "Parse",
+      "importConfirm": "Import {count}",
+      "importItemOk": "Added",
+      "commandRequired": "Missing command",
+      "urlRequired": "Enter a URL",
+      "urlInvalid": "This URL cannot be parsed. Include the scheme, e.g. https://",
+      "urlScheme": "Only http and https URLs are supported",
+      "modeSwitchTitle": "Change connection type",
+      "modeSwitchBody": "Local and remote use separate settings. Switching clears the other set of fields, and a running connection is dropped."
     },
     "screenshot": {
       "title": "Screenshot Sharing",
@@ -3381,7 +3430,14 @@
       "removeLabel": "Remove authorized directory"
     },
     "mcpElicitation": {
-      "unsupportedField": "Unsupported field type"
+      "unsupportedField": "Unsupported field type",
+      "choose": "Choose…",
+      "requiredMissing": "Fill in the fields marked *"
+    },
+    "mcpTool": {
+      "allowForSession": "Don’t ask again this session",
+      "allowAlways": "Always allow this tool",
+      "grantFailed": "Could not remember this decision"
     }
   },
   "auth": {

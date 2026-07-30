@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { t } from '../../helpers';
 import styles from '../../Settings.module.css';
-import { SelectWidget } from '@/ui';
-import { parseKeyValueLines, serializeKeyValueLines } from './mcp-config';
+import { ConfirmDialog, SelectWidget } from '@/ui';
+import { parseKeyValueLines, remoteUrlError, serializeKeyValueLines } from './mcp-config';
 import type { McpAuthType, McpConnector, McpConnectorInput, McpTransport } from './types';
 
 type FormMode = 'local' | 'remote';
+
+/** The transport a remote connector uses when its saved one is a local transport. */
+const DEFAULT_REMOTE_TRANSPORT: McpTransport = 'remote';
 
 interface ConnectorFormProps {
   disabled?: boolean;
@@ -56,18 +59,52 @@ export function ConnectorForm({
 }: ConnectorFormProps) {
   const [form, setForm] = useState(() => editingConnector ? formFromConnector(editingConnector) : INITIAL_FORM);
   const [error, setError] = useState('');
+  const [pendingMode, setPendingMode] = useState<FormMode | null>(null);
 
   useEffect(() => {
     setForm(editingConnector ? formFromConnector(editingConnector) : INITIAL_FORM);
     setError('');
   }, [editingConnector]);
 
+  // Front-end validation of the URL, so a missing scheme is caught in the field
+  // instead of coming back as a server error in a toast.
+  const urlErrorKey = form.mode === 'remote' && form.url.trim() ? remoteUrlError(form.url) : null;
   const canSubmit = form.mode === 'local'
     ? form.command.trim().length > 0
-    : form.url.trim().length > 0;
+    : form.url.trim().length > 0 && !urlErrorKey;
+
+  /**
+   * Switching an existing connector between local and remote rewrites how it
+   * connects, which drops the fields the other mode does not use and tears down
+   * the live client. That is a real consequence, so it is asked about first.
+   */
+  const requestModeChange = (mode: FormMode) => {
+    if (mode === form.mode) return;
+    const editingSwitchesTransport = !!editingConnector;
+    if (editingSwitchesTransport) {
+      setPendingMode(mode);
+      return;
+    }
+    applyModeChange(mode);
+  };
+
+  const applyModeChange = (mode: FormMode) => {
+    setForm(current => ({
+      ...current,
+      mode,
+      // Keep the saved remote transport when returning to remote; only fall back
+      // when the connector has never had one.
+      transport: mode === 'local' ? 'stdio' : (isRemoteTransport(current.transport) ? current.transport : DEFAULT_REMOTE_TRANSPORT),
+    }));
+    setPendingMode(null);
+  };
 
   const submit = async () => {
     setError('');
+    if (urlErrorKey) {
+      setError(t(urlErrorKey));
+      return;
+    }
     let parseError = '';
     const parseRecord = (value: string, kind: 'env' | 'headers') => {
       try {
@@ -134,7 +171,7 @@ export function ConnectorForm({
           <label className={styles['settings-form-label']}>{t('settings.mcp.connectorMode')}</label>
           <SelectWidget
             value={form.mode}
-            onChange={(v) => setForm({ ...form, mode: v as FormMode })}
+            onChange={(v) => requestModeChange(v as FormMode)}
             options={[
               { value: 'remote', label: t('settings.mcp.modeRemote') },
               { value: 'local',  label: t('settings.mcp.modeLocal') },
@@ -160,9 +197,13 @@ export function ConnectorForm({
               <input
                 className={styles['settings-input']}
                 value={form.url}
+                aria-invalid={!!urlErrorKey}
                 onChange={(e) => setForm({ ...form, url: e.target.value })}
                 placeholder="https://mcp.example.com/mcp"
               />
+              {urlErrorKey && (
+                <span className={styles['settings-inline-error']}>{t(urlErrorKey)}</span>
+              )}
             </div>
             <div className={fieldHalfClass}>
               <label className={styles['settings-form-label']}>{t('settings.mcp.transport')}</label>
@@ -336,8 +377,25 @@ export function ConnectorForm({
           {editingConnector ? t('settings.mcp.updateConnector') : t('settings.mcp.addConnector')}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={pendingMode !== null}
+        scope="window"
+        title={t('settings.mcp.modeSwitchTitle')}
+        confirmLabel={t('common.confirm')}
+        cancelLabel={t('common.cancel')}
+        confirmTone="danger"
+        onConfirm={() => pendingMode && applyModeChange(pendingMode)}
+        onCancel={() => setPendingMode(null)}
+      >
+        {t('settings.mcp.modeSwitchBody')}
+      </ConfirmDialog>
     </div>
   );
+}
+
+function isRemoteTransport(transport: McpTransport): boolean {
+  return transport !== 'stdio';
 }
 
 function formFromConnector(connector: McpConnector): typeof INITIAL_FORM {
@@ -347,7 +405,10 @@ function formFromConnector(connector: McpConnector): typeof INITIAL_FORM {
     name: connector.name || '',
     description: connector.description || '',
     url: connector.url || '',
-    transport: connector.transport === 'stdio' ? 'remote' : connector.transport,
+    // The saved transport is carried through as-is. Rewriting a local
+    // connector's transport to "remote" here made the form disagree with the
+    // connector it was editing the moment it opened.
+    transport: connector.transport,
     command: connector.command || '',
     args: (connector.args || []).join('\n'),
     cwd: connector.cwd || '',

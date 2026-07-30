@@ -301,7 +301,8 @@
     "screenshotFailed": "스크린샷 저장 실패",
     "selectedCount": "{count}개 선택됨",
     "allDone": "모두 완료",
-    "markAllComplete": "모두 완료로 표시"
+    "markAllComplete": "모두 완료로 표시",
+    "back": "뒤로"
   },
   "chat": {
     "find": {
@@ -448,7 +449,11 @@
     "referenceDocument": "[참고 문서] {path}",
     "mention": {
       "title": "멘션",
-      "tab": { "files": "파일", "sessions": "대화", "agents": "에이전트" },
+      "tab": {
+        "files": "파일",
+        "sessions": "대화",
+        "agents": "에이전트"
+      },
       "empty": "일치하는 항목이 없습니다",
       "singleAgent": "한 턴에는 한 명의 Agent 리뷰어만 초대할 수 있습니다"
     }
@@ -2032,7 +2037,51 @@
       "removeConfirm": "Remove this connector? Saved per-agent switches will remain but no longer take effect.",
       "agentTitle": "Agent Configuration",
       "agentConnectorDesc": "Enable for the selected agent, just like skills.",
-      "saveError": "Save failed"
+      "saveError": "Save failed",
+      "enabledAgentsCount": "개 어시스턴트에서 사용 중",
+      "manage": "관리",
+      "removeTitle": "커넥터 제거",
+      "connectionTitle": "연결 방식",
+      "permissionTitle": "권한",
+      "toolsTitle": "도구",
+      "noTools": "아직 도구가 없습니다. 커넥터를 시작하고 한 번 새로 고치면 보입니다.",
+      "noToolMatches": "일치하는 도구가 없습니다",
+      "toolSearch": "도구 검색",
+      "selectAll": "전체 선택",
+      "selectNone": "선택 해제",
+      "selectInvert": "선택 반전",
+      "badgeReadOnly": "읽기 전용",
+      "badgeDestructive": "파괴적",
+      "permissionAllow": "검토 없이 허용",
+      "pinTool": "항상 로드",
+      "permissionMode": "호출 검토",
+      "permissionModeHint": "기본적으로 모든 호출을 검토합니다. 허용 목록으로 바꾸면 직접 허용한 도구만 검토를 건너뜁니다.",
+      "permissionReviewAll": "모두 검토",
+      "permissionAllowlist": "허용 목록",
+      "trustReadOnly": "읽기 전용 선언 신뢰",
+      "trustReadOnlyHint": "읽기 전용 여부는 서버가 스스로 밝힌 것이며 Hana가 확인할 수 없습니다. 켜면 읽기 전용으로 선언된 도구는 매번 검토하지 않습니다.",
+      "deferTitle": "지연 로딩",
+      "deferScopeNote": "아래 설정은 이 커넥터뿐 아니라 모든 커넥터에 함께 적용됩니다.",
+      "deferEnabled": "지연 로딩 허용",
+      "deferEnabledHint": "도구가 많을 때는 먼저 목록만 모델에 주고, 필요한 도구의 설명만 가져옵니다.",
+      "deferThreshold": "임계값",
+      "deferThresholdHint": "사용 중인 도구가 이 수를 넘을 때만 목록을 쓰고, 그 아래면 모두 직접 로드합니다.",
+      "agentConnectorEnabled": "이 어시스턴트에서 사용",
+      "oauthWaiting": "브라우저에서 인증이 끝나기를 기다리는 중",
+      "oauthWaitingHint": "브라우저에 인증 페이지를 열었습니다. 완료되면 자동으로 반영되며, 언제든 취소할 수 있습니다.",
+      "oauthFailed": "인증에 실패했습니다",
+      "oauthTimeout": "인증 대기 시간이 초과되었습니다",
+      "importEmpty": "커넥터를 찾지 못했습니다",
+      "importPreviewHint": "가져올 항목을 확인하세요. 체크를 해제하면 그 항목은 제외됩니다.",
+      "importParse": "분석",
+      "importConfirm": "{count}개 가져오기",
+      "importItemOk": "추가됨",
+      "commandRequired": "명령이 없습니다",
+      "urlRequired": "주소를 입력하세요",
+      "urlInvalid": "이 주소를 해석할 수 없습니다. https:// 같은 스킴을 포함하세요",
+      "urlScheme": "http 또는 https 주소만 지원합니다",
+      "modeSwitchTitle": "연결 유형 변경",
+      "modeSwitchBody": "로컬과 원격은 서로 다른 설정을 씁니다. 전환하면 다른 쪽 항목이 지워지고 실행 중인 연결도 끊깁니다."
     },
     "screenshot": {
       "title": "스크린샷 공유",
@@ -3375,7 +3424,14 @@
       "removeLabel": "권한 디렉터리 제거"
     },
     "mcpElicitation": {
-      "unsupportedField": "지원하지 않는 필드 유형"
+      "unsupportedField": "지원하지 않는 필드 유형",
+      "choose": "선택하세요",
+      "requiredMissing": "* 표시된 필수 항목을 입력하세요"
+    },
+    "mcpTool": {
+      "allowForSession": "이 세션에서는 다시 묻지 않기",
+      "allowAlways": "이 도구를 항상 허용",
+      "grantFailed": "이 허용을 기억하지 못했습니다"
     }
   },
   "auth": {

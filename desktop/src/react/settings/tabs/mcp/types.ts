@@ -8,10 +8,31 @@ export type McpConnectorStatus =
   | 'failed'
   | 'needs-auth';
 
+/** Per-connector policy. `review-all` reviews every invocation; `allowlist` honours per-tool grants. */
+export type McpPermissionMode = 'review-all' | 'allowlist';
+/** Per-tool override inside an allowlist connector. */
+export type McpToolPermission = 'allow' | 'review';
+
+/**
+ * What the running server says about a tool. These are the server's own claims,
+ * not verified facts, which is why the UI labels them as declarations.
+ */
+export interface McpToolAnnotations {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
 export interface McpTool {
   name: string;
   title?: string;
   description?: string;
+  /** Agent-facing tool id, `${connectorId}_${toolName}` sanitized. Assigned by the server. */
+  qualifiedName?: string;
+  /** Permission capability string for this tool, `${qualifiedName}.invoke`. */
+  capability?: string;
+  annotations?: McpToolAnnotations;
 }
 
 export interface McpOAuthState {
@@ -35,6 +56,8 @@ export interface McpConnector {
   timeout?: number;
   autoStart?: boolean;
   status: McpConnectorStatus;
+  /** Last failure reported by the runtime. Empty when the connector is healthy. */
+  error?: string;
   tools: McpTool[];
   authType?: McpAuthType;
   authStatus?: string;
@@ -42,6 +65,10 @@ export interface McpConnector {
   oauthClientId?: string;
   oauthClientSecret?: string;
   oauth?: McpOAuthState;
+  permissionMode?: McpPermissionMode;
+  toolPermissions?: Record<string, McpToolPermission>;
+  trustReadOnlyHint?: boolean;
+  pinnedTools?: Record<string, boolean>;
 }
 
 export interface McpAgentConnectorConfig {
@@ -51,6 +78,10 @@ export interface McpAgentConnectorConfig {
 
 export interface McpState {
   enabled: boolean;
+  /** Global deferred-loading switch. */
+  deferEnabled: boolean;
+  /** Tool count above which deferred loading engages. */
+  deferThreshold: number;
   connectors: McpConnector[];
   servers?: McpConnector[];
   agentConfig: {
@@ -76,4 +107,15 @@ export interface McpConnectorInput {
   authorizationToken?: string;
   oauthClientId?: string;
   oauthClientSecret?: string;
+  permissionMode?: McpPermissionMode;
+  toolPermissions?: Record<string, McpToolPermission>;
+  trustReadOnlyHint?: boolean;
+  pinnedTools?: Record<string, boolean>;
+}
+
+/** One row of a bulk import result, positionally matched to the submitted list. */
+export interface McpBulkResult {
+  ok: boolean;
+  id?: string;
+  error?: string;
 }

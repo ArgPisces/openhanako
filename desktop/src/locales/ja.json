@@ -301,7 +301,8 @@
     "screenshotFailed": "スクリーンショットの保存に失敗しました",
     "selectedCount": "{count} 件選択中",
     "allDone": "すべて完了",
-    "markAllComplete": "すべて完了にする"
+    "markAllComplete": "すべて完了にする",
+    "back": "戻る"
   },
   "chat": {
     "find": {
@@ -448,7 +449,11 @@
     "referenceDocument": "[参考ドキュメント] {path}",
     "mention": {
       "title": "メンション",
-      "tab": { "files": "ファイル", "sessions": "会話", "agents": "エージェント" },
+      "tab": {
+        "files": "ファイル",
+        "sessions": "会話",
+        "agents": "エージェント"
+      },
       "empty": "一致する項目はありません",
       "singleAgent": "1 回のターンで招待できる Agent レビュアーは 1 人です"
     }
@@ -2032,7 +2037,51 @@
       "removeConfirm": "Remove this connector? Saved per-agent switches will remain but no longer take effect.",
       "agentTitle": "Agent Configuration",
       "agentConnectorDesc": "Enable for the selected agent, just like skills.",
-      "saveError": "Save failed"
+      "saveError": "Save failed",
+      "enabledAgentsCount": "件のアシスタントで有効",
+      "manage": "管理",
+      "removeTitle": "コネクタを削除",
+      "connectionTitle": "接続方法",
+      "permissionTitle": "権限",
+      "toolsTitle": "ツール",
+      "noTools": "ツールはまだありません。コネクタを起動して一度更新すると表示されます。",
+      "noToolMatches": "一致するツールがありません",
+      "toolSearch": "ツールを検索",
+      "selectAll": "すべて選択",
+      "selectNone": "選択を解除",
+      "selectInvert": "選択を反転",
+      "badgeReadOnly": "読み取り専用",
+      "badgeDestructive": "破壊的",
+      "permissionAllow": "審査なしで許可",
+      "pinTool": "常時読み込み",
+      "permissionMode": "呼び出しの審査",
+      "permissionModeHint": "既定ではすべての呼び出しを審査します。許可リストにすると、個別に許可したツールだけが審査を省きます。",
+      "permissionReviewAll": "すべて審査",
+      "permissionAllowlist": "許可リスト",
+      "trustReadOnly": "読み取り専用の申告を信頼する",
+      "trustReadOnlyHint": "読み取り専用かどうかはサーバー自身の申告で、Hana には確認できません。有効にすると、読み取り専用と申告されたツールは毎回の審査を省きます。",
+      "deferTitle": "遅延読み込み",
+      "deferScopeNote": "以下の設定はこのコネクタだけでなく、すべてのコネクタに適用されます。",
+      "deferEnabled": "遅延読み込みを許可",
+      "deferEnabledHint": "ツールが多いときは、まず目録だけをモデルに渡し、必要になったものだけ詳細を取り出します。",
+      "deferThreshold": "しきい値",
+      "deferThresholdHint": "有効なツールがこの数を超えたときだけ目録を使い、下回る場合はすべて直接読み込みます。",
+      "agentConnectorEnabled": "このアシスタントで有効",
+      "oauthWaiting": "ブラウザでの認可を待っています",
+      "oauthWaitingHint": "認可ページをブラウザで開きました。完了すると自動で反映されます。いつでも中止できます。",
+      "oauthFailed": "認可に失敗しました",
+      "oauthTimeout": "認可の待機がタイムアウトしました",
+      "importEmpty": "コネクタが見つかりませんでした",
+      "importPreviewHint": "取り込む内容を確認してください。チェックを外すとその項目は除外されます。",
+      "importParse": "解析",
+      "importConfirm": "{count} 件を取り込む",
+      "importItemOk": "追加しました",
+      "commandRequired": "コマンドがありません",
+      "urlRequired": "URL を入力してください",
+      "urlInvalid": "この URL は解釈できません。https:// のようにスキームを付けてください",
+      "urlScheme": "URL は http または https のみ対応しています",
+      "modeSwitchTitle": "接続タイプを変更",
+      "modeSwitchBody": "ローカルとリモートは別々の設定を使います。切り替えると他方の項目は消去され、稼働中の接続も切断されます。"
     },
     "screenshot": {
       "title": "スクリーンショット共有",
@@ -3375,7 +3424,14 @@
       "removeLabel": "認可ディレクトリを削除"
     },
     "mcpElicitation": {
-      "unsupportedField": "未対応のフィールド型"
+      "unsupportedField": "未対応のフィールド型",
+      "choose": "選択してください",
+      "requiredMissing": "* の付いた必須項目を入力してください"
+    },
+    "mcpTool": {
+      "allowForSession": "このセッションでは今後聞かない",
+      "allowAlways": "このツールを常に許可",
+      "grantFailed": "この許可を記憶できませんでした"
     }
   },
   "auth": {
