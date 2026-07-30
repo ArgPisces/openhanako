@@ -559,6 +559,101 @@ describe("artifact-ota: fetchChannelManifest (dual-source parallel race)", () =>
 
     expect(result.notModified).toBe(true);
   });
+
+  // ── total-race-failure fallback: the origin's short race budget only
+  //    makes sense while the mirror leg is answering. When neither side
+  //    produced a candidate, the origin gets ONE more attempt with the full
+  //    per-hop budget, since it's the only source guaranteed fresh.
+  it("retries the origin with the full budget after a total race failure and resolves from the retry", async () => {
+    const keys = makeKeys();
+    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
+    const origin = buildSignedManifestBytes(keys, { train: 7, version: "0.407.0" });
+    let originManifestCalls = 0;
+    const fetchOnce = async (url: string) => {
+      if (url === mirrorUrl || url === `${mirrorUrl}.sig`) throw new Error("mirror unreachable");
+      if (url === originUrl) {
+        originManifestCalls += 1;
+        // First attempt = the raced leg (short budget) failing; the second
+        // is the post-race retry that gets the full budget.
+        if (originManifestCalls === 1) throw new Error("origin exceeded its race budget");
+        return fakeStreamResponse(200, { etag: 'W/"retry-etag"' }, [origin.manifestBytes]);
+      }
+      if (url === `${originUrl}.sig`) return fakeStreamResponse(200, {}, [origin.sigBytes]);
+      throw new Error(`unexpected url ${url}`);
+    };
+
+    const result = await fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} });
+
+    expect(result.manifest.train).toBe(7);
+    expect(result.sourceKind).toBe("origin");
+    // The origin DID end up contributing this round, so the "(via backup
+    // source)" annotation must not fire.
+    expect(result.originUnreachable).toBe(false);
+    expect(originManifestCalls).toBe(2); // raced leg + exactly one retry
+    expect(result.sourceEtagUpdate.origin).toBe('W/"retry-etag"');
+    expect(result.etag).toBe('W/"retry-etag"');
+  });
+
+  it("includes the origin retry outcome when the final retry also fails", async () => {
+    const keys = makeKeys();
+    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
+    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, "error", "error");
+
+    await expect(
+      fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} }),
+    ).rejects.toThrow(/origin retry/);
+    await expect(
+      fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} }),
+    ).rejects.toThrow(/all channel manifest sources failed/i);
+  });
+
+  it("treats a 304 on the origin retry as a not-modified round", async () => {
+    const keys = makeKeys();
+    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
+    let originManifestCalls = 0;
+    const fetchOnce = async (url: string) => {
+      if (url === mirrorUrl || url === `${mirrorUrl}.sig`) throw new Error("mirror unreachable");
+      if (url === originUrl) {
+        originManifestCalls += 1;
+        if (originManifestCalls === 1) throw new Error("origin exceeded its race budget");
+        // The retry reuses the same cached ETag for its conditional GET.
+        return fakeStreamResponse(304, {});
+      }
+      throw new Error(`unexpected url ${url}`);
+    };
+
+    const result = await fetchChannelManifest({
+      channel: "stable",
+      keyset: keys.keyset,
+      cachedEtags: { origin: 'W/"cached"' },
+      fetchOnce,
+      log: () => {},
+    });
+
+    expect(result.notModified).toBe(true);
+  });
+
+  it("excludes an origin retry whose signature fails verification and throws", async () => {
+    const keys = makeKeys();
+    const otherKeys = makeKeys("some-other-key-not-in-keyset");
+    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
+    const forged = buildSignedManifestBytes(otherKeys, { train: 11, version: "0.411.0" });
+    let originManifestCalls = 0;
+    const fetchOnce = async (url: string) => {
+      if (url === mirrorUrl || url === `${mirrorUrl}.sig`) throw new Error("mirror unreachable");
+      if (url === originUrl) {
+        originManifestCalls += 1;
+        if (originManifestCalls === 1) throw new Error("origin exceeded its race budget");
+        return fakeStreamResponse(200, {}, [forged.manifestBytes]);
+      }
+      if (url === `${originUrl}.sig`) return fakeStreamResponse(200, {}, [forged.sigBytes]);
+      throw new Error(`unexpected url ${url}`);
+    };
+
+    await expect(
+      fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} }),
+    ).rejects.toThrow(/origin retry: manifest failed verification/i);
+  });
 });
 
 describe("artifact-ota: isShellVersionSufficient (minShell gate)", () => {

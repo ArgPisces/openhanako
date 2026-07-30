@@ -152,6 +152,17 @@
  * has, so if it's behind, the origin's higher number simply wins whenever
  * origin is reachable, and the whole "how do I know this manifest hasn't
  * gone stale" question this design deliberately declines to introduce.
+ * The origin's short race budget is only justified while the mirror leg
+ * actually answers — its whole purpose is "don't make an answered round
+ * wait on a slow origin". When BOTH legs come back without a usable
+ * candidate that premise is gone: there is no answered leg to protect, and
+ * failing the round on an 8s budget throws away the only source guaranteed
+ * to carry a train the moment it ships (on a slow hop, 8s routinely times
+ * out where the full 30s succeeds). So a totally failed round ends with one
+ * final origin attempt at the full per-hop budget, unraced, under exactly
+ * the same signature verification as the raced legs — a retry can never
+ * introduce content a raced leg couldn't have introduced, only more
+ * patience about reaching it.
  * A per-source boolean (`originUnreachable`, persisted in `ota-state.json`
  * and returned by `readStagedTrainStatus`) records whether the origin
  * failed to contribute a verified candidate THIS round, independent of
@@ -243,6 +254,9 @@ const MAX_SIG_BYTES = 4 * 1024; // raw ed25519 sig is 64 bytes; PEM-wrapped is s
 // GitHub's race leg gets this short budget instead of the full 30s idle
 // timeout above — see the file header's "dual-source manifest fetch" note
 // for why: it must never hold up a round the mirror leg already answered.
+// This budget applies to the RACED leg only: when both sources fail to
+// produce a candidate, the origin gets one final retry with the full
+// MANIFEST_REQUEST_TIMEOUT_MS budget (see `fetchChannelManifest`).
 const ORIGIN_MANIFEST_RACE_TIMEOUT_MS = 8_000;
 
 // ── channel pointer URLs: clients poll ONLY these static asset
@@ -577,7 +591,11 @@ function describeSourceOutcome(result, verifiedManifest) {
 /**
  * Fetches and resolves this round's channel manifest by racing both
  * sources in parallel — see the file header's "dual-source manifest
- * fetch" note for the full design rationale.
+ * fetch" note for the full design rationale. When the race yields no
+ * verified candidate and no 304, the origin is retried once with the full
+ * `MANIFEST_REQUEST_TIMEOUT_MS` budget (unraced) before the round fails,
+ * since the short race budget only earns its keep while the mirror leg is
+ * answering.
  * @param {{channel: string, keyset: Array<{keyId:string, publicKey:string}>,
  *   cachedEtags?: {origin?: string|null, mirror?: string|null},
  *   log?: (msg: string) => void, fetchOnce?: Function,
@@ -639,9 +657,41 @@ async function fetchChannelManifest({ channel, keyset, cachedEtags = {}, log = (
     if (anyNotModified) {
       return { notModified: true, sourceEtagUpdate };
     }
+    // Nobody produced a candidate, so the premise behind the origin's short
+    // race budget ("don't hold up a round the mirror already answered") no
+    // longer holds — there is no answered mirror leg to protect. Give the
+    // origin one final attempt with the full per-hop budget before failing
+    // the round: it's the only source guaranteed to carry a train the
+    // moment it ships, and on a slow hop 8s is routinely too tight while
+    // 30s succeeds. The retry is deliberately NOT wrapped in
+    // `raceWithBudget` (nothing left to race) and stays under exactly the
+    // same signature verification as the raced legs.
+    log(`[ota] both manifest sources failed this round; retrying origin once with the full ${MANIFEST_REQUEST_TIMEOUT_MS}ms budget`);
+    const retryResult = await fetchOneChannelSource(originUrl, { cachedEtag: cachedEtags.origin, fetchOnce, log, timeoutMs: MANIFEST_REQUEST_TIMEOUT_MS });
+    // Same conditional GET as the raced leg, so a 304 here means the same
+    // thing it means anywhere else: nothing changed, end the round quietly.
+    if (retryResult.status === "not-modified") {
+      return { notModified: true, sourceEtagUpdate };
+    }
+    const retryVerified = retryResult.status === "fetched" ? tryVerifyManifestCandidate(retryResult, keyset, log, "origin retry") : null;
+    if (retryVerified) {
+      sourceEtagUpdate.origin = retryResult.etag;
+      return {
+        manifest: retryVerified,
+        sourceUrl: retryResult.sourceUrl,
+        sourceKind: "origin",
+        // The origin ultimately DID contribute this round, so the UI must
+        // not annotate the result as coming from the backup source.
+        originUnreachable: false,
+        etag: retryResult.etag,
+        localDir: null,
+        sourceEtagUpdate,
+      };
+    }
     throw new Error(
       `all channel manifest sources failed (origin: ${describeSourceOutcome(originResult, originVerified)}; `
-        + `mirror: ${describeSourceOutcome(mirrorResult, mirrorVerified)})`,
+        + `mirror: ${describeSourceOutcome(mirrorResult, mirrorVerified)}; `
+        + `origin retry: ${describeSourceOutcome(retryResult, retryVerified)})`,
     );
   }
 

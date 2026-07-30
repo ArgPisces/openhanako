@@ -8551,7 +8551,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 399,
+      "line": 413,
       "kind": "mkdir",
       "excerpt": "fsp.mkdir(path.dirname(destPath), { recursive: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8560,7 +8560,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 400,
+      "line": 414,
       "kind": "write-file",
       "excerpt": "fs.createWriteStream(destPath)",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8569,7 +8569,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 451,
+      "line": 465,
       "kind": "remove-path",
       "excerpt": "fsp.rm(destPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8578,7 +8578,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 776,
+      "line": 826,
       "kind": "mkdir",
       "excerpt": "fsp.mkdir(path.dirname(filePath), { recursive: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8587,7 +8587,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 778,
+      "line": 828,
       "kind": "write-file",
       "excerpt": "fsp.writeFile(tmpPath, text, \"utf8\")",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8596,7 +8596,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 779,
+      "line": 829,
       "kind": "rename",
       "excerpt": "fsp.rename(tmpPath, filePath)",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8605,7 +8605,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 823,
+      "line": 873,
       "kind": "atomic-write",
       "excerpt": "pointerStore.atomicWriteJson(otaStatePath(homeDir), state)",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8614,7 +8614,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 849,
+      "line": 899,
       "kind": "remove-path",
       "excerpt": "fsp.rm(partPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8623,7 +8623,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 850,
+      "line": 900,
       "kind": "copy-file",
       "excerpt": "fsp.copyFile(sourcePath, partPath)",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8632,7 +8632,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 851,
+      "line": 901,
       "kind": "rename",
       "excerpt": "fsp.rename(partPath, finalPath)",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8641,7 +8641,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 861,
+      "line": 911,
       "kind": "remove-path",
       "excerpt": "fsp.rm(partPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8650,7 +8650,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 863,
+      "line": 913,
       "kind": "rename",
       "excerpt": "fsp.rename(partPath, finalPath)",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8659,7 +8659,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 869,
+      "line": 919,
       "kind": "remove-path",
       "excerpt": "fsp.rm(partPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8668,7 +8668,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 879,
+      "line": 929,
       "kind": "remove-path",
       "excerpt": "fsp.rm(finalPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8677,7 +8677,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1424,
+      "line": 1474,
       "kind": "mkdir",
       "excerpt": "fsp.mkdir(stagingDir, { recursive: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8686,7 +8686,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1492,
+      "line": 1542,
       "kind": "remove-path",
       "excerpt": "fsp.rm(serverStagedPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8695,7 +8695,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1493,
+      "line": 1543,
       "kind": "remove-path",
       "excerpt": "fsp.rm(rendererStagedPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8704,7 +8704,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1494,
+      "line": 1544,
       "kind": "remove-path",
       "excerpt": "fsp.rm(`${serverStagedPath}.part`, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8713,7 +8713,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1495,
+      "line": 1545,
       "kind": "remove-path",
       "excerpt": "fsp.rm(`${rendererStagedPath}.part`, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8722,7 +8722,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1720,
+      "line": 1770,
       "kind": "mkdir",
       "excerpt": "fsp.mkdir(stagingDir, { recursive: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8731,7 +8731,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1762,
+      "line": 1812,
       "kind": "remove-path",
       "excerpt": "fsp.rm(rendererStagedPath, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
@@ -8740,7 +8740,7 @@
     },
     {
       "sourceFile": "shared/artifact-core/ota-core.cjs",
-      "line": 1763,
+      "line": 1813,
       "kind": "remove-path",
       "excerpt": "fsp.rm(`${rendererStagedPath}.part`, { force: true })",
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",

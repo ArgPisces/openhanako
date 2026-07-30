@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:c342348b0e81a9b62d394c3b87bf6c1d9f391643259e63cd9c67fa5fba8d7578",
+  "payloadFingerprint": "sha256:454d041a42297a375dc2c6caae6ec86faadd329d207a9e3f97e7146df4847bfa",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2878,8 +2878,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Dropping the reminder receipt render timestamp only shifts line numbers of existing persistence call sites in the session coordinator; no store schema, record shape, or on-disk layout changes.",
-    "payloadFingerprint": "sha256:c342348b0e81a9b62d394c3b87bf6c1d9f391643259e63cd9c67fa5fba8d7578"
+    "compatibilityReason": "Retrying the origin channel manifest once at the full request budget after a total dual-source race failure only shifts line numbers of existing persistence call sites in the artifact OTA core; no store schema, record shape, or on-disk layout changes.",
+    "payloadFingerprint": "sha256:454d041a42297a375dc2c6caae6ec86faadd329d207a9e3f97e7146df4847bfa"
   },
   "schemas": [
     {
@@ -8980,7 +8980,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 399,
+      "line": 413,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -8988,7 +8988,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 400,
+      "line": 414,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -8996,7 +8996,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 451,
+      "line": 465,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9004,7 +9004,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 776,
+      "line": 826,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9012,7 +9012,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 778,
+      "line": 828,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9020,7 +9020,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 779,
+      "line": 829,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9028,7 +9028,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 823,
+      "line": 873,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9036,7 +9036,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 849,
+      "line": 899,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9044,7 +9044,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 850,
+      "line": 900,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9052,7 +9052,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 851,
+      "line": 901,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9060,7 +9060,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 861,
+      "line": 911,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9068,7 +9068,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 863,
+      "line": 913,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9076,7 +9076,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 869,
+      "line": 919,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9084,7 +9084,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 879,
+      "line": 929,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9092,7 +9092,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 1424,
+      "line": 1474,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9100,7 +9100,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1492,
+      "line": 1542,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9108,7 +9108,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1493,
+      "line": 1543,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9116,7 +9116,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1494,
+      "line": 1544,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9124,7 +9124,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1495,
+      "line": 1545,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9132,7 +9132,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 1720,
+      "line": 1770,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9140,7 +9140,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1762,
+      "line": 1812,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
@@ -9148,7 +9148,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1763,
+      "line": 1813,
       "reason": "Writes, deletes, or repairs signed artifact activation and OTA state.",
       "sourceFile": "shared/artifact-core/ota-core.cjs",
       "storeId": "signed-artifacts"
