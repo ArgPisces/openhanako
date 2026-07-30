@@ -169,4 +169,13 @@ describe("WorkflowJournal", () => {
     expect(replay.tryReplay(2, k2)).toEqual({ hit: true, result: "r2" });
     expect(replay.tryReplay(3, k3)).toEqual({ hit: true, result: "r3" });
   });
+
+  it("writeFolders 参与 agent() cache key：范围变化不得命中旧缓存", () => {
+    const a = WorkflowJournal.computeKey("p", { writeFolders: ["/a"] });
+    const b = WorkflowJournal.computeKey("p", { writeFolders: ["/b"] });
+    const c = WorkflowJournal.computeKey("p", {});
+    expect(a).not.toBe(b);
+    expect(a).not.toBe(c);
+    expect(b).not.toBe(c);
+  });
 });
