@@ -3069,6 +3069,8 @@ function createBrowserViewerWindow(opts = {}) {
 
   // 窗口获得焦点时，将输入焦点转发到 WebContentsView（否则无法滚动/打字）
   browserViewerWindow.on("focus", () => {
+    // 用户把 viewer 拉到前台 = 用户侧活动，刷新闲置回收计时
+    _sendBrowserUserActivity(_currentBrowserSession);
     if (_browserWebView) {
       _browserWebView.webContents.focus();
       console.log("[browser-viewer] window focus → view.focus(), isFocused:", _browserWebView.webContents.isFocused());
@@ -3853,6 +3855,14 @@ async function handleBrowserCommand(cmd, params) {
       return {};
     }
 
+    // ── viewerVisibility ──（闲置回收巡检用：viewer 当前是否可见、正在展示哪个 session）
+    case "viewerVisibility": {
+      return {
+        visible: !!(browserViewerWindow && !browserViewerWindow.isDestroyed() && browserViewerWindow.isVisible()),
+        sessionPath: _currentBrowserSession,
+      };
+    }
+
     // ── viewerShowSession ──（viewer 显示指定 session 的标签页组；无组则空态。不改变窗口可见性）
     case "viewerShowSession": {
       const sp = params.sessionPath || null;
@@ -4235,6 +4245,21 @@ function _syncWorkspaceToServer(sessionPath) {
       type: "browser-workspace-sync",
       sessionPath,
       workspace: workspace ? _serializeBrowserWorkspace(workspace) : null,
+    }));
+  } catch {}
+}
+
+/**
+ * 告诉 server 的 BrowserManager「用户刚碰过这个 session 的浏览器」。
+ * 闲置回收要求 agent 与用户双方都超时，用户侧的时间戳只有主进程知道。
+ */
+function _sendBrowserUserActivity(sessionPath) {
+  if (!sessionPath) return;
+  if (!_browserCmdWs || _browserCmdWs.readyState !== 1) return;
+  try {
+    _browserCmdWs.send(JSON.stringify({
+      type: "browser-user-activity",
+      sessionPath,
     }));
   } catch {}
 }
@@ -5133,6 +5158,7 @@ wrapIpcBestEffortHandler("open-browser-viewer", async (_event, theme, payload) =
   if (theme) _browserViewerTheme = theme;
   const { url, sessionPath: sp } = _normalizeBrowserViewerOpenPayload(payload);
   createBrowserViewerWindow();
+  _sendBrowserUserActivity(sp);
 
   if (url && isAllowedBrowserUrl(url)) {
     await _openUrlInNewBrowserTab(sp, url);
@@ -5162,29 +5188,39 @@ wrapIpcBestEffortHandler("open-browser-viewer", async (_event, theme, payload) =
   }
 });
 wrapIpcBestEffortHandler("browser-go-back", (_event, sessionPath) => {
-  const view = _getViewForSession(_resolveBrowserIpcSessionPath(sessionPath));
+  const sp = _resolveBrowserIpcSessionPath(sessionPath);
+  _sendBrowserUserActivity(sp);
+  const view = _getViewForSession(sp);
   if (view) view.webContents.goBack();
 });
 wrapIpcBestEffortHandler("browser-go-forward", (_event, sessionPath) => {
-  const view = _getViewForSession(_resolveBrowserIpcSessionPath(sessionPath));
+  const sp = _resolveBrowserIpcSessionPath(sessionPath);
+  _sendBrowserUserActivity(sp);
+  const view = _getViewForSession(sp);
   if (view) view.webContents.goForward();
 });
 wrapIpcBestEffortHandler("browser-reload", (_event, sessionPath) => {
-  const view = _getViewForSession(_resolveBrowserIpcSessionPath(sessionPath));
+  const sp = _resolveBrowserIpcSessionPath(sessionPath);
+  _sendBrowserUserActivity(sp);
+  const view = _getViewForSession(sp);
   if (view) view.webContents.reload();
 });
 wrapIpcBestEffortHandler("browser-new-tab", async (_event, sessionPath) => {
   const sp = _resolveBrowserIpcSessionPath(sessionPath);
+  _sendBrowserUserActivity(sp);
   await _openUrlInNewBrowserTab(sp, null);
   _syncWorkspaceToServer(sp);
 });
 wrapIpcBestEffortHandler("browser-switch-tab", (_event, tabId, sessionPath) => {
   if (typeof tabId !== "string" || !tabId) return;
-  _switchActiveBrowserTab(_resolveBrowserIpcSessionPath(sessionPath), tabId);
+  const sp = _resolveBrowserIpcSessionPath(sessionPath);
+  _sendBrowserUserActivity(sp);
+  _switchActiveBrowserTab(sp, tabId);
 });
 wrapIpcBestEffortHandler("browser-close-tab", async (_event, tabId, sessionPath) => {
   if (typeof tabId !== "string" || !tabId) return;
   const sp = _resolveBrowserIpcSessionPath(sessionPath);
+  _sendBrowserUserActivity(sp);
   const result = await handleBrowserCommand("closeTab", {
     sessionPath: sp,
     tabId,

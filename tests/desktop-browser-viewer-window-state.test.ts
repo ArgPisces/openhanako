@@ -148,6 +148,24 @@ describe("desktop browser viewer window state", () => {
     expect(source).toContain('case "clearBrowserCookiesAndSiteData"');
   });
 
+  it("reports viewer visibility and reports user activity for idle reclaim", () => {
+    const source = fs.readFileSync(MAIN_PATH, "utf-8");
+    const visibility = caseBody(source, "viewerVisibility");
+
+    expect(visibility).toContain("browserViewerWindow.isVisible()");
+    expect(visibility).toContain("sessionPath: _currentBrowserSession");
+
+    expect(source).toContain("function _sendBrowserUserActivity");
+    expect(source).toContain('type: "browser-user-activity"');
+    expect(ipcHandlerBody(source, "open-browser-viewer")).toContain("_sendBrowserUserActivity(");
+    expect(ipcHandlerBody(source, "browser-go-back")).toContain("_sendBrowserUserActivity(");
+    expect(ipcHandlerBody(source, "browser-go-forward")).toContain("_sendBrowserUserActivity(");
+    expect(ipcHandlerBody(source, "browser-reload")).toContain("_sendBrowserUserActivity(");
+    expect(ipcHandlerBody(source, "browser-new-tab")).toContain("_sendBrowserUserActivity(");
+    expect(ipcHandlerBody(source, "browser-switch-tab")).toContain("_sendBrowserUserActivity(");
+    expect(ipcHandlerBody(source, "browser-close-tab")).toContain("_sendBrowserUserActivity(");
+  });
+
   it("routes new-window requests into a new in-app browser tab", () => {
     const source = fs.readFileSync(MAIN_PATH, "utf-8");
     const body = functionBody(source, "_createBrowserWebContentsView");

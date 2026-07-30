@@ -1072,3 +1072,47 @@ describe("browser workspace sync from the desktop viewer", () => {
     expect(manager._sendCmd).not.toHaveBeenCalled();
   });
 });
+
+describe("browser idle reclaim", () => {
+  it("suspends a session only when both agent and user are idle past the threshold", async () => {
+    vi.useFakeTimers();
+    try {
+      const manager = new BrowserManager({});
+      manager._loadColdState = vi.fn(() => ({}));
+      manager._saveColdState = vi.fn();
+      manager._sendCmd = vi.fn(async (cmd) => (cmd === "viewerVisibility" ? { visible: false, sessionPath: null } : {}));
+      manager._setSessionEntry(SP1, { running: true, activeTabId: "t1", tabs: [{ tabId: "t1", url: "https://a.example" }] });
+      manager._touchLru(SP1);
+      manager._ensureIdleSweep();
+
+      await vi.advanceTimersByTimeAsync(29 * 60_000);
+      expect(manager.isRunning(SP1)).toBe(true);        // 未到阈值
+      manager._touchUserActivity(SP1);                   // 用户活动重置
+      await vi.advanceTimersByTimeAsync(29 * 60_000);
+      expect(manager.isRunning(SP1)).toBe(true);
+      await vi.advanceTimersByTimeAsync(6 * 60_000);     // 双闲置超 30 分钟
+      expect(manager.isRunning(SP1)).toBe(false);        // 已被 suspend（entry 删除）
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips the session currently visible in the viewer", async () => {
+    vi.useFakeTimers();
+    try {
+      const manager = new BrowserManager({});
+      manager._loadColdState = vi.fn(() => ({}));
+      manager._saveColdState = vi.fn();
+      manager._sendCmd = vi.fn(async (cmd) => (cmd === "viewerVisibility" ? { visible: true, sessionPath: SP1 } : {}));
+      manager._setSessionEntry(SP1, { running: true, activeTabId: "t1", tabs: [{ tabId: "t1", url: "https://a.example" }] });
+      manager._touchLru(SP1);
+      manager._ensureIdleSweep();
+      await vi.advanceTimersByTimeAsync(65 * 60_000);
+      expect(manager.isRunning(SP1)).toBe(true);
+      clearInterval(manager._idleSweepTimer);
+      manager._idleSweepTimer = null;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
