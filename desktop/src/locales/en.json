@@ -3379,6 +3379,9 @@
       "body": "Once confirmed, this folder will become an additional sandbox directory for the current conversation. It will not change the working directory or modify prompts.",
       "addLabel": "Add authorized directory",
       "removeLabel": "Remove authorized directory"
+    },
+    "mcpElicitation": {
+      "unsupportedField": "Unsupported field type"
     }
   },
   "auth": {

@@ -3261,6 +3261,9 @@
       "body": "确认后，这个文件夹会成为当前对话的额外沙盒目录；不会改变工作目录，也不会写入提示词。",
       "addLabel": "添加授权目录",
       "removeLabel": "移除授权目录"
+    },
+    "mcpElicitation": {
+      "unsupportedField": "暂不支持的字段类型"
     }
   },
   "auth": {

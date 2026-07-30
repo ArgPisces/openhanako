@@ -3373,6 +3373,9 @@
       "body": "확인하면 이 폴더가 현재 대화의 추가 샌드박스 디렉터리가 돼요. 작업 디렉터리나 프롬프트는 변경하지 않아요.",
       "addLabel": "권한 디렉터리 추가",
       "removeLabel": "권한 디렉터리 제거"
+    },
+    "mcpElicitation": {
+      "unsupportedField": "지원하지 않는 필드 유형"
     }
   },
   "auth": {

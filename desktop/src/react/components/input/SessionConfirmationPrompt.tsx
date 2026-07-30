@@ -94,6 +94,82 @@ function buildTooltipText(
   return Array.from(new Set(lines.map((line) => line.trim()).filter(Boolean))).join('\n\n');
 }
 
+// Form-mode elicitation is limited to flat objects of primitive properties.
+// This batch renders exactly those three types; anything richer (nested
+// objects, enums, multi-select, validation messages) is left to a fuller form
+// implementation rather than being half-rendered here.
+type ElicitationField = {
+  name: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean';
+  defaultValue: string | boolean;
+};
+
+type ElicitationForm = {
+  fields: ElicitationField[];
+  unsupported: string[];
+};
+
+function readElicitationForm(block: SessionConfirmationBlock): ElicitationForm | null {
+  if (block.kind !== 'mcp_elicitation') return null;
+  const schema = block.payload?.requestedSchema as Record<string, unknown> | undefined;
+  const properties = schema?.properties as Record<string, Record<string, unknown>> | undefined;
+  if (!properties || typeof properties !== 'object') return { fields: [], unsupported: [] };
+
+  const fields: ElicitationField[] = [];
+  const unsupported: string[] = [];
+  for (const [name, property] of Object.entries(properties)) {
+    const rawType = typeof property?.type === 'string' ? property.type : '';
+    const label = typeof property?.title === 'string' && property.title ? property.title : name;
+    if (rawType === 'string') {
+      fields.push({ name, label, type: 'string', defaultValue: typeof property.default === 'string' ? property.default : '' });
+    } else if (rawType === 'number' || rawType === 'integer') {
+      fields.push({
+        name,
+        label,
+        type: 'number',
+        defaultValue: typeof property.default === 'number' ? String(property.default) : '',
+      });
+    } else if (rawType === 'boolean') {
+      fields.push({ name, label, type: 'boolean', defaultValue: property.default === true });
+    } else {
+      unsupported.push(name);
+    }
+  }
+  return { fields, unsupported };
+}
+
+function initialElicitationValues(form: ElicitationForm | null) {
+  const values: Record<string, string | boolean> = {};
+  for (const field of form?.fields || []) values[field.name] = field.defaultValue;
+  return values;
+}
+
+function collectElicitationValue(
+  form: ElicitationForm | null,
+  values: Record<string, string | boolean>,
+) {
+  const result: Record<string, unknown> = {};
+  for (const field of form?.fields || []) {
+    const raw = values[field.name];
+    if (field.type === 'boolean') {
+      result[field.name] = raw === true;
+      continue;
+    }
+    const text = typeof raw === 'string' ? raw : '';
+    if (field.type === 'number') {
+      // An untouched optional number is left out rather than sent as NaN.
+      if (!text.trim()) continue;
+      const numeric = Number(text);
+      if (Number.isNaN(numeric)) continue;
+      result[field.name] = numeric;
+      continue;
+    }
+    result[field.name] = text;
+  }
+  return result;
+}
+
 export function SessionConfirmationPrompt({ block, exiting = false }: SessionConfirmationPromptProps) {
   const [submission, setSubmission] = useState<{ confirmId: string; action: ConfirmationAction } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -101,6 +177,13 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
   const [switchingMode, setSwitchingMode] = useState(false);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
+  const elicitation = useMemo(() => readElicitationForm(block), [block]);
+  const [fieldValues, setFieldValues] = useState<Record<string, string | boolean>>(
+    () => initialElicitationValues(elicitation),
+  );
+  useEffect(() => {
+    setFieldValues(initialElicitationValues(elicitation));
+  }, [elicitation]);
   const pending = block.status === 'pending' && !exiting;
   const submitting = submission?.confirmId === block.confirmId ? submission.action : null;
   const confirmLabel = block.actions?.confirmLabel || window.t?.('common.approve') || '同意';
@@ -111,7 +194,15 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
   const tooltipText = useMemo(() => buildTooltipText(block, title, subject), [block, subject, title]);
   const tooltipId = `session-confirmation-tooltip-${block.confirmId}`;
   const canDisableAskForConversation = block.kind === 'tool_action_approval';
+  // The server's own words explaining why it is asking. Shown in full above the
+  // fields, since the summary row only has space for the connector and tool.
+  const elicitationMessage = elicitation
+    ? String(block.payload?.message || block.body || '')
+    : '';
+  const hasUnsupportedField = (elicitation?.unsupported.length || 0) > 0;
   const busy = !!submitting || switchingMode;
+  // A form we cannot fill faithfully must not be sent as a half-answer.
+  const confirmBlocked = busy || hasUnsupportedField;
 
   const updateMenuPosition = useCallback(() => {
     const anchor = menuAnchorRef.current;
@@ -176,11 +267,15 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
     if (!pending || submitting) return;
     setMenuOpen(false);
     setSubmission({ confirmId: block.confirmId, action });
+    // Only an approval carries answers; a rejection stays a bare decision.
+    const value = elicitation && action === 'confirmed'
+      ? collectElicitationValue(elicitation, fieldValues)
+      : null;
     try {
       await hanaFetch(`/api/confirm/${block.confirmId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(value ? { action, value } : { action }),
       });
     } catch (err) {
       setSubmission((current) => (
@@ -188,7 +283,7 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
       ));
       console.warn('[session-confirmation] submit failed', err);
     }
-  }, [block.confirmId, pending, submitting]);
+  }, [block.confirmId, elicitation, fieldValues, pending, submitting]);
 
   const disableAskForConversation = useCallback(async () => {
     if (!pending || submitting || switchingMode || !canDisableAskForConversation) return;
@@ -275,6 +370,52 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
           </div>
         )}
       </Tooltip>
+      {pending && elicitation && (
+        <div className={styles['session-confirmation-form']}>
+          {elicitationMessage && (
+            <div className={styles['session-confirmation-form-message']}>{elicitationMessage}</div>
+          )}
+          {elicitation.fields.map((field) => (
+            <div key={field.name} className={styles['session-confirmation-field']}>
+              <span className={styles['session-confirmation-field-label']}>{field.label}</span>
+              {field.type === 'boolean' ? (
+                <input
+                  type="checkbox"
+                  aria-label={field.label}
+                  className={styles['session-confirmation-field-checkbox']}
+                  checked={fieldValues[field.name] === true}
+                  disabled={busy}
+                  onChange={(event) => setFieldValues((current) => ({
+                    ...current,
+                    [field.name]: event.target.checked,
+                  }))}
+                />
+              ) : (
+                <input
+                  type={field.type === 'number' ? 'number' : 'text'}
+                  aria-label={field.label}
+                  className={styles['session-confirmation-field-input']}
+                  value={typeof fieldValues[field.name] === 'string' ? (fieldValues[field.name] as string) : ''}
+                  disabled={busy}
+                  onChange={(event) => setFieldValues((current) => ({
+                    ...current,
+                    [field.name]: event.target.value,
+                  }))}
+                />
+              )}
+            </div>
+          ))}
+          {hasUnsupportedField && (
+            <div
+              className={styles['session-confirmation-field-unsupported']}
+              data-testid="elicitation-unsupported"
+            >
+              {textWithFallback('approval.mcpElicitation.unsupportedField', '暂不支持的字段类型')}
+              {`: ${elicitation.unsupported.join(', ')}`}
+            </div>
+          )}
+        </div>
+      )}
       {pending ? (
         <div className={styles['session-confirmation-actions']}>
           <button
@@ -316,7 +457,7 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
               type="button"
               className={`${styles['session-confirmation-button']} ${styles['session-confirmation-button-confirm']}`}
               onClick={() => submit('confirmed')}
-              disabled={busy}
+              disabled={confirmBlocked}
             >
               {confirmLabel}
             </button>
