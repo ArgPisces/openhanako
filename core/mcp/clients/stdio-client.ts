@@ -3,6 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { isJsonRpcServerRequest, methodNotFoundResponse } from "./jsonrpc.ts";
 
+// The handshake-based revision this client speaks. Known limitation: the
+// stateless revision changes stdio substantially — no initialize, per-request
+// metadata in the message body, and era detection by probing for a discovery
+// reply — so supporting it here is a behavioural change rather than a version
+// bump. Until that is built deliberately, stdio servers are addressed with the
+// handshake, and a stateless-only stdio server will not connect. The HTTP
+// transport already negotiates both eras; see the protocol-version module.
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
 
 // stdio shutdown escalation windows: ask politely (stdin EOF), then SIGTERM,
