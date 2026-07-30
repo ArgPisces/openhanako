@@ -9,6 +9,10 @@ import path from "path";
 import { createAgentSession, SessionManager } from "../lib/pi-sdk/index.ts";
 import { createDefaultSettings } from "./session-defaults.ts";
 import { compactSessionWithCachePreservation } from "./session-compactor.ts";
+import {
+  installDynamicCompactionReserve,
+  installMidRunCompaction,
+} from "./session-compaction-runtime.ts";
 import { repairOrphanToolResultEntriesInFile } from "./session-health.ts";
 import { debugLog, createModuleLogger } from "../lib/debug-log.ts";
 import { t, getLocale } from "../lib/i18n.ts";
@@ -210,6 +214,45 @@ function formatAutomationSuggestionText(payload, deps: any = {}) {
     "回复 /apply 创建最新这一项。",
     "也可以回复 /apply <建议ID> 精确创建。",
   ].join("\n");
+}
+
+/**
+ * Usage attribution for a compaction that fires between turns of a bridge run.
+ * Mirrors the reply attribution so compaction cost lands on the same
+ * conversation, with its own subsystem/trigger.
+ */
+function buildBridgeCompactionUsageContext({ sessionPath, agent, bridgeContext }) {
+  const conversationType = bridgeContext?.chatType === "channel" ? "channel" : "dm";
+  if (bridgeContext?.isBridgeSession) {
+    return {
+      source: {
+        subsystem: "compaction",
+        operation: "compact",
+        surface: conversationType,
+        trigger: "threshold",
+      },
+      attribution: {
+        kind: "phone_conversation",
+        agentId: agent?.id || bridgeContext?.agentId || null,
+        conversationId: bridgeContext?.sessionKey || bridgeContext?.chatId || sessionPath || "unknown",
+        conversationType,
+        sessionPath,
+      },
+    };
+  }
+  return {
+    source: {
+      subsystem: "compaction",
+      operation: "compact",
+      surface: "bridge",
+      trigger: "threshold",
+    },
+    attribution: {
+      kind: "session",
+      agentId: agent?.id || null,
+      sessionPath,
+    },
+  };
 }
 
 function recordBridgeAssistantUsage({ ledger, event, sessionPath, agent, model, bridgeContext }) {
@@ -1104,6 +1147,16 @@ export class BridgeSessionManager {
         ...sessionOpts,
       });
 
+      installDynamicCompactionReserve(session);
+      installMidRunCompaction(session, {
+        usageLedger: this._deps.getUsageLedger?.() || null,
+        buildUsageContext: (s: any) => buildBridgeCompactionUsageContext({
+          sessionPath: s?.sessionManager?.getSessionFile?.() || null,
+          agent,
+          bridgeContext,
+        }),
+      });
+
       const activeSessionPath = session.sessionManager?.getSessionFile?.() || null;
       this._assertBridgeSessionRefLocator(sessionRefRef.current, activeSessionPath, "bridge executeExternalMessage");
       sessionPathRef.current = activeSessionPath;
@@ -1610,6 +1663,16 @@ export class BridgeSessionManager {
       authStorage: mm.authStorage,
       modelRegistry: mm.modelRegistry,
       ...sessionOpts,
+    });
+
+    installDynamicCompactionReserve(session);
+    installMidRunCompaction(session, {
+      usageLedger: this._deps.getUsageLedger?.() || null,
+      buildUsageContext: (s: any) => buildBridgeCompactionUsageContext({
+        sessionPath: s?.sessionManager?.getSessionFile?.() || null,
+        agent,
+        bridgeContext,
+      }),
     });
 
     try {

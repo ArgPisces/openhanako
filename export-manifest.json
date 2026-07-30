@@ -140,6 +140,7 @@
     "core/session-branch-head.ts",
     "core/session-cache-snapshot.ts",
     "core/session-capability-drift.ts",
+    "core/session-compaction-runtime.ts",
     "core/session-compactor.ts",
     "core/session-coordinator.ts",
     "core/session-defaults.ts",

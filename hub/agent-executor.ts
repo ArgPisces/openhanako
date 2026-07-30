@@ -13,6 +13,10 @@ import { createAgentSession, SessionManager } from "../lib/pi-sdk/index.ts";
 import { debugLog } from "../lib/debug-log.ts";
 import { getLocale, t } from "../lib/i18n.ts";
 import { createDefaultSettings } from "../core/session-defaults.ts";
+import {
+  installDynamicCompactionReserve,
+  installMidRunCompaction,
+} from "../core/session-compaction-runtime.ts";
 import { SESSION_PERMISSION_MODES } from "../core/session-permission-mode.ts";
 import { teardownSessionResources } from "../core/session-teardown.ts";
 import {
@@ -287,6 +291,23 @@ export async function runAgentSession(agentId, rounds, { engine, signal, session
       customTools,
     });
     session = created.session;
+    installDynamicCompactionReserve(session);
+    installMidRunCompaction(session, {
+      usageLedger: engine.usageLedger || engine.getUsageLedger?.() || null,
+      buildUsageContext: (s: any) => ({
+        source: {
+          subsystem: "compaction",
+          operation: "compact",
+          surface: "hub",
+          trigger: "threshold",
+        },
+        attribution: {
+          kind: "session",
+          agentId,
+          sessionPath: s?.sessionManager?.getSessionFile?.() || null,
+        },
+      }),
+    });
     const activeSessionPath = session.sessionManager?.getSessionFile?.() || null;
     if (!activeSessionPath || path.resolve(activeSessionPath) !== path.resolve(sessionRef.sessionPath)) {
       const error: any = new Error("runAgentSession: runtime locator does not match SessionRef");
@@ -497,6 +518,25 @@ export async function runAgentPhoneSession(agentId, rounds, {
     resourceLoader: tempResourceLoader,
     tools,
     customTools: sessionCustomTools,
+  });
+  installDynamicCompactionReserve(session);
+  installMidRunCompaction(session, {
+    usageLedger: engine.usageLedger || engine.getUsageLedger?.() || null,
+    buildUsageContext: (s: any) => ({
+      source: {
+        subsystem: "compaction",
+        operation: "compact",
+        surface: conversationType === "channel" ? "channel" : "dm",
+        trigger: "threshold",
+      },
+      attribution: {
+        kind: "phone",
+        agentId: agentId || null,
+        conversationId,
+        conversationType,
+        sessionPath: s?.sessionManager?.getSessionFile?.() || null,
+      },
+    }),
   });
   let sessionPath = null;
   let usageLedger = null;

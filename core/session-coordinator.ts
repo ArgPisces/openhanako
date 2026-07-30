@@ -19,6 +19,10 @@ import {
   isDirectCompactionInProgress,
   runCachePreservingCompactionForSession,
 } from "./session-compactor.ts";
+import {
+  installDynamicCompactionReserve,
+  installMidRunCompaction,
+} from "./session-compaction-runtime.ts";
 import { teardownSessionResources } from "./session-teardown.ts";
 import { evaluateSessionHealth, repairOrphanToolResultEntriesInFile } from "./session-health.ts";
 import {
@@ -2553,6 +2557,11 @@ export class SessionCoordinator {
       : promptSnapshotForPersist;
     this._renewCachePrefixContract(mapKey, sessionEntry, restore ? "session_restore" : "new_session");
     this._installCachePrefixGuard(mapKey, sessionEntry);
+    installDynamicCompactionReserve(session);
+    installMidRunCompaction(session, {
+      usageLedger: this._d.getUsageLedger?.() || null,
+      buildUsageContext: (s: any) => this._buildMidRunCompactionUsageContext(s),
+    });
 
     // Persist fresh snapshots and repair/establish restored snapshots. Restored
     // legacy sessions with missing toolNames get a baseline on first restore,
@@ -5361,6 +5370,34 @@ export class SessionCoordinator {
     });
   }
 
+  /**
+   * Usage attribution for a compaction that fires between turns of a running
+   * agentic loop. The session's own live locator is resolved to a sessionId at
+   * this boundary, so the attribution follows the session even after the run
+   * has moved the branch head.
+   * @private
+   */
+  _buildMidRunCompactionUsageContext(session: any) {
+    const sessionPath = session?.sessionManager?.getSessionFile?.() || null;
+    const sessionId = sessionPath ? this._sessionIdForPath(sessionPath) : null;
+    return {
+      source: {
+        subsystem: "compaction",
+        operation: "compact",
+        surface: "desktop",
+        trigger: "threshold",
+      },
+      attribution: {
+        kind: "session",
+        agentId: (sessionPath ? this.resolveSessionOwnership(sessionPath).agentId : null)
+          || this._d.getActiveAgentId?.()
+          || null,
+        ...(sessionId ? { sessionId } : {}),
+        ...(sessionPath ? { sessionPath } : {}),
+      },
+    };
+  }
+
   _markSessionCompacted(sessionPath: any) {
     if (!sessionPath) return false;
     const entry = this._getSessionEntryByPath(sessionPath);
@@ -8087,6 +8124,10 @@ export class SessionCoordinator {
         tools: actTools,
         customTools: [...actCustomTools, ...wrappedExtraCustomTools],
       });
+
+      // Throwaway session: the proportional reserve still applies, but there is
+      // no long-lived task to resume, so no mid-run compaction is installed.
+      installDynamicCompactionReserve(session);
 
       if (isolatedProviderCacheAffinityKey && typeof session?.agent?.streamFn === "function") {
         const originalStreamFn = session.agent.streamFn;

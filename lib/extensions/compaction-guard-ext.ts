@@ -16,8 +16,14 @@
  *     两者都可容纳时，追加一条内部压缩指令到原会话前缀后面，让主模型
  *     在同一 prompt cache 前缀上生成 summary，并通过 hook 返回 compaction。
  *
- *   L2（非 hook，由 session-defaults.js 调大 reserveTokens 实现）：
- *     让 pi SDK 的原生 threshold 压缩更早触发，给 tool_result 累积留 buffer。
+ *   L2（非 hook，session 创建时安装的运行时覆写）：
+ *     compaction 的 reserveTokens 不再是固定值，而是按模型窗口推导：
+ *     max(16384, 10% × contextWindow)，等价于把触发点放在
+ *     min(90% 窗口, 窗口 − 16384)——两者取小。百万级窗口下固定 16384
+ *     会让触发点贴到 98% 以上，实际压不了；按比例留白才能给 tool_result
+ *     累积留出 buffer。
+ *     另外，一轮 agentic run 中途的压缩走 agent loop 的 per-turn 接缝
+ *     （prepareNextTurnWithContext）触发，不经过本扩展的任何 hook。
  *
  * 纪律：
  *   - 零 pi SDK 改动，全走官方 ExtensionAPI

@@ -111,6 +111,7 @@ export function loginOAuthProvider(
 
 // ── Session/history utilities ──
 export {
+  calculateContextTokens,
   estimateTokens, findCutPoint,
   serializeConversation, shouldCompact,
   parseSessionEntries, buildSessionContext,
