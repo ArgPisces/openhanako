@@ -1177,17 +1177,21 @@ export class BrowserManager {
     if (!tabId) throw new Error("browser closeTab requires tabId");
     const result = await this._sendSessionCmd("closeTab", { sessionPath, tabId });
     if (Array.isArray(result?.tabs) && result.tabs.length === 0) {
+      // 空标签组仍是活 workspace：保留 running 与 LRU 位置，等待新 tab；
+      // 不能走 _applyWorkspaceResult（normalizeBrowserTabs 会给空列表捏造一个空白 tab）。
       const entry = this._getSessionEntry(sessionPath);
-      this._setSessionEntry(sessionPath, {
+      const next = {
         ...(entry || {}),
-        running: false,
+        running: entry ? entry.running : true,
         url: null,
         activeTabId: null,
         tabs: [],
         headless: entry?.headless ?? this._headless,
-      });
-      this._removeColdUrl(sessionPath);
-      this._removeLru(sessionPath);
+      };
+      this._setSessionEntry(sessionPath, next);
+      // 空组没有可恢复 URL，_saveColdWorkspace 会顺带清掉冷记录
+      this._saveColdWorkspace(sessionPath, next);
+      this._touchLru(sessionPath);
       return null;
     }
     const entry = this._applyWorkspaceResult(sessionPath, result);

@@ -150,6 +150,33 @@ describe("BrowserManager URL tracking (per-session)", () => {
     expect(manager.currentUrl(SP1)).toBe("https://one.example.com");
   });
 
+  it("closing the last tab keeps an empty running workspace instead of stopping the browser", async () => {
+    const manager = new BrowserManager();
+    manager._sessions.set(SP1, {
+      running: true,
+      url: "https://one.example.com",
+      activeTabId: "tab-1",
+      headless: false,
+      tabs: [{ tabId: "tab-1", title: "One", url: "https://one.example.com" }],
+    });
+    manager._sendCmd = vi.fn().mockResolvedValue({ activeTabId: null, tabs: [] });
+    manager._saveColdWorkspace = vi.fn();
+    manager._removeColdUrl = vi.fn();
+
+    const result = await manager.closeTab(SP1, "tab-1");
+
+    expect(result).toBeNull();
+    // 空标签组仍是活 workspace：不置 running:false，等待用户/agent 再开新 tab
+    expect(manager.isRunning(SP1)).toBe(true);
+    expect(manager.getTabs(SP1)).toEqual([]);
+    expect(manager.currentUrl(SP1)).toBe(null);
+    // 冷保存走 _saveColdWorkspace（空组无可恢复 URL，由它负责清掉冷记录），不再直接删冷 URL
+    expect(manager._saveColdWorkspace).toHaveBeenCalledWith(SP1, expect.objectContaining({ tabs: [] }));
+    expect(manager._removeColdUrl).not.toHaveBeenCalled();
+    // 空组保留在 LRU 中，闲置回收与容量淘汰照常管理它
+    expect(manager._lruOrder).toContain(SP1);
+  });
+
   it("navigate honors the Agent new-tab browser preference", async () => {
     const manager = new BrowserManager();
     manager.setBrowserPreferences({ agentOpenBehavior: "new_tab" });
