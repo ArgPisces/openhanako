@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:454d041a42297a375dc2c6caae6ec86faadd329d207a9e3f97e7146df4847bfa",
+  "payloadFingerprint": "sha256:33e8d4f2f5786b56b1914819d49d34949397cce8a3f972f3b86a07efc2603cc7",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -1641,6 +1641,44 @@
       }
     },
     {
+      "affectedByEpochMigration": true,
+      "bootstrapSafety": null,
+      "checkpointPolicy": "Single JSON config; checkpoint the whole file.",
+      "epochPolicy": "epoch-managed",
+      "exemption": null,
+      "firstPossibleOpenPhase": "engine_construct",
+      "firstPossibleWritePhase": "runtime_ready",
+      "format": "json",
+      "id": "mcp-config",
+      "identityContract": "core/mcp owns plugin-data/mcp exclusively.",
+      "migrationEntry": [
+        "normalizeMcpConfig read-time normalization (servers→connectors alias)"
+      ],
+      "openEntry": [
+        "Engine constructor via McpManager"
+      ],
+      "ownerModule": "core/mcp/manager.ts",
+      "pathExclusions": [],
+      "pathKind": "tree",
+      "pathPattern": "plugin-data/mcp",
+      "pathPatterns": [
+        "plugin-data/mcp"
+      ],
+      "preCoordinatorReadProjection": null,
+      "protocolModules": [],
+      "restorePolicy": "Restore the whole file; read-time normalization absorbs older shapes.",
+      "schemaContract": {
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs.",
+        "kind": "runtime-source",
+        "source": "core/mcp/manager.ts"
+      },
+      "schemaSource": {
+        "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults)",
+        "kind": "runtime-contract",
+        "module": "core/mcp/manager.ts"
+      }
+    },
+    {
       "affectedByEpochMigration": false,
       "bootstrapSafety": null,
       "checkpointPolicy": "Excluded; jobs are request-scoped and generated PDFs are re-creatable outputs.",
@@ -1811,7 +1849,8 @@
       "ownerModule": "core/plugin-config.ts",
       "pathExclusions": [
         "plugin-data/office/jobs",
-        "plugin-data/office/generated"
+        "plugin-data/office/generated",
+        "plugin-data/mcp"
       ],
       "pathKind": "tree",
       "pathPattern": "plugin-data/{pluginId}",
@@ -2878,8 +2917,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Retrying the origin channel manifest once at the full request budget after a total dual-source race failure only shifts line numbers of existing persistence call sites in the artifact OTA core; no store schema, record shape, or on-disk layout changes.",
-    "payloadFingerprint": "sha256:454d041a42297a375dc2c6caae6ec86faadd329d207a9e3f97e7146df4847bfa"
+    "compatibilityReason": "MCP connector config keeps the same on-disk location and JSON shape; only its owning module path moved from the bundled plugin to the core MCP manager.",
+    "payloadFingerprint": "sha256:33e8d4f2f5786b56b1914819d49d34949397cce8a3f972f3b86a07efc2603cc7"
   },
   "schemas": [
     {
@@ -3113,6 +3152,13 @@
       "module": "lib/pi-sdk/search-tools.ts",
       "sourceHash": "sha256:3b43314a2e959cf39946d8b88f471c07cd95c5ef4023cd9020ee55360b423c9d",
       "storeId": "managed-runtime-caches"
+    },
+    {
+      "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults)",
+      "kind": "runtime-contract",
+      "module": "core/mcp/manager.ts",
+      "sourceHash": "sha256:ed48eb3d89456347961aa88b8e99f5fd6d74cfd7b59b1051643c938bcfd2eab7",
+      "storeId": "mcp-config"
     },
     {
       "contract": "job.json/input.html request contract and generated PDF output lifecycle",
@@ -3836,7 +3882,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 306,
+      "line": 309,
       "reason": "Creates the channel root.",
       "sourceFile": "core/engine.ts",
       "storeId": "channels"
@@ -3844,7 +3890,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 352,
+      "line": 355,
       "reason": "Constructs the preferences owner.",
       "sourceFile": "core/engine.ts",
       "storeId": "user-preferences"
@@ -3852,7 +3898,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 353,
+      "line": 356,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -3860,7 +3906,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 371,
+      "line": 380,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -3868,7 +3914,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 604,
+      "line": 613,
       "reason": "Constructs the plugin task registry.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-task-registry"
@@ -3876,7 +3922,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1227,
+      "line": 1237,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -3884,7 +3930,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1248,
+      "line": 1258,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -3892,7 +3938,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2226,
+      "line": 2236,
       "reason": "Creates the user skill root.",
       "sourceFile": "core/engine.ts",
       "storeId": "skill-state"
@@ -3900,7 +3946,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 2408,
+      "line": 2418,
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-jsonl"
@@ -3908,7 +3954,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2462,
+      "line": 2474,
       "reason": "Creates the plugin development source root.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-development-state"
@@ -4224,6 +4270,14 @@
       "reason": "The file-local atomic helper receives paths only from the separately registered users.json and local-user-auth.json call sites.",
       "sourceFile": "core/local-user-account.ts",
       "storeId": null
+    },
+    {
+      "exemptionId": null,
+      "kind": "mkdir",
+      "line": 502,
+      "reason": "Sole writer of plugin-data/mcp/config.json.",
+      "sourceFile": "core/mcp/manager.ts",
+      "storeId": "mcp-config"
     },
     {
       "exemptionId": null,
@@ -8375,14 +8429,6 @@
       "line": 230,
       "reason": "Writes data within the active pluginId-scoped data directory.",
       "sourceFile": "plugins/jimeng-cli/adapters/dreamina.ts",
-      "storeId": "plugin-runtime-data"
-    },
-    {
-      "exemptionId": null,
-      "kind": "mkdir",
-      "line": 432,
-      "reason": "Writes data within the active pluginId-scoped data directory.",
-      "sourceFile": "plugins/mcp/lib/mcp-runtime.ts",
       "storeId": "plugin-runtime-data"
     },
     {

@@ -141,7 +141,14 @@ describe("persistent store registry", () => {
     expect(pluginData.pathExclusions).toEqual([
       "plugin-data/office/jobs",
       "plugin-data/office/generated",
+      "plugin-data/mcp",
     ]);
+    // MCP config is owned by the core module, not by the plugin data store, even
+    // though it kept its historical directory name.
+    const mcp = PERSISTENT_STORES.find((store) => store.id === "mcp-config")!;
+    expect(mcp.ownerModule).toBe("core/mcp/manager.ts");
+    expect(mcp.pathPatterns).toEqual(["plugin-data/mcp"]);
+    expect(mcp.schemaContract.kind).not.toBe("exempt");
     const office = PERSISTENT_STORES.find((store) => store.id === "office-render-jobs")!;
     expect(office.ownerModule).toBe("plugins/office/lib/html-to-pdf.ts");
     expect(office.pathPatterns).toEqual([

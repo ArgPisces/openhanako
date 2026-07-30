@@ -1058,6 +1058,44 @@
       "exemption": null
     },
     {
+      "id": "mcp-config",
+      "ownerModule": "core/mcp/manager.ts",
+      "pathPattern": "plugin-data/mcp",
+      "pathPatterns": [
+        "plugin-data/mcp"
+      ],
+      "pathExclusions": [],
+      "pathKind": "tree",
+      "format": "json",
+      "schemaSource": {
+        "kind": "runtime-contract",
+        "module": "core/mcp/manager.ts",
+        "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults)"
+      },
+      "schemaContract": {
+        "kind": "runtime-source",
+        "source": "core/mcp/manager.ts",
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs."
+      },
+      "openEntry": [
+        "Engine constructor via McpManager"
+      ],
+      "migrationEntry": [
+        "normalizeMcpConfig read-time normalization (servers→connectors alias)"
+      ],
+      "protocolModules": [],
+      "firstPossibleOpenPhase": "engine_construct",
+      "firstPossibleWritePhase": "runtime_ready",
+      "epochPolicy": "epoch-managed",
+      "checkpointPolicy": "Single JSON config; checkpoint the whole file.",
+      "restorePolicy": "Restore the whole file; read-time normalization absorbs older shapes.",
+      "affectedByEpochMigration": true,
+      "bootstrapSafety": null,
+      "preCoordinatorReadProjection": null,
+      "identityContract": "core/mcp owns plugin-data/mcp exclusively.",
+      "exemption": null
+    },
+    {
       "id": "office-render-jobs",
       "ownerModule": "plugins/office/lib/html-to-pdf.ts",
       "pathPattern": "plugin-data/office/jobs",
@@ -1214,7 +1252,8 @@
       ],
       "pathExclusions": [
         "plugin-data/office/jobs",
-        "plugin-data/office/generated"
+        "plugin-data/office/generated",
+        "plugin-data/mcp"
       ],
       "pathKind": "tree",
       "format": "mixed-directory",
@@ -2764,7 +2803,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 306,
+      "line": 309,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.channelsDir, { recursive: true })",
       "reason": "Creates the channel root.",
@@ -2773,7 +2812,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 352,
+      "line": 355,
       "kind": "persistent-store-constructor",
       "excerpt": "new PreferencesManager({ userDir: this.userDir, agentsDir: this.agentsDir })",
       "reason": "Constructs the preferences owner.",
@@ -2782,7 +2821,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 353,
+      "line": 356,
       "kind": "persistent-store-constructor",
       "excerpt": "new InputDraftsStore({ hanakoHome: this.hanakoHome })",
       "reason": "Constructs draft/project stores.",
@@ -2791,7 +2830,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 371,
+      "line": 380,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionProjectCatalogStore({ userDir: this.userDir })",
       "reason": "Constructs draft/project stores.",
@@ -2800,7 +2839,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 604,
+      "line": 613,
       "kind": "persistent-store-constructor",
       "excerpt": "new TaskRegistry({ persistencePath: path.join(this.hanakoHome, \".ephemeral\", \"plugin-tasks.json\"), getSessionIdForPath: (sessionPath) => this.getSessionIdForPath(sessionPath), })",
       "reason": "Constructs the plugin task registry.",
@@ -2809,7 +2848,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1227,
+      "line": 1237,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2818,7 +2857,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1248,
+      "line": 1258,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2827,7 +2866,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2226,
+      "line": 2236,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates the user skill root.",
@@ -2836,7 +2875,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2408,
+      "line": 2418,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
@@ -2845,7 +2884,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2462,
+      "line": 2474,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(pluginDevSourcesDir, { recursive: true })",
       "reason": "Creates the plugin development source root.",
@@ -3202,6 +3241,15 @@
       "reason": "The file-local atomic helper receives paths only from the separately registered users.json and local-user-auth.json call sites.",
       "storeId": null,
       "exemptionId": "local-user-account-atomic-helper"
+    },
+    {
+      "sourceFile": "core/mcp/manager.ts",
+      "line": 502,
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(this.dataDir, { recursive: true })",
+      "reason": "Sole writer of plugin-data/mcp/config.json.",
+      "storeId": "mcp-config",
+      "exemptionId": null
     },
     {
       "sourceFile": "core/media-adapters/agnes.ts",
@@ -7870,15 +7918,6 @@
       "line": 230,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(resolved, { recursive: true })",
-      "reason": "Writes data within the active pluginId-scoped data directory.",
-      "storeId": "plugin-runtime-data",
-      "exemptionId": null
-    },
-    {
-      "sourceFile": "plugins/mcp/lib/mcp-runtime.ts",
-      "line": 432,
-      "kind": "mkdir",
-      "excerpt": "fs.mkdirSync(this.ctx.dataDir, { recursive: true })",
       "reason": "Writes data within the active pluginId-scoped data directory.",
       "storeId": "plugin-runtime-data",
       "exemptionId": null

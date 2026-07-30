@@ -850,10 +850,29 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     ],
   }),
   defineStore({
+    id: "mcp-config",
+    ownerModule: "core/mcp/manager.ts",
+    pathPatterns: ["plugin-data/mcp"],
+    pathKind: "tree",
+    format: "json",
+    schemaSource: runtimeSource(
+      "core/mcp/manager.ts",
+      "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults)",
+    ),
+    openEntry: ["Engine constructor via McpManager"],
+    migrationEntry: ["normalizeMcpConfig read-time normalization (servers→connectors alias)"],
+    checkpointPolicy: "Single JSON config; checkpoint the whole file.",
+    restorePolicy: "Restore the whole file; read-time normalization absorbs older shapes.",
+    // The directory name predates the move to core/mcp and stays put: it is
+    // where every existing install already keeps its connector config.
+    identityContract: "core/mcp owns plugin-data/mcp exclusively.",
+    siteRules: rules(["core/mcp/manager.ts"], "Sole writer of plugin-data/mcp/config.json."),
+  }),
+  defineStore({
     id: "plugin-runtime-data",
     ownerModule: "core/plugin-config.ts",
     pathPatterns: ["plugin-data/{pluginId}"],
-    pathExclusions: ["plugin-data/office/jobs", "plugin-data/office/generated"],
+    pathExclusions: ["plugin-data/office/jobs", "plugin-data/office/generated", "plugin-data/mcp"],
     pathKind: "tree",
     format: "mixed-directory",
     schemaSource: {
@@ -878,7 +897,6 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
       "core/media/universal-media-manager.ts",
       "core/media-adapters/agnes.ts",
       "plugins/jimeng-cli/adapters/dreamina.ts",
-      "plugins/mcp/lib/mcp-runtime.ts",
     ], "Writes data within the active pluginId-scoped data directory."),
   }),
   defineStore({
