@@ -1,4 +1,4 @@
-import { McpRuntime } from "./lib/mcp-runtime.ts";
+import { McpRuntime } from "../../core/mcp/manager.ts";
 
 export default class McpPlugin {
   declare ctx: any;

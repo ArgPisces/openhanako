@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
-import { MCP_PROTOCOL_VERSION } from "./mcp-stdio-client.ts";
-import { McpHttpError } from "./mcp-http-client.ts";
+import { MCP_PROTOCOL_VERSION } from "./stdio-client.ts";
+import { McpHttpError } from "./http-client.ts";
 import {
   MCP_PROTOCOL_VERSION_HEADER,
   resolveInitialMcpProtocolVersion,
-} from "./mcp-protocol-version.ts";
+} from "./protocol-version.ts";
 
 export function parseWwwAuthenticate(value) {
   const header = String(value || "");

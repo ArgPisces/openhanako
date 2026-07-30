@@ -13,8 +13,8 @@
  *   - autoReconnect=false 的连接器不重连
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { McpRuntime } from "../plugins/mcp/lib/mcp-runtime.ts";
-import { McpHttpError } from "../plugins/mcp/lib/mcp-http-client.ts";
+import { McpRuntime } from "../core/mcp/manager.ts";
+import { McpHttpError } from "../core/mcp/clients/http-client.ts";
 
 /**
  * 一个可被 runtime 通过 onClose 回调驱动的 fake client。

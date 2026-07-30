@@ -1,4 +1,4 @@
-import { MCP_PROTOCOL_VERSION } from "./mcp-stdio-client.ts";
+import { MCP_PROTOCOL_VERSION } from "./stdio-client.ts";
 import { getOutboundProxyConfig } from "../../../lib/net/outbound-proxy.ts";
 import {
   normalizeNetworkProxyConfig,
@@ -9,7 +9,7 @@ import {
   MCP_PROTOCOL_VERSION_HEADER,
   headersWithoutMcpProtocolVersion,
   resolveInitialMcpProtocolVersion,
-} from "./mcp-protocol-version.ts";
+} from "./protocol-version.ts";
 
 const STREAMABLE_ACCEPT = "application/json, text/event-stream";
 const SSE_ACCEPT = "text/event-stream";

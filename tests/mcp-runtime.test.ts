@@ -8,8 +8,8 @@ import {
   isMcpToolEnabledForAgentConfig,
   normalizeMcpConfig,
   toMcpToolId,
-} from "../plugins/mcp/lib/mcp-runtime.ts";
-import { McpHttpError } from "../plugins/mcp/lib/mcp-http-client.ts";
+} from "../core/mcp/manager.ts";
+import { McpHttpError } from "../core/mcp/clients/http-client.ts";
 import registerMcpRoutes from "../plugins/mcp/routes/api.ts";
 
 describe("MCP runtime policy", () => {

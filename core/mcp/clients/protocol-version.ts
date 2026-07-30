@@ -1,4 +1,4 @@
-import { MCP_PROTOCOL_VERSION } from "./mcp-stdio-client.ts";
+import { MCP_PROTOCOL_VERSION } from "./stdio-client.ts";
 
 export const MCP_PROTOCOL_VERSION_HEADER = "MCP-Protocol-Version";
 
