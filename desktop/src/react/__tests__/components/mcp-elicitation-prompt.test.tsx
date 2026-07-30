@@ -136,4 +136,108 @@ describe('mcp_elicitation confirmation prompt', () => {
 
     expect(screen.queryByLabelText('name')).toBeNull();
   });
+  it('renders an enumerated field as a set of choices', async () => {
+    render(
+      <SessionConfirmationPrompt
+        block={elicitationBlock({
+          type: 'object',
+          properties: {
+            env: { type: 'string', title: 'Environment', enum: ['dev', 'prod'], enumNames: ['Development', 'Production'] },
+          },
+        })}
+      />,
+    );
+
+    // A closed set of options is a choice, not free text the user must spell.
+    expect(screen.queryByLabelText('Environment')).toBeNull();
+    fireEvent.click(screen.getByText('请选择'));
+    expect(screen.getByText('Development')).toBeTruthy();
+    expect(screen.getByText('Production')).toBeTruthy();
+  });
+
+  it('groups a nested object instead of refusing the whole form', async () => {
+    render(
+      <SessionConfirmationPrompt
+        block={elicitationBlock({
+          type: 'object',
+          properties: {
+            name: { type: 'string', title: 'Username' },
+            address: {
+              type: 'object',
+              title: 'Address',
+              properties: { city: { type: 'string', title: 'City' } },
+            },
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Address')).toBeTruthy();
+    expect(screen.getByLabelText('City')).toBeTruthy();
+    expect(screen.queryByTestId('elicitation-unsupported')).toBeNull();
+  });
+
+  it('will not submit while a required field is blank', async () => {
+    render(
+      <SessionConfirmationPrompt
+        block={elicitationBlock({
+          type: 'object',
+          properties: { name: { type: 'string', title: 'Username' } },
+          required: ['name'],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Approve'));
+
+    await waitFor(() => expect(screen.getByTestId('elicitation-required')).toBeTruthy());
+    // Nothing was sent: an incomplete answer is the user's to finish, not the
+    // server's to reject.
+    expect(hanaFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('clears the required warning once the field is filled in', async () => {
+    render(
+      <SessionConfirmationPrompt
+        block={elicitationBlock({
+          type: 'object',
+          properties: { name: { type: 'string', title: 'Username' } },
+          required: ['name'],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Approve'));
+    await waitFor(() => expect(screen.getByTestId('elicitation-required')).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'octocat' } });
+    expect(screen.queryByTestId('elicitation-required')).toBeNull();
+
+    fireEvent.click(screen.getByText('Approve'));
+    await waitFor(() => expect(hanaFetchMock).toHaveBeenCalled());
+    expect(lastConfirmBody()).toEqual({ action: 'confirmed', value: { name: 'octocat' } });
+  });
+
+  it('submits the nested shape the server asked for', async () => {
+    render(
+      <SessionConfirmationPrompt
+        block={elicitationBlock({
+          type: 'object',
+          properties: {
+            address: {
+              type: 'object',
+              title: 'Address',
+              properties: { city: { type: 'string', title: 'City' } },
+            },
+          },
+        })}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Berlin' } });
+    fireEvent.click(screen.getByText('Approve'));
+
+    await waitFor(() => expect(hanaFetchMock).toHaveBeenCalled());
+    expect(lastConfirmBody()).toEqual({ action: 'confirmed', value: { address: { city: 'Berlin' } } });
+  });
 });

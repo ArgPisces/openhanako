@@ -1,8 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { hanaFetch } from '../../hooks/use-hana-fetch';
+import { useStore } from '../../stores';
 import type { SessionConfirmationBlock } from '../../stores/chat-types';
 import { Tooltip } from '../../ui';
+import { ElicitationForm } from './ElicitationForm';
+import {
+  collectElicitationValue,
+  initialElicitationValues,
+  missingRequiredFields,
+  readElicitationForm,
+  type ElicitationValues,
+} from './elicitation-schema';
+import {
+  grantForSession,
+  grantPermanently,
+  loadMcpApprovalIndex,
+  resolveMcpApprovalTarget,
+  type McpApprovalTarget,
+} from './mcp-approval-actions';
 import styles from './InputArea.module.css';
 
 type ConfirmationAction = 'confirmed' | 'rejected';
@@ -27,11 +43,19 @@ function displayTitle(block: SessionConfirmationBlock) {
   return block.title;
 }
 
-function displaySubject(block: SessionConfirmationBlock) {
+function displaySubject(block: SessionConfirmationBlock, mcpTarget: McpApprovalTarget | null) {
   if (block.kind === 'computer_app_approval') {
     return {
       label: 'computer app',
       detail: block.subject?.detail || block.subject?.label || '',
+    };
+  }
+  // A deferred MCP tool arrives as the bridge. Naming the bridge tells the user
+  // nothing about what is being asked, so the real tool is named instead.
+  if (mcpTarget) {
+    return {
+      label: `${mcpTarget.connectorName} · ${mcpTarget.toolName}`,
+      detail: block.subject?.detail || '',
     };
   }
   if (block.subject?.label || block.subject?.detail) {
@@ -94,102 +118,31 @@ function buildTooltipText(
   return Array.from(new Set(lines.map((line) => line.trim()).filter(Boolean))).join('\n\n');
 }
 
-// Form-mode elicitation is limited to flat objects of primitive properties.
-// This batch renders exactly those three types; anything richer (nested
-// objects, enums, multi-select, validation messages) is left to a fuller form
-// implementation rather than being half-rendered here.
-type ElicitationField = {
-  name: string;
-  label: string;
-  type: 'string' | 'number' | 'boolean';
-  defaultValue: string | boolean;
-};
-
-type ElicitationForm = {
-  fields: ElicitationField[];
-  unsupported: string[];
-};
-
-function readElicitationForm(block: SessionConfirmationBlock): ElicitationForm | null {
-  if (block.kind !== 'mcp_elicitation') return null;
-  const schema = block.payload?.requestedSchema as Record<string, unknown> | undefined;
-  const properties = schema?.properties as Record<string, Record<string, unknown>> | undefined;
-  if (!properties || typeof properties !== 'object') return { fields: [], unsupported: [] };
-
-  const fields: ElicitationField[] = [];
-  const unsupported: string[] = [];
-  for (const [name, property] of Object.entries(properties)) {
-    const rawType = typeof property?.type === 'string' ? property.type : '';
-    const label = typeof property?.title === 'string' && property.title ? property.title : name;
-    if (rawType === 'string') {
-      fields.push({ name, label, type: 'string', defaultValue: typeof property.default === 'string' ? property.default : '' });
-    } else if (rawType === 'number' || rawType === 'integer') {
-      fields.push({
-        name,
-        label,
-        type: 'number',
-        defaultValue: typeof property.default === 'number' ? String(property.default) : '',
-      });
-    } else if (rawType === 'boolean') {
-      fields.push({ name, label, type: 'boolean', defaultValue: property.default === true });
-    } else {
-      unsupported.push(name);
-    }
-  }
-  return { fields, unsupported };
-}
-
-function initialElicitationValues(form: ElicitationForm | null) {
-  const values: Record<string, string | boolean> = {};
-  for (const field of form?.fields || []) values[field.name] = field.defaultValue;
-  return values;
-}
-
-function collectElicitationValue(
-  form: ElicitationForm | null,
-  values: Record<string, string | boolean>,
-) {
-  const result: Record<string, unknown> = {};
-  for (const field of form?.fields || []) {
-    const raw = values[field.name];
-    if (field.type === 'boolean') {
-      result[field.name] = raw === true;
-      continue;
-    }
-    const text = typeof raw === 'string' ? raw : '';
-    if (field.type === 'number') {
-      // An untouched optional number is left out rather than sent as NaN.
-      if (!text.trim()) continue;
-      const numeric = Number(text);
-      if (Number.isNaN(numeric)) continue;
-      result[field.name] = numeric;
-      continue;
-    }
-    result[field.name] = text;
-  }
-  return result;
-}
-
 export function SessionConfirmationPrompt({ block, exiting = false }: SessionConfirmationPromptProps) {
   const [submission, setSubmission] = useState<{ confirmId: string; action: ConfirmationAction } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const [switchingMode, setSwitchingMode] = useState(false);
+  const [mcpTarget, setMcpTarget] = useState<McpApprovalTarget | null>(null);
+  const [missingKeys, setMissingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
+  const currentSessionId = useStore((s: any) => s.currentSessionId) as string | null;
   const elicitation = useMemo(() => readElicitationForm(block), [block]);
-  const [fieldValues, setFieldValues] = useState<Record<string, string | boolean>>(
+  const [fieldValues, setFieldValues] = useState<ElicitationValues>(
     () => initialElicitationValues(elicitation),
   );
   useEffect(() => {
     setFieldValues(initialElicitationValues(elicitation));
+    setMissingKeys(new Set());
   }, [elicitation]);
+
   const pending = block.status === 'pending' && !exiting;
   const submitting = submission?.confirmId === block.confirmId ? submission.action : null;
   const confirmLabel = block.actions?.confirmLabel || window.t?.('common.approve') || '同意';
   const rejectLabel = block.actions?.rejectLabel || window.t?.('common.reject') || '拒绝';
   const title = displayTitle(block);
-  const subject = displaySubject(block);
+  const subject = displaySubject(block, mcpTarget);
   const hasSubject = !!(subject.label || subject.detail);
   const tooltipText = useMemo(() => buildTooltipText(block, title, subject), [block, subject, title]);
   const tooltipId = `session-confirmation-tooltip-${block.confirmId}`;
@@ -203,6 +156,27 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
   const busy = !!submitting || switchingMode;
   // A form we cannot fill faithfully must not be sent as a half-answer.
   const confirmBlocked = busy || hasUnsupportedField;
+
+  // Only a tool approval can be about an MCP tool, and the registry is only
+  // worth reading when one is actually on screen.
+  useEffect(() => {
+    if (!pending || block.kind !== 'tool_action_approval') {
+      setMcpTarget(null);
+      return;
+    }
+    let cancelled = false;
+    loadMcpApprovalIndex()
+      .then((connectors) => {
+        if (!cancelled) setMcpTarget(resolveMcpApprovalTarget(block, connectors));
+      })
+      .catch((err) => {
+        // Without the registry the prompt simply offers the plain approve
+        // button; it never guesses an identity it could not confirm.
+        if (!cancelled) setMcpTarget(null);
+        console.warn('[session-confirmation] mcp registry unavailable', err);
+      });
+    return () => { cancelled = true; };
+  }, [block, pending]);
 
   const updateMenuPosition = useCallback(() => {
     const anchor = menuAnchorRef.current;
@@ -265,6 +239,15 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
 
   const submit = useCallback(async (action: ConfirmationAction) => {
     if (!pending || submitting) return;
+    if (action === 'confirmed' && elicitation) {
+      // A required field left blank is the user's omission, not the server's
+      // problem; say so rather than sending an answer the server will reject.
+      const missing = missingRequiredFields(elicitation, fieldValues);
+      if (missing.length > 0) {
+        setMissingKeys(new Set(missing.map(field => field.key)));
+        return;
+      }
+    }
     setMenuOpen(false);
     setSubmission({ confirmId: block.confirmId, action });
     // Only an approval carries answers; a rejection stays a bare decision.
@@ -285,6 +268,44 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
     }
   }, [block.confirmId, elicitation, fieldValues, pending, submitting]);
 
+  const notifyFailure = (fallback: string) => {
+    window.dispatchEvent(new CustomEvent('hana-inline-notice', {
+      detail: { text: fallback, type: 'error' },
+    }));
+  };
+
+  /** Approve now and stop asking about this one tool for the rest of the session. */
+  const approveForSession = useCallback(async () => {
+    if (!mcpTarget || !currentSessionId || busy) return;
+    setMenuOpen(false);
+    setSwitchingMode(true);
+    try {
+      await grantForSession(currentSessionId, mcpTarget.capability);
+      await submit('confirmed');
+    } catch (err) {
+      notifyFailure(textWithFallback('approval.mcpTool.grantFailed', '无法记住这次授权'));
+      console.warn('[session-confirmation] session grant failed', err);
+    } finally {
+      setSwitchingMode(false);
+    }
+  }, [busy, currentSessionId, mcpTarget, submit]);
+
+  /** Approve now and record the grant against the connector. */
+  const approvePermanently = useCallback(async () => {
+    if (!mcpTarget || busy) return;
+    setMenuOpen(false);
+    setSwitchingMode(true);
+    try {
+      await grantPermanently(mcpTarget);
+      await submit('confirmed');
+    } catch (err) {
+      notifyFailure(textWithFallback('approval.mcpTool.grantFailed', '无法记住这次授权'));
+      console.warn('[session-confirmation] permanent grant failed', err);
+    } finally {
+      setSwitchingMode(false);
+    }
+  }, [busy, mcpTarget, submit]);
+
   const disableAskForConversation = useCallback(async () => {
     if (!pending || submitting || switchingMode || !canDisableAskForConversation) return;
     setMenuOpen(false);
@@ -304,12 +325,7 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
       }));
       await submit('confirmed');
     } catch (err) {
-      window.dispatchEvent(new CustomEvent('hana-inline-notice', {
-        detail: {
-          text: textWithFallback('input.accessModeLocked', '当前无法更改权限模式'),
-          type: 'error',
-        },
-      }));
+      notifyFailure(textWithFallback('input.accessModeLocked', '当前无法更改权限模式'));
       console.warn('[session-confirmation] disable ask for conversation failed', err);
     } finally {
       setSwitchingMode(false);
@@ -324,6 +340,31 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
         role="menu"
         style={menuStyle}
       >
+        {mcpTarget && currentSessionId && (
+          <button
+            type="button"
+            role="menuitem"
+            className={styles['session-confirmation-menu-item']}
+            data-testid="mcp-approve-session"
+            onClick={approveForSession}
+          >
+            {textWithFallback('approval.mcpTool.allowForSession', '本会话此工具不再询问')}
+          </button>
+        )}
+        {/* A server-declared destructive tool gets no permanent grant. The
+            engine refuses to honour one anyway, so offering it would promise
+            something that does not happen. */}
+        {mcpTarget && !mcpTarget.destructive && (
+          <button
+            type="button"
+            role="menuitem"
+            className={styles['session-confirmation-menu-item']}
+            data-testid="mcp-approve-always"
+            onClick={approvePermanently}
+          >
+            {textWithFallback('approval.mcpTool.allowAlways', '始终允许此工具')}
+          </button>
+        )}
         <button
           type="button"
           role="menuitem"
@@ -342,7 +383,9 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
       className={`${styles['session-confirmation-prompt']} ${exiting ? styles['session-confirmation-prompt-exiting'] : ''}`}
       data-confirm-id={block.confirmId}
       data-status={block.status}
-      data-severity={block.severity || 'normal'}
+      // A destructive tool is styled as the danger it is, whatever severity the
+      // generic approval path assigned.
+      data-severity={mcpTarget?.destructive ? 'danger' : (block.severity || 'normal')}
     >
       <Tooltip
         id={tooltipId}
@@ -371,50 +414,22 @@ export function SessionConfirmationPrompt({ block, exiting = false }: SessionCon
         )}
       </Tooltip>
       {pending && elicitation && (
-        <div className={styles['session-confirmation-form']}>
-          {elicitationMessage && (
-            <div className={styles['session-confirmation-form-message']}>{elicitationMessage}</div>
-          )}
-          {elicitation.fields.map((field) => (
-            <div key={field.name} className={styles['session-confirmation-field']}>
-              <span className={styles['session-confirmation-field-label']}>{field.label}</span>
-              {field.type === 'boolean' ? (
-                <input
-                  type="checkbox"
-                  aria-label={field.label}
-                  className={styles['session-confirmation-field-checkbox']}
-                  checked={fieldValues[field.name] === true}
-                  disabled={busy}
-                  onChange={(event) => setFieldValues((current) => ({
-                    ...current,
-                    [field.name]: event.target.checked,
-                  }))}
-                />
-              ) : (
-                <input
-                  type={field.type === 'number' ? 'number' : 'text'}
-                  aria-label={field.label}
-                  className={styles['session-confirmation-field-input']}
-                  value={typeof fieldValues[field.name] === 'string' ? (fieldValues[field.name] as string) : ''}
-                  disabled={busy}
-                  onChange={(event) => setFieldValues((current) => ({
-                    ...current,
-                    [field.name]: event.target.value,
-                  }))}
-                />
-              )}
-            </div>
-          ))}
-          {hasUnsupportedField && (
-            <div
-              className={styles['session-confirmation-field-unsupported']}
-              data-testid="elicitation-unsupported"
-            >
-              {textWithFallback('approval.mcpElicitation.unsupportedField', '暂不支持的字段类型')}
-              {`: ${elicitation.unsupported.join(', ')}`}
-            </div>
-          )}
-        </div>
+        <ElicitationForm
+          form={elicitation}
+          values={fieldValues}
+          message={elicitationMessage}
+          busy={busy}
+          missingKeys={missingKeys}
+          onChange={(key, value) => {
+            setFieldValues((current) => ({ ...current, [key]: value }));
+            setMissingKeys((current) => {
+              if (!current.has(key)) return current;
+              const next = new Set(current);
+              next.delete(key);
+              return next;
+            });
+          }}
+        />
       )}
       {pending ? (
         <div className={styles['session-confirmation-actions']}>
