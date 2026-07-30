@@ -100,6 +100,7 @@ import {
 import { SessionListProjectionCache } from "./session-list-projection-cache.ts";
 import {
   buildLlmContextCachePrefixContract,
+  describeCachePrefixDrift,
   hashCacheContractValue,
   diffCachePrefixContracts,
   summarizeCachePrefixContract,
@@ -6212,7 +6213,6 @@ export class SessionCoordinator {
       throw new Error(`preflightSessionInput: session not loaded for ${sessionPath}`);
     }
     return this._assertCachePrefixContract(sessionPath, entry, {
-      allowRenew: false,
       countRequest: false,
     });
   }
@@ -7226,21 +7226,21 @@ export class SessionCoordinator {
     {
       model = null,
       context = null,
-      allowRenew = true,
       countRequest = true,
     }: any = {},
   ) {
     if (!entry?.session) return null;
     let expected = entry.cachePrefixContract;
     if (!expected) {
-      if (!allowRenew) {
-        throw new Error("Cache prefix contract unavailable for input preflight");
-      }
       expected = this._renewCachePrefixContract(sessionPath, entry, "late_init", { model, context });
     }
     const actual = this._buildCachePrefixContract(entry, { model, context });
     const diffs = diffCachePrefixContracts(expected, actual);
     if (diffs.length > 0) {
+      // 漂移只说明有人在请求前重建了 prompt / 工具表却没走 renew：损失的是缓存命中，
+      // 不是正确性。所以记录足够定位到那个改写者的原文级 diff，然后按当前真实状态
+      // 续签契约放行，绝不把这份内部账目变成用户请求的失败。
+      const drift = describeCachePrefixDrift(expected, actual);
       const record = {
         session: sessionPath ? path.basename(sessionPath) : null,
         renewReason: entry.cachePrefixContractRenewReason || null,
@@ -7248,6 +7248,7 @@ export class SessionCoordinator {
         diffs,
         expected: summarizeCachePrefixContract(expected),
         actual: summarizeCachePrefixContract(actual),
+        drift,
       };
       log.error(`cache_contract_violation ${JSON.stringify(record)}`);
       try {
@@ -7257,11 +7258,17 @@ export class SessionCoordinator {
           diffs,
           expected: summarizeCachePrefixContract(expected),
           actual: summarizeCachePrefixContract(actual),
+          drift,
+          action: "renewed",
         }, sessionPath);
       } catch {
-        // The provider request must still fail even if UI event delivery fails.
+        // 事件投递失败不影响本次请求，诊断已经落在日志里。
       }
-      throw new Error(`Cache prefix contract violated: ${diffs.map((d) => d.field).join(", ")}`);
+      const renewed = this._renewCachePrefixContract(sessionPath, entry, "drift_auto_renew", { model, context });
+      if (countRequest) {
+        entry.cachePrefixContractRequestCount = (entry.cachePrefixContractRequestCount || 0) + 1;
+      }
+      return renewed ?? actual;
     }
 
     if (countRequest) {
@@ -7284,9 +7291,10 @@ export class SessionCoordinator {
     entry.cachePrefixGuardInstalled = true;
     entry.cachePrefixOriginalStreamFn = originalStreamFn;
     agent.streamFn = async (model, context, options) => {
-      // The main-session prefix contract applies only to normal turns. Pi native
-      // compaction and branch summaries use their own prompt; cache-preserving
-      // side tasks remain protected by their strict session snapshot contract.
+      // 这份前缀契约是诊断工具，不是闸门：发现漂移就记下原文级 diff 并按现状续签放行，
+      // 请求照常发出。漂移意味着有人在重建 prompt / 工具表时没走续签，凭那条记录去定位。
+      // 契约只覆盖普通轮次，原生压缩与分支摘要用的是各自的 prompt；保缓存的旁路任务
+      // 仍由它们自己的严格会话快照契约把关。
       if (entry.session?.isCompacting !== true) {
         this._assertCachePrefixContract(sessionPath, entry, { model, context });
       }

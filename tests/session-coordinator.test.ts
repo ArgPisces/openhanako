@@ -1380,7 +1380,7 @@ describe("SessionCoordinator", () => {
     expect(session.steer).toHaveBeenCalledWith("先别展开，直接给结论");
   });
 
-  it("fails legacy focus prompt and steer explicitly when their cache contract is missing", async () => {
+  it("late-initializes the cache contract for legacy focus prompt and steer instead of failing them", async () => {
     const sessionPath = path.join(tempDir, "focus-preflight.jsonl");
     const model = { id: "test-model", provider: "test", name: "test-model" };
     const session = {
@@ -1425,10 +1425,17 @@ describe("SessionCoordinator", () => {
     coordinator._session = session;
     coordinator._currentSessionPath = sessionPath;
 
-    await expect(coordinator.prompt("hello", undefined)).rejects.toThrow(/contract unavailable/i);
-    expect(session.prompt).not.toHaveBeenCalled();
-    expect(() => coordinator.steer("interrupt")).toThrow(/contract unavailable/i);
-    expect(session.steer).not.toHaveBeenCalled();
+    const entry = coordinator._sessions.get(sessionPath);
+    expect(entry.cachePrefixContract).toBeUndefined();
+
+    // 契约缺失只是还没签过，不是用户的错：preflight 就地补签并放行。
+    await coordinator.prompt("hello", undefined);
+    expect(session.prompt).toHaveBeenCalledTimes(1);
+    expect(entry.cachePrefixContract).toBeTruthy();
+    expect(entry.cachePrefixContractRenewReason).toBe("late_init");
+
+    expect(() => coordinator.steer("interrupt")).not.toThrow();
+    expect(session.steer).toHaveBeenCalledWith("interrupt");
   });
 
   it("lists sessions from a lightweight projection without delegating to the Pi SDK full scan", async () => {
@@ -3096,7 +3103,9 @@ describe("SessionCoordinator", () => {
     });
   });
 
-  it("guards normal-turn cache prefixes while allowing Pi compaction prompts", async () => {
+  it("records and auto-renews cache prefix drift instead of failing the turn", async () => {
+    const emittedEvents: any[] = [];
+    const violations = () => emittedEvents.filter((event) => event?.type === "cache_contract_violation");
     const sessionFile = path.join(tempDir, "hana", "sessions", "cache-contract.jsonl");
     const model = {
       id: "deepseek-v4-pro",
@@ -3163,7 +3172,7 @@ describe("SessionCoordinator", () => {
       }),
       getSkills: () => null,
       buildTools: () => ({ tools: [readTool, execCommandTool], customTools: [] }),
-      emitEvent: () => {},
+      emitEvent: (event: any) => { emittedEvents.push(event); },
       getHomeCwd: () => "/tmp/home",
       agentIdFromSessionPath: () => "hana",
       switchAgentOnly: async () => {},
@@ -3194,32 +3203,60 @@ describe("SessionCoordinator", () => {
     expect(entry.cachePrefixContractRequestCount).toBe(requestCountBeforePreflight);
     expect(renewSpy).not.toHaveBeenCalled();
 
+    expect(violations()).toHaveLength(0);
+
+    // 输入前有人重建了 system prompt 却没续签：漂移必须被记下来，但请求照常发出。
     session.agent.state.systemPrompt = "MUTATED BEFORE INPUT";
-    const rejectedHook = vi.fn();
-    await expect(coordinator.promptSession(sessionFile, "blocked", undefined, {
-      afterCachePreflight: rejectedHook,
-    })).rejects.toThrow(/Cache prefix contract violated/);
-    expect(rejectedHook).not.toHaveBeenCalled();
-    expect(session.prompt).toHaveBeenCalledTimes(1);
+    const driftHook = vi.fn();
+    await coordinator.promptSession(sessionFile, "drifted", undefined, {
+      afterCachePreflight: driftHook,
+    });
+    expect(driftHook).toHaveBeenCalled();
+    expect(session.prompt).toHaveBeenCalledTimes(2);
+    expect(violations()).toHaveLength(1);
+    const inputViolation = violations()[0];
+    expect(inputViolation.action).toBe("renewed");
+    expect(inputViolation.diffs.map((d: any) => d.field)).toContain("systemPromptHash");
+    expect(inputViolation.drift.systemPrompt.expectedExcerpt).toContain("FINAL CACHE PREFIX");
+    expect(inputViolation.drift.systemPrompt.actualExcerpt).toContain("MUTATED BEFORE INPUT");
+    // 事件只带摘要，整段 prompt 不外泄
+    expect(inputViolation.expected.systemPrompt).toBeUndefined();
+    expect(renewSpy).toHaveBeenCalledWith(sessionFile, entry, "drift_auto_renew", expect.anything());
+
+    // 契约已按现状续签：同一份 prompt 再来一次不再报漂移
+    renewSpy.mockClear();
+    await coordinator.promptSession(sessionFile, "settled", undefined, {
+      afterCachePreflight: vi.fn(),
+    });
+    expect(violations()).toHaveLength(1);
+    expect(renewSpy).not.toHaveBeenCalled();
+
+    // steer 路径同理：漂移不再打断用户的插话
     session.isStreaming = true;
     session.steer.mockClear();
-    expect(() => coordinator.steerSession(sessionFile, "blocked steer"))
-      .toThrow(/Cache prefix contract violated/);
-    expect(session.steer).not.toHaveBeenCalled();
+    session.agent.state.systemPrompt = "MUTATED BEFORE STEER";
+    expect(() => coordinator.steerSession(sessionFile, "steered")).not.toThrow();
+    expect(session.steer).toHaveBeenCalledTimes(1);
+    expect(violations()).toHaveLength(2);
+    expect(violations()[1].action).toBe("renewed");
     session.isStreaming = false;
     session.agent.state.systemPrompt = "FINAL CACHE PREFIX";
 
+    // 契约放行不改变 preflight 钩子本身的同步契约
     await expect(coordinator.promptSession(sessionFile, "async hook", undefined, {
       afterCachePreflight: () => Promise.resolve(),
     })).rejects.toThrow(/must be synchronous/);
-    expect(session.prompt).toHaveBeenCalledTimes(1);
+    expect(session.prompt).toHaveBeenCalledTimes(3);
 
     await expect((session.agent.streamFn as any)(model, {
       systemPrompt: "FINAL CACHE PREFIX",
       tools: [readTool, execCommandTool],
       messages: [{ role: "user", content: "hello" }],
     }, {})).resolves.toBe("ok");
+    expect(originalStreamFn).toHaveBeenCalledTimes(1);
+    expect(violations()).toHaveLength(3);
 
+    // 请求发出那一刻才漂移：记录 + 续签 + 照常发给 provider
     await expect((session.agent.streamFn as any)(model, {
       systemPrompt: "MUTATED CACHE PREFIX",
       tools: [readTool, execCommandTool],
@@ -3227,8 +3264,19 @@ describe("SessionCoordinator", () => {
         { role: "user", content: "hello" },
         { role: "toolResult", content: [{ type: "text", text: "dynamic" }] },
       ],
-    }, {})).rejects.toThrow(/Cache prefix contract violated/);
-    expect(originalStreamFn).toHaveBeenCalledTimes(1);
+    }, {})).resolves.toBe("ok");
+    expect(originalStreamFn).toHaveBeenCalledTimes(2);
+    expect(violations()).toHaveLength(4);
+    expect(violations()[3].drift.systemPrompt.actualExcerpt).toContain("MUTATED CACHE PREFIX");
+
+    // 续签之后同一个前缀不再重复告警
+    await expect((session.agent.streamFn as any)(model, {
+      systemPrompt: "MUTATED CACHE PREFIX",
+      tools: [readTool, execCommandTool],
+      messages: [{ role: "user", content: "hello again" }],
+    }, {})).resolves.toBe("ok");
+    expect(originalStreamFn).toHaveBeenCalledTimes(3);
+    expect(violations()).toHaveLength(4);
 
     session.isCompacting = true;
     await expect((session.agent.streamFn as any)(model, {
@@ -3236,21 +3284,28 @@ describe("SessionCoordinator", () => {
       tools: [],
       messages: [{ role: "user", content: "Summarize the conversation" }],
     }, {})).resolves.toBe("ok");
-    expect(originalStreamFn).toHaveBeenCalledTimes(2);
+    expect(originalStreamFn).toHaveBeenCalledTimes(4);
+    expect(violations()).toHaveLength(4);
 
+    // 工具表漂移同样只留证据，并按名字点出增删改
     session.isCompacting = false;
     await expect((session.agent.streamFn as any)(model, {
       systemPrompt: "MUTATED CACHE PREFIX",
-      tools: [readTool, execCommandTool],
-      messages: [{ role: "user", content: "hello again" }],
-    }, {})).rejects.toThrow(/Cache prefix contract violated/);
-    expect(originalStreamFn).toHaveBeenCalledTimes(2);
+      tools: [readTool],
+      messages: [{ role: "user", content: "fewer tools" }],
+    }, {})).resolves.toBe("ok");
+    expect(originalStreamFn).toHaveBeenCalledTimes(5);
+    expect(violations()).toHaveLength(5);
+    expect(violations()[4].drift.tools.removed).toEqual(["exec_command"]);
 
+    // 契约缺失（late init）不再是错误，续签后照常发出
     entry.cachePrefixContract = null;
-    await expect(coordinator.promptSession(sessionFile, "missing contract", undefined, {
+    renewSpy.mockClear();
+    await coordinator.promptSession(sessionFile, "late init", undefined, {
       afterCachePreflight: vi.fn(),
-    })).rejects.toThrow(/contract unavailable/i);
-    expect(renewSpy).not.toHaveBeenCalled();
+    });
+    expect(renewSpy).toHaveBeenCalledWith(sessionFile, entry, "late_init", expect.anything());
+    expect(session.prompt).toHaveBeenCalledTimes(4);
   });
 
   it("renews the cache prefix contract for an explicit model switch", async () => {
