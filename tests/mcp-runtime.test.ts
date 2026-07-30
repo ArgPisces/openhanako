@@ -1665,4 +1665,105 @@ describe("MCP runtime OAuth persistence", () => {
       expiresAt: stored.connectors[0].oauth.expiresAt,
     });
   });
+
+  it("normalizes connector permission policy fields with read-time defaults", () => {
+    const config = normalizeMcpConfig({
+      enabled: true,
+      connectors: [
+        // Legacy connector: zero policy fields on disk.
+        { id: "legacy", url: "https://mcp.example.com/mcp" },
+        {
+          id: "explicit",
+          url: "https://mcp.example.com/mcp",
+          permissionMode: "allowlist",
+          toolPermissions: { search: "allow", write: "review" },
+          trustReadOnlyHint: true,
+        },
+        {
+          id: "invalid",
+          url: "https://mcp.example.com/mcp",
+          permissionMode: "yolo",
+          toolPermissions: { ok: "allow", bad: "sudo", worse: 1, nested: {} },
+          trustReadOnlyHint: "yes",
+        },
+      ],
+    });
+
+    const [legacy, explicit, invalid] = config.connectors;
+
+    // Read-time compatibility: configs written before the policy model existed
+    // carry none of these fields and must read out as the safe defaults,
+    // without any write-time migration.
+    expect(legacy.permissionMode).toBe("review-all");
+    expect(legacy.toolPermissions).toEqual({});
+    expect(legacy.trustReadOnlyHint).toBe(false);
+
+    expect(explicit.permissionMode).toBe("allowlist");
+    expect(explicit.toolPermissions).toEqual({ search: "allow", write: "review" });
+    expect(explicit.trustReadOnlyHint).toBe(true);
+
+    // An unrecognized mode collapses to the safe default rather than being
+    // preserved; only well-formed per-tool entries survive; a non-boolean
+    // trust flag is never truthy-coerced into an implicit grant.
+    expect(invalid.permissionMode).toBe("review-all");
+    expect(invalid.toolPermissions).toEqual({ ok: "allow" });
+    expect(invalid.trustReadOnlyHint).toBe(false);
+  });
+
+  it("exposes the connector permission policy through public state", () => {
+    const stored = {
+      enabled: true,
+      connectors: [{
+        id: "notion",
+        url: "https://mcp.example.com/mcp",
+        permissionMode: "allowlist",
+        toolPermissions: { search: "allow" },
+        trustReadOnlyHint: true,
+      }],
+    };
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-policy-state"),
+      config: { get: vi.fn(() => stored), set: vi.fn() },
+      log: console,
+    });
+
+    const [connector] = runtime.getState().connectors;
+    expect(connector.permissionMode).toBe("allowlist");
+    expect(connector.toolPermissions).toEqual({ search: "allow" });
+    expect(connector.trustReadOnlyHint).toBe(true);
+  });
+
+  it("round-trips the connector permission policy through saveConfig", () => {
+    const set = vi.fn();
+    let stored: any = {
+      enabled: true,
+      connectors: [{ id: "notion", url: "https://mcp.example.com/mcp" }],
+    };
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-policy-roundtrip"),
+      config: { get: vi.fn(() => stored), set },
+      log: console,
+    });
+
+    const config = runtime.getConfig();
+    config.connectors[0].permissionMode = "allowlist";
+    config.connectors[0].toolPermissions = { search: "allow" };
+    config.connectors[0].trustReadOnlyHint = true;
+    runtime.saveConfig(config);
+
+    const written = set.mock.calls.at(-1)[1];
+    expect(written.connectors[0]).toMatchObject({
+      permissionMode: "allowlist",
+      toolPermissions: { search: "allow" },
+      trustReadOnlyHint: true,
+    });
+
+    // Reading the persisted shape back yields the identical policy.
+    stored = written;
+    expect(runtime.getConfig().connectors[0]).toMatchObject({
+      permissionMode: "allowlist",
+      toolPermissions: { search: "allow" },
+      trustReadOnlyHint: true,
+    });
+  });
 });

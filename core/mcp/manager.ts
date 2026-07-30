@@ -84,6 +84,31 @@ function normalizeTool(tool) {
   return normalized;
 }
 
+// Per-connector permission policy. "review-all" is both the default and the
+// safe one: every tool invocation goes through review. "allowlist" opts the
+// connector into policy-driven silent approval, but only for tools the user
+// explicitly allowed, or that the server declares read-only while the user has
+// turned on trustReadOnlyHint.
+const PERMISSION_MODES = new Set(["review-all", "allowlist"]);
+const TOOL_PERMISSION_VALUES = new Set(["allow", "review"]);
+
+function normalizePermissionMode(value) {
+  return PERMISSION_MODES.has(value) ? value : "review-all";
+}
+
+// Unrecognized per-tool entries are dropped rather than coerced: a malformed
+// value must never widen access, and silently keeping it would leave a grant
+// nobody can read back out of the UI.
+function normalizeToolPermissions(value) {
+  if (!isPlainObject(value)) return {};
+  const normalized = {};
+  for (const [toolName, permission] of Object.entries(value)) {
+    if (!toolName) continue;
+    if (TOOL_PERMISSION_VALUES.has(permission as any)) normalized[toolName] = permission;
+  }
+  return normalized;
+}
+
 function normalizeConnector(connector, fallbackId = "") {
   if (!connector || typeof connector !== "object") return null;
   const id = sanitizeId(connector.id || fallbackId);
@@ -127,6 +152,15 @@ function normalizeConnector(connector, fallbackId = "") {
     // users get keepalive without a migration script. Only an explicit `false`
     // opts out of automatic reconnection.
     autoReconnect: connector.autoReconnect !== false,
+    // Read-time compatibility: connectors saved before the permission policy
+    // model existed carry none of these three fields. They default to the
+    // pre-existing behaviour (every invocation reviewed), so no write-time
+    // migration is needed and an untouched config keeps its old semantics.
+    permissionMode: normalizePermissionMode(connector.permissionMode),
+    toolPermissions: normalizeToolPermissions(connector.toolPermissions),
+    // Only an explicit `true` opts in; a truthy non-boolean must not be
+    // coerced into an implicit grant.
+    trustReadOnlyHint: connector.trustReadOnlyHint === true,
     tools,
   };
 }
