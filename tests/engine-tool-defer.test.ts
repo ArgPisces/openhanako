@@ -288,3 +288,74 @@ describe("bridge permission through the real engine assembly", () => {
     expect(made.engine._mcp.callTool).not.toHaveBeenCalled();
   });
 });
+
+describe("build result carries the catalog manifest", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function build(options: Parameters<typeof makeEngine>[0]) {
+    const made = makeEngine(options);
+    dirs.push(made.tmpDir);
+    return made.build();
+  }
+
+  it("returns the manifest text, tier and fingerprint in catalog mode", () => {
+    const result = build({
+      connectors: [{ id: "github", name: "GitHub", tools: manyTools(11) }],
+      deferThreshold: 10,
+    });
+    expect(result.toolCatalogManifest).toBeTruthy();
+    expect(result.toolCatalogManifest.text).toContain("github_t_0");
+    expect(result.toolCatalogManifest.text).toContain("GitHub");
+    expect(result.toolCatalogManifest.tier).toBe(1);
+    expect(typeof result.toolCatalogManifest.fingerprint).toBe("string");
+    expect(result.toolCatalogManifest.fingerprint.length).toBeGreaterThan(0);
+  });
+
+  it("returns null outside catalog mode", () => {
+    expect(build({
+      connectors: [{ id: "github", tools: manyTools(10) }],
+      deferThreshold: 10,
+    }).toolCatalogManifest).toBeNull();
+    expect(build({
+      connectors: [{ id: "github", tools: manyTools(40) }],
+      deferEnabled: false,
+    }).toolCatalogManifest).toBeNull();
+  });
+
+  it("gives the same catalog the same fingerprint and a changed catalog a different one", () => {
+    const first = build({
+      connectors: [{ id: "github", name: "GitHub", tools: manyTools(11) }],
+      deferThreshold: 10,
+    });
+    const same = build({
+      connectors: [{ id: "github", name: "GitHub", tools: manyTools(11) }],
+      deferThreshold: 10,
+    });
+    const changed = build({
+      connectors: [{ id: "github", name: "GitHub", tools: manyTools(12) }],
+      deferThreshold: 10,
+    });
+    expect(same.toolCatalogManifest.fingerprint).toBe(first.toolCatalogManifest.fingerprint);
+    expect(changed.toolCatalogManifest.fingerprint).not.toBe(first.toolCatalogManifest.fingerprint);
+  });
+
+  it("degrades to tier 2 when the model's context leaves little room", () => {
+    const made = makeEngine({
+      connectors: [{ id: "github", name: "GitHub", tools: manyTools(60) }],
+      deferThreshold: 10,
+    });
+    dirs.push(made.tmpDir);
+    const result = made.engine.buildTools(made.workspace, [], {
+      agentDir: made.agentDir,
+      workspace: made.workspace,
+      getSessionPath: () => path.join(made.agentDir, "sessions", "main.jsonl"),
+      getPermissionMode: () => "operate",
+      modelContextWindowTokens: 2000,
+    });
+    expect(result.toolCatalogManifest.tier).toBe(2);
+    expect(result.toolCatalogManifest.text).not.toContain("github_t_0");
+  });
+});

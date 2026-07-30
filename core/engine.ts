@@ -136,11 +136,32 @@ import { workspaceRootsForSandbox } from "../shared/workspace-scope.ts";
 import { wrapWithCheckpoint } from "../lib/checkpoint-wrapper.ts";
 import { wrapWithSessionPermission } from "../lib/tools/session-permission-wrapper.ts";
 import { createToolCatalog } from "./tool-catalog.ts";
+import { hashCacheContractValue } from "../lib/llm/cache-prefix-contract.ts";
+import { resolveReferenceBudgetTokens } from "./session-reminders.ts";
 import { createBridgeTools, registerBridgeCapabilityDelegates } from "./tool-catalog-bridge.ts";
 import { summarizeToolParameters } from "./mcp/manager.ts";
 
 /** Matches the MCP config default; used when no manager config is available. */
 const DEFAULT_TOOL_DEFER_THRESHOLD = 10;
+
+/**
+ * Snapshots the catalog listing for the session that is being built.
+ *
+ * The fingerprint covers the catalog's tool names, so a later refresh that adds
+ * or drops a tool produces a different value and the owning session can notice
+ * it has been holding a stale listing. It deliberately ignores descriptions and
+ * schemas: a reworded description is not news worth interrupting a session for.
+ */
+function buildToolCatalogManifestSnapshot(catalog, modelContextWindowTokens) {
+  const names = catalog.names();
+  const { tier, text } = catalog.manifest(resolveReferenceBudgetTokens(modelContextWindowTokens));
+  return {
+    text,
+    tier,
+    fingerprint: hashCacheContractValue(names),
+    names,
+  };
+}
 import { filterToolObjectsByAvailability } from "./tool-availability.ts";
 import { TaskRegistry } from "../lib/task-registry.ts";
 import { BrowserManager } from "../lib/browser/browser-manager.ts";
@@ -3047,7 +3068,15 @@ export class HanaEngine {
         .filter(Boolean),
     ]);
 
-    return result;
+    // The manifest travels in the build result rather than being stashed here.
+    // The session that owns this tool set is the only thing that should hold it,
+    // and the engine has no business keeping a map from sessions to catalogs.
+    return {
+      ...result,
+      toolCatalogManifest: deferPlan
+        ? buildToolCatalogManifestSnapshot(deferPlan.catalog, opts.modelContextWindowTokens)
+        : null,
+    };
   }
 
   // ════════════════════════════
