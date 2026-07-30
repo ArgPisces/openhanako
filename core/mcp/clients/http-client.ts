@@ -57,6 +57,126 @@ function withModernRequestMeta(payload, protocolVersion, capabilities) {
   };
 }
 
+// Header mirroring is a property of the Streamable HTTP binding, not of the
+// protocol: stdio has no header layer, so none of this applies there.
+const MCP_NAME_METHODS = new Set(["tools/call", "resources/read", "prompts/get"]);
+const MCP_PARAM_TYPES = new Set(["string", "integer", "boolean"]);
+// RFC 9110 field-name token characters.
+const HEADER_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const BASE64_SENTINEL_PREFIX = "=?base64?";
+const BASE64_SENTINEL_SUFFIX = "?=";
+
+function isPlainHeaderValue(text) {
+  if (!text.length) return false;
+  if (text !== text.trim()) return false;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || code > 0x7E) return false;
+  }
+  return true;
+}
+
+// Values that cannot travel as visible ASCII go base64 behind a sentinel. A
+// plain value that merely looks like the sentinel is encoded too, so the server
+// can never misread a literal as an encoding marker.
+function encodeMcpHeaderValue(text) {
+  const looksEncoded = text.startsWith(BASE64_SENTINEL_PREFIX) && text.endsWith(BASE64_SENTINEL_SUFFIX);
+  if (isPlainHeaderValue(text) && !looksEncoded) return text;
+  return `${BASE64_SENTINEL_PREFIX}${Buffer.from(text, "utf-8").toString("base64")}${BASE64_SENTINEL_SUFFIX}`;
+}
+
+function mcpParamValue(value) {
+  if (typeof value === "string") return value;
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number" && Number.isSafeInteger(value)) return String(value);
+  return null;
+}
+
+function readAtPath(root, path) {
+  let node = root;
+  for (const key of path) {
+    if (!node || typeof node !== "object") return undefined;
+    node = node[key];
+  }
+  return node;
+}
+
+// Every x-mcp-header occurrence anywhere in the schema, however it is nested.
+function collectAllAnnotations(node, out) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectAllAnnotations(item, out);
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(node, "x-mcp-header")) out.push(node);
+  for (const value of Object.values(node)) collectAllAnnotations(value, out);
+}
+
+// Only the annotations reachable by a chain made purely of `properties` keys.
+function collectReachableAnnotations(schema, path, out) {
+  const properties = schema?.properties;
+  if (!properties || typeof properties !== "object" || Array.isArray(properties)) return;
+  for (const [key, child] of Object.entries(properties)) {
+    if (!child || typeof child !== "object") continue;
+    const childPath = [...path, key];
+    if (Object.prototype.hasOwnProperty.call(child, "x-mcp-header")) {
+      out.push({ path: childPath, name: (child as any)["x-mcp-header"], type: (child as any).type });
+    }
+    collectReachableAnnotations(child, childPath, out);
+  }
+}
+
+// The mirrorable annotations of one tool, or null when the definition breaks a
+// constraint the spec requires clients to reject. Null means "drop this tool":
+// mirroring a malformed annotation would put a malformed header on the wire.
+export function collectMcpParamAnnotations(inputSchema) {
+  if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) return [];
+  const everywhere = [];
+  collectAllAnnotations(inputSchema, everywhere);
+  const reachable = [];
+  collectReachableAnnotations(inputSchema, [], reachable);
+  // An annotation that exists but is not statically reachable invalidates the
+  // whole definition, rather than being quietly ignored.
+  if (everywhere.length !== reachable.length) return null;
+
+  const seen = new Set();
+  for (const annotation of reachable) {
+    const name = annotation.name;
+    if (typeof name !== "string" || !name || !HEADER_TOKEN.test(name)) return null;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return null;
+    seen.add(key);
+    if (!MCP_PARAM_TYPES.has(annotation.type)) return null;
+  }
+  return reachable;
+}
+
+function modernRoutingHeaders(payload, annotationsByTool) {
+  const headers: any = {};
+  const method = typeof payload?.method === "string" ? payload.method : "";
+  if (!method) return headers;
+  headers["Mcp-Method"] = method;
+  if (!MCP_NAME_METHODS.has(method)) return headers;
+
+  const params = payload?.params && typeof payload.params === "object" ? payload.params : {};
+  const rawName = method === "resources/read" ? params.uri : params.name;
+  if (typeof rawName === "string" && rawName) headers["Mcp-Name"] = encodeMcpHeaderValue(rawName);
+  if (method !== "tools/call") return headers;
+
+  const annotations = annotationsByTool?.get?.(params.name);
+  if (!Array.isArray(annotations)) return headers;
+  const args = params.arguments && typeof params.arguments === "object" ? params.arguments : {};
+  for (const annotation of annotations) {
+    const value = readAtPath(args, annotation.path);
+    // Absent or null: the header is omitted and the server must not expect it.
+    if (value === undefined || value === null) continue;
+    const text = mcpParamValue(value);
+    if (text === null) continue;
+    headers[`Mcp-Param-${annotation.name}`] = encodeMcpHeaderValue(text);
+  }
+  return headers;
+}
+
 export class McpHttpError extends Error {
   declare body: any;
   declare headers: any;
@@ -243,6 +363,7 @@ export class McpStreamableHttpClient {
   declare _initialized: any;
   declare _nextId: any;
   declare _stopping: any;
+  declare _toolParamAnnotations: any;
   declare endpoint: any;
   declare fetchImpl: any;
   declare getAuthToken: any;
@@ -294,6 +415,8 @@ export class McpStreamableHttpClient {
     // one connection never re-probes.
     this.era = this.pinnedProtocolVersion ? mcpEraForProtocolVersion(this.pinnedProtocolVersion) : "";
     this.negotiatedProtocolVersion = "";
+    // tool name -> mirrorable x-mcp-header annotations, learned from tools/list.
+    this._toolParamAnnotations = new Map();
   }
 
   get running() {
@@ -381,7 +504,26 @@ export class McpStreamableHttpClient {
 
   async listTools() {
     const result = await this.request("tools/list", {});
-    return Array.isArray(result?.tools) ? result.tools : [];
+    const tools = Array.isArray(result?.tools) ? result.tools : [];
+    // Parameter mirroring only exists on the stateless track, so only there do
+    // we hold tools to the annotation constraints.
+    if (this.era !== MCP_ERA_MODERN) return tools;
+
+    const usable = [];
+    const annotations = new Map();
+    for (const tool of tools) {
+      const parsed = collectMcpParamAnnotations(tool?.inputSchema);
+      if (parsed === null) {
+        this.log.warn?.(
+          `[mcp:${this.server.id}] dropped tool "${tool?.name}": its x-mcp-header annotations break the header-mirroring rules`,
+        );
+        continue;
+      }
+      usable.push(tool);
+      if (parsed.length) annotations.set(tool?.name, parsed);
+    }
+    this._toolParamAnnotations = annotations;
+    return usable;
   }
 
   async callTool(name, args) {
@@ -522,6 +664,7 @@ export class McpStreamableHttpClient {
     includeJson = true,
     initializing = false,
     era = this.era,
+    payload = null,
   }: any = {}) {
     const modern = era === MCP_ERA_MODERN;
     const headers = {
@@ -535,6 +678,7 @@ export class McpStreamableHttpClient {
     // Sessions exist only on the legacy track; the stateless revision removed
     // them outright, so a modern request must never carry one.
     if (!modern && sessionId && !initializing) headers["MCP-Session-Id"] = sessionId;
+    if (modern && payload) Object.assign(headers, modernRoutingHeaders(payload, this._toolParamAnnotations));
     // Prefer the runtime's freshest token (handles near-expiry refresh out of
     // band); fall back to the connector snapshot when no callback is injected.
     const token = await requestAuthToken(this.server, this.getAuthToken);
@@ -574,7 +718,7 @@ export class McpStreamableHttpClient {
       : payload;
     const response = await fetchWithTimeout(this.fetchImpl, this.endpoint, {
       method: "POST",
-      headers: await this._headers({ initializing, era }),
+      headers: await this._headers({ initializing, era, payload: body }),
       body: JSON.stringify(body),
     }, requestTimeoutMs(this.server));
     if (initializing) {

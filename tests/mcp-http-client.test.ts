@@ -252,6 +252,186 @@ describe("MCP HTTP clients", () => {
     ]);
   });
 
+  function modernServer({ tools = [] } = {}) {
+    const requests = [];
+    const fetchImpl = vi.fn(async (url, init) => {
+      const body = requestBody(init);
+      requests.push({ url: String(url), init, body });
+      if (body?.method === "server/discover") return modernDiscoverResult(body);
+      if (body?.method === "tools/list") {
+        return jsonResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { resultType: "complete", tools },
+        });
+      }
+      if (body?.method === "tools/call") {
+        return jsonResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { resultType: "complete", content: [{ type: "text", text: "ok" }] },
+        });
+      }
+      if (body?.method === "resources/read") {
+        return jsonResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { resultType: "complete", contents: [] },
+        });
+      }
+      throw new Error(`unexpected method ${body?.method}`);
+    });
+    const client = new McpStreamableHttpClient({
+      id: "modern",
+      url: "https://mcp.example.com/mcp",
+    }, { fetchImpl });
+    return { requests, client, lastFor: (method) => requests.filter(r => r.body?.method === method).at(-1) };
+  }
+
+  it("mirrors method and name into routing headers on the stateless path", async () => {
+    const { requests, client, lastFor } = modernServer({ tools: [{ name: "search" }] });
+    await client.start();
+    await client.listTools();
+    await client.callTool("search", { q: "hana" });
+    await client.readResource("file:///projects/app/config.json");
+
+    // Every request mirrors its method; only the name-bearing methods mirror a name.
+    expect(headerValue(requests[0].init.headers, "Mcp-Method")).toBe("server/discover");
+    expect(headerValue(lastFor("tools/list").init.headers, "Mcp-Method")).toBe("tools/list");
+    expect(headerValue(lastFor("tools/list").init.headers, "Mcp-Name")).toBeFalsy();
+    expect(headerValue(lastFor("tools/call").init.headers, "Mcp-Method")).toBe("tools/call");
+    expect(headerValue(lastFor("tools/call").init.headers, "Mcp-Name")).toBe("search");
+    expect(headerValue(lastFor("resources/read").init.headers, "Mcp-Name"))
+      .toBe("file:///projects/app/config.json");
+  });
+
+  it("does not send routing headers on the legacy path", async () => {
+    const requests = [];
+    const fetchImpl = vi.fn(async (url, init) => {
+      const body = requestBody(init);
+      requests.push({ url: String(url), init, body });
+      if (body?.method === "server/discover") return legacyDiscoverRejection();
+      if (body?.method === "initialize") {
+        return jsonResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
+        }, { headers: { "MCP-Session-Id": "session-a" } });
+      }
+      if (body?.method === "notifications/initialized") return emptyResponse();
+      return jsonResponse({ jsonrpc: "2.0", id: body.id, result: { content: [] } });
+    });
+    const client = new McpStreamableHttpClient({
+      id: "legacy",
+      url: "https://mcp.example.com/mcp",
+    }, { fetchImpl });
+
+    await client.start();
+    await client.callTool("search", { q: "hana" });
+
+    const call = requests.filter(r => r.body?.method === "tools/call").at(-1);
+    expect(headerValue(call.init.headers, "Mcp-Method")).toBeFalsy();
+    expect(headerValue(call.init.headers, "Mcp-Name")).toBeFalsy();
+  });
+
+  it("mirrors annotated tool arguments into Mcp-Param headers", async () => {
+    const { client, lastFor } = modernServer({
+      tools: [{
+        name: "execute_sql",
+        inputSchema: {
+          type: "object",
+          properties: {
+            region: { type: "string", "x-mcp-header": "Region" },
+            dry_run: { type: "boolean", "x-mcp-header": "DryRun" },
+            attempt: { type: "integer", "x-mcp-header": "Attempt" },
+            query: { type: "string" },
+          },
+        },
+      }],
+    });
+    await client.start();
+    await client.listTools();
+    await client.callTool("execute_sql", {
+      region: "us-west1",
+      dry_run: false,
+      attempt: 42,
+      query: "SELECT 1",
+    });
+
+    const headers = lastFor("tools/call").init.headers;
+    expect(headerValue(headers, "Mcp-Param-Region")).toBe("us-west1");
+    expect(headerValue(headers, "Mcp-Param-DryRun")).toBe("false");
+    expect(headerValue(headers, "Mcp-Param-Attempt")).toBe("42");
+    // An unannotated argument stays in the body only.
+    expect(headerValue(headers, "Mcp-Param-Query")).toBeFalsy();
+  });
+
+  it("omits an Mcp-Param header when the annotated argument is absent or null", async () => {
+    const { client, lastFor } = modernServer({
+      tools: [{
+        name: "execute_sql",
+        inputSchema: {
+          type: "object",
+          properties: {
+            region: { type: "string", "x-mcp-header": "Region" },
+            tenant: { type: "string", "x-mcp-header": "Tenant" },
+          },
+        },
+      }],
+    });
+    await client.start();
+    await client.listTools();
+    await client.callTool("execute_sql", { tenant: null });
+
+    const headers = lastFor("tools/call").init.headers;
+    expect(headerValue(headers, "Mcp-Param-Region")).toBeFalsy();
+    expect(headerValue(headers, "Mcp-Param-Tenant")).toBeFalsy();
+  });
+
+  it("base64-encodes header values that cannot travel as plain ASCII", async () => {
+    const { client, lastFor } = modernServer({
+      tools: [{
+        name: "greet",
+        inputSchema: {
+          type: "object",
+          properties: { greeting: { type: "string", "x-mcp-header": "Greeting" } },
+        },
+      }],
+    });
+    await client.start();
+    await client.listTools();
+    await client.callTool("greet", { greeting: "Hello, 世界" });
+
+    expect(headerValue(lastFor("tools/call").init.headers, "Mcp-Param-Greeting"))
+      .toBe("=?base64?SGVsbG8sIOS4lueVjA==?=");
+  });
+
+  it("excludes tools whose x-mcp-header annotation violates the spec", async () => {
+    const { client } = modernServer({
+      tools: [
+        { name: "ok_tool", inputSchema: { type: "object", properties: { a: { type: "string", "x-mcp-header": "A" } } } },
+        // number is explicitly not permitted for a mirrored parameter
+        { name: "number_param", inputSchema: { type: "object", properties: { n: { type: "number", "x-mcp-header": "N" } } } },
+        // duplicate names, compared case-insensitively
+        { name: "dupe", inputSchema: { type: "object", properties: {
+          a: { type: "string", "x-mcp-header": "Dup" },
+          b: { type: "string", "x-mcp-header": "dup" },
+        } } },
+        // not statically reachable: the annotation hides inside an array item
+        { name: "nested", inputSchema: { type: "object", properties: {
+          rows: { type: "array", items: { type: "object", properties: { r: { type: "string", "x-mcp-header": "R" } } } },
+        } } },
+        // illegal header token
+        { name: "bad_token", inputSchema: { type: "object", properties: { a: { type: "string", "x-mcp-header": "Bad Name" } } } },
+      ],
+    });
+    await client.start();
+    const tools = await client.listTools();
+
+    // One malformed definition must not cost us the healthy tools.
+    expect(tools.map(t => t.name)).toEqual(["ok_tool"]);
+  });
+
   it("sends custom connector headers while preserving protocol headers", async () => {
     const requests = [];
     const fetchImpl = vi.fn(async (url, init) => {
