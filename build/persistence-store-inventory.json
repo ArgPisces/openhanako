@@ -3244,7 +3244,7 @@
     },
     {
       "sourceFile": "core/mcp/manager.ts",
-      "line": 502,
+      "line": 528,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.dataDir, { recursive: true })",
       "reason": "Sole writer of plugin-data/mcp/config.json.",

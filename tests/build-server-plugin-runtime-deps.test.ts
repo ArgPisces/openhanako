@@ -22,14 +22,14 @@ describe("bundled plugin runtime dependencies", () => {
     rootDir = path.join(tempDir, "root");
     outDir = path.join(tempDir, "dist-server", "mac-arm64");
 
-    fs.mkdirSync(path.join(rootDir, "plugins", "mcp", "lib"), { recursive: true });
+    fs.mkdirSync(path.join(rootDir, "plugins", "bridge-plugin", "lib"), { recursive: true });
     fs.writeFileSync(
-      path.join(rootDir, "plugins", "mcp", "index.js"),
-      'import { loadRuntime } from "./lib/mcp-runtime.js";\nexport default loadRuntime;\n',
+      path.join(rootDir, "plugins", "bridge-plugin", "index.js"),
+      'import { loadRuntime } from "./lib/runtime.js";\nexport default loadRuntime;\n',
       "utf-8",
     );
     fs.writeFileSync(
-      path.join(rootDir, "plugins", "mcp", "lib", "mcp-runtime.js"),
+      path.join(rootDir, "plugins", "bridge-plugin", "lib", "runtime.js"),
       'import { createSettingsUpdate } from "../../../lib/tools/settings-update-result.ts";\nexport function loadRuntime() { return createSettingsUpdate; }\n',
       "utf-8",
     );
@@ -89,7 +89,7 @@ describe("bundled plugin runtime dependencies", () => {
       .toContain("buildCliArgs");
     expect(fs.readFileSync(path.join(outDir, "shared", "log-redactor.ts"), "utf-8"))
       .toContain("redactLogText");
-    expect(fs.existsSync(path.join(outDir, "plugins", "mcp", "index.js"))).toBe(false);
+    expect(fs.existsSync(path.join(outDir, "plugins", "bridge-plugin", "index.js"))).toBe(false);
   });
 
   it("includes host modules used by the bundled media generation plugin", async () => {
@@ -161,7 +161,7 @@ describe("bundled plugin runtime dependencies", () => {
   it("collects npm packages imported by host modules reached from bundled plugins", async () => {
     fs.mkdirSync(path.join(rootDir, "lib", "i18n"), { recursive: true });
     fs.writeFileSync(
-      path.join(rootDir, "plugins", "mcp", "index.js"),
+      path.join(rootDir, "plugins", "bridge-plugin", "index.js"),
       'import { t } from "../../lib/i18n/index.ts";\nexport default t;\n',
       "utf-8",
     );

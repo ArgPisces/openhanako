@@ -273,6 +273,16 @@ export const DYNAMIC_CALL_ALLOWLIST = Object.freeze([
       + "spawnHidden above -- same generic execution-machinery rationale.",
   },
   {
+    file: "core/mcp/clients/stdio-client.ts",
+    callee: "spawn",
+    argText: "spawnSpec.command",
+    reason:
+      "The stdio MCP transport launches the connector process the user configured "
+      + "(command plus args stored in the connector config). The target is external "
+      + "third-party server software chosen at runtime, not a reference to any module "
+      + "in this repo, so it contributes nothing to the source closure.",
+  },
+  {
     file: "lib/sandbox/exec-helper.ts",
     callee: "spawn",
     argText: "cmd",

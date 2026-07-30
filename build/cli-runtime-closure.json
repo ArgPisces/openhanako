@@ -95,6 +95,12 @@
       "reason": "spawnSyncHidden(command, args, options) is the synchronous counterpart of spawnHidden above -- same generic execution-machinery rationale."
     },
     {
+      "file": "core/mcp/clients/stdio-client.ts",
+      "callee": "spawn",
+      "argText": "spawnSpec.command",
+      "reason": "The stdio MCP transport launches the connector process the user configured (command plus args stored in the connector config). The target is external third-party server software chosen at runtime, not a reference to any module in this repo, so it contributes nothing to the source closure."
+    },
+    {
       "file": "lib/sandbox/exec-helper.ts",
       "callee": "spawn",
       "argText": "cmd",
@@ -1026,6 +1032,91 @@
       "reason": "Reached via esbuild source module graph, imported by server/routes/access.ts (import-statement); server/routes/web-auth.ts (import-statement)."
     },
     {
+      "path": "core/mcp/clients/http-client.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/oauth.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/manager.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/mcp/clients/oauth.ts (import-statement); core/mcp/manager.ts (import-statement)."
+    },
+    {
+      "path": "core/mcp/clients/oauth.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/manager.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/mcp/manager.ts (import-statement)."
+    },
+    {
+      "path": "core/mcp/clients/protocol-version.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/http-client.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/oauth.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/mcp/clients/http-client.ts (import-statement); core/mcp/clients/oauth.ts (import-statement)."
+    },
+    {
+      "path": "core/mcp/clients/stdio-client.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/protocol-version.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/http-client.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/oauth.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/manager.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/mcp/clients/protocol-version.ts (import-statement); core/mcp/clients/http-client.ts (import-statement); core/mcp/clients/oauth.ts (import-statement); +1 more importer(s)."
+    },
+    {
+      "path": "core/mcp/manager.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+    },
+    {
       "path": "core/media-adapter-registry.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -1548,9 +1639,14 @@
           "root": "server-bootstrap",
           "from": "core/media/universal-media-manager.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/manager.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/plugin-context.ts (import-statement); core/plugin-manager.ts (import-statement); core/media/universal-media-manager.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/plugin-context.ts (import-statement); core/plugin-manager.ts (import-statement); core/media/universal-media-manager.ts (import-statement); +1 more importer(s)."
     },
     {
       "path": "core/plugin-context.ts",
@@ -6369,6 +6465,11 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "core/mcp/clients/http-client.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/bridge/outbound-http.ts",
           "kind": "import-statement"
         },
@@ -6398,7 +6499,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/bridge/outbound-http.ts (import-statement); server/routes/bridge.ts (import-statement); lib/bridge/telegram-adapter.ts (import-statement); +3 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/mcp/clients/http-client.ts (import-statement); lib/bridge/outbound-http.ts (import-statement); server/routes/bridge.ts (import-statement); +4 more importer(s)."
     },
     {
       "path": "lib/notifications/notification-service.ts",
@@ -9136,11 +9237,16 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/mcp/manager.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/bridge/bridge-manager.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/bridge-session-manager.ts (import-statement); lib/tools/update-settings-tool.ts (import-statement); core/desktop-session-submit.ts (import-statement); +1 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/bridge-session-manager.ts (import-statement); lib/tools/update-settings-tool.ts (import-statement); core/desktop-session-submit.ts (import-statement); +2 more importer(s)."
     },
     {
       "path": "lib/tools/show-card-tool.ts",
@@ -9399,11 +9505,16 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/mcp/manager.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/engine.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/plugin-manager.ts (import-statement); lib/tools/automation-tool.ts (import-statement); lib/tools/output-file-tool.ts (import-statement); +18 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/plugin-manager.ts (import-statement); lib/tools/automation-tool.ts (import-statement); lib/tools/output-file-tool.ts (import-statement); +19 more importer(s)."
     },
     {
       "path": "lib/tools/update-settings-tool.ts",
@@ -109423,6 +109534,18 @@
       "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
     },
     {
+      "path": "server/routes/mcp.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "server/composition/open-root.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
+    },
+    {
       "path": "server/routes/media.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -110934,9 +111057,14 @@
           "root": "server-bootstrap",
           "from": "lib/net/outbound-proxy.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/mcp/clients/http-client.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/preferences-manager.ts (import-statement); lib/net/outbound-proxy.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/preferences-manager.ts (import-statement); lib/net/outbound-proxy.ts (import-statement); core/mcp/clients/http-client.ts (import-statement)."
     },
     {
       "path": "shared/notification-preferences.ts",
@@ -111952,9 +112080,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9601,
+    "totalFiles": 9607,
     "byInputType": {
-      "source-graph": 623,
+      "source-graph": 629,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

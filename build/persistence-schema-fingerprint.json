@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:33e8d4f2f5786b56b1914819d49d34949397cce8a3f972f3b86a07efc2603cc7",
+  "payloadFingerprint": "sha256:d55b8135ca70c07e071cf614044749a2f49c34092a76aa5fe0509e13108fe01e",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -2918,7 +2918,7 @@
   "review": {
     "classification": "compatible",
     "compatibilityReason": "MCP connector config keeps the same on-disk location and JSON shape; only its owning module path moved from the bundled plugin to the core MCP manager.",
-    "payloadFingerprint": "sha256:33e8d4f2f5786b56b1914819d49d34949397cce8a3f972f3b86a07efc2603cc7"
+    "payloadFingerprint": "sha256:d55b8135ca70c07e071cf614044749a2f49c34092a76aa5fe0509e13108fe01e"
   },
   "schemas": [
     {
@@ -3157,7 +3157,7 @@
       "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:ed48eb3d89456347961aa88b8e99f5fd6d74cfd7b59b1051643c938bcfd2eab7",
+      "sourceHash": "sha256:71cb8172f514bc5183c7e74c266ef76685a6485315ab82a5620d905de68108cf",
       "storeId": "mcp-config"
     },
     {
@@ -4274,7 +4274,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 502,
+      "line": 528,
       "reason": "Sole writer of plugin-data/mcp/config.json.",
       "sourceFile": "core/mcp/manager.ts",
       "storeId": "mcp-config"
