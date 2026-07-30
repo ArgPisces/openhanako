@@ -451,6 +451,7 @@ interface McpManagerOptions {
 export class McpManager {
   declare Client: any;
   declare clientErrors: any;
+  declare toolListFreshness: any;
   declare clientFactory: any;
   declare clients: any;
   declare connectorStatus: any;
@@ -491,6 +492,10 @@ export class McpManager {
     ));
     this.clients = new Map();
     this.clientErrors = new Map();
+    // Per-connector tool-list caching hints from the last refresh. Deliberately
+    // in memory only: a hint describes one live response, so persisting it
+    // would let it outlive the answer it describes.
+    this.toolListFreshness = new Map();
     // Explicit per-connector intent. The single source of truth for "does the
     // user want this connector running?" — never inferred from clients.has(id).
     // Only desiredStates.get(id) === "running" permits auto-reconnect.
@@ -582,6 +587,7 @@ export class McpManager {
       connector,
       status: this.connectorStatusFor(connector.id),
       error: this.clientErrors.get(connector.id) || "",
+      toolListFreshness: this.toolListFreshness.get(connector.id) || null,
     }));
     return {
       enabled: config.enabled,
@@ -778,6 +784,8 @@ export class McpManager {
     if (!client) return;
     this.clients.delete(id);
     this.clientErrors.delete(id);
+    // The hint described that client's last response; it dies with the client.
+    this.toolListFreshness.delete(id);
     await client.stop();
   }
 
@@ -944,6 +952,7 @@ export class McpManager {
     const client = this.clients.get(id);
     if (!client?.running) throw new Error(`MCP connector "${id}" is not running`);
     const tools = await client.listTools();
+    this.toolListFreshness.set(id, client.toolListFreshness ?? null);
     const config = this.getConfig();
     const connector = config.connectors.find((s) => s.id === id);
     if (!connector) throw new Error(`MCP connector "${id}" not found`);
@@ -1708,11 +1717,12 @@ function connectorClientFingerprint(connector) {
   });
 }
 
-function publicConnector({ connector, status, error = "" }) {
+function publicConnector({ connector, status, error = "", toolListFreshness = null }) {
   return {
     ...connector,
     status,
     error,
+    toolListFreshness,
     apps: appsForConnector(connector),
     env: redactRecord(connector.env),
     headers: redactRecord(connector.headers),

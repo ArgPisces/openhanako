@@ -423,6 +423,45 @@ describe("MCP runtime policy", () => {
     expect(connector.oauthClientSecret).toBe("********");
   });
 
+  it("surfaces tool-list freshness hints in public state without persisting them", async () => {
+    async function stateAfterRefresh(toolListFreshness) {
+      const stored = {
+        enabled: true,
+        connectors: [{ id: "remote", name: "Remote", url: "https://mcp.example.com/mcp" }],
+      };
+      const set = vi.fn();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-test"),
+        config: { get: vi.fn(() => stored), set },
+        log: console,
+      }, {
+        clientFactory: () => ({
+          running: true,
+          toolListFreshness,
+          start: vi.fn(async () => {}),
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => [{ name: "search", inputSchema: { type: "object" } }]),
+        }),
+      });
+      await runtime.startConnector("remote");
+      await runtime.refreshTools("remote");
+      return { connector: runtime.getState().connectors[0], set };
+    }
+
+    const hints = { ttlMs: 300000, cacheScope: "public", fetchedAt: 1234 };
+    const { connector, set } = await stateAfterRefresh(hints);
+    expect(connector.toolListFreshness).toEqual(hints);
+
+    // A caching hint describes one live response, so it belongs in memory only.
+    // Persisting it would outlive the answer it describes.
+    for (const [, value] of set.mock.calls) {
+      expect(JSON.stringify(value)).not.toContain("toolListFreshness");
+    }
+
+    const { connector: bare } = await stateAfterRefresh(null);
+    expect(bare.toolListFreshness).toBeNull();
+  });
+
   it("surfaces connector start errors in public state", async () => {
     const stored = {
       enabled: true,

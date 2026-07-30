@@ -432,6 +432,50 @@ describe("MCP HTTP clients", () => {
     expect(tools.map(t => t.name)).toEqual(["ok_tool"]);
   });
 
+  it("captures tool-list freshness hints when the server sends them", async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      const body = requestBody(init);
+      if (body?.method === "server/discover") return modernDiscoverResult(body);
+      return jsonResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: { resultType: "complete", tools: [], ttlMs: 300000, cacheScope: "public" },
+      });
+    });
+    const client = new McpStreamableHttpClient({
+      id: "modern",
+      url: "https://mcp.example.com/mcp",
+    }, { fetchImpl });
+
+    const before = Date.now();
+    await client.start();
+    await client.listTools();
+
+    expect(client.toolListFreshness).toMatchObject({ ttlMs: 300000, cacheScope: "public" });
+    expect(client.toolListFreshness.fetchedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it("leaves tool-list freshness null when the server sends no hints", async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      const body = requestBody(init);
+      if (body?.method === "server/discover") return modernDiscoverResult(body);
+      return jsonResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: { resultType: "complete", tools: [] },
+      });
+    });
+    const client = new McpStreamableHttpClient({
+      id: "modern",
+      url: "https://mcp.example.com/mcp",
+    }, { fetchImpl });
+
+    await client.start();
+    await client.listTools();
+
+    expect(client.toolListFreshness).toBeNull();
+  });
+
   it("sends custom connector headers while preserving protocol headers", async () => {
     const requests = [];
     const fetchImpl = vi.fn(async (url, init) => {

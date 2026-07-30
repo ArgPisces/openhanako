@@ -57,6 +57,19 @@ function withModernRequestMeta(payload, protocolVersion, capabilities) {
   };
 }
 
+// The stateless revision lets a list response advertise how long it stays
+// fresh. We record the hint and nothing more: no polling, no expiry, no cache.
+// Absent hints read as null rather than as zero, so "not offered" never
+// masquerades as "expires immediately".
+function readToolListFreshness(result) {
+  const rawTtl = (result as any)?.ttlMs;
+  const ttlMs = typeof rawTtl === "number" && Number.isFinite(rawTtl) ? rawTtl : null;
+  const rawScope = (result as any)?.cacheScope;
+  const cacheScope = typeof rawScope === "string" && rawScope.trim() ? rawScope.trim() : null;
+  if (ttlMs === null && cacheScope === null) return null;
+  return { ttlMs, cacheScope, fetchedAt: Date.now() };
+}
+
 // Header mirroring is a property of the Streamable HTTP binding, not of the
 // protocol: stdio has no header layer, so none of this applies there.
 const MCP_NAME_METHODS = new Set(["tools/call", "resources/read", "prompts/get"]);
@@ -377,6 +390,7 @@ export class McpStreamableHttpClient {
   declare refreshAuthToken: any;
   declare server: any;
   declare sessionId: any;
+  declare toolListFreshness: any;
   constructor(server, { fetchImpl = globalThis.fetch, log = console, onClose = null, getAuthToken = null, refreshAuthToken = null } = {}) {
     this.server = server;
     this.fetchImpl = fetchImpl;
@@ -417,6 +431,7 @@ export class McpStreamableHttpClient {
     this.negotiatedProtocolVersion = "";
     // tool name -> mirrorable x-mcp-header annotations, learned from tools/list.
     this._toolParamAnnotations = new Map();
+    this.toolListFreshness = null;
   }
 
   get running() {
@@ -504,6 +519,7 @@ export class McpStreamableHttpClient {
 
   async listTools() {
     const result = await this.request("tools/list", {});
+    this.toolListFreshness = readToolListFreshness(result);
     const tools = Array.isArray(result?.tools) ? result.tools : [];
     // Parameter mirroring only exists on the stateless track, so only there do
     // we hold tools to the annotation constraints.
@@ -1086,6 +1102,10 @@ export class McpAutoHttpClient {
 
   get running() {
     return this.client?.running === true;
+  }
+
+  get toolListFreshness() {
+    return this.client?.toolListFreshness ?? null;
   }
 
   async start() {
