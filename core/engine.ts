@@ -135,6 +135,12 @@ import {
 import { workspaceRootsForSandbox } from "../shared/workspace-scope.ts";
 import { wrapWithCheckpoint } from "../lib/checkpoint-wrapper.ts";
 import { wrapWithSessionPermission } from "../lib/tools/session-permission-wrapper.ts";
+import { createToolCatalog } from "./tool-catalog.ts";
+import { createBridgeTools, registerBridgeCapabilityDelegates } from "./tool-catalog-bridge.ts";
+import { summarizeToolParameters } from "./mcp/manager.ts";
+
+/** Matches the MCP config default; used when no manager config is available. */
+const DEFAULT_TOOL_DEFER_THRESHOLD = 10;
 import { filterToolObjectsByAvailability } from "./tool-availability.ts";
 import { TaskRegistry } from "../lib/task-registry.ts";
 import { BrowserManager } from "../lib/browser/browser-manager.ts";
@@ -2596,6 +2602,92 @@ export class HanaEngine {
   //  工具构建
   // ════════════════════════════
 
+  /**
+   * Decide whether this tool set defers, and build the catalog if it does.
+   *
+   * Returns null for the ordinary case: few enough tools that loading them all
+   * costs less than the machinery to avoid it. The count is per tool across all
+   * servers, and excludes tools that cannot defer (pinned by the user, or
+   * declared non-deferrable), because those stay in the prefix either way.
+   *
+   * Deferral is all-or-nothing across servers on purpose. Deferring only the
+   * larger connectors would make a tool's availability depend on which company
+   * shipped it, which is exactly the kind of hidden ranking the catalog avoids.
+   */
+  _planDeferredToolAssembly(mcpTools, pluginTools) {
+    const config = this._mcp?.getConfig?.() || null;
+    const deferEnabled = config ? config.deferEnabled !== false : true;
+    if (!deferEnabled) return null;
+    const threshold = Number.isSafeInteger(config?.deferThreshold) && config.deferThreshold > 0
+      ? config.deferThreshold
+      : DEFAULT_TOOL_DEFER_THRESHOLD;
+
+    const mcpEntries = typeof this._mcp?.getCatalogEntries === "function"
+      ? (this._mcp.getCatalogEntries() || [])
+      : [];
+    const publishedMcpNames = new Set((mcpTools || []).map((tool) => tool?.name));
+    // Only tools that are actually published this run can be deferred.
+    const liveMcpEntries = mcpEntries.filter((entry) => publishedMcpNames.has(`mcp_${entry.name}`));
+
+    const builtinDeferEnabled = this._prefs?.getBuiltinToolDeferEnabled?.() === true;
+    const builtinEntries = builtinDeferEnabled
+      ? (pluginTools || [])
+        .filter((tool) => tool?.name && tool.deferrable !== false)
+        .map((tool) => ({
+          name: tool.name,
+          toolName: tool.name,
+          description: tool.description || "",
+          paramsSummary: summarizeToolParameters(tool.parameters),
+          serverId: tool._pluginId || "plugin",
+          serverLabel: tool._pluginId || "plugin",
+          origin: "builtin",
+          deferrable: true,
+          pinned: false,
+          schemaRef: () => tool.parameters || { type: "object", properties: {} },
+        }))
+      : [];
+
+    const deferrable = [...liveMcpEntries, ...builtinEntries]
+      .filter((entry) => entry.deferrable !== false && entry.pinned !== true);
+    if (deferrable.length <= threshold) return null;
+
+    const catalog = createToolCatalog();
+    // Pinned tools are registered too: the model should be able to see that
+    // they exist and read their schema, they simply also stay loaded.
+    if (liveMcpEntries.length > 0) catalog.registerSource("mcp", liveMcpEntries);
+    if (builtinEntries.length > 0) catalog.registerSource("builtin", builtinEntries);
+
+    const builtinToolsByName = new Map<string, any>(
+      (pluginTools || []).map((tool) => [tool?.name, tool] as [string, any]),
+    );
+    const bridgeTools = createBridgeTools({
+      catalog,
+      mcpCall: (serverId, toolName, args, ctx) => this._mcp.callTool(serverId, toolName, args, ctx),
+      resolveMcpPermission: (serverId, toolName) =>
+        this._mcp?.resolveToolPermissionKind?.(serverId, toolName) ?? "review",
+      // A deferred builtin keeps its own permission voice rather than being
+      // flattened into the MCP policy model.
+      resolveBuiltinInvocation: (name, params) => {
+        const target = builtinToolsByName.get(name);
+        const resolver = target?.sessionPermission?.resolveInvocation;
+        return typeof resolver === "function" ? resolver(params) : null;
+      },
+      builtinCall: (name, args, ctx) => {
+        const target = builtinToolsByName.get(name);
+        if (typeof target?.execute !== "function") {
+          throw new Error(`Deferred tool ${name} is no longer available`);
+        }
+        return target.execute(`bridge_${name}`, args, ctx, undefined, ctx);
+      },
+      log: toolAvailabilityLog,
+    });
+
+    const deferredToolNames = new Set(deferrable.map((entry) => (
+      entry.origin === "builtin" ? entry.name : `mcp_${entry.name}`
+    )));
+    return { catalog, bridgeTools, deferredToolNames };
+  }
+
   buildTools(cwd, customTools, opts: any = {}) {
     // Executable background runtimes bind one persisted identity snapshot at assembly time.
     // Desktop chat keeps the callback path until it moves into the same session factory.
@@ -2693,11 +2785,33 @@ export class HanaEngine {
         },
       };
     };
+    // Deferred assembly is decided once, here, and never revisited for the life
+    // of this tool set. The session's cacheable prefix is the tool schemas plus
+    // the system prompt, and a running session asserts that prefix on every
+    // request, so a tool set that changed shape mid-session would break the
+    // cache and fail the contract. Everything dynamic goes through the
+    // conversation stream instead.
+    const deferPlan = this._planDeferredToolAssembly(mcpTools, pluginTools);
+    const directMcpTools = deferPlan
+      ? mcpTools.filter((tool) => !deferPlan.deferredToolNames.has(tool?.name))
+      : mcpTools;
+    const directPluginTools = deferPlan
+      ? pluginTools.filter((tool) => !deferPlan.deferredToolNames.has(tool?.name))
+      : pluginTools;
+    const bridgeTools = deferPlan ? deferPlan.bridgeTools : [];
+
     const runtimeCustomTools = ct.map(withRuntimeContext);
     // Plugin tools and MCP tools both need the same session context injection;
     // withRuntimeContext is that wrapper, so neither gets its own copy of it.
-    const wrappedPluginTools = pluginTools.map(withRuntimeContext);
-    const wrappedMcpTools = mcpTools.map(withRuntimeContext);
+    const wrappedPluginTools = directPluginTools.map(withRuntimeContext);
+    const wrappedMcpTools = directMcpTools.map(withRuntimeContext);
+    const wrappedBridgeTools = bridgeTools.map(withRuntimeContext);
+    if (deferPlan) {
+      // withRuntimeContext returns copies, and the permission layer keys its
+      // delegation registry on object identity, so the objects that actually
+      // reach that layer are the ones that must be registered.
+      registerBridgeCapabilityDelegates(wrappedBridgeTools, { catalog: deferPlan.catalog });
+    }
     const pluginDevTools = this._pluginDevService && this._prefs.getPluginDevToolsEnabled?.() === true
       ? createPluginDevTools({
           pluginDevService: this._pluginDevService,
@@ -2707,12 +2821,13 @@ export class HanaEngine {
     assertUniqueBuiltToolNames([
       { source: "custom tools", tools: baseCustomTools },
       { source: "extra custom tools", tools: extraCustomTools },
-      { source: "plugin tools", tools: pluginTools },
-      { source: "mcp tools", tools: mcpTools },
+      { source: "plugin tools", tools: directPluginTools },
+      { source: "mcp tools", tools: directMcpTools },
+      { source: "mcp bridge tools", tools: bridgeTools },
       { source: "plugin development tools", tools: pluginDevTools },
     ]);
     const allTools = filterToolObjectsByAvailability(
-      [...runtimeCustomTools, ...wrappedPluginTools, ...wrappedMcpTools, ...pluginDevTools],
+      [...runtimeCustomTools, ...wrappedPluginTools, ...wrappedMcpTools, ...wrappedBridgeTools, ...pluginDevTools],
       toolAgent?.config || {},
       {
         agentId,

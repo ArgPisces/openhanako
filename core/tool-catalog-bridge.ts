@@ -30,6 +30,10 @@ export interface BridgeToolDeps {
   catalog: ToolCatalog;
   mcpCall: (serverId: string, toolName: string, args: Record<string, unknown>, ctx?: unknown) => Promise<unknown>;
   resolveMcpPermission: (serverId: string, toolName: string) => string;
+  /** Resolves a deferred builtin tool's own invocation descriptor. */
+  resolveBuiltinInvocation?: (name: string, params: unknown) => unknown;
+  /** Executes a deferred builtin tool in place of the MCP call path. */
+  builtinCall?: (name: string, args: Record<string, unknown>, ctx: unknown) => Promise<unknown>;
   log?: { warn?: (message: string) => void; log?: (message: string) => void };
 }
 
@@ -153,7 +157,14 @@ function callExample(entry: ToolCatalogEntry, schema: unknown): string {
   return JSON.stringify({ server: entry.serverId, tool: entry.name, arguments: example }, null, 2);
 }
 
-export function createBridgeTools({ catalog, mcpCall, resolveMcpPermission, log }: BridgeToolDeps) {
+export function createBridgeTools({
+  catalog,
+  mcpCall,
+  resolveMcpPermission,
+  resolveBuiltinInvocation,
+  builtinCall,
+  log,
+}: BridgeToolDeps) {
   const searchTool = {
     name: SEARCH_TOOL_NAME,
     label: "Search MCP Tools",
@@ -240,9 +251,12 @@ export function createBridgeTools({ catalog, mcpCall, resolveMcpPermission, log 
       resolveInvocation: (params: any) => {
         const entry = resolveTarget(catalog, params?.server, params?.tool);
         if (!entry) return null;
-        const kind = entry.origin === "mcp"
-          ? resolveMcpPermission(entry.serverId, entry.toolName)
-          : "review";
+        if (entry.origin === "builtin") {
+          // A deferred builtin already owns a permission voice; speaking for it
+          // means repeating what it says, not restating it in MCP terms.
+          return resolveBuiltinInvocation?.(entry.name, params?.arguments ?? {}) ?? null;
+        }
+        const kind = resolveMcpPermission(entry.serverId, entry.toolName);
         // No `target`: the invocation target vocabulary is a closed set that
         // does not cover MCP tools, and the capability already names the tool
         // exactly. The reviewer still sees server and tool in the call params.
@@ -280,6 +294,10 @@ export function createBridgeTools({ catalog, mcpCall, resolveMcpPermission, log 
       }
 
       try {
+        if (entry.origin === "builtin") {
+          if (!builtinCall) return text(`${entry.name} 当前不可调用。`);
+          return await builtinCall(entry.name, args, ctx) as any;
+        }
         return await mcpCall(entry.serverId, entry.toolName, args, ctx) as any;
       } catch (error: any) {
         log?.warn?.(`mcp_call ${entry.name} failed: ${error?.message || error}`);

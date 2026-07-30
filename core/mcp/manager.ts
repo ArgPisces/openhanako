@@ -248,6 +248,24 @@ export function toMcpToolId(serverId, toolName) {
   return sanitizeId(`${serverId}_${toolName}`);
 }
 
+/** One-line parameter digest for a catalog row, cheap enough to hold in memory. */
+export function summarizeToolParameters(inputSchema) {
+  const properties = isPlainObject(inputSchema?.properties) ? inputSchema.properties : {};
+  const required = new Set(
+    Array.isArray(inputSchema?.required)
+      ? inputSchema.required.filter((name) => typeof name === "string")
+      : [],
+  );
+  const names = Object.keys(properties);
+  if (names.length === 0) return "";
+  return names
+    .map((name) => {
+      const type = typeof properties[name]?.type === "string" ? properties[name].type : "any";
+      return `${name} (${type}${required.has(name) ? ", required" : ""})`;
+    })
+    .join(", ");
+}
+
 export function normalizeMcpConfig(value) {
   const input = value && typeof value === "object" ? value : {};
   const rawConnectors = Array.isArray(input.connectors)
@@ -1375,6 +1393,53 @@ export class McpManager {
   /** Snapshot of the agent-facing MCP tools. The engine composes these into buildTools. */
   getAllTools() {
     return [...this._tools];
+  }
+
+  /**
+   * One catalog row per connector tool.
+   *
+   * `name` matches the id the direct-load path uses, so a deferred tool keeps
+   * the same capability string and the same session grant it would have had if
+   * it were loaded. The full input schema stays behind `schemaRef`, so building
+   * a catalog never materializes the schemas it describes.
+   *
+   * The connectors_status tool is deliberately absent: it is a host diagnostic
+   * rather than a connector tool, and it is never deferred.
+   */
+  getCatalogEntries() {
+    const entries = [];
+    for (const connector of this.getConfig().connectors) {
+      for (const tool of connector.tools || []) {
+        if (!tool?.name) continue;
+        entries.push({
+          name: toMcpToolId(connector.id, tool.name),
+          toolName: tool.name,
+          description: tool.description || `${connector.name}: ${tool.title || tool.name}`,
+          paramsSummary: summarizeToolParameters(tool.inputSchema),
+          serverId: connector.id,
+          serverLabel: connector.name || connector.id,
+          // Only an explicit false opts a tool out of deferral.
+          deferrable: tool.deferrable !== false,
+          pinned: connector.pinnedTools?.[tool.name] === true,
+          schemaRef: () => tool.inputSchema || { type: "object", properties: {} },
+        });
+      }
+    }
+    return entries;
+  }
+
+  /**
+   * The permission kind for one tool, resolved the same way the direct-load
+   * path resolves it. The bridge routes through here so the two paths cannot
+   * drift apart.
+   */
+  resolveToolPermissionKind(connectorId, toolName) {
+    const connector = this.getConfig().connectors.find((item) => item.id === connectorId);
+    return resolveMcpToolPermissionKind({
+      permissionMode: connector?.permissionMode,
+      toolPermission: connector?.toolPermissions?.[toolName],
+      trustReadOnlyHint: connector?.trustReadOnlyHint,
+    }, this.getRuntimeToolAnnotations(connectorId, toolName));
   }
 
   /**
