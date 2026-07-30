@@ -101,17 +101,75 @@ export function createMcpRoute(engine) {
   sub.put("/settings/enabled", setGlobalEnabled);
   sub.put("/enabled", setGlobalEnabled);
 
+  // Deferred-loading knobs. Both fields are optional; an absent one is left as
+  // it is rather than reset, so the two controls can move independently.
+  sub.put("/settings/defer", async (c) => {
+    const rt = runtime();
+    if (!rt) return c.json({ error: "not initialized" }, 503);
+    const body = await safeJson(c);
+    const patch: Record<string, unknown> = {};
+    if (body?.deferEnabled !== undefined) {
+      if (typeof body.deferEnabled !== "boolean") {
+        return c.json({ error: "deferEnabled must be a boolean" }, 400);
+      }
+      patch.deferEnabled = body.deferEnabled;
+    }
+    if (body?.deferThreshold !== undefined) {
+      const threshold = body.deferThreshold;
+      if (typeof threshold !== "number" || !Number.isSafeInteger(threshold) || threshold <= 0) {
+        return c.json({ error: "deferThreshold must be a positive integer" }, 400);
+      }
+      patch.deferThreshold = threshold;
+    }
+    try {
+      await rt.setDeferSettings(patch);
+      return currentState(c);
+    } catch (err: any) {
+      return c.json({ error: err.message }, 400);
+    }
+  });
+
   async function addConnector(c) {
     const rt = runtime();
     if (!rt) return c.json({ error: "not initialized" }, 503);
     try {
       const connector = rt.addConnector(await c.req.json());
       await markCapabilitySnapshotsStale({ reason: "mcp.connector.add", connectorId: connector.id });
+      // Adding a connector is a request to use it. Starting is not awaited so a
+      // slow or unreachable server cannot hold up the add result; a failure is
+      // recorded as the connector's error instead.
+      void Promise.resolve(rt.autoStartAfterAdd(connector.id)).catch(() => {});
       const state = rt.getState();
       const publicConnector = state.connectors.find((item) => item.id === connector.id) || connector;
       return c.json({ connector: publicConnector, server: publicConnector, state });
     } catch (err) {
       return c.json({ error: err.message }, 400);
+    }
+  }
+
+  // Import several connectors at once. The manager validates the whole batch
+  // before writing any of it, so a bad row rejects the request without leaving
+  // a partial import behind; `results` still names the offending row either way.
+  async function addConnectorsBulk(c) {
+    const rt = runtime();
+    if (!rt) return c.json({ error: "not initialized" }, 503);
+    const body = await safeJson(c);
+    const connectors = body?.connectors;
+    if (!Array.isArray(connectors)) {
+      return c.json({ error: "connectors must be an array" }, 400);
+    }
+    try {
+      const results = rt.addConnectors(connectors);
+      await markCapabilitySnapshotsStale({ reason: "mcp.connector.add" });
+      // Starting is deliberately not awaited: a connector that is slow or down
+      // must not hold up the import result.
+      for (const result of results) {
+        // A fire-and-forget promise must never become an unhandled rejection.
+        if (result?.ok && result.id) void Promise.resolve(rt.autoStartAfterAdd(result.id)).catch(() => {});
+      }
+      return c.json({ results, state: rt.getState() });
+    } catch (err: any) {
+      return c.json({ error: err.message, ...(err.results ? { results: err.results } : {}) }, 400);
     }
   }
 
@@ -187,6 +245,9 @@ export function createMcpRoute(engine) {
 
   sub.post("/connectors", addConnector);
   sub.post("/servers", addConnector);
+  // Registered before the ":id" routes so "bulk" is never read as a connector id.
+  sub.post("/connectors/bulk", addConnectorsBulk);
+  sub.post("/servers/bulk", addConnectorsBulk);
   sub.put("/connectors/:id", updateConnector);
   sub.put("/servers/:id", updateConnector);
   sub.delete("/connectors/:id", removeConnector);
@@ -276,8 +337,22 @@ export function createMcpRoute(engine) {
     }
   }
 
+  // End a browser round trip the user gave up on. The wait is abandoned, not
+  // failed: nothing about the connector's saved credentials changes.
+  function cancelOAuth(c) {
+    const rt = runtime();
+    if (!rt) return c.json({ error: "not initialized" }, 503);
+    try {
+      return c.json(rt.cancelOAuth(c.req.param("id")));
+    } catch (err: any) {
+      return c.json({ error: err.message }, 400);
+    }
+  }
+
   sub.post("/connectors/:id/oauth/start", startOAuth);
   sub.post("/servers/:id/oauth/start", startOAuth);
+  sub.post("/connectors/:id/oauth/cancel", cancelOAuth);
+  sub.post("/servers/:id/oauth/cancel", cancelOAuth);
   sub.post("/connectors/:id/oauth/logout", logoutOAuth);
   sub.post("/servers/:id/oauth/logout", logoutOAuth);
 

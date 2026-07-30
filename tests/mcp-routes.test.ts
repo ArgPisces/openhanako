@@ -22,6 +22,7 @@ function fakeMcp(overrides: any = {}) {
     _markCapabilitySnapshotsStale: vi.fn(async () => null),
     completeOAuth: vi.fn(async () => ({ status: "done" })),
     getOAuthStatus: vi.fn(() => ({ status: "pending" })),
+    autoStartAfterAdd: vi.fn(async () => {}),
     startOAuth: vi.fn(async () => ({ sessionId: "s1", url: "https://auth.example.com/authorize" })),
     listApps: vi.fn(() => []),
     readResource: vi.fn(async () => ({ contents: [] })),
@@ -251,6 +252,146 @@ describe("MCP first-class routes", () => {
 
       expect(res.status).toBe(409);
       expect(await res.json()).toMatchObject({ error: "session_not_loaded" });
+    });
+  });
+
+  describe("bulk connector import", () => {
+    function postBulk(app, body, routePath = "/api/mcp/connectors/bulk") {
+      return app.request(routePath, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("writes every connector and reports one result per item", async () => {
+      const mcp = fakeMcp({
+        addConnectors: vi.fn(() => [
+          { ok: true, id: "alpha" },
+          { ok: true, id: "beta" },
+        ]),
+      });
+
+      const res = await postBulk(createApp(mcp), {
+        connectors: [
+          { name: "alpha", transport: "remote", url: "https://a.example.com/mcp" },
+          { name: "beta", transport: "stdio", command: "npx" },
+        ],
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({
+        results: [{ ok: true, id: "alpha" }, { ok: true, id: "beta" }],
+      });
+      expect(mcp.addConnectors).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects the whole batch without writing when any item fails validation", async () => {
+      const mcp = fakeMcp({
+        addConnectors: vi.fn(() => {
+          const error: any = new Error("connector 2: url is required");
+          error.results = [{ ok: true }, { ok: false, error: "url is required" }];
+          throw error;
+        }),
+      });
+
+      const res = await postBulk(createApp(mcp), {
+        connectors: [
+          { name: "alpha", transport: "remote", url: "https://a.example.com/mcp" },
+          { name: "beta", transport: "remote" },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      // The caller still learns which item was at fault, so the preview list can
+      // mark exactly the offending row rather than failing anonymously.
+      expect(await res.json()).toMatchObject({
+        results: [{ ok: true }, { ok: false, error: "url is required" }],
+      });
+    });
+
+    it("rejects a body without a connectors array", async () => {
+      const mcp = fakeMcp({ addConnectors: vi.fn() });
+
+      const res = await postBulk(createApp(mcp), { connectors: "nope" });
+
+      expect(res.status).toBe(400);
+      expect(mcp.addConnectors).not.toHaveBeenCalled();
+    });
+
+    it("is reachable through the legacy alias", async () => {
+      const mcp = fakeMcp({ addConnectors: vi.fn(() => [{ ok: true, id: "alpha" }]) });
+
+      const res = await postBulk(
+        createApp(mcp),
+        { connectors: [{ name: "alpha", transport: "stdio", command: "npx" }] },
+        "/api/plugins/mcp/connectors/bulk",
+      );
+
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe("cancellable OAuth waits", () => {
+    it("cancels the connector's pending OAuth session", async () => {
+      const mcp = fakeMcp({ cancelOAuth: vi.fn(() => ({ cancelled: 1 })) });
+
+      const res = await createApp(mcp).request("/api/mcp/connectors/github/oauth/cancel", {
+        method: "POST",
+      });
+
+      expect(res.status).toBe(200);
+      expect(mcp.cancelOAuth).toHaveBeenCalledWith("github");
+    });
+
+    it("is reachable through the legacy and servers aliases", async () => {
+      const mcp = fakeMcp({ cancelOAuth: vi.fn(() => ({ cancelled: 0 })) });
+      const app = createApp(mcp);
+
+      for (const routePath of [
+        "/api/mcp/servers/github/oauth/cancel",
+        "/api/plugins/mcp/connectors/github/oauth/cancel",
+      ]) {
+        expect((await app.request(routePath, { method: "POST" })).status).toBe(200);
+      }
+    });
+
+    it("reports a cancelled wait through the existing poll endpoint", async () => {
+      const mcp = fakeMcp({ getOAuthStatus: vi.fn(() => ({ status: "cancelled" })) });
+
+      const res = await createApp(mcp).request("/api/mcp/oauth/poll/s1");
+
+      expect(await res.json()).toMatchObject({ status: "cancelled" });
+    });
+  });
+
+  describe("deferred loading settings", () => {
+    it("persists the defer switch and threshold", async () => {
+      const mcp = fakeMcp({
+        setDeferSettings: vi.fn(async () => ({ enabled: true, connectors: [] })),
+      });
+
+      const res = await createApp(mcp).request("/api/mcp/settings/defer", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deferEnabled: false, deferThreshold: 25 }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(mcp.setDeferSettings).toHaveBeenCalledWith({ deferEnabled: false, deferThreshold: 25 });
+    });
+
+    it("rejects a threshold that is not a positive integer", async () => {
+      const mcp = fakeMcp({ setDeferSettings: vi.fn() });
+
+      const res = await createApp(mcp).request("/api/mcp/settings/defer", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deferThreshold: 0 }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(mcp.setDeferSettings).not.toHaveBeenCalled();
     });
   });
 });

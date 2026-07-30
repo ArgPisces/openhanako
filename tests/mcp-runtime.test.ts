@@ -580,7 +580,67 @@ describe("MCP runtime policy", () => {
       });
     });
 
-    for (const action of ["rejected", "timeout", "aborted"]) {
+    // A user who refuses the form made a decision the server is entitled to
+    // hear: the spec's ElicitResult has a "decline" action for exactly this, and
+    // relaying it lets the server unwind its own pending work. What the model
+    // sees is unchanged — the tool call still fails loudly, naming the server
+    // and the outcome.
+    it("relays the user's refusal to the server as a decline before failing the call", async () => {
+      const confirmStore = fakeConfirmStore();
+      const { runtime, calls } = buildRuntime({
+        confirmStore,
+        emitEvent: vi.fn(),
+        results: [
+          { resultType: "input_required", inputRequests: ELICIT_REQUEST, requestState: "opaque-blob" },
+          { resultType: "complete", content: [] },
+        ],
+      });
+      await runtime.startConnector("remote");
+
+      const pending = runtime.callTool("remote", "deploy", { env: "prod" }, { sessionPath: "/tmp/session.jsonl" });
+      await vi.waitFor(() => expect(confirmStore.create).toHaveBeenCalled());
+      confirmStore.settle({ action: "rejected" });
+
+      await expect(pending).rejects.toThrow(/Remote Service/);
+      await expect(pending).rejects.toThrow(/rejected/);
+
+      // The decline round goes out on the wire, repeating the original
+      // arguments and echoing the server's opaque state back untouched. No
+      // content rides along: a decline carries no submitted data.
+      expect(calls).toHaveLength(2);
+      expect(calls[1].args).toEqual({ env: "prod" });
+      expect(calls[1].opts).toMatchObject({
+        requestState: "opaque-blob",
+        inputResponses: { github_login: { action: "decline" } },
+      });
+      expect(calls[1].opts.inputResponses.github_login).not.toHaveProperty("content");
+      // The user is asked exactly once; the decline round is not another prompt.
+      expect(confirmStore.create).toHaveBeenCalledTimes(1);
+    });
+
+    it("still fails the call when the decline round itself cannot be delivered", async () => {
+      const confirmStore = fakeConfirmStore();
+      const { runtime } = buildRuntime({
+        confirmStore,
+        emitEvent: vi.fn(),
+        results: [
+          { resultType: "input_required", inputRequests: ELICIT_REQUEST },
+          new Error("connection reset"),
+        ],
+      });
+      await runtime.startConnector("remote");
+
+      const pending = runtime.callTool("remote", "deploy", {}, { sessionPath: "/tmp/session.jsonl" });
+      await vi.waitFor(() => expect(confirmStore.create).toHaveBeenCalled());
+      confirmStore.settle({ action: "rejected" });
+
+      // A transport failure while telling the server "no" must not turn the
+      // refusal into a different-looking outcome.
+      await expect(pending).rejects.toThrow(/Remote Service/);
+      await expect(pending).rejects.toThrow(/rejected/);
+    });
+
+    for (const action of ["timeout", "aborted"]) {
       it(`fails loudly with the server name and reason when the user answer is ${action}`, async () => {
         const confirmStore = fakeConfirmStore();
         const { runtime, calls } = buildRuntime({
@@ -599,7 +659,7 @@ describe("MCP runtime policy", () => {
 
         await expect(pending).rejects.toThrow(/Remote Service/);
         await expect(pending).rejects.toThrow(new RegExp(action));
-        // No silent retry: the call is not replayed behind the user's back.
+        // No silent retry: an unanswered prompt is not a decision to relay.
         expect(calls).toHaveLength(1);
       });
     }
@@ -1983,6 +2043,291 @@ describe("MCP runtime OAuth persistence", () => {
       permissionMode: "allowlist",
       toolPermissions: { search: "allow" },
       trustReadOnlyHint: true,
+    });
+  });
+});
+
+describe("MCP management-center seams", () => {
+  function memoryStore(initial: any = { enabled: true, connectors: [] }) {
+    let value = initial;
+    return {
+      get: vi.fn(() => value),
+      set: vi.fn((_key, next) => { value = next; }),
+      read: () => value,
+    };
+  }
+
+  describe("bulk connector import", () => {
+    it("writes the whole batch in one save and returns an id per item", () => {
+      const store = memoryStore();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-bulk"),
+        config: store,
+        log: console,
+      });
+
+      const results = runtime.addConnectors([
+        { name: "Alpha", transport: "remote", url: "https://alpha.example.com/mcp" },
+        { name: "Beta", transport: "stdio", command: "npx" },
+      ]);
+
+      expect(results).toEqual([
+        { ok: true, id: "Alpha" },
+        { ok: true, id: "Beta" },
+      ]);
+      // One transaction, not one write per connector.
+      expect(store.set).toHaveBeenCalledTimes(1);
+      expect(store.read().connectors.map((c) => c.name)).toEqual(["Alpha", "Beta"]);
+    });
+
+    it("writes nothing at all when any item fails validation", () => {
+      const store = memoryStore();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-bulk-invalid"),
+        config: store,
+        log: console,
+      });
+
+      let thrown: any = null;
+      try {
+        runtime.addConnectors([
+          { name: "Alpha", transport: "remote", url: "https://alpha.example.com/mcp" },
+          { name: "Beta", transport: "remote" },
+        ]);
+      } catch (err) {
+        thrown = err;
+      }
+
+      expect(thrown).toBeTruthy();
+      // Validate-then-write: a bad row anywhere leaves the config untouched, so
+      // the user never has to undo a half-applied import.
+      expect(store.set).not.toHaveBeenCalled();
+      expect(thrown.results).toEqual([
+        { ok: true },
+        { ok: false, error: expect.stringContaining("url") },
+      ]);
+    });
+
+    it("gives colliding names distinct ids inside one batch", () => {
+      const store = memoryStore();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-bulk-collide"),
+        config: store,
+        log: console,
+      });
+
+      const results = runtime.addConnectors([
+        { name: "Same", transport: "stdio", command: "a" },
+        { name: "Same", transport: "stdio", command: "b" },
+      ]);
+
+      expect(results.map((r: any) => r.id)).toEqual(["Same", "Same_2"]);
+    });
+
+    it("reports a clear message instead of a bare Invalid URL", () => {
+      const store = memoryStore();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-bad-url"),
+        config: store,
+        log: console,
+      });
+
+      expect(() => runtime.addConnector({ name: "NoScheme", transport: "remote", url: "example.com/mcp" }))
+        .toThrow(/example\.com\/mcp/);
+      expect(() => runtime.addConnector({ name: "NoScheme", transport: "remote", url: "example.com/mcp" }))
+        .not.toThrow(/^Invalid URL$/);
+    });
+  });
+
+  describe("cancellable OAuth waits", () => {
+    it("cancels the connector's pending session so the poll reports cancelled", async () => {
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-oauth-cancel"),
+        config: memoryStore(),
+        log: console,
+      });
+      runtime.oauthSessions.set("state-1", { status: "pending", connectorId: "github" });
+      runtime.oauthSessions.set("state-2", { status: "pending", connectorId: "other" });
+
+      expect(runtime.cancelOAuth("github")).toMatchObject({ cancelled: 1 });
+
+      expect(runtime.getOAuthStatus("state-1")).toEqual({ status: "cancelled" });
+      // Another connector's wait is untouched.
+      expect(runtime.getOAuthStatus("state-2")).toEqual({ status: "pending" });
+    });
+
+    it("leaves an already finished session alone", () => {
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-oauth-cancel-done"),
+        config: memoryStore(),
+        log: console,
+      });
+      runtime.oauthSessions.set("state-1", { status: "done", connectorId: "github", result: { connectorId: "github" } });
+
+      expect(runtime.cancelOAuth("github")).toMatchObject({ cancelled: 0 });
+      expect(runtime.getOAuthStatus("state-1")).toMatchObject({ status: "done" });
+    });
+
+    it("completing a cancelled session does not write a token", async () => {
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-oauth-cancel-race"),
+        config: memoryStore(),
+        log: console,
+      });
+      runtime.oauthSessions.set("state-1", { status: "pending", connectorId: "github" });
+      runtime.cancelOAuth("github");
+
+      // The browser tab may still come back after the user cancelled. A
+      // cancelled wait must not silently reopen into a granted connection.
+      await expect(runtime.completeOAuth({ state: "state-1", code: "code-1", error: "" }))
+        .rejects.toThrow(/cancel/i);
+      expect(runtime.getOAuthStatus("state-1")).toEqual({ status: "cancelled" });
+    });
+  });
+
+  describe("auto-start after add", () => {
+    it("starts the freshly added connector", async () => {
+      const store = memoryStore();
+      const start = vi.fn(async () => {});
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-autostart"),
+        config: store,
+        log: console,
+      }, {
+        clientFactory: () => ({
+          running: true,
+          start,
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => [{ name: "search", inputSchema: { type: "object" } }]),
+        }),
+      });
+      const connector = runtime.addConnector({ name: "Alpha", transport: "stdio", command: "npx" });
+
+      await runtime.autoStartAfterAdd(connector.id);
+
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(runtime.getState().connectors[0]).toMatchObject({ status: "running" });
+    });
+
+    it("records a failed start as the connector's error instead of throwing", async () => {
+      const store = memoryStore();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-autostart-fail"),
+        config: store,
+        log: console,
+      }, {
+        clientFactory: () => ({
+          running: false,
+          start: vi.fn(async () => { throw new Error("spawn ENOENT"); }),
+          stop: vi.fn(async () => {}),
+        }),
+      });
+      const connector = runtime.addConnector({ name: "Alpha", transport: "stdio", command: "nope" });
+
+      // Adding succeeded; the connector simply is not up yet. The failure is
+      // reported where the user is looking, not thrown at the add request.
+      await expect(runtime.autoStartAfterAdd(connector.id)).resolves.toBeUndefined();
+      expect(runtime.getState().connectors[0]).toMatchObject({ error: "spawn ENOENT" });
+    });
+
+    it("does not try to start while MCP is globally disabled", async () => {
+      const store = memoryStore({ enabled: false, connectors: [] });
+      const start = vi.fn(async () => {});
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-autostart-disabled"),
+        config: store,
+        log: console,
+      }, {
+        clientFactory: () => ({ running: false, start, stop: vi.fn(async () => {}) }),
+      });
+      const connector = runtime.addConnector({ name: "Alpha", transport: "stdio", command: "npx" });
+
+      await runtime.autoStartAfterAdd(connector.id);
+
+      expect(start).not.toHaveBeenCalled();
+      expect(runtime.getState().connectors[0].error).toBe("");
+    });
+  });
+
+  describe("deferred loading settings", () => {
+    it("persists the switch and threshold across a save", async () => {
+      const store = memoryStore();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-defer-persist"),
+        config: store,
+        log: console,
+      });
+
+      await runtime.setDeferSettings({ deferEnabled: false, deferThreshold: 25 });
+
+      // Regression guard: saveConfig used to write only { enabled, connectors },
+      // so every defer edit was silently discarded on the next read.
+      expect(store.read()).toMatchObject({ deferEnabled: false, deferThreshold: 25 });
+      expect(runtime.getConfig()).toMatchObject({ deferEnabled: false, deferThreshold: 25 });
+    });
+
+    it("keeps defer settings when an unrelated connector edit saves the config", async () => {
+      const store = memoryStore();
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-defer-survives"),
+        config: store,
+        log: console,
+      });
+      await runtime.setDeferSettings({ deferEnabled: false, deferThreshold: 25 });
+
+      runtime.addConnector({ name: "Alpha", transport: "stdio", command: "npx" });
+
+      expect(runtime.getConfig()).toMatchObject({ deferEnabled: false, deferThreshold: 25 });
+    });
+
+    it("rejects a threshold that is not a positive integer", async () => {
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-defer-invalid"),
+        config: memoryStore(),
+        log: console,
+      });
+
+      for (const deferThreshold of [0, -1, 2.5, "ten"]) {
+        await expect(runtime.setDeferSettings({ deferThreshold })).rejects.toThrow(/threshold/i);
+      }
+    });
+
+    it("exposes the defer settings through getState so the settings page can read them", () => {
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-defer-state"),
+        config: memoryStore(),
+        log: console,
+      });
+
+      expect(runtime.getState()).toMatchObject({ deferEnabled: true, deferThreshold: 10 });
+    });
+  });
+
+  it("publishes each tool's agent-facing identity in state", () => {
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-qualified"),
+      config: {
+        get: vi.fn(() => ({
+          enabled: true,
+          connectors: [{
+            id: "github.com",
+            name: "GitHub",
+            url: "https://mcp.github.com/mcp",
+            tools: [{ name: "search/repositories" }],
+          }],
+        })),
+        set: vi.fn(),
+      },
+      log: console,
+    });
+
+    // The approval prompt needs to map a pending invocation back to a connector
+    // and tool without re-deriving the id-sanitizing rules in the renderer.
+    const [tool] = runtime.getState().connectors[0].tools;
+    expect(tool).toMatchObject({
+      name: "search/repositories",
+      qualifiedName: "github_com_search_repositories",
+      capability: "github_com_search_repositories.invoke",
     });
   });
 });

@@ -746,9 +746,40 @@ export class McpManager {
     const normalized = normalizeMcpConfig(config);
     this._configStore.set(MCP_CONFIG_KEY, {
       enabled: normalized.enabled,
+      // The defer switch and threshold are written on every save, not only when
+      // they change. Omitting them here used to make every defer edit vanish on
+      // the next read, because getConfig() re-applies the defaults to whatever
+      // is on disk.
+      deferEnabled: normalized.deferEnabled,
+      deferThreshold: normalized.deferThreshold,
       connectors: normalized.connectors,
     });
     return normalized;
+  }
+
+  /**
+   * Persist the deferred-loading knobs the management center exposes.
+   *
+   * Both fields are optional so the caller can move one without restating the
+   * other. An out-of-range threshold is refused rather than silently coerced to
+   * the default: a rejected edit the user can see beats a saved value they did
+   * not choose.
+   */
+  async setDeferSettings({ deferEnabled, deferThreshold }: any = {}) {
+    const config = this.getConfig();
+    if (deferEnabled !== undefined) {
+      if (typeof deferEnabled !== "boolean") throw new Error("deferEnabled must be a boolean");
+      config.deferEnabled = deferEnabled;
+    }
+    if (deferThreshold !== undefined) {
+      if (typeof deferThreshold !== "number" || !Number.isSafeInteger(deferThreshold) || deferThreshold <= 0) {
+        throw new Error("deferThreshold must be a positive integer");
+      }
+      config.deferThreshold = deferThreshold;
+    }
+    const saved = this.saveConfig(config);
+    await this._markCapabilitySnapshotsStale?.({ reason: "mcp.defer.settings" });
+    return saved;
   }
 
   getState(agentConfig = null) {
@@ -762,6 +793,8 @@ export class McpManager {
     }));
     return {
       enabled: config.enabled,
+      deferEnabled: config.deferEnabled,
+      deferThreshold: config.deferThreshold,
       connectors,
       servers: connectors,
       agentConfig: normalizeAgentMcpConfig(agentConfig),
@@ -825,6 +858,78 @@ export class McpManager {
 
   addServer(input) {
     return this.addConnector(input);
+  }
+
+  /**
+   * Add several connectors as one transaction.
+   *
+   * Every item is normalized and validated against the batch-in-progress before
+   * anything is written, so a malformed row late in an imported file cannot
+   * leave half an import on disk for the user to clean up by hand. Only schema
+   * problems are validation failures — reachability is not checked here, since a
+   * server being down is not a reason to refuse to save its address.
+   *
+   * On failure the thrown error carries `results`, one entry per input item, so
+   * the caller can point at the offending row instead of failing anonymously.
+   */
+  addConnectors(inputs) {
+    if (!Array.isArray(inputs)) throw new Error("connectors must be an array");
+    const config = this.getConfig();
+    const staged = [];
+    const results = [];
+    let failed = false;
+
+    for (const input of inputs) {
+      if (failed) {
+        results.push({ ok: false, error: "not attempted" });
+        continue;
+      }
+      try {
+        // Ids are allocated against the connectors already staged in this batch
+        // too, so two rows with the same name do not collide with each other.
+        const id = uniqueConnectorId([...config.connectors, ...staged], input?.id || input?.name || input?.url || input?.command || "connector");
+        const connector = normalizeConnector({ ...input, id }, id);
+        validateConnector(connector);
+        staged.push(connector);
+        results.push({ ok: true, id });
+      } catch (err) {
+        failed = true;
+        results.push({ ok: false, error: err?.message || String(err) });
+      }
+    }
+
+    if (failed) {
+      const index = results.findIndex((result) => result.ok === false);
+      const error: any = new Error(`connector ${index + 1}: ${results[index].error}`);
+      error.results = results.map((result) => (result.ok ? { ok: true } : result));
+      throw error;
+    }
+
+    config.connectors.push(...staged);
+    const saved = this.saveConfig(config);
+    this.registerCachedTools();
+    return results.map((result) => ({
+      ok: true,
+      id: saved.connectors.find((item) => item.id === result.id)?.id ?? result.id,
+    }));
+  }
+
+  /**
+   * Bring a just-added connector up without making the caller wait for it.
+   *
+   * A start can take seconds and can fail for reasons that say nothing about
+   * whether the connector was worth saving, so the failure is recorded as the
+   * connector's error (where the settings page already shows it) rather than
+   * thrown back at the add request.
+   */
+  async autoStartAfterAdd(id) {
+    if (this.getConfig().enabled !== true) return;
+    try {
+      await this.startConnector(id);
+    } catch {
+      // startConnector already recorded the message in clientErrors, which
+      // getState() surfaces as connector.error.
+    }
   }
 
   async updateConnector(id, patch) {
@@ -1252,6 +1357,21 @@ export class McpManager {
         );
       }
       extra = await this._gatherInputResponses(result, { connectorId, connectorName, toolName, runtimeCtx });
+      // The user refused the form. The server is told so it can unwind its own
+      // pending work, and then the call fails with the same outcome the user
+      // chose — the decline round is a courtesy to the server, not a retry.
+      if (extra?.declined) {
+        await client
+          .callTool(toolName, args, extra.payload)
+          // Failing to deliver the "no" must not turn a refusal into a
+          // different-looking result. Swallow it and report the refusal.
+          .catch(() => {});
+        throw new Error(
+          `MCP connector "${connectorName}" needed input for "${toolName}", but the request ended as `
+          + `"rejected".`,
+        );
+      }
+      extra = extra?.payload ?? extra;
     }
     // Unreachable: the loop either returns a result or throws above.
     throw new Error(`MCP connector "${connectorName}" did not complete "${toolName}".`);
@@ -1262,10 +1382,11 @@ export class McpManager {
     const inputRequests = result?.inputRequests;
     // State but no questions: replay straight away, echoing the state back.
     if (!inputRequests || typeof inputRequests !== "object" || Array.isArray(inputRequests)) {
-      return requestState ? { requestState } : {};
+      return { payload: requestState ? { requestState } : {}, declined: false };
     }
 
     const inputResponses = {};
+    let declined = false;
     for (const [key, request] of Object.entries(inputRequests)) {
       const method = (request as any)?.method;
       const params = (request as any)?.params || {};
@@ -1281,14 +1402,19 @@ export class McpManager {
           `MCP connector "${connectorName}" requested "${params.mode}" mode input for "${toolName}", which is not supported yet.`,
         );
       }
-      inputResponses[key] = await this._askUserForElicitation(params, {
+      const response = await this._askUserForElicitation(params, {
         connectorId,
         connectorName,
         toolName,
         runtimeCtx,
       });
+      inputResponses[key] = response;
+      if (response.action === "decline") declined = true;
     }
-    return requestState ? { inputResponses, requestState } : { inputResponses };
+    return {
+      payload: requestState ? { inputResponses, requestState } : { inputResponses },
+      declined,
+    };
   }
 
   async _askUserForElicitation(params, { connectorId, connectorName, toolName, runtimeCtx }) {
@@ -1330,9 +1456,14 @@ export class McpManager {
     }, sessionPath);
 
     const decision = await promise;
+    // An explicit refusal is a decision the protocol has a word for. It goes
+    // back to the server as a decline (no content: a decline submits nothing),
+    // and the caller still fails the tool call.
+    if (decision?.action === "rejected") return { action: "decline" };
     if (decision?.action !== "confirmed") {
-      // Declining, timing out and aborting are all real outcomes the model must
-      // see. Never swallow them into a retry or an empty answer.
+      // Timing out and aborting are real outcomes the model must see, but they
+      // are not answers to relay. Never swallow them into a retry or an empty
+      // answer.
       throw new Error(
         `MCP connector "${connectorName}" needed input for "${toolName}", but the request ended as `
         + `"${decision?.action || "unanswered"}".`,
@@ -1680,9 +1811,30 @@ export class McpManager {
     return { sessionId: session.state, url };
   }
 
+  /**
+   * Abandon whatever OAuth waits this connector has in flight.
+   *
+   * The user gave up on the browser round trip, so the wait ends here. The
+   * session is kept (rather than deleted) in the cancelled state: the redirect
+   * may still arrive afterwards, and completeOAuth must be able to tell "the
+   * user cancelled this" apart from "no such session".
+   */
+  cancelOAuth(connectorId) {
+    let cancelled = 0;
+    for (const session of this.oauthSessions.values()) {
+      if (session.connectorId !== connectorId) continue;
+      if (session.status !== "pending") continue;
+      session.status = "cancelled";
+      cancelled += 1;
+    }
+    return { cancelled };
+  }
+
   async completeOAuth({ state, code, error }) {
     const session = this.oauthSessions.get(state);
     if (!session) throw new Error("OAuth session not found");
+    // A late redirect must not reopen a wait the user already called off.
+    if (session.status === "cancelled") throw new Error("OAuth session was cancelled");
     if (error) {
       session.status = "error";
       session.error = error;
@@ -1724,6 +1876,7 @@ export class McpManager {
     if (!session) return { status: "missing" };
     if (session.status === "done") return { status: "done", result: session.result || null };
     if (session.status === "error") return { status: "error", error: session.error || "OAuth failed" };
+    if (session.status === "cancelled") return { status: "cancelled" };
     return { status: "pending" };
   }
 
@@ -2051,7 +2204,14 @@ function validateConnector(connector) {
     return;
   }
   if (!connector.url) throw new Error("url is required");
-  const url = new URL(connector.url);
+  let url;
+  try {
+    url = new URL(connector.url);
+  } catch {
+    // The platform's bare "Invalid URL" says nothing about which field or which
+    // value, and it used to reach the user verbatim in a toast.
+    throw new Error(`url "${connector.url}" is not a valid URL — include the scheme, e.g. https://example.com/mcp`);
+  }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("url must use http or https");
   }
@@ -2091,7 +2251,12 @@ function publicConnector({ connector, status, error = "", toolListFreshness = nu
     // connector: saveConfig normalizes through normalizeTool, which drops them.
     tools: (connector.tools || []).map((tool) => {
       const annotations = toolAnnotations?.get(tool.name);
-      return annotations ? { ...tool, annotations } : tool;
+      // The agent-facing identity travels with the tool so surfaces can match a
+      // pending invocation back to its connector without re-deriving the
+      // id-sanitizing rules. Two implementations of that rule would drift.
+      const qualifiedName = toMcpToolId(connector.id, tool.name);
+      const identified = { ...tool, qualifiedName, capability: `${qualifiedName}.invoke` };
+      return annotations ? { ...identified, annotations } : identified;
     }),
     status,
     error,
