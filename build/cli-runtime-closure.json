@@ -2912,6 +2912,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "server/routes/sessions.ts",
           "kind": "import-statement"
         },
@@ -2921,7 +2926,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/message-utils.ts (import-statement); lib/session-collab/transcript.ts (import-statement); core/session-list-projection-cache.ts (import-statement); +3 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/message-utils.ts (import-statement); lib/session-collab/transcript.ts (import-statement); core/session-list-projection-cache.ts (import-statement); +4 more importer(s)."
     },
     {
       "path": "core/session-teardown.ts",
@@ -3279,11 +3284,16 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "core/session-coordinator.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/engine.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-coordinator.ts (import-statement); core/engine.ts (import-statement)."
     },
     {
       "path": "core/tool-snapshot-repair.ts",
@@ -5920,9 +5930,14 @@
           "root": "server-bootstrap",
           "from": "core/session-coordinator.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-cache-snapshot.ts (import-statement); core/session-compactor.ts (import-statement); core/session-capability-drift.ts (import-statement); +1 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-cache-snapshot.ts (import-statement); core/session-compactor.ts (import-statement); core/session-capability-drift.ts (import-statement); +2 more importer(s)."
     },
     {
       "path": "lib/llm/cache-preserving-compaction-agent-run.ts",
