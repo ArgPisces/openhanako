@@ -187,7 +187,11 @@ describe("workflow tool", () => {
       executeIsolated: async () => ({ replyText: "", error: "boom" }), emitEvent: () => {},
       getDeferredStore: () => store, getSubagentRunStore: () => runStore,
     });
-    const res = await tool.execute("c1", { script: META + `return await agent('x')` }, undefined, undefined, makeCtx()) as any;
+    const res = await tool.execute(
+      "c1",
+      { script: META + `return await agent('x')`, limits: { nodeRetries: 0 } },
+      undefined, undefined, makeCtx(),
+    ) as any;
     await flush();
     expect(res.details.taskId).toBeTruthy();
     expect(store.fail).toHaveBeenCalledWith(res.details.taskId, expect.stringMatching(/boom|agent 失败/));
@@ -298,14 +302,18 @@ describe("workflow tool", () => {
       emitEvent: (e) => evts.push(e),
       getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
     });
-    const res = await tool.execute("c1", { script: META + `return await agent('x')` }, undefined, undefined, makeCtx()) as any;
+    const res = await tool.execute(
+      "c1",
+      { script: META + `return await agent('x')`, limits: { nodeRetries: 0 } },
+      undefined, undefined, makeCtx(),
+    ) as any;
     await flush();
     const bu = evts.find((e) => e.type === "block_update" && e.patch?.streamStatus === "failed");
     expect(bu).toBeTruthy();
     expect(bu.taskId).toBe(res.details.taskId);
   });
 
-  it("workflow deadline 是 10 分钟，10 分钟前不 fail，到点后 fail", async () => {
+  it("默认无进展阈值是 10 分钟：卡死 9 分钟不 fail，10 分钟判死", async () => {
     vi.useFakeTimers();
     const store = makeStore();
     const tool = createWorkflowTool({
@@ -329,6 +337,134 @@ describe("workflow tool", () => {
         expect.stringMatching(/超时|timeout/i),
       );
     });
+  });
+
+  it("僵尸回归：无进展超时 → store.fail 一次且 abort 真正传播（后续节点被拒、消息带 resume 指引）", async () => {
+    vi.useFakeTimers();
+    const store = makeStore();
+    const seenSignals: AbortSignal[] = [];
+    const tool = createWorkflowTool({
+      executeIsolated: (_p, o) => new Promise((_res, rej) => {
+        seenSignals.push(o.signal);
+        o.signal?.addEventListener("abort", () => rej(new Error("aborted by controller")), { once: true });
+      }),
+      getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "read_only",
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    const res = await tool.execute(
+      "c1",
+      { script: META + `return await agent('x', { access: 'read', retries: 0 })`, limits: { idleTimeoutMs: 60_000, nodeTimeoutMs: 3_600_000 } },
+      undefined, undefined, makeCtx(),
+    ) as any;
+    // 只推到 idle 阈值，绝不 runOnlyPendingTimers：节点超时是 1h，此刻唯一能中止
+    // 在飞节点的只有 watchdog → failWith → controller.abort() 这一条链路。
+    await vi.advanceTimersByTimeAsync(61_000);
+    vi.useRealTimers();
+    await flush();
+    expect(store.fail).toHaveBeenCalledTimes(1);
+    const reason = String(store.fail.mock.calls[0][1]);
+    expect(reason).toMatch(/空转|无进展/);
+    expect(reason).toContain(res.details.taskId);   // resume 指引引用本次 runId
+    expect(reason).toContain("resumeFromRunId");
+    expect(seenSignals[0]?.aborted).toBe(true);      // abort 真正传播到在飞节点
+    expect(store.resolve).not.toHaveBeenCalled();
+  });
+
+  it("总量 backstop：无论节点是否还在喂狗，totalTimeoutMs 到点即判死并 abort", async () => {
+    vi.useFakeTimers();
+    const store = makeStore();
+    const seenSignals: AbortSignal[] = [];
+    const tool = createWorkflowTool({
+      executeIsolated: (_p, o) => new Promise((_res, rej) => {
+        seenSignals.push(o.signal);
+        o.signal?.addEventListener("abort", () => rej(new Error("aborted by controller")), { once: true });
+      }),
+      getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "read_only",
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    // idle 长于 total：只有总量 backstop 能结束这条 run。
+    const res = await tool.execute(
+      "c1",
+      {
+        script: META + `return await agent('x', { access: 'read', retries: 0 })`,
+        limits: { idleTimeoutMs: 3_600_000, nodeTimeoutMs: 3_600_000, totalTimeoutMs: 300_000 },
+      },
+      undefined, undefined, makeCtx(),
+    ) as any;
+    await vi.advanceTimersByTimeAsync(301_000);
+    vi.useRealTimers();
+    await flush();
+    expect(store.fail).toHaveBeenCalledTimes(1);
+    expect(String(store.fail.mock.calls[0][1])).toMatch(/总时长/);
+    expect(res.details.taskId).toBeTruthy();
+    expect(seenSignals[0]?.aborted).toBe(true);
+  });
+
+  it("有进展就不判死：节点持续完成时 idleTimeoutMs 不触发（长任务合法化）", async () => {
+    vi.useFakeTimers();
+    const store = makeStore();
+    const tool = createWorkflowTool({
+      // 每个节点花 40s，共 10 个 → 总计 400s，远超 60s 的 idle 阈值，但一直有进展。
+      executeIsolated: () => new Promise((res) => { setTimeout(() => res({ replyText: "ok", error: null }), 40_000); }),
+      getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "read_only",
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    const script = META + `const o=[]; while(o.length<10){o.push(await agent('x', { access: 'read' }))} return o.length`;
+    await tool.execute("c1", { script, limits: { idleTimeoutMs: 60_000, maxConcurrent: 1 } }, undefined, undefined, makeCtx());
+    await vi.advanceTimersByTimeAsync(500_000);
+    vi.useRealTimers();
+    await flush();
+    expect(store.fail).not.toHaveBeenCalled();
+    expect(store.resolve).toHaveBeenCalledWith(expect.any(String), "10");
+  });
+
+  it("limits.maxConcurrent 生效：并发被限制", async () => {
+    const store = makeStore();
+    let inFlight = 0, peak = 0;
+    const tool = createWorkflowTool({
+      executeIsolated: async () => {
+        inFlight++; peak = Math.max(peak, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight--;
+        return { replyText: "ok", error: null };
+      },
+      getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "read_only",
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    await tool.execute(
+      "c1",
+      { script: META + `return await parallel(Array.from({length: 8}, () => () => agent('x', { access: 'read' })))`, limits: { maxConcurrent: 2 } },
+      undefined, undefined, makeCtx(),
+    );
+    await new Promise((r) => setTimeout(r, 100));
+    expect(peak).toBeLessThanOrEqual(2);
+  });
+
+  it("默认并发是 16（不再是 256），越界 limits 被 clamp 到 64", async () => {
+    const store = makeStore();
+    let inFlight = 0, peak = 0;
+    const releases: Array<() => void> = [];
+    const makeTool = () => createWorkflowTool({
+      executeIsolated: async () => {
+        inFlight++; peak = Math.max(peak, inFlight);
+        await new Promise<void>((r) => releases.push(r));
+        inFlight--;
+        return { replyText: "ok", error: null };
+      },
+      getAgentId: () => "a1", emitEvent: () => {},
+      getSessionPermissionMode: () => "read_only",
+      getDeferredStore: () => store, getSubagentRunStore: () => makeRunStore(),
+    });
+    const script = META + `return await parallel(Array.from({length: 40}, () => () => agent('x', { access: 'read' })))`;
+    await makeTool().execute("c1", { script }, undefined, undefined, makeCtx());
+    await vi.waitFor(() => expect(releases.length).toBeGreaterThanOrEqual(16));
+    expect(peak).toBe(16);
+    releases.forEach((r) => r());
+    await flush();
   });
 
   it("脚本里 agent() → ActivityHub workflow_agent 子 entry（parentTaskId/label/childSessionPath）", async () => {
@@ -425,7 +561,7 @@ describe("workflow tool", () => {
     expect(done.tokens).toBe(1234); // 1000 + 234
   });
 
-  it("workflow agent fan-out 使用独立高并发上限，能同时启动几十个一次性节点", async () => {
+  it("workflow agent fan-out 抬高 limits.maxConcurrent 后能同时启动几十个一次性节点", async () => {
     const store = makeStore();
     let active = 0;
     let peak = 0;
@@ -448,7 +584,10 @@ describe("workflow tool", () => {
 
     await tool.execute(
       "c1",
-      { script: META + `return await parallel(Array.from({ length: 64 }, (_, i) => () => agent('x' + i)))` },
+      {
+        script: META + `return await parallel(Array.from({ length: 64 }, (_, i) => () => agent('x' + i)))`,
+        limits: { maxConcurrent: 64 },
+      },
       undefined,
       undefined,
       makeCtx(),
