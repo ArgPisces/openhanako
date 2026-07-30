@@ -100,7 +100,7 @@ describe("scan", () => {
 });
 
 describe("loadAll", () => {
-  it("loads real bundled media, jimeng-cli, beautify, mcp, and office plugin contributions", async () => {
+  it("loads real bundled media, jimeng-cli, beautify, and office plugin contributions", async () => {
     const bus = await makeBus();
     for (const type of [
       "provider:register-runtime-media-capability-source",
@@ -129,7 +129,7 @@ describe("loadAll", () => {
       await pm.loadAll();
 
       const diagnosticsById = new Map(pm.getDiagnostics().map((entry) => [entry.id, entry]));
-      for (const id of ["media", "jimeng-cli", "beautify", "mcp", "office"]) {
+      for (const id of ["media", "jimeng-cli", "beautify", "office"]) {
         expect(diagnosticsById.get(id)).toMatchObject({
           id,
           source: "builtin",
@@ -157,16 +157,11 @@ describe("loadAll", () => {
       // 内置插件的指南走工具，不贡献 skill 目录：它们的安装路径带版本号，
       // 冻结进会话快照后会在下次服务端更新时失效。
       expect(pm.getSkillPaths()).toHaveLength(0);
-      expect(pm.routeRegistry.has("mcp")).toBe(true);
       expect(pm.getConfigSchema("beautify")?.properties).toHaveProperty("coverResolution");
-      expect(pm.getSettingsTabs()).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          pluginId: "mcp",
-          nativeComponent: "mcp.settings",
-        }),
-      ]));
+      // MCP is a core module now, so it contributes no settings tab here.
+      expect(pm.getSettingsTabs().some((tab) => tab.pluginId === "mcp")).toBe(false);
     } finally {
-      for (const id of ["media", "jimeng-cli", "beautify", "mcp", "office"]) {
+      for (const id of ["media", "jimeng-cli", "beautify", "office"]) {
         await pm.unloadPlugin(id, { source: "builtin" });
       }
     }

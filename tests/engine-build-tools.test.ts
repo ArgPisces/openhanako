@@ -400,6 +400,80 @@ describe("HanaEngine.buildTools", () => {
     expect(customTools.map((tool) => tool.name)).toEqual(["automation"]);
   });
 
+  it("composes MCP manager tools with the same session context as plugin tools", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-build-tools-mcp-"));
+    const agentDir = path.join(tmpDir, "agents", "focus");
+    const workspace = path.join(tmpDir, "workspace");
+    const sessionPath = path.join(agentDir, "sessions", "main.jsonl");
+    const execute = vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] }));
+    const agent = { id: "focus", agentDir, config: {}, tools: [] };
+
+    const engine = Object.create(HanaEngine.prototype);
+    engine.hanakoHome = tmpDir;
+    engine.getAgent = vi.fn(() => agent);
+    engine._pluginManager = null;
+    // MCP tools come from the engine-owned manager, not the plugin registry.
+    engine._mcp = {
+      getAllTools: () => [{
+        name: "mcp_github_search",
+        _pluginId: "mcp",
+        execute,
+      }],
+    };
+    engine._prefs = { getFileBackup: () => ({ enabled: false }) };
+    engine._readPreferences = () => ({ sandbox: true });
+    engine._confirmStore = null;
+    engine._emitEvent = vi.fn();
+    engine.getSessionPermissionMode = vi.fn(() => "operate");
+    engine._agentMgr = { agent };
+
+    const { customTools } = engine.buildTools(workspace, [], {
+      agentDir,
+      workspace,
+      getSessionPath: () => sessionPath,
+      getPermissionMode: () => "operate",
+    });
+
+    const mcpTool = customTools.find((tool) => tool.name === "mcp_github_search");
+    expect(mcpTool).toBeTruthy();
+
+    await mcpTool.execute("call-1", { q: "hana" }, {
+      sessionManager: { getSessionFile: () => sessionPath },
+    });
+
+    // Same wrapper as plugin tools: the runtime context arrives as the fifth
+    // argument, carrying the resolved agent and session identity.
+    expect(execute).toHaveBeenCalledWith(
+      "call-1",
+      { q: "hana" },
+      expect.objectContaining({ sessionManager: expect.any(Object) }),
+      undefined,
+      expect.objectContaining({ agentId: "focus", sessionPath }),
+    );
+  });
+
+  it("rejects duplicate names between MCP tools and custom tools", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-build-tools-mcp-duplicate-"));
+    const agentDir = path.join(tmpDir, "agents", "focus");
+    const agent = { id: "focus", agentDir, config: {}, tools: [] };
+
+    const engine = Object.create(HanaEngine.prototype);
+    engine.hanakoHome = tmpDir;
+    engine.getAgent = vi.fn(() => agent);
+    engine._pluginManager = null;
+    engine._mcp = {
+      getAllTools: () => [{ ...permissionTool("mcp_duplicate"), _pluginId: "mcp" }],
+    };
+    engine._prefs = { getFileBackup: () => ({ enabled: false }) };
+    engine._readPreferences = () => ({ sandbox: true });
+    engine._agentMgr = { agent };
+
+    expect(() => engine.buildTools(tmpDir, [permissionTool("mcp_duplicate")], {
+      agentDir,
+      workspace: tmpDir,
+    })).toThrow(/duplicate tool name "mcp_duplicate" across custom tools and mcp tools/);
+  });
+
   it("passes a session workbench execution boundary into plugin tools", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-build-tools-boundary-"));
     const agentDir = path.join(tmpDir, "agents", "focus");

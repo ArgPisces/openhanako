@@ -160,6 +160,7 @@ import { SessionCollabDraftStore } from "../lib/session-collab/draft-store.ts";
 import { NotificationService } from "../lib/notifications/notification-service.ts";
 import { SpeechRecognitionService } from "./speech-recognition-service.ts";
 import { UniversalMediaManager } from "./media/universal-media-manager.ts";
+import { McpManager } from "./mcp/manager.ts";
 import { createCurrentTurnNativeMediaStore } from "./current-turn-native-media.ts";
 import {
   getSkillNameTranslationCachePath,
@@ -175,6 +176,7 @@ import {
 import { assertValidAgentId, isValidAgentId } from "../shared/agent-id.ts";
 
 const moduleLog = createModuleLogger("engine");
+const mcpLog = createModuleLogger("mcp");
 const toolAvailabilityLog = createModuleLogger("tool-availability");
 const win32SandboxCleanupLog = createModuleLogger("win32-sandbox-cleanup");
 
@@ -236,6 +238,7 @@ export class HanaEngine {
   declare _imageStripNotified: any;
   declare _listeners: any;
   declare _media: any;
+  declare _mcp: any;
   declare _models: any;
   declare _notifications: any;
   declare _outboundProxyRuntime: any;
@@ -367,6 +370,12 @@ export class HanaEngine {
       registerSessionFile: (entry) => this.serializeSessionFile(this.registerSessionFile(entry)),
       onProviderChanged: () => this.onProviderChanged(),
       builtinAdapters: builtinMediaAdapters,
+    });
+    // The data directory keeps the historical `plugin-data/mcp` location: it is
+    // where existing installs already store their connector config.
+    this._mcp = new McpManager({
+      dataDir: path.join(this.hanakoHome, "plugin-data", "mcp"),
+      log: mcpLog,
     });
     this._sessionProjects = new SessionProjectCatalogStore({ userDir: this.userDir });
 
@@ -993,6 +1002,7 @@ export class HanaEngine {
   }
   get speechRecognition() { return this._speechRecognition; }
   get media() { return this._media; }
+  get mcp() { return this._mcp; }
   get resources() { return this._resources; }
   getResourceService() {
     if (!this._resources) throw new Error("resource service is not initialized");
@@ -2429,6 +2439,7 @@ export class HanaEngine {
       this._pluginDevEventBusCleanup?.();
       this._pluginDevEventBusCleanup = null;
       this._media?.dispose?.();
+      await this._mcp?.dispose?.();
       this._skills?.unwatch();
       this._deferredResultCoordinator?.dispose?.();
       this._deferredResultCoordinator = null;
@@ -2453,6 +2464,7 @@ export class HanaEngine {
    */
   async initPlugins(bus) {
     this._media?.start?.(bus);
+    await this._mcp?.start?.(bus);
     const builtinPluginsDir = path.join(this.productDir, "..", "plugins");
     const userPluginsDir = path.join(this.hanakoHome, "plugins");
     const devPluginsDir = path.join(this.hanakoHome, "plugins-dev");
@@ -2637,6 +2649,7 @@ export class HanaEngine {
 
     // Append plugin tools
     const pluginTools = this._pluginManager?.getAllTools() || [];
+    const mcpTools = this._mcp?.getAllTools() || [];
     const executionBoundary = this._runtimeContext
       ? this.createExecutionBoundary({ workbenchRoot: cwd })
       : null;
@@ -2671,30 +2684,10 @@ export class HanaEngine {
       };
     };
     const runtimeCustomTools = ct.map(withRuntimeContext);
-    const wrappedPluginTools = pluginTools.map(t => ({
-      ...t,
-      execute: (toolCallId, params, signalOrRuntimeCtx, onUpdate, piCtx) => {
-        const { ctx: runtimeCtx } = normalizeToolRuntimeContext(signalOrRuntimeCtx, piCtx);
-        const runtimeSessionPath = runtimeCtx?.sessionPath
-          || getToolSessionPath(runtimeCtx)
-          || getSessionPath()
-          || null;
-        const sessionRef = resolveRuntimeSessionRef(runtimeCtx);
-        const sessionPath = runtimeSessionPath || sessionRef?.sessionPath || null;
-        const mergedCtx = {
-          ...runtimeCtx,
-          ...(sessionRef ? { sessionId: sessionRef.sessionId, sessionRef } : {}),
-          ...(sessionPath ? { sessionPath } : {}),
-          ...(opts.bridgeContext ? { bridgeContext: opts.bridgeContext } : {}),
-          ...(opts.notificationContext ? { notificationContext: opts.notificationContext } : {}),
-          allowHumanApproval,
-          approvalPolicy,
-          agentId,
-          ...executionScope,
-        };
-        return t.execute(toolCallId, params, signalOrRuntimeCtx, onUpdate, mergedCtx);
-      },
-    }));
+    // Plugin tools and MCP tools both need the same session context injection;
+    // withRuntimeContext is that wrapper, so neither gets its own copy of it.
+    const wrappedPluginTools = pluginTools.map(withRuntimeContext);
+    const wrappedMcpTools = mcpTools.map(withRuntimeContext);
     const pluginDevTools = this._pluginDevService && this._prefs.getPluginDevToolsEnabled?.() === true
       ? createPluginDevTools({
           pluginDevService: this._pluginDevService,
@@ -2705,10 +2698,11 @@ export class HanaEngine {
       { source: "custom tools", tools: baseCustomTools },
       { source: "extra custom tools", tools: extraCustomTools },
       { source: "plugin tools", tools: pluginTools },
+      { source: "mcp tools", tools: mcpTools },
       { source: "plugin development tools", tools: pluginDevTools },
     ]);
     const allTools = filterToolObjectsByAvailability(
-      [...runtimeCustomTools, ...wrappedPluginTools, ...pluginDevTools],
+      [...runtimeCustomTools, ...wrappedPluginTools, ...wrappedMcpTools, ...pluginDevTools],
       toolAgent?.config || {},
       {
         agentId,
