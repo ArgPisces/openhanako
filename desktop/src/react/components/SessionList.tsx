@@ -1536,6 +1536,7 @@ const SessionItem = memo(function SessionItem({ session: s, isActive, isPending,
   const [editValue, setEditValue] = useState('');
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [summaryPreviewPosition, setSummaryPreviewPosition] = useState<{ x: number; y: number } | null>(null);
+  const [browserMenuPosition, setBrowserMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isDeletedAgentSession = s.agentDeleted === true;
 
@@ -1617,19 +1618,42 @@ const SessionItem = memo(function SessionItem({ session: s, isActive, isPending,
   const browserTitle = [
     browserUrl,
     browserState?.unavailableReason,
-    t('browser.close'),
+    t('browser.open'),
   ].filter(Boolean).join('\n');
 
-  const handleBrowserClose = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
+  // 徽章左键 = 打开这个 session 的浏览器（冷状态先恢复，再让 viewer 切到它）。
+  // 关闭是破坏性操作，收进右键菜单，避免误点中断 agent。
+  const handleBrowserOpen = useCallback(async (e: React.MouseEvent | React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    onCloseBrowser(s.path);
-  }, [onCloseBrowser, s.path]);
+    try {
+      await hanaFetch('/api/browser/open-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionPath: s.path }),
+      });
+    } catch (err) {
+      console.warn('[browser] open session failed:', err);
+    }
+    window.platform?.openBrowserViewer?.({ sessionPath: s.path });
+  }, [s.path]);
 
   const handleBrowserKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    handleBrowserClose(e);
-  }, [handleBrowserClose]);
+    void handleBrowserOpen(e);
+  }, [handleBrowserOpen]);
+
+  const handleBrowserContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setBrowserMenuPosition({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const browserMenuItems = useMemo<ContextMenuItem[]>(() => ([{
+    label: t('browser.closeForSession'),
+    danger: true,
+    action: () => onCloseBrowser(s.path),
+  }]), [t, onCloseBrowser, s.path]);
 
   return (
     <>
@@ -1681,11 +1705,12 @@ const SessionItem = memo(function SessionItem({ session: s, isActive, isPending,
                   title={browserTitle}
                   role="button"
                   tabIndex={0}
-                  aria-label={t('browser.close')}
+                  aria-label={t('browser.open')}
                   data-running={browserState?.running ? 'true' : 'false'}
                   data-resumable={browserState?.resumable ? 'true' : 'false'}
-                  onClick={handleBrowserClose}
+                  onClick={handleBrowserOpen}
                   onKeyDown={handleBrowserKeyDown}
+                  onContextMenu={handleBrowserContextMenu}
                 >
                   <BrowserStatusIcon />
                 </span>
@@ -1741,6 +1766,13 @@ const SessionItem = memo(function SessionItem({ session: s, isActive, isPending,
           session={s}
           position={summaryPreviewPosition}
           onClose={() => setSummaryPreviewPosition(null)}
+        />
+      )}
+      {browserMenuPosition && (
+        <ContextMenu
+          items={browserMenuItems}
+          position={browserMenuPosition}
+          onClose={() => setBrowserMenuPosition(null)}
         />
       )}
     </>

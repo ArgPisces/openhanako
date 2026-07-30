@@ -2440,6 +2440,18 @@ export function createSessionsRoute(engine, hub = null) {
     return c.json(bm.getBrowserSessionStates());
   });
 
+  // 打开指定 session 的浏览器（侧栏徽章左键入口）：冷状态先恢复，再让 viewer 展示该 session
+  route.post("/browser/open-session", async (c) => {
+    const body = await safeJson(c);
+    const { sessionPath } = body;
+    if (!sessionPath) return c.json({ error: "missing sessionPath" }, 400);
+    const bm = BrowserManager.instance();
+    const resume = await bm.resumeForSessionIfAvailable(sessionPath);
+    const session = engine.getSessionByPath(sessionPath);
+    await bm.notifyViewerSession(sessionPath, session?.title || null);
+    return c.json({ ok: true, resume });
+  });
+
   // 关闭指定 session 的浏览器
   route.post("/browser/close-session", async (c) => {
     const body = await safeJson(c);

@@ -14,6 +14,7 @@ const renameSessionMock = vi.fn();
 const pinSessionMock = vi.fn();
 const createNewSessionMock = vi.fn();
 const reorderPinnedSessionsMock = vi.fn();
+const openBrowserViewerMock = vi.fn();
 
 const localServerConnection = {
   connectionId: 'local',
@@ -168,6 +169,11 @@ describe('SessionList context menu', () => {
     pinSessionMock.mockReset();
     createNewSessionMock.mockReset();
     reorderPinnedSessionsMock.mockReset();
+    openBrowserViewerMock.mockReset();
+    Object.defineProperty(window, 'platform', {
+      configurable: true,
+      value: { openBrowserViewer: openBrowserViewerMock },
+    });
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: vi.fn(async () => undefined) },
@@ -292,11 +298,44 @@ describe('SessionList context menu', () => {
     expect(archiveSessionMock).toHaveBeenCalledWith('/tmp/agents/deleted/sessions/pinned.jsonl');
   });
 
-  it('closes a sidebar browser badge without switching the session row', async () => {
+  it('opens the session browser from a left click on the sidebar badge', async () => {
     const browserStates = {
       '/tmp/agents/hana/sessions/with-summary.jsonl': {
         url: 'https://example.com',
         running: false,
+        resumable: true,
+        unavailableReason: null,
+      },
+    };
+    hanaFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/browser/session-states') return jsonResponse(browserStates);
+      if (url === '/api/browser/open-session') return jsonResponse({ ok: true });
+      return jsonResponse({});
+    });
+
+    render(<SessionList />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'browser.open' }));
+
+    await waitFor(() => {
+      expect(hanaFetchMock).toHaveBeenCalledWith('/api/browser/open-session', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ sessionPath: '/tmp/agents/hana/sessions/with-summary.jsonl' }),
+      }));
+      expect(openBrowserViewerMock).toHaveBeenCalledWith({
+        sessionPath: '/tmp/agents/hana/sessions/with-summary.jsonl',
+      });
+    });
+    expect(hanaFetchMock).not.toHaveBeenCalledWith('/api/browser/close-session', expect.anything());
+    expect(switchSessionMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'browser.open' })).toBeInTheDocument();
+  });
+
+  it('closes the session browser from the badge context menu', async () => {
+    const browserStates = {
+      '/tmp/agents/hana/sessions/with-summary.jsonl': {
+        url: 'https://example.com',
+        running: true,
         resumable: true,
         unavailableReason: null,
       },
@@ -313,8 +352,11 @@ describe('SessionList context menu', () => {
 
     render(<SessionList />);
 
-    const closeBadge = await screen.findByRole('button', { name: 'browser.close' });
-    fireEvent.click(closeBadge);
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'browser.open' }), {
+      clientX: 40,
+      clientY: 60,
+    });
+    fireEvent.click(await screen.findByText('browser.closeForSession'));
 
     await waitFor(() => {
       expect(hanaFetchMock).toHaveBeenCalledWith('/api/browser/close-session', expect.objectContaining({
@@ -324,7 +366,7 @@ describe('SessionList context menu', () => {
     });
     expect(switchSessionMock).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'browser.close' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'browser.open' })).not.toBeInTheDocument();
     });
   });
 

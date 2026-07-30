@@ -2685,6 +2685,9 @@
   "browser": {
     "using": "正在用瀏覽器",
     "close": "關閉瀏覽器",
+    "open": "開啟瀏覽器",
+    "collapse": "收起",
+    "closeForSession": "關閉此對話的瀏覽器",
     "closeBtn": "關閉",
     "back": "後退",
     "forward": "前進",

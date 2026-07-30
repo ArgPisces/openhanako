@@ -2685,6 +2685,9 @@
   "browser": {
     "using": "Using browser",
     "close": "Close browser",
+    "open": "Open browser",
+    "collapse": "Collapse",
+    "closeForSession": "Close this session's browser",
     "closeBtn": "Close",
     "back": "Back",
     "forward": "Forward",

@@ -2685,6 +2685,9 @@
   "browser": {
     "using": "ブラウザを使用中",
     "close": "ブラウザを閉じる",
+    "open": "ブラウザを開く",
+    "collapse": "折りたたむ",
+    "closeForSession": "このセッションのブラウザを閉じる",
     "closeBtn": "閉じる",
     "back": "戻る",
     "forward": "進む",

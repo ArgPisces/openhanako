@@ -2685,6 +2685,9 @@
   "browser": {
     "using": "브라우저 사용 중",
     "close": "브라우저 닫기",
+    "open": "브라우저 열기",
+    "collapse": "접기",
+    "closeForSession": "이 세션의 브라우저 닫기",
     "closeBtn": "닫기",
     "back": "뒤로",
     "forward": "앞으로",
