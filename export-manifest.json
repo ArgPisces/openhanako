@@ -180,6 +180,8 @@
     "core/studio-cron-service.ts",
     "core/studio-mounts.ts",
     "core/tool-availability.ts",
+    "core/tool-catalog.ts",
+    "core/tool-catalog-bridge.ts",
     "core/tool-snapshot-repair.ts",
     "core/vision-auxiliary-policy.ts",
     "core/vision-bridge.ts",

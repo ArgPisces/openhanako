@@ -97,6 +97,11 @@ function foldPlural(token: string): string {
   return token;
 }
 
+// Han, Hiragana and Katakana characters are indexed one character at a time.
+// Written as script properties rather than literal ranges so the source stays
+// free of the full-width punctuation those ranges would otherwise embed.
+const CJK_CHAR_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
 function tokenize(value: unknown): string[] {
   if (typeof value !== "string" || !value) return [];
   const tokens: string[] = [];
@@ -104,7 +109,7 @@ function tokenize(value: unknown): string[] {
     if (!run) continue;
     let latin = "";
     for (const char of run) {
-      if (/[　-鿿豈-﫿＀-￯]/u.test(char)) {
+      if (CJK_CHAR_RE.test(char)) {
         if (latin) {
           tokens.push(foldPlural(latin));
           latin = "";

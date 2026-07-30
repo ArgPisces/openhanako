@@ -149,6 +149,16 @@ describe("tool catalog search", () => {
     expect(hits[0].score).toBeCloseTo(hits[1].score, 10);
   });
 
+  it("indexes Chinese descriptions so a Chinese query finds the tool", () => {
+    const catalog = createToolCatalog();
+    catalog.registerSource("mcp:doc", [entry({
+      name: "doc_translate",
+      description: "\u5c06\u6587\u6863\u7ffb\u8bd1\u6210\u53e6\u4e00\u79cd\u8bed\u8a00",
+      paramsSummary: "",
+    })]);
+    expect(catalog.search("\u7ffb\u8bd1").map((hit) => hit.name)).toEqual(["doc_translate"]);
+  });
+
   it("falls back to a tool-name substring match when scoring finds nothing", () => {
     const catalog = createToolCatalog();
     catalog.registerSource("mcp:github", [entry({ name: "github_zzqq_special", description: "Nothing relevant here." })]);

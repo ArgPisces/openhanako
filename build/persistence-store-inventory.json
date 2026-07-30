@@ -2804,7 +2804,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 309,
+      "line": 315,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.channelsDir, { recursive: true })",
       "reason": "Creates the channel root.",
@@ -2813,7 +2813,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 355,
+      "line": 361,
       "kind": "persistent-store-constructor",
       "excerpt": "new PreferencesManager({ userDir: this.userDir, agentsDir: this.agentsDir })",
       "reason": "Constructs the preferences owner.",
@@ -2822,7 +2822,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 356,
+      "line": 362,
       "kind": "persistent-store-constructor",
       "excerpt": "new InputDraftsStore({ hanakoHome: this.hanakoHome })",
       "reason": "Constructs draft/project stores.",
@@ -2831,7 +2831,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 385,
+      "line": 391,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionProjectCatalogStore({ userDir: this.userDir })",
       "reason": "Constructs draft/project stores.",
@@ -2840,7 +2840,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 618,
+      "line": 624,
       "kind": "persistent-store-constructor",
       "excerpt": "new TaskRegistry({ persistencePath: path.join(this.hanakoHome, \".ephemeral\", \"plugin-tasks.json\"), getSessionIdForPath: (sessionPath) => this.getSessionIdForPath(sessionPath), })",
       "reason": "Constructs the plugin task registry.",
@@ -2849,7 +2849,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1242,
+      "line": 1248,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2858,7 +2858,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1263,
+      "line": 1269,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2867,7 +2867,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2246,
+      "line": 2252,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates the user skill root.",
@@ -2876,7 +2876,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2428,
+      "line": 2434,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
@@ -2885,7 +2885,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2484,
+      "line": 2490,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(pluginDevSourcesDir, { recursive: true })",
       "reason": "Creates the plugin development source root.",
@@ -3245,7 +3245,7 @@
     },
     {
       "sourceFile": "core/mcp/manager.ts",
-      "line": 651,
+      "line": 703,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.dataDir, { recursive: true })",
       "reason": "Sole writer of plugin-data/mcp/config.json.",

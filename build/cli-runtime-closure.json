@@ -1129,9 +1129,14 @@
           "root": "server-bootstrap",
           "from": "core/engine.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement); core/engine.ts (import-statement)."
     },
     {
       "path": "core/media-adapter-registry.ts",
@@ -1654,16 +1659,16 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "core/media/universal-media-manager.ts",
+          "from": "core/mcp/manager.ts",
           "kind": "import-statement"
         },
         {
           "root": "server-bootstrap",
-          "from": "core/mcp/manager.ts",
+          "from": "core/media/universal-media-manager.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/plugin-context.ts (import-statement); core/plugin-manager.ts (import-statement); core/media/universal-media-manager.ts (import-statement); +1 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/plugin-context.ts (import-statement); core/plugin-manager.ts (import-statement); core/mcp/manager.ts (import-statement); +1 more importer(s)."
     },
     {
       "path": "core/plugin-context.ts",
@@ -3255,6 +3260,30 @@
         }
       ],
       "reason": "Reached via esbuild source module graph, imported by core/session-coordinator.ts (import-statement); core/engine.ts (import-statement)."
+    },
+    {
+      "path": "core/tool-catalog-bridge.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+    },
+    {
+      "path": "core/tool-catalog.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
     },
     {
       "path": "core/tool-snapshot-repair.ts",
@@ -5671,6 +5700,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/mcp/manager.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/media/image-task-runner.ts",
           "kind": "import-statement"
         },
@@ -5682,11 +5716,6 @@
         {
           "root": "server-bootstrap",
           "from": "core/media/universal-media-manager.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "core/mcp/manager.ts",
           "kind": "import-statement"
         },
         {
@@ -5962,9 +5991,19 @@
           "root": "server-bootstrap",
           "from": "core/session-compactor.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/session-reminders.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/tool-catalog.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); core/session-reminders.ts (import-statement); core/tool-catalog.ts (import-statement)."
     },
     {
       "path": "lib/llm/prompt-layout.ts",
@@ -6589,9 +6628,14 @@
           "root": "server-bootstrap",
           "from": "lib/tools/session-permission-wrapper.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/tool-catalog-bridge.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/tools/session-permission-wrapper.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by lib/tools/session-permission-wrapper.ts (import-statement); core/tool-catalog-bridge.ts (import-statement)."
     },
     {
       "path": "lib/pi-sdk/compaction-request-shape.ts",
@@ -6816,6 +6860,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/tool-catalog-bridge.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/diary/diary-writer.ts",
           "kind": "import-statement"
         },
@@ -6860,7 +6909,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +47 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +48 more importer(s)."
     },
     {
       "path": "lib/pi-sdk/search-tools.ts",
@@ -9534,12 +9583,12 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "lib/session-execution-registry.ts",
+          "from": "core/mcp/manager.ts",
           "kind": "import-statement"
         },
         {
           "root": "server-bootstrap",
-          "from": "core/mcp/manager.ts",
+          "from": "lib/session-execution-registry.ts",
           "kind": "import-statement"
         },
         {
@@ -112124,9 +112173,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9609,
+    "totalFiles": 9611,
     "byInputType": {
-      "source-graph": 631,
+      "source-graph": 633,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }
