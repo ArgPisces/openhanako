@@ -1020,6 +1020,42 @@
       "exemption": null
     },
     {
+      "id": "loop-state",
+      "ownerModule": "lib/loop/loop-store.ts",
+      "pathPattern": ".ephemeral/loop-state.json",
+      "pathPatterns": [
+        ".ephemeral/loop-state.json"
+      ],
+      "pathExclusions": [],
+      "pathKind": "file",
+      "format": "json",
+      "schemaSource": {
+        "kind": "runtime-contract",
+        "module": "lib/loop/loop-store.ts",
+        "contract": "LoopStore schemaVersion-1 sessionId-keyed record shape, corrupt-file quarantine, and atomic serializer"
+      },
+      "schemaContract": {
+        "kind": "runtime-source",
+        "source": "lib/loop/loop-store.ts",
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs."
+      },
+      "openEntry": [
+        "new LoopStore"
+      ],
+      "migrationEntry": [],
+      "protocolModules": [],
+      "firstPossibleOpenPhase": "engine_construct",
+      "firstPossibleWritePhase": "engine_construct",
+      "epochPolicy": "epoch-managed",
+      "checkpointPolicy": "Include running/paused loop records so restart recovery can re-arm alarms; terminal records may be pruned.",
+      "restorePolicy": "Load through LoopStore so corrupt-file quarantine and record normalization apply before recovery runs.",
+      "affectedByEpochMigration": true,
+      "bootstrapSafety": null,
+      "preCoordinatorReadProjection": null,
+      "identityContract": "sessionId is the loop key for desktop and bridge targets alike; bridge sessionKey and any session path are delivery locators only.",
+      "exemption": null
+    },
+    {
       "id": "managed-runtime-caches",
       "ownerModule": "lib/pi-sdk/search-tools.ts",
       "pathPattern": "runtime/pi-sdk/bin/{toolName}",
@@ -2454,7 +2490,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 349,
+      "line": 352,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.join(this.agentDir, \"memory\", \"summaries\"), { recursive: true })",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2463,7 +2499,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 350,
+      "line": 353,
       "kind": "persistent-store-constructor",
       "excerpt": "new FactStore(this.factsDbPath)",
       "reason": "Constructs or migrates a FactStore.",
@@ -2472,7 +2508,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 360,
+      "line": 363,
       "kind": "database-open",
       "excerpt": "new Database(oldMemoriesPath, { readonly: true })",
       "reason": "Constructs or migrates a FactStore.",
@@ -2481,7 +2517,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 375,
+      "line": 378,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(migrationDone, new Date().toISOString())",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2490,7 +2526,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 379,
+      "line": 382,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(migrationDone, `failed: ${err.message}`)",
       "reason": "Creates the memory directory and records legacy memories.db import state.",
@@ -2499,7 +2535,7 @@
     },
     {
       "sourceFile": "core/agent.ts",
-      "line": 508,
+      "line": 511,
       "kind": "persistent-store-constructor",
       "excerpt": "new CronStore( path.join(this.deskDir, \"cron-jobs.json\"), path.join(this.deskDir, \"cron-runs\"), )",
       "reason": "Constructs an agent or studio CronStore.",
@@ -2526,7 +2562,7 @@
     },
     {
       "sourceFile": "core/bridge-session-manager.ts",
-      "line": 1024,
+      "line": 718,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(sessionDir, { recursive: true })",
       "reason": "Writes a session-owned sidecar or bridge index.",
@@ -2535,7 +2571,7 @@
     },
     {
       "sourceFile": "core/bridge-session-manager.ts",
-      "line": 1390,
+      "line": 1125,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(sessionDir, { recursive: true })",
       "reason": "Writes a session-owned sidecar or bridge index.",
@@ -2805,7 +2841,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 348,
+      "line": 354,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.channelsDir, { recursive: true })",
       "reason": "Creates the channel root.",
@@ -2814,7 +2850,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 394,
+      "line": 400,
       "kind": "persistent-store-constructor",
       "excerpt": "new PreferencesManager({ userDir: this.userDir, agentsDir: this.agentsDir })",
       "reason": "Constructs the preferences owner.",
@@ -2823,7 +2859,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 395,
+      "line": 401,
       "kind": "persistent-store-constructor",
       "excerpt": "new InputDraftsStore({ hanakoHome: this.hanakoHome })",
       "reason": "Constructs draft/project stores.",
@@ -2832,7 +2868,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 424,
+      "line": 430,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionProjectCatalogStore({ userDir: this.userDir })",
       "reason": "Constructs draft/project stores.",
@@ -2841,7 +2877,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 658,
+      "line": 664,
       "kind": "persistent-store-constructor",
       "excerpt": "new TaskRegistry({ persistencePath: path.join(this.hanakoHome, \".ephemeral\", \"plugin-tasks.json\"), getSessionIdForPath: (sessionPath) => this.getSessionIdForPath(sessionPath), })",
       "reason": "Constructs the plugin task registry.",
@@ -2850,7 +2886,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1282,
+      "line": 1427,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2859,7 +2895,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1303,
+      "line": 1448,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2868,7 +2904,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2286,
+      "line": 2431,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates the user skill root.",
@@ -2877,7 +2913,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2468,
+      "line": 2613,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
@@ -2886,7 +2922,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2524,
+      "line": 2671,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(pluginDevSourcesDir, { recursive: true })",
       "reason": "Creates the plugin development source root.",
@@ -6350,6 +6386,33 @@
       "exemptionId": null
     },
     {
+      "sourceFile": "lib/loop/loop-store.ts",
+      "line": 61,
+      "kind": "rename",
+      "excerpt": "fs.renameSync(this._path, backup)",
+      "reason": "Persists sessionId-keyed loop state.",
+      "storeId": "loop-state",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "lib/loop/loop-store.ts",
+      "line": 71,
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(path.dirname(this._path), { recursive: true })",
+      "reason": "Persists sessionId-keyed loop state.",
+      "storeId": "loop-state",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "lib/loop/loop-store.ts",
+      "line": 77,
+      "kind": "atomic-write",
+      "excerpt": "atomicWriteSync(this._path, data)",
+      "reason": "Persists sessionId-keyed loop state.",
+      "storeId": "loop-state",
+      "exemptionId": null
+    },
+    {
       "sourceFile": "lib/memory/cache-snapshot-observation.ts",
       "line": 81,
       "kind": "mkdir",
@@ -7656,7 +7719,7 @@
     },
     {
       "sourceFile": "lib/task-registry.ts",
-      "line": 494,
+      "line": 502,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(this._persistencePath), { recursive: true })",
       "reason": "Persists plugin task and schedule metadata.",
@@ -7665,7 +7728,7 @@
     },
     {
       "sourceFile": "lib/task-registry.ts",
-      "line": 499,
+      "line": 507,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(this._persistencePath, JSON.stringify({ tasks, schedules }, null, 2))",
       "reason": "Persists plugin task and schedule metadata.",
@@ -7962,7 +8025,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 288,
+      "line": 290,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(serverInfoPath)",
       "reason": "Writes or deletes live server discovery state.",
@@ -7971,7 +8034,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 479,
+      "line": 481,
       "kind": "persistent-store-constructor",
       "excerpt": "new DeferredResultStore( hub.eventBus, path.join(hanakoHome, \".ephemeral\", \"deferred-tasks.json\"), { getSessionIdForPath: (sessionPath: string) => engine.getSessionIdForPath?.(sessionPath) || null }, )",
       "reason": "Constructs the deferred result store.",
@@ -7980,7 +8043,16 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 692,
+      "line": 489,
+      "kind": "persistent-store-constructor",
+      "excerpt": "new LoopStore( path.join(hanakoHome, \".ephemeral\", \"loop-state.json\"), { log }, )",
+      "reason": "Constructs the loop store.",
+      "storeId": "loop-state",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "server/index.ts",
+      "line": 699,
       "kind": "persistent-store-constructor",
       "excerpt": "new ConfirmStore({ getSessionIdForPath: (sessionPath: string) => engine.getSessionIdForPath?.(sessionPath) || null, })",
       "reason": "ConfirmStore is deliberately process-memory-only: pending approvals time out or abort with their session and have no restart replay contract.",
@@ -7989,7 +8061,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 697,
+      "line": 704,
       "kind": "persistent-store-constructor",
       "excerpt": "new SubagentRunStore( path.join(hanakoHome, \"subagent-runs.json\"), { getSessionIdForPath: (sessionPath: string) => engine.getSessionIdForPath?.(sessionPath) || null }, )",
       "reason": "Constructs subagent stores.",
@@ -7998,7 +8070,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 703,
+      "line": 710,
       "kind": "persistent-store-constructor",
       "excerpt": "new SubagentThreadStore( path.join(hanakoHome, \"subagent-threads.json\"), { getSessionIdForPath: (sessionPath: string) => engine.getSessionIdForPath?.(sessionPath) || null }, )",
       "reason": "Constructs subagent stores.",
@@ -8007,7 +8079,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 714,
+      "line": 721,
       "kind": "persistent-store-constructor",
       "excerpt": "new WorkflowActivityStore( path.join(hanakoHome, \"workflow-activity.json\"), )",
       "reason": "Constructs the workflow activity store.",
@@ -8016,7 +8088,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 1136,
+      "line": 1175,
       "kind": "append-file",
       "excerpt": "fs.promises.appendFile(_bwsLogPath, chunk)",
       "reason": "Appends the browser worker log.",
@@ -8025,7 +8097,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 1195,
+      "line": 1234,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(serverInfoPath, JSON.stringify({ pid: process.pid, port: actualPort, host, configuredHost: serverRuntimeState.listenHost, networkMode: serverRuntimeState.mode, configuredMode: serverRuntimeState.configuredMode, configuredLi",
       "reason": "Writes or deletes live server discovery state.",
@@ -8034,7 +8106,7 @@
     },
     {
       "sourceFile": "server/index.ts",
-      "line": 1296,
+      "line": 1335,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(path.join(hanakoHome, \"server-info.json\"))",
       "reason": "Writes or deletes live server discovery state.",
