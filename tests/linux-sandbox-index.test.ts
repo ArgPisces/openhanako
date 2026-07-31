@@ -183,7 +183,7 @@ describe("createSandboxedTools on Linux", () => {
     expect(getSandboxNetworkEnabled).toHaveBeenCalledTimes(2);
   });
 
-  it("resolves read fileId through the current session before path guard and SDK execution", async () => {
+  it("resolves read fileId through ResourceIO before path guard and SDK execution", async () => {
     const { createSandboxedTools } = await import("../lib/sandbox/index.ts");
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hana-linux-session-file-"));
     const agentDir = path.join(tempRoot, "hana", "agents", "hana");
@@ -218,7 +218,7 @@ describe("createSandboxedTools on Linux", () => {
       fileId: "sf_cjk_digits",
     });
 
-    expect(output.details.params.path).toBe(sessionFilePath);
-    expect(output.details.params.fileId).toBe("sf_cjk_digits");
+    expect(output.details.params.path).toBe(fs.realpathSync(sessionFilePath));
+    expect(output.details.params.fileId).toBeUndefined();
   });
 });

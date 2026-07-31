@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { countFiles, createUploadRoute } from "../server/routes/upload.ts";
+import { createUploadRoute } from "../server/routes/upload.ts";
 import { SessionFileRegistry } from "../lib/session-files/session-file-registry.ts";
 
 function mktemp() {
@@ -44,7 +44,7 @@ describe("upload route", () => {
     });
   });
 
-  it("rejects directories that contain symlinks", async () => {
+  it("accepts directories that contain symlinks by registering a reference", async () => {
     tmpDir = mktemp();
     const dirPath = path.join(tmpDir, "cycle");
     fs.mkdirSync(dirPath, { recursive: true });
@@ -62,22 +62,80 @@ describe("upload route", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
+    expect(data.uploads[0].error).toBeUndefined();
     expect(data.uploads[0]).toMatchObject({
       src: dirPath,
-      error: "symlink not allowed",
+      dest: fs.realpathSync(dirPath),
+      isDirectory: true,
     });
   });
 
-  it("stops counting once the configured file limit is exceeded", async () => {
+  it("registers a dropped directory as an external reference without copying", async () => {
     tmpDir = mktemp();
-    const dirPath = path.join(tmpDir, "many-files");
+    const dirPath = path.join(tmpDir, "big-folder");
     fs.mkdirSync(dirPath, { recursive: true });
     for (let i = 0; i < 12; i++) {
       fs.writeFileSync(path.join(dirPath, `f-${i}.txt`), "x", "utf-8");
     }
+    const hanakoHome = path.join(tmpDir, "hana-home");
+    const sessionPath = path.join(tmpDir, "sessions", "upload.jsonl");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.writeFileSync(sessionPath, "{}\n");
+    const registry = new SessionFileRegistry({ managedCacheRoot: path.join(hanakoHome, "session-files") });
+    const engine = {
+      hanakoHome,
+      registerSessionFile: registry.registerFile.bind(registry),
+      getSessionFileBySourceKey: registry.getBySourceKey.bind(registry),
+    };
+    const app = new Hono();
+    app.route("/api", createUploadRoute(engine));
 
-    const count = await countFiles(dirPath, { limit: 9 });
-    expect(count).toBe(10);
+    const res = await app.request("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths: [dirPath], sessionPath }),
+    });
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    const up = data.uploads[0];
+    expect(up.error).toBeUndefined();
+    expect(up.isDirectory).toBe(true);
+    expect(up.storageKind).toBe("external");
+    expect(up.dest).toBe(fs.realpathSync(dirPath));
+    expect(up.fileId).toBeTruthy();
+    // 12 个文件的目录不再撞 9 文件上限，且没有任何字节被复制进 session-files 缓存
+    const cacheRoot = path.join(hanakoHome, "session-files");
+    const cacheEntries = fs.existsSync(cacheRoot)
+      ? fs.readdirSync(cacheRoot).flatMap((d) => fs.readdirSync(path.join(cacheRoot, d)))
+      : [];
+    expect(cacheEntries).toHaveLength(0);
+    const [entry] = registry.list(sessionPath);
+    expect(entry.storageKind).toBe("external");
+    expect(entry.filePath).toBe(fs.realpathSync(dirPath));
+    expect(entry.isDirectory).toBe(true);
+  });
+
+  it("caps one upload request at 9 attachments", async () => {
+    tmpDir = mktemp();
+    const paths = [];
+    for (let i = 0; i < 10; i++) {
+      const p = path.join(tmpDir, `f-${i}.txt`);
+      fs.writeFileSync(p, "x", "utf-8");
+      paths.push(p);
+    }
+    const app = new Hono();
+    app.route("/api", createUploadRoute({ hanakoHome: path.join(tmpDir, "hana-home") }));
+
+    const res = await app.request("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    });
+    const data = await res.json();
+
+    expect(data.uploads.filter((u) => !u.error)).toHaveLength(9);
+    expect(data.uploads[9].error).toBeTruthy();
   });
 
   it("upload-blob writes base64 image to uploads dir with sanitized name", async () => {

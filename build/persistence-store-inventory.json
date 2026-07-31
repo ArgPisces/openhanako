@@ -8466,7 +8466,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 216,
+      "line": 181,
       "kind": "remove-path",
       "excerpt": "fs.rm(fullPath, { recursive: true, force: true })",
       "reason": "Expires a sessionless legacy upload cache entry.",
@@ -8475,7 +8475,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 309,
+      "line": 274,
       "kind": "mkdir",
       "excerpt": "fs.mkdir(uploadsDir, { recursive: true })",
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
@@ -8484,16 +8484,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 390,
-      "kind": "copy-file",
-      "excerpt": "fs.cp(srcPath, destPath, { recursive: true })",
-      "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
-      "storeId": null,
-      "exemptionId": "conditional-upload-target"
-    },
-    {
-      "sourceFile": "server/routes/upload.ts",
-      "line": 392,
+      "line": 376,
       "kind": "copy-file",
       "excerpt": "fs.copyFile(srcPath, destPath)",
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
@@ -8502,7 +8493,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 450,
+      "line": 429,
       "kind": "mkdir",
       "excerpt": "fs.mkdir(uploadsDir, { recursive: true })",
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
@@ -8511,7 +8502,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 509,
+      "line": 488,
       "kind": "write-file",
       "excerpt": "fs.writeFile(destPath, buf)",
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
