@@ -192,6 +192,17 @@ describe("createSandboxedTools on Linux", () => {
     fs.mkdirSync(path.dirname(sessionFilePath), { recursive: true });
     fs.writeFileSync(sessionFilePath, "hello", "utf-8");
 
+    const resolveSessionFileMock = vi.fn((fileId: any, options: any) => {
+      expect(fileId).toBe("sf_cjk_digits");
+      expect(options).toEqual({ sessionPath: path.join(agentDir, "sessions", "main.jsonl") });
+      return {
+        fileId,
+        filePath: sessionFilePath,
+        realPath: sessionFilePath,
+        status: "available",
+      };
+    });
+
     const result = createSandboxedTools(workspace, [], {
       agentDir,
       workspace,
@@ -199,16 +210,7 @@ describe("createSandboxedTools on Linux", () => {
       hanakoHome: path.join(tempRoot, "hana"),
       getSandboxEnabled: () => true,
       getSessionPath: () => path.join(agentDir, "sessions", "main.jsonl"),
-      resolveSessionFile: vi.fn((fileId: any, options: any) => {
-        expect(fileId).toBe("sf_cjk_digits");
-        expect(options).toEqual({ sessionPath: path.join(agentDir, "sessions", "main.jsonl") });
-        return {
-          fileId,
-          filePath: sessionFilePath,
-          realPath: sessionFilePath,
-          status: "available",
-        };
-      }),
+      resolveSessionFile: resolveSessionFileMock,
     } as any);
 
     const read = result.tools.find((tool) => tool.name === "read");
@@ -218,6 +220,7 @@ describe("createSandboxedTools on Linux", () => {
       fileId: "sf_cjk_digits",
     });
 
+    expect(resolveSessionFileMock).toHaveBeenCalledTimes(1);
     expect(output.details.params.path).toBe(fs.realpathSync(sessionFilePath));
     expect(output.details.params.fileId).toBeUndefined();
   });

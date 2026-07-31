@@ -207,7 +207,7 @@ export function createSandboxedTools(cwd, customTools, {
     getSessionPath,
     recordFileOperation,
   });
-  const readTool = wrapSessionFilePathTool(wrapReadImageWithVisionBridge(wrapReadOfficeMedia(createReadTool(cwd, { operations: readOps }), cwd, {
+  const readTool = wrapReadImageWithVisionBridge(wrapReadOfficeMedia(createReadTool(cwd, { operations: readOps }), cwd, {
     hanakoHome,
     getSessionPath,
     getSessionIdForPath,
@@ -220,7 +220,7 @@ export function createSandboxedTools(cwd, customTools, {
     recordFileOperation,
     getVisionBridge,
     isVisionAuxiliaryEnabled,
-  }), { getSessionPath, resolveSessionFile });
+  });
   const buildResourceIoFileTools = (tools) => wrapResourceIoFileTools(tools, {
     cwd,
     resourceIO,
@@ -411,71 +411,6 @@ function wrapFileTouchTool(tool, cwd, {
         return appendSessionFileDetails(result, sessionFile, absolutePath);
       } catch (err) {
         return appendRegistrationWarning(result, err);
-      }
-    },
-  };
-}
-
-function addSessionFileParameters(parameters) {
-  if (!parameters || typeof parameters !== "object" || !parameters.properties) return parameters;
-  const required = Array.isArray(parameters.required)
-    ? parameters.required.filter((name) => name !== "path")
-    : parameters.required;
-  return {
-    ...parameters,
-    ...(required ? { required } : {}),
-    properties: {
-      ...parameters.properties,
-      fileId: {
-        type: "string",
-        description: "SessionFile id from current_status/session_files or attached [SessionFile] context. Use this for read/stat/copy access. Do not use fileId for write/edit; use writableLocalRef.path or an ordinary local path for modifications.",
-      },
-      sessionPath: {
-        type: "string",
-        description: "Optional session JSONL path that owns fileId. Usually omit to use the current session.",
-      },
-    },
-  };
-}
-
-function sessionFilePath(file) {
-  if (!file || typeof file !== "object") return null;
-  if (file.status === "expired") {
-    throw new Error(`SessionFile expired: ${file.fileId || file.id || "unknown"}`);
-  }
-  const filePath = file.realPath || file.filePath || file.path || null;
-  if (!filePath || !path.isAbsolute(filePath)) {
-    throw new Error(`SessionFile has no readable absolute path: ${file.fileId || file.id || "unknown"}`);
-  }
-  return filePath;
-}
-
-function wrapSessionFilePathTool(tool, { getSessionPath, resolveSessionFile }: { getSessionPath?: any; resolveSessionFile?: any } = {}) {
-  return {
-    ...tool,
-    parameters: addSessionFileParameters(tool.parameters),
-    execute: async (toolCallId, params: Record<string, any> = {}, ...rest) => {
-      const fileId = typeof params.fileId === "string" && params.fileId.trim() ? params.fileId.trim() : null;
-      if (!fileId) return tool.execute(toolCallId, params, ...rest);
-      if (typeof resolveSessionFile !== "function") {
-        return {
-          content: [{ type: "text", text: `SessionFile resolver unavailable for fileId: ${fileId}` }],
-        };
-      }
-      const lookupSessionPath = typeof params.sessionPath === "string" && params.sessionPath
-        ? params.sessionPath
-        : getSessionPath?.() || null;
-      try {
-        const file = resolveSessionFile(fileId, { sessionPath: lookupSessionPath });
-        if (!file) {
-          return { content: [{ type: "text", text: `SessionFile not found: ${fileId}` }] };
-        }
-        const resolvedPath = sessionFilePath(file);
-        return tool.execute(toolCallId, { ...params, path: resolvedPath }, ...rest);
-      } catch (err) {
-        return {
-          content: [{ type: "text", text: err?.message || String(err) }],
-        };
       }
     },
   };

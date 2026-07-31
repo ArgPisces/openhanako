@@ -286,8 +286,7 @@ describe("ResourceIO agent tools", () => {
   it("guides read calls on directory SessionFiles toward ls/grep/find", async () => {
     const readExecute = vi.fn();
     const resourceIO = {
-      stat: vi.fn(async () => ({ exists: true, isDirectory: true })),
-      materialize: vi.fn(),
+      materialize: vi.fn(async () => ({ filePath: "/tmp/ref-dir", isDirectory: true })),
     };
     const [read] = wrapResourceIoFileTools([
       { name: "read", parameters: { type: "object", required: ["path"], properties: {} }, execute: readExecute },
@@ -299,12 +298,12 @@ describe("ResourceIO agent tools", () => {
 
     const result = await read.execute("read-dir", { fileId: "sf_dir" });
 
-    expect(resourceIO.stat).toHaveBeenCalledWith({
+    expect(resourceIO.materialize).toHaveBeenCalledTimes(1);
+    expect(resourceIO.materialize).toHaveBeenCalledWith({
       kind: "session-file",
       fileId: "sf_dir",
       sessionPath: "/sessions/a.jsonl",
     });
-    expect(resourceIO.materialize).not.toHaveBeenCalled();
     expect(readExecute).not.toHaveBeenCalled();
     expect(result.content[0].text).toContain("is a directory");
   });
@@ -314,7 +313,6 @@ describe("ResourceIO agent tools", () => {
       content: [{ type: "text", text: `read:${params.path}` }],
     }));
     const resourceIO = {
-      stat: vi.fn(async () => ({ exists: true, isDirectory: false })),
       materialize: vi.fn(async () => ({ filePath: "/tmp/m.txt" })),
     };
     const [read] = wrapResourceIoFileTools([

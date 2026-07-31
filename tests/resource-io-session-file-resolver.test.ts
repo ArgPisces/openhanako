@@ -111,6 +111,7 @@ describe("SessionFileResolverProvider", () => {
 
     const materialized = await provider.materialize(ref);
     expect(materialized.filePath).toBe(realPath);
+    expect(materialized.isDirectory).toBe(false);
 
     await expect(provider.write(ref, "changed")).rejects.toMatchObject({ code: "capability_denied" });
     await expect(provider.writeExpectedVersion(ref, "changed", { mtimeMs: 1, size: 1 })).rejects.toMatchObject({ code: "capability_denied" });
@@ -121,5 +122,30 @@ describe("SessionFileResolverProvider", () => {
     await expect(provider.delete(ref)).rejects.toMatchObject({ code: "capability_denied" });
     await expect(provider.mkdir(ref)).rejects.toMatchObject({ code: "capability_denied" });
     expect(fs.readFileSync(filePath, "utf-8")).toBe("# hello\n");
+  });
+
+  it("reports directories from materialize so callers need no second stat", async () => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hana-resource-session-file-"));
+    const sessionPath = path.join(tempRoot, "agents", "hana", "sessions", "a.jsonl");
+    const dirPath = path.join(tempRoot, "files", "ref-dir");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.mkdirSync(dirPath, { recursive: true });
+    fs.writeFileSync(sessionPath, "{}\n", "utf-8");
+    const registry = new SessionFileRegistry({
+      managedCacheRoot: path.join(tempRoot, "session-files"),
+    });
+    const entry = registry.registerFile({
+      sessionPath,
+      filePath: dirPath,
+      label: "ref-dir",
+      origin: "test",
+      storageKind: "external",
+    });
+    const provider = new SessionFileResolverProvider({ sessionFiles: registry });
+
+    const materialized = await provider.materialize({ kind: "session-file", fileId: entry.id, sessionPath });
+
+    expect(materialized.filePath).toBe(fs.realpathSync(dirPath));
+    expect(materialized.isDirectory).toBe(true);
   });
 });

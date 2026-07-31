@@ -320,18 +320,14 @@ function wrapResourceIoTool(tool, options) {
         if (typeof options.resourceIO.materialize !== "function") {
           return textResult("SessionFile access requires the ResourceIO kernel.");
         }
-        const ref = {
+        const materialized = await options.resourceIO.materialize({
           kind: "session-file",
           fileId: target.fileId,
           sessionPath: target.sessionPath || options.getSessionPath?.() || null,
-        };
-        if (toolName === "read" && typeof options.resourceIO.stat === "function") {
-          const stat = await options.resourceIO.stat(ref);
-          if (stat?.isDirectory) {
-            return textResult(`SessionFile ${target.fileId} is a directory. Use ls, grep, or find with the same fileId to browse it.`);
-          }
+        });
+        if (toolName === "read" && materialized.isDirectory === true) {
+          return textResult(`SessionFile ${target.fileId} is a directory. Use ls, grep, or find with the same fileId to browse it.`);
         }
-        const materialized = await options.resourceIO.materialize(ref);
         return tool.execute(toolCallId, paramsForLocalTarget(params, materialized.filePath), ...rest);
       }
 
