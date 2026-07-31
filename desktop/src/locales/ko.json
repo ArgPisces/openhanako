@@ -482,6 +482,7 @@
     "stop": "현재 응답 중지",
     "new": "새 세션 시작 (기록 보관)",
     "reset": "세션 초기화 (기록 삭제)",
+    "loop": "이 세션에서 반복 작업 실행",
     "commandError": "[명령 오류] {message}",
     "usage": "사용법: {usage}",
     "commandTimeout": "명령 시간 초과 (>{ms}ms)"

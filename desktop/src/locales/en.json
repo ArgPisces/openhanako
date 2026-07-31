@@ -482,6 +482,7 @@
     "stop": "Stop current reply",
     "new": "Start new session (archive history)",
     "reset": "Reset session (clear history)",
+    "loop": "Run a recurring loop task in this session",
     "commandError": "[Command error] {message}",
     "usage": "Usage: {usage}",
     "commandTimeout": "Command timed out (>{ms}ms)"
