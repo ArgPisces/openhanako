@@ -5672,6 +5672,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/tools/loop-control-tool.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/tools/stop-task-tool.ts",
           "kind": "import-statement"
         },
@@ -5881,7 +5886,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/llm/provider-client.ts (import-statement); core/execution-router.ts (import-statement); core/model-manager.ts (import-statement); +69 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/llm/provider-client.ts (import-statement); core/execution-router.ts (import-statement); core/model-manager.ts (import-statement); +70 more importer(s)."
     },
     {
       "path": "lib/identity-templates",
@@ -6212,6 +6217,59 @@
         }
       ],
       "reason": "Reached via esbuild source module graph, imported by lib/debug-log.ts (import-statement); lib/tools/browser-action-log.ts (import-statement); lib/tools/browser-tool.ts (import-statement); +2 more importer(s)."
+    },
+    {
+      "path": "lib/loop/alarm-service.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+    },
+    {
+      "path": "lib/loop/loop-controller.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+    },
+    {
+      "path": "lib/loop/loop-messages.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/loop/loop-controller.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/loop/loop-controller.ts (import-statement)."
+    },
+    {
+      "path": "lib/loop/loop-store.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/loop/loop-controller.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "server/index.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/loop/loop-controller.ts (import-statement); server/index.ts (import-statement)."
     },
     {
       "path": "lib/memory/cache-snapshot-observation.ts",
@@ -6867,6 +6925,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/tools/loop-control-tool.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/tools/stop-task-tool.ts",
           "kind": "import-statement"
         },
@@ -6971,7 +7034,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +49 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/compaction-utils.ts (import-statement); lib/llm/cache-preserving-compaction-agent-run.ts (import-statement); core/session-compactor.ts (import-statement); +50 more importer(s)."
     },
     {
       "path": "lib/pi-sdk/search-tools.ts",
@@ -9251,6 +9314,18 @@
       "reason": "Reached via esbuild source module graph, imported by core/agent.ts (import-statement); lib/skill-bundles/package-service.ts (import-statement)."
     },
     {
+      "path": "lib/tools/loop-control-tool.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/agent.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/agent.ts (import-statement)."
+    },
+    {
       "path": "lib/tools/media-details.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -9600,6 +9675,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/tools/loop-control-tool.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/tools/stop-task-tool.ts",
           "kind": "import-statement"
         },
@@ -9659,7 +9739,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/plugin-manager.ts (import-statement); lib/tools/automation-tool.ts (import-statement); lib/tools/output-file-tool.ts (import-statement); +19 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/plugin-manager.ts (import-statement); lib/tools/automation-tool.ts (import-statement); lib/tools/output-file-tool.ts (import-statement); +20 more importer(s)."
     },
     {
       "path": "lib/tools/update-settings-tool.ts",
@@ -109487,6 +109567,18 @@
       "reason": "Declared root: Since the route-composition split, this file is the open server composition root: it unconditionally, statically imports composition/open-root.ts and mounts every open route/WS surface, and no longer imports any closed-product route file directly (avatar/cards/character-cards/desk/diary moved to composition/full-root.ts, imported only by the closed server/main-full.ts entry). No current boot path spawns or imports this file directly anymore -- cli/server-runner.ts's resolveServerSpawnSpec() source mode, scripts/launch.js, scripts/dev-web.js, and desktop/main.cjs's dev HANA_SERVER_ENTRY all target server/main-full.ts instead, and vite.config.server.js's build.lib.entry (which scripts/build-server.mjs feeds into the packaged bundle) does too. main-full.ts is a thin closed entry that statically imports this file's startServer() export plus composition/full-root.ts's registerClosedRoutes hook and calls one with the other; it is deliberately not declared as a root here because it, and everything it pulls in, is closed product wiring, not part of the CLI's open redistributable closure. This file remains declared directly (rather than relying on reachability through main-full.ts) so its own source graph -- now free of closed-product route imports, exactly the open closure this generator needs -- keeps being traced independent of that closed wiring; it is also the entry a future open-server distribution build is expected to spawn on its own."
     },
     {
+      "path": "server/loop-bus-handlers.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "server/index.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by server/index.ts (import-statement)."
+    },
+    {
       "path": "server/plugin-chat-surface.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -111593,6 +111685,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/loop/loop-store.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/preferences-manager.ts",
           "kind": "import-statement"
         },
@@ -111782,7 +111879,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by shared/migrate-config-scope.ts (import-statement); core/provider-media-config.ts (import-statement); core/device-registry.ts (import-statement); +52 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by shared/migrate-config-scope.ts (import-statement); core/provider-media-config.ts (import-statement); core/device-registry.ts (import-statement); +53 more importer(s)."
     },
     {
       "path": "shared/safe-parse.ts",
@@ -112264,9 +112361,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9614,
+    "totalFiles": 9620,
     "byInputType": {
-      "source-graph": 636,
+      "source-graph": 642,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }
