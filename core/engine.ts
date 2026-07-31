@@ -44,6 +44,8 @@ import { compactSessionWithCachePreservationRecoveringRuntime } from "./session-
 import { resolveRequestReasoningLevelForContext } from "./request-reasoning-level.ts";
 import { getFreshCompactNoopReason } from "../lib/fresh-compact/policy.ts";
 import { DeferredResultCoordinator } from "../lib/deferred-result-coordinator.ts";
+import { LoopAlarmService } from "../lib/loop/alarm-service.ts";
+import { LoopController } from "../lib/loop/loop-controller.ts";
 import {
   getToolSessionPath,
   normalizeToolRuntimeContext,
@@ -276,6 +278,10 @@ export class HanaEngine {
   declare _hubCallbacks: any;
   declare _imageStripNotified: any;
   declare _listeners: any;
+  declare _loopStore: any;
+  declare _loopAlarm: any;
+  declare _loopController: any;
+  declare _loopBridgeHooks: any;
   declare _media: any;
   declare _mcp: any;
   declare _models: any;
@@ -663,6 +669,12 @@ export class HanaEngine {
     // subagent AbortController 存储（engine 级别，跨 agent 共享）
     this._subagentControllers = new Map();
     this._subagentRunStore = null;
+
+    // 循环服务：由 server 层在 store 与桥接投递就绪后经 setLoopServices 注入
+    this._loopStore = null;
+    this._loopAlarm = null;
+    this._loopController = null;
+    this._loopBridgeHooks = null;
     this._taskRegistry.registerHandler("subagent", {
       abort: (taskId) => {
         const ctrl = this._subagentControllers.get(taskId);
@@ -790,6 +802,139 @@ export class HanaEngine {
   get deferredResults() {
     return this._deferredResultStore || null;
   }
+
+  /**
+   * 循环服务接线。bridgeHooks 由 server 层在 bridge-manager 就绪后注入：
+   * { executeLoopTurn(sessionKey, agentId, text), sendNotice(sessionKey, agentId, text),
+   *   resolveSessionId(sessionKey, agentId), ensureSessionId(sessionKey, agentId) }
+   * 未注入时桥接循环的投递按服务不可用抛错（fail-closed），桌面循环不受影响。
+   */
+  setLoopServices({ store, bridgeHooks = null }) {
+    this._loopAlarm?.dispose?.();
+    this._loopController?.dispose?.();
+    this._loopStore = store || null;
+    this._loopBridgeHooks = bridgeHooks;
+    this._loopAlarm = null;
+    this._loopController = null;
+    if (!store) return;
+
+    const requireBridgeHooks = () => {
+      if (!this._loopBridgeHooks) throw new Error("loop: bridge delivery is not wired");
+      return this._loopBridgeHooks;
+    };
+    const targetResetError = (detail) => {
+      const err: any = new Error(`loop target session was reset: ${detail}`);
+      err.code = "loop_target_reset";
+      return err;
+    };
+    // 桌面：sessionId → 当前活跃路径；换代/归档 → loop_target_reset
+    const resolveDesktopPath = (sessionId) => {
+      // resolveSessionRef 经 SessionManifestResolver 按 sessionId 解析 manifest，
+      // 当前 locator 路径在 manifest 上是 currentLocator.path；查无此 id 时抛
+      // session_manifest_not_found，对循环而言即目标已换代。清单服务本身不可用
+      // 是另一类故障，原样上抛而不伪装成换代。
+      let manifest;
+      try {
+        manifest = this.resolveSessionRef({ sessionId });
+      } catch (error: any) {
+        if (error?.code === "session_manifest_not_found" || error?.code === "session_manifest_ref_required") {
+          throw targetResetError(sessionId);
+        }
+        throw error;
+      }
+      const sessionPath = manifest?.currentLocator?.path ?? null;
+      if (!sessionPath || !this._sessionCoord.isRunnableSessionPath(sessionPath)) {
+        throw targetResetError(sessionId);
+      }
+      return sessionPath;
+    };
+    const resolveTargetSessionPathSoft = (target) => {
+      // 守恒检查用的软解析：解析不到返回 null（视为无后台任务），不抛错
+      try {
+        if (target.kind === "desktop") return resolveDesktopPath(target.sessionId);
+        const hooks = this._loopBridgeHooks;
+        if (!hooks) return null;
+        if (hooks.resolveSessionId(target.sessionKey, target.agentId) !== target.sessionId) return null;
+        const agent = this.getAgent?.(target.agentId);
+        return agent
+          ? this.bridgeSessionManager?.resolveSessionPathForSessionKey?.(target.sessionKey, agent) ?? null
+          : null;
+      } catch {
+        return null;
+      }
+    };
+    const hasLiveBackgroundWork = (target) => {
+      const sessionPath = resolveTargetSessionPathSoft(target);
+      if (!sessionPath) return false;
+      if (this.taskRegistry?.hasActiveForParentSession?.(sessionPath)) return true;
+      return (this._deferredResultStore?.listPending?.(sessionPath)?.length ?? 0) > 0;
+    };
+
+    const controller = new LoopController({
+      store,
+      hasLiveBackgroundWork,
+      deliverLoopMessage: (target, message) => {
+        if (target.kind === "desktop") {
+          const sessionPath = resolveDesktopPath(target.sessionId);
+          return this._sessionCoord.deliverCustomMessage(sessionPath, message, { triggerTurn: true });
+        }
+        const hooks = requireBridgeHooks();
+        if (hooks.resolveSessionId(target.sessionKey, target.agentId) !== target.sessionId) {
+          throw targetResetError(target.sessionKey);
+        }
+        return hooks.executeLoopTurn(target.sessionKey, target.agentId, message.content);
+      },
+      recordNotice: (target, message) => {
+        if (target.kind === "desktop") {
+          const sessionPath = resolveDesktopPath(target.sessionId);
+          return this._sessionCoord.deliverCustomMessage(sessionPath, message, { triggerTurn: false });
+        }
+        return requireBridgeHooks().sendNotice(target.sessionKey, target.agentId, message.content);
+      },
+      isTargetMidStream: (target) => {
+        if (target.kind !== "desktop") return false;
+        const sessionPath = resolveTargetSessionPathSoft(target);
+        return sessionPath ? this._sessionCoord.isSessionStreaming(sessionPath) : false;
+      },
+      isTargetRunnable: (target) => {
+        try {
+          if (target.kind === "desktop") { resolveDesktopPath(target.sessionId); return true; }
+          return this._loopBridgeHooks?.resolveSessionId?.(target.sessionKey, target.agentId) === target.sessionId;
+        } catch {
+          return false;
+        }
+      },
+      resolveSessionIdForPath: (sessionPath) => this.getSessionIdForPath?.(sessionPath) ?? null,
+      resolveTargetFromSessionRef: async (ref, { ensure = false } = {}) => {
+        if (ref?.kind === "desktop" && (ref.sessionId || ref.sessionPath)) {
+          const sessionId = ref.sessionId || this.getSessionIdForPath?.(ref.sessionPath);
+          return sessionId ? { kind: "desktop", sessionId } : null;
+        }
+        if (ref?.kind === "bridge" && ref.sessionKey) {
+          const hooks = requireBridgeHooks();
+          let sessionId = hooks.resolveSessionId(ref.sessionKey, ref.agentId);
+          if (!sessionId && ensure) sessionId = await hooks.ensureSessionId(ref.sessionKey, ref.agentId);
+          return sessionId
+            ? { kind: "bridge", sessionId, sessionKey: ref.sessionKey, agentId: ref.agentId }
+            : null;
+        }
+        return null;
+      },
+    });
+    const alarm = new LoopAlarmService({
+      store,
+      hasLiveBackgroundWork,
+      deliverWakeup: (key, reason) => controller.deliverWakeupTurn(key, reason),
+      hooks: {
+        onDeliveryExhausted: (key, err) => controller.pauseForDeliveryFailure(key, err),
+      },
+    });
+    controller.attachAlarm(alarm);
+    this._loopAlarm = alarm;
+    this._loopController = controller;
+  }
+
+  get loopController() { return this._loopController; }
 
   setSubagentRunStore(store) {
     this._subagentRunStore = store || null;
@@ -2493,6 +2638,8 @@ export class HanaEngine {
       this._skills?.unwatch();
       this._deferredResultCoordinator?.dispose?.();
       this._deferredResultCoordinator = null;
+      this._loopAlarm?.dispose?.();
+      this._loopController?.dispose?.();
       await this._agentMgr.disposeAll(this._sessionCoord);
       await this._sessionCoord.cleanupSession();
     } finally {

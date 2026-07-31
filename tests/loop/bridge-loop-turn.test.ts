@@ -260,6 +260,28 @@ describe("BridgeSessionManager session identity by sessionKey", () => {
     expect(sessionManagerCreateMock).not.toHaveBeenCalled();
   });
 
+  it("resolves the absolute jsonl path behind an index entry, or null when absent", () => {
+    const agent = makeAgent(rootDir);
+    const deps = makeDeps(agent, rootCwd);
+    const manager = new BridgeSessionManager(deps);
+    seedIndex(agent, {
+      "tg_dm_1@agent-a": "owner/legacy.jsonl",
+      "tg_dm_2@agent-a": { file: "owner/modern.jsonl", role: "owner" },
+      "tg_dm_3@agent-a": { role: "owner" },
+    });
+
+    expect(manager.resolveSessionPathForSessionKey("tg_dm_1@agent-a", agent))
+      .toBe(path.join(agent.sessionDir, "bridge", "owner", "legacy.jsonl"));
+    expect(manager.resolveSessionPathForSessionKey("tg_dm_2@agent-a", agent))
+      .toBe(path.join(agent.sessionDir, "bridge", "owner", "modern.jsonl"));
+    expect(manager.resolveSessionPathForSessionKey("tg_dm_3@agent-a", agent)).toBe(null);
+    expect(manager.resolveSessionPathForSessionKey("tg_dm_missing@agent-a", agent)).toBe(null);
+    expect(manager.resolveSessionPathForSessionKey("", agent)).toBe(null);
+    expect(manager.resolveSessionPathForSessionKey("tg_dm_1@agent-a", null)).toBe(null);
+    // 只读解析：不得创建会话
+    expect(sessionManagerCreateMock).not.toHaveBeenCalled();
+  });
+
   it("creates the session entity for an empty chat and returns its sessionId", async () => {
     const agent = makeAgent(rootDir);
     const deps = makeDeps(agent, rootCwd);

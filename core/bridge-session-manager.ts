@@ -674,6 +674,17 @@ export class BridgeSessionManager {
     return this._deps.getSessionIdForPath?.(sessionPath) ?? null;
   }
 
+  /** sessionKey → 当前 jsonl 绝对路径（索引无条目返回 null；只读，不创建）。 */
+  resolveSessionPathForSessionKey(sessionKey, agent) {
+    if (!sessionKey || !agent) return null;
+    const index = this.readIndex(agent);
+    const entry = index?.[sessionKey];
+    if (!entry) return null;
+    const file = typeof entry === "string" ? entry : entry.file;
+    if (!file) return null;
+    return path.join(agent.sessionDir, "bridge", file);
+  }
+
   /**
    * 确保 sessionKey 对应的会话实体存在并返回其 sessionId（不存在则创建）。
    * 不建 agent session、不跑一轮：空聊天里第一条消息就是循环启动命令时用。
