@@ -36,6 +36,7 @@ import {
   createSubagentTool,
 } from "../lib/tools/subagent-tool.ts";
 import { createCheckDeferredTool } from "../lib/tools/check-deferred-tool.ts";
+import { createLoopControlTool } from "../lib/tools/loop-control-tool.ts";
 import { createStopTaskTool } from "../lib/tools/stop-task-tool.ts";
 import { createCurrentStatusTool } from "../lib/tools/current-status-tool.ts";
 import { createWorkflowTool } from "../lib/tools/workflow-tool.ts";
@@ -93,6 +94,7 @@ export class Agent {
   declare _channelPostHandler: any;
   declare _channelTool: any;
   declare _checkDeferredTool: any;
+  declare _loopControlTool: any;
   declare _computerUseTool: any;
   declare _config: any;
   declare _cronStore: any;
@@ -235,6 +237,7 @@ export class Agent {
     this._sessionTool = null;
     this._workflowTool = null;
     this._currentStatusTool = null;
+    this._loopControlTool = null;
 
     /**
      * 外部回调注入（由 AgentManager._createAgentInstance 填充）。
@@ -567,6 +570,9 @@ export class Agent {
     this._checkDeferredTool = createCheckDeferredTool({
       getDeferredStore: () => this._cb?.getDeferredResults?.(),
       getSessionPath: () => this._cb?.getCurrentSessionPath?.(),
+    });
+    this._loopControlTool = createLoopControlTool({
+      getLoopController: () => this._cb?.getLoopController?.(),
     });
     this._currentStatusTool = createCurrentStatusTool({
       getTimezone: () => this._cb?.getTimezone?.() || "",
@@ -945,6 +951,7 @@ export class Agent {
       this._subagentCloseTool,
       this._workflowTool,
       this._checkDeferredTool,
+      this._loopControlTool,
       this._currentStatusTool,
       ...(surface === "desktop" ? [this._sessionTool] : []),
       this._cardGuideTool,

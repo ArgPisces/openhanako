@@ -908,6 +908,14 @@
       "noTasks": "当前对话没有后台任务{qualifier}。",
       "noTasksQualifier": "（状态: {status}）"
     },
+    "loopControl": {
+      "serviceUnavailable": "循环服务未就绪。",
+      "noActiveSession": "没有活跃会话。",
+      "noActiveLoop": "当前会话没有活跃循环，用 /loop <任务> 启动。",
+      "delayRequired": "action=schedule 需要 delay_seconds。",
+      "scheduled": "已约 {seconds} 秒后的唤醒（{wakeAt} 触发），并替换了之前的闹钟。",
+      "completed": "循环已完成并关闭。"
+    },
     "workflow": {
       "running": "🔄 {name} 正在编排工作流",
       "done": "🔄 编排完了",
