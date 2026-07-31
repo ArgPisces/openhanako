@@ -9,8 +9,9 @@ import styles from '../../Settings.module.css';
 interface DeferSettingsProps {
   deferEnabled: boolean;
   deferThreshold: number;
+  builtinDeferEnabled: boolean;
   busy: boolean;
-  onChange: (patch: { deferEnabled?: boolean; deferThreshold?: number }) => void;
+  onChange: (patch: { deferEnabled?: boolean; deferThreshold?: number; builtinDeferEnabled?: boolean }) => void;
 }
 
 /**
@@ -18,7 +19,7 @@ interface DeferSettingsProps {
  * the tab's top level next to the master switch rather than inside any single
  * connector's detail page.
  */
-export function DeferSettings({ deferEnabled, deferThreshold, busy, onChange }: DeferSettingsProps) {
+export function DeferSettings({ deferEnabled, deferThreshold, builtinDeferEnabled, busy, onChange }: DeferSettingsProps) {
   const [threshold, setThreshold] = useState(deferThreshold);
 
   return (
@@ -33,6 +34,20 @@ export function DeferSettings({ deferEnabled, deferThreshold, busy, onChange }: 
             disabled={busy}
             ariaLabel={t('settings.mcp.deferEnabled')}
             onChange={(on) => onChange({ deferEnabled: on })}
+          />
+        )}
+      />
+      <SettingsRow
+        label={t('settings.mcp.deferBuiltin')}
+        hint={t('settings.mcp.deferBuiltinHint')}
+        control={(
+          <Toggle
+            on={builtinDeferEnabled}
+            // The second tier only means something while the first is on: the
+            // assembly plan bails out entirely when deferral is disabled.
+            disabled={busy || !deferEnabled}
+            ariaLabel={t('settings.mcp.deferBuiltin')}
+            onChange={(on) => onChange({ builtinDeferEnabled: on })}
           />
         )}
       />

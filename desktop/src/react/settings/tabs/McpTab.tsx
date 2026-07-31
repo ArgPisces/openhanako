@@ -171,7 +171,7 @@ export function McpTab() {
   const setTrustReadOnly = (connectorId: string, trustReadOnlyHint: boolean) =>
     run(`policy-${connectorId}`, () => updateMcpConnectorPolicy(connectorId, { trustReadOnlyHint }));
 
-  const changeDefer = (patch: { deferEnabled?: boolean; deferThreshold?: number }) =>
+  const changeDefer = (patch: { deferEnabled?: boolean; deferThreshold?: number; builtinDeferEnabled?: boolean }) =>
     run('defer', () => setMcpDeferSettings(patch));
 
   const connectOAuth = async (connectorId: string) => {
@@ -266,6 +266,7 @@ export function McpTab() {
         <DeferSettings
           deferEnabled={state.deferEnabled}
           deferThreshold={state.deferThreshold}
+          builtinDeferEnabled={state.builtinDeferEnabled}
           busy={busyKeys.has('defer') || !state.enabled}
           onChange={changeDefer}
         />

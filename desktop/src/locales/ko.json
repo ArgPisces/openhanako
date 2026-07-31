@@ -2064,6 +2064,8 @@
       "deferScopeNote": "아래 설정은 이 커넥터뿐 아니라 모든 커넥터에 함께 적용됩니다.",
       "deferEnabled": "지연 로딩 허용",
       "deferEnabledHint": "도구가 많을 때는 먼저 목록만 모델에 주고, 필요한 도구의 설명만 가져옵니다.",
+      "deferBuiltin": "내장 도구도 지연 로딩",
+      "deferBuiltinHint": "켜면 내장 도구도 카탈로그를 통해 필요할 때 로드됩니다. 직접 로드가 모델의 능동성에 유리하므로 컨텍스트가 부족할 때만 권장합니다.",
       "deferThreshold": "임계값",
       "deferThresholdHint": "사용 중인 도구가 이 수를 넘을 때만 목록을 쓰고, 그 아래면 모두 직접 로드합니다.",
       "agentConnectorEnabled": "이 어시스턴트에서 사용",

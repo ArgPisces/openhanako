@@ -2130,6 +2130,8 @@
       "deferScopeNote": "These switches apply to every connector, not only this one.",
       "deferEnabled": "Allow deferred loading",
       "deferEnabledHint": "With many tools, give the model a catalog first and fetch the full description of a tool only when it is needed.",
+      "deferBuiltin": "Defer built-in tools too",
+      "deferBuiltinHint": "Built-in tools join the on-demand catalog as well. Eagerly loaded tools keep the model more proactive; turn this on only when context runs tight.",
       "deferThreshold": "Threshold",
       "deferThresholdHint": "The catalog is used only above this many enabled tools; below it, every tool is loaded directly.",
       "agentConnectorEnabled": "Enabled for this agent",

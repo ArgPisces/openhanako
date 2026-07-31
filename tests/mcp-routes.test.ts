@@ -381,6 +381,47 @@ describe("MCP first-class routes", () => {
       expect(mcp.setDeferSettings).toHaveBeenCalledWith({ deferEnabled: false, deferThreshold: 25 });
     });
 
+    it("routes the built-in defer switch to preferences and reflects it in state", async () => {
+      const setBuiltinToolDeferEnabled = vi.fn();
+      const getBuiltinToolDeferEnabled = vi.fn(() => true);
+      const mcp = fakeMcp({ setDeferSettings: vi.fn() });
+      const app = new Hono();
+      app.route("/api", createMcpRoute({
+        mcp,
+        preferences: { setBuiltinToolDeferEnabled, getBuiltinToolDeferEnabled },
+      } as any));
+
+      const res = await app.request("/api/mcp/settings/defer", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ builtinDeferEnabled: true }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(setBuiltinToolDeferEnabled).toHaveBeenCalledWith(true);
+      // The pure-preferences patch must not disturb the mcp config store.
+      expect(mcp.setDeferSettings).not.toHaveBeenCalled();
+      expect(await res.json()).toMatchObject({ builtinDeferEnabled: true });
+    });
+
+    it("rejects a non-boolean built-in defer flag", async () => {
+      const setBuiltinToolDeferEnabled = vi.fn();
+      const app = new Hono();
+      app.route("/api", createMcpRoute({
+        mcp: fakeMcp({ setDeferSettings: vi.fn() }),
+        preferences: { setBuiltinToolDeferEnabled, getBuiltinToolDeferEnabled: vi.fn(() => false) },
+      } as any));
+
+      const res = await app.request("/api/mcp/settings/defer", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ builtinDeferEnabled: "yes" }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(setBuiltinToolDeferEnabled).not.toHaveBeenCalled();
+    });
+
     it("rejects a threshold that is not a positive integer", async () => {
       const mcp = fakeMcp({ setDeferSettings: vi.fn() });
 

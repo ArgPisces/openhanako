@@ -8,6 +8,7 @@ export const EMPTY_MCP_STATE: McpState = {
   enabled: false,
   deferEnabled: true,
   deferThreshold: DEFAULT_DEFER_THRESHOLD,
+  builtinDeferEnabled: false,
   connectors: [],
   agentConfig: { connectors: {} },
 };
@@ -29,6 +30,7 @@ export async function loadMcpState(agentId: string): Promise<McpState> {
     deferThreshold: Number.isSafeInteger(data.deferThreshold) && data.deferThreshold > 0
       ? data.deferThreshold
       : DEFAULT_DEFER_THRESHOLD,
+    builtinDeferEnabled: data.builtinDeferEnabled === true,
     connectors: Array.isArray(data.connectors) ? data.connectors : (Array.isArray(data.servers) ? data.servers : []),
     servers: Array.isArray(data.servers) ? data.servers : undefined,
     agentConfig: data.agentConfig || { connectors: {} },
@@ -83,7 +85,7 @@ export async function addMcpConnectorsBulk(inputs: McpConnectorInput[]): Promise
 }
 
 export async function setMcpDeferSettings(
-  patch: { deferEnabled?: boolean; deferThreshold?: number },
+  patch: { deferEnabled?: boolean; deferThreshold?: number; builtinDeferEnabled?: boolean },
 ): Promise<void> {
   const res = await hanaFetch('/api/mcp/settings/defer', {
     method: 'PUT',

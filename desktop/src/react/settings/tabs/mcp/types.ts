@@ -82,6 +82,8 @@ export interface McpState {
   deferEnabled: boolean;
   /** Tool count above which deferred loading engages. */
   deferThreshold: number;
+  /** Whether built-in tools join the deferred catalog too (only meaningful while deferEnabled). */
+  builtinDeferEnabled: boolean;
   connectors: McpConnector[];
   servers?: McpConnector[];
   agentConfig: {

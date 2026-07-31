@@ -19,7 +19,12 @@ export function createMcpRoute(engine) {
     if (!rt) return c.json({ error: "not initialized" }, 503);
     const agentId = c.req.query("agentId") || c.get("agentId") || null;
     const config = await rt.getAgentConfig(agentId);
-    return c.json(rt.getState(config));
+    return c.json({
+      ...rt.getState(config),
+      // The built-in defer switch lives in preferences, not mcp config; the
+      // state view composes both so the settings tab has one source to read.
+      builtinDeferEnabled: engine?.preferences?.getBuiltinToolDeferEnabled?.() === true,
+    });
   }
 
   async function markCapabilitySnapshotsStale(payload: Record<string, unknown>) {
@@ -121,8 +126,16 @@ export function createMcpRoute(engine) {
       }
       patch.deferThreshold = threshold;
     }
+    if (body?.builtinDeferEnabled !== undefined) {
+      if (typeof body.builtinDeferEnabled !== "boolean") {
+        return c.json({ error: "builtinDeferEnabled must be a boolean" }, 400);
+      }
+    }
     try {
-      await rt.setDeferSettings(patch);
+      if (Object.keys(patch).length > 0) await rt.setDeferSettings(patch);
+      if (typeof body?.builtinDeferEnabled === "boolean") {
+        engine?.preferences?.setBuiltinToolDeferEnabled?.(body.builtinDeferEnabled);
+      }
       return currentState(c);
     } catch (err: any) {
       return c.json({ error: err.message }, 400);

@@ -2064,6 +2064,8 @@
       "deferScopeNote": "以下開關對所有連接器一併生效，不只是這一個。",
       "deferEnabled": "允許延遲載入",
       "deferEnabledHint": "工具較多時先給模型一份目錄，用到哪個再取哪個的完整說明。",
+      "deferBuiltin": "內建工具也延遲",
+      "deferBuiltinHint": "開啟後，系統內建工具同樣進入目錄按需揭露。直接載入的內建工具讓模型更主動，上下文吃緊時再開。",
       "deferThreshold": "啟用門檻",
       "deferThresholdHint": "已啟用的工具數超過此值才走目錄，低於此值全部直接載入。",
       "agentConnectorEnabled": "對此助手啟用",

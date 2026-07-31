@@ -323,6 +323,13 @@ describe("build result carries the catalog manifest", () => {
       connectors: [{ id: "github", tools: manyTools(40) }],
       deferEnabled: false,
     }).toolCatalogManifest).toBeNull();
+    // The built-in switch is the second tier of a hierarchy: with the master
+    // defer switch off it must be inert, however many tools would qualify.
+    expect(build({
+      connectors: [{ id: "github", tools: manyTools(40) }],
+      deferEnabled: false,
+      builtinDefer: true,
+    }).toolCatalogManifest).toBeNull();
   });
 
   it("gives the same catalog the same fingerprint and a changed catalog a different one", () => {

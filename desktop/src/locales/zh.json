@@ -2130,6 +2130,8 @@
       "deferScopeNote": "以下开关对所有连接器一并生效，不只是这一个。",
       "deferEnabled": "允许延迟加载",
       "deferEnabledHint": "工具较多时先给模型一份目录，用到哪个再取哪个的完整说明。",
+      "deferBuiltin": "内置工具也延迟",
+      "deferBuiltinHint": "开启后，系统内置工具同样进入目录按需披露。直载的内置工具让模型更主动，上下文吃紧时再开。",
       "deferThreshold": "启用阈值",
       "deferThresholdHint": "已启用的工具数超过此值才走目录，低于此值全部直接加载。",
       "agentConnectorEnabled": "对此助手启用",
