@@ -536,7 +536,7 @@ export function wrapWithSessionPermission(tools: any[] = [], deps: any = {}) {
         const sessionPath = sessionBinding.value.sessionPath;
         const mode = resolveToolPermissionMode(deps, sessionPath);
         // Raw hard-safety checks run before any tool-owned resolver. A hostile
-        // resolver therefore cannot hide a blocked command or delivery path.
+        // resolver therefore cannot hide a blocked delivery path.
         const rawSafety = evaluateToolSafetyPolicy({
           toolName: tool.name,
           params,

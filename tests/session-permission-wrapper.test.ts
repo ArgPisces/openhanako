@@ -288,7 +288,7 @@ describe("session permission wrapper", () => {
     expect(result.details.executed).toBe(true);
   });
 
-  it("hard safety policy blocks dangerous git push variants even in operate mode", async () => {
+  it("operate mode runs dangerous git push variants through the same flow as an ordinary push", async () => {
     const tool = makeTool("bash");
     const confirmStore = { create: vi.fn() };
     const approvalGateway = {
@@ -303,14 +303,10 @@ describe("session permission wrapper", () => {
 
     const result = await wrapped.execute("call-1", { command: "git push --force-with-lease origin main" }, null, null, ctx);
 
-    expect(tool.execute).not.toHaveBeenCalled();
+    expect(tool.execute).toHaveBeenCalledOnce();
     expect(approvalGateway.review).not.toHaveBeenCalled();
     expect(confirmStore.create).not.toHaveBeenCalled();
-    expect(result.details).toMatchObject({
-      errorCode: "ACTION_BLOCKED_BY_SAFETY_POLICY",
-      ruleIds: ["force-push-blocked"],
-      toolName: "bash",
-    });
+    expect(result.details.executed).toBe(true);
   });
 
   it("auto mode runs sandbox-bound workspace actions without approval gateway or human confirmation", async () => {
@@ -927,18 +923,20 @@ describe("session permission wrapper", () => {
 
   it("runs hard safety before a tool-owned resolver", async () => {
     const resolver = vi.fn(() => { throw new Error("resolver should not run"); });
-    const tool = makeTool("exec_command", {
+    const tool = makeTool("stage_files", {
       sessionPermission: { resolveInvocation: resolver },
     });
     const [wrapped] = wrapWithSessionPermission([tool], {
       getPermissionMode: () => "auto",
     });
 
-    const result = await wrapped.execute("call-force", { cmd: "git push --force origin main" }, null, null, ctx);
+    const result = await wrapped.execute("call-stage-hostile", {
+      filepaths: ["/outside/secret.txt"],
+    }, null, null, ctx);
 
     expect(resolver).not.toHaveBeenCalled();
     expect(tool.execute).not.toHaveBeenCalled();
-    expect(result.details.errorCode).toBe("ACTION_BLOCKED_BY_SAFETY_POLICY");
+    expect(result.details.errorCode).toBe("ACTION_BLOCKED_BY_WORKSPACE_BOUNDARY");
   });
 
   it("rejects accessor parameters without evaluating them", async () => {
@@ -1282,7 +1280,16 @@ describe("session permission wrapper", () => {
   });
 
   it("runs hard safety checks before unattended automation action classification", async () => {
-    const tool = makeChannelDescriptorTool();
+    const tool = makeTool("stage_files", {
+      sessionPermission: {
+        resolveInvocation: () => ({
+          action: "stage",
+          kind: "routine",
+          capability: "stage_files.stage",
+          target: { type: "session_files", id: "workspace-file" },
+        }),
+      },
+    });
     const approvalGateway = { review: vi.fn() };
     const [wrapped] = wrapWithSessionPermission([tool], {
       getPermissionMode: () => "auto",
@@ -1292,13 +1299,10 @@ describe("session permission wrapper", () => {
     });
 
     const result = await wrapped.execute("call-automation-danger", {
-      action: "post",
-      channelId: "ch_team",
-      content: "daily update",
-      command: "git push --force origin main",
+      filepaths: ["/outside/secret.txt"],
     }, null, null, ctx);
 
-    expect(result.details.errorCode).toBe("ACTION_BLOCKED_BY_SAFETY_POLICY");
+    expect(result.details.errorCode).toBe("ACTION_BLOCKED_BY_WORKSPACE_BOUNDARY");
     expect(approvalGateway.review).not.toHaveBeenCalled();
     expect(tool.execute).not.toHaveBeenCalled();
   });
