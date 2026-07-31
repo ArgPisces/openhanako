@@ -75,6 +75,18 @@ describe('McpTab', () => {
     await waitFor(() => expect(screen.getAllByText('settings.mcp.noConnectors').length).toBeGreaterThan(0));
   });
 
+  it('offers the global defer settings on the tab itself, not inside a connector', async () => {
+    apiMocks.loadMcpState.mockResolvedValue(state(true));
+    useSettingsStore.setState({
+      currentAgentId: 'hanako',
+      agents: [{ id: 'hanako', name: 'Hanako', yuan: 'hanako', isPrimary: true }],
+    });
+
+    render(<McpTab />);
+
+    await waitFor(() => expect(screen.getByText('settings.mcp.deferTitle')).toBeTruthy());
+  });
+
   it('toggles the global connector switch when the master row text is clicked', async () => {
     apiMocks.loadMcpState
       .mockResolvedValueOnce(state(false))

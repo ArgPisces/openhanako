@@ -4,6 +4,7 @@ import { t } from '../helpers';
 import { SettingsSection } from '../components/SettingsSection';
 import { ConfirmDialog, Toggle } from '@/ui';
 import { ConnectorDetail } from './mcp/ConnectorDetail';
+import { DeferSettings } from './mcp/DeferSettings';
 import { ConnectorForm } from './mcp/ConnectorForm';
 import { ConnectorImport } from './mcp/ConnectorImport';
 import { ConnectorList } from './mcp/ConnectorList';
@@ -214,8 +215,6 @@ export function McpTab() {
         <ConnectorDetail
           connector={openConnector}
           globalEnabled={state.enabled}
-          deferEnabled={state.deferEnabled}
-          deferThreshold={state.deferThreshold}
           busyKeys={busyKeys}
           viewAgentId={viewAgentId}
           agentConfig={state.agentConfig}
@@ -230,7 +229,6 @@ export function McpTab() {
           onToolPinnedChange={setToolPinned}
           onPermissionModeChange={setPermissionMode}
           onTrustReadOnlyChange={setTrustReadOnly}
-          onDeferChange={changeDefer}
           onOAuthStart={connectOAuth}
           onOAuthCancel={cancelOAuth}
           onOAuthLogout={disconnectOAuth}
@@ -265,6 +263,12 @@ export function McpTab() {
             />
           </div>
         </div>
+        <DeferSettings
+          deferEnabled={state.deferEnabled}
+          deferThreshold={state.deferThreshold}
+          busy={busyKeys.has('defer') || !state.enabled}
+          onChange={changeDefer}
+        />
       </SettingsSection>
 
       <SettingsSection title={t('settings.mcp.connectorsTitle')} surface="plain">
