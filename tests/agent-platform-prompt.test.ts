@@ -75,6 +75,7 @@ describe("Agent platform prompt identity", () => {
 
     expect(prompt).toContain("fileId 是机器契约，label 只是展示名");
     expect(prompt).toContain("继续修改文件时用 writableLocalRef.path 或普通本机路径，write/edit 不接受 fileId。");
+    expect(prompt).toContain("materialize");
   });
 
   it("distinguishes SessionFile identity from writable local refs in English", () => {
@@ -85,6 +86,7 @@ describe("Agent platform prompt identity", () => {
 
     expect(prompt).toContain("fileId is the machine contract; label is display-only.");
     expect(prompt).toContain("For further modifications use writableLocalRef.path or an ordinary local path; write/edit does not accept fileId.");
+    expect(prompt).toContain("materialize");
   });
 
   it("formats prompt times with an unambiguous 24-hour clock", () => {

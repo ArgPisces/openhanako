@@ -1397,12 +1397,14 @@ export class Agent {
         "- fileId 是机器契约，label 只是展示名；读取、stat、copy、stage 优先用 fileId，不要从可见文本重建真实路径，也不要猜 session-files 缓存路径。需要本 session 已有文件的清单时，先调用 current_status 获取 session_files。\n" +
         "- write/edit 新建或修改文件后，调用 stage_files 交付该变更（优先传结果里的 sessionFileRef.fileId）。同一未变化的文件不要重复 stage；内容再次变化时再 stage 最新版本。\n" +
         "- 继续修改文件时用 writableLocalRef.path 或普通本机路径，write/edit 不接受 fileId。\n" +
+        "- 需要在 shell 命令里使用某个 session 文件时，先用 materialize 工具把 fileId 换成本地绝对路径；不要从可见文本回忆或拼接真实路径。\n" +
         "- 不要只在文本里写文件路径；也不要在 Agent 层判断各平台如何展示或发送，消费端会处理。"
       : "\n## Session Files and Delivery\n\n" +
         "SessionFile is the unified record of local files related to the current session: user uploads, files you produce with write/edit, plugin outputs, browser screenshots, and install outputs.\n\n" +
         "- fileId is the machine contract; label is display-only. Prefer fileId for read, stat, copy, and stage; never reconstruct real paths from visible text or guess session-files cache paths. To list this session's existing files, call current_status with the session_files key first.\n" +
         "- After write/edit creates or modifies a file, call stage_files to deliver that change (prefer sessionFileRef.fileId from the tool result). Do not re-stage an unchanged file; stage again when the content changes.\n" +
         "- For further modifications use writableLocalRef.path or an ordinary local path; write/edit does not accept fileId.\n" +
+        "- To use a session file in shell commands, first call the materialize tool to resolve its fileId into a local absolute path; do not recall or reconstruct real paths from visible text.\n" +
         "- Do not merely write file paths in text, and do not decide platform-specific display or sending in the Agent layer; consumers handle it."
     );
 

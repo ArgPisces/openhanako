@@ -87,6 +87,7 @@ describe("createSandboxedTools on Windows", () => {
       "grep",
       "find",
       "ls",
+      "materialize",
     ]);
     expect(tools.find((tool) => tool.name === "bash")).toBeUndefined();
     const execCommandTool = tools.find((tool) => tool.name === "exec_command");

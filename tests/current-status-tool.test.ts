@@ -506,8 +506,6 @@ describe("current_status tool", () => {
             missingAt: null,
             createdAt: 1778432852184,
             isDirectory: false,
-            filePath: "/tmp/session-files/browser-screenshot.jpg",
-            realPath: "/private/tmp/session-files/browser-screenshot.jpg",
           },
           {
             fileId: "sf_expired",
@@ -527,8 +525,6 @@ describe("current_status tool", () => {
             missingAt: 1778432859999,
             createdAt: null,
             isDirectory: false,
-            filePath: "/tmp/session-files/old.png",
-            realPath: null,
           },
           {
             fileId: "sf_agent_report",
@@ -548,8 +544,6 @@ describe("current_status tool", () => {
             missingAt: null,
             createdAt: 1778432860000,
             isDirectory: false,
-            filePath: "/workspace/report.md",
-            realPath: null,
           },
         ],
       },

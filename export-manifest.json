@@ -388,6 +388,7 @@
     "lib/public-ishiki-templates",
     "lib/resource-io/agent-tools.ts",
     "lib/resource-io/errors.ts",
+    "lib/resource-io/materialize-tool.ts",
     "lib/resource-io/pi-tool-operations.ts",
     "lib/resource-io/providers/local-fs-provider.ts",
     "lib/resource-io/providers/mount-provider.ts",

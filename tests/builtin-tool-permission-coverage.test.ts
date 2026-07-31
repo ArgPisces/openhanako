@@ -87,6 +87,11 @@ const SNAPSHOT_EXEMPT_TOOL_NAMES = [
   // Agent.getToolsSnapshot；它们已经由 tests/engine-build-tools.test.ts
   // 对真实 buildTools 调用覆盖，不需要在这里重复构造。
   "read", "write", "edit", "exec_command", "write_stdin", "grep", "find", "ls",
+  // materialize 与上面这批一样，由 createSandboxedTools 在 engine.buildTools 里
+  // 组装（见 lib/sandbox/index.ts 的两个 return 数组），同样不经过
+  // Agent.getToolsSnapshot；它自带的 sessionPermission 描述符由
+  // tests/resource-io-materialize-tool.test.ts 直接断言覆盖。
+  "materialize",
   // 插件承载的合成 OPTIONAL 分类，没有对应的内置工具对象
   // （见 shared/tool-categories.ts 的 PLUGIN_BACKED_OPTIONAL_TOOL_IDS）。
   "beautify", "office",

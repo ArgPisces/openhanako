@@ -31,6 +31,7 @@ import {
 import { normalizeWin32ShellPath } from "./win32-path.ts";
 import { serializeSessionFile } from "../session-files/session-file-response.ts";
 import { wrapResourceIoFileTools } from "../resource-io/agent-tools.ts";
+import { createMaterializeTool } from "../resource-io/materialize-tool.ts";
 import { createResourceIoToolOperations } from "../resource-io/pi-tool-operations.ts";
 import { createSandboxResourceIO } from "../resource-io/sandbox-resource-io.ts";
 import { createExecCommandTools } from "../exec-command/tool.ts";
@@ -221,6 +222,12 @@ export function createSandboxedTools(cwd, customTools, {
     getVisionBridge,
     isVisionAuxiliaryEnabled,
   });
+  const materializeTool = createMaterializeTool({
+    resourceIO,
+    getSessionPath,
+    getSessionIdForPath,
+    cwd,
+  });
   const buildResourceIoFileTools = (tools) => wrapResourceIoFileTools(tools, {
     cwd,
     resourceIO,
@@ -298,6 +305,7 @@ export function createSandboxedTools(cwd, customTools, {
         createGrepTool(cwd, { ...searchToolPaths, operations: resourceOps.grep }),
         createFindTool(cwd, { ...searchToolPaths, operations: resourceOps.find }),
         createLsTool(cwd, { operations: resourceOps.ls }),
+        materializeTool,
       ]),
       customTools,
       permissionBoundary,
@@ -347,6 +355,7 @@ export function createSandboxedTools(cwd, customTools, {
       createGrepTool(cwd, { ...searchToolPaths, operations: resourceOps.grep }),
       createFindTool(cwd, { ...searchToolPaths, operations: resourceOps.find }),
       createLsTool(cwd, { operations: resourceOps.ls }),
+      materializeTool,
     ]),
     customTools,
     permissionBoundary,

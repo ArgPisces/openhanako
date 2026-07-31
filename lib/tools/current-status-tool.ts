@@ -185,8 +185,6 @@ function normalizeSessionFile(file) {
     missingAt: nullableNumber(source.missingAt),
     createdAt: nullableNumber(source.createdAt),
     isDirectory: source.isDirectory === true,
-    filePath: nullableString(source.filePath),
-    realPath: nullableString(source.realPath),
   };
 }
 

@@ -102,7 +102,7 @@ function parseResourceObject(resource, cwd) {
   return null;
 }
 
-function resolveToolTarget(params, cwd) {
+export function resolveToolTarget(params, cwd) {
   if (!isObject(params)) return null;
 
   const resource = params.resource ?? params.ref ?? params.target;

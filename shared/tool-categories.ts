@@ -33,6 +33,7 @@ export const STANDARD_TOOL_NAMES = [
   "notify",
   "stage_files",
   "file",
+  "materialize",
   "subagent",
   "subagent_reply",
   "subagent_close",
