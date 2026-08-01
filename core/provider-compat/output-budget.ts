@@ -91,6 +91,9 @@ function hasOutputCap(payload) {
 function resolveOutputCapField(model) {
   const explicit = model?.compat?.outputCapField;
   if (typeof explicit === "string" && OUTPUT_CAP_FIELD_SET.has(explicit)) return explicit;
+  // Responses 协议的输出预算字段是 max_output_tokens；发 max_tokens 会被静默忽略。
+  const api = lower(model?.api);
+  if (api === "openai-responses" || api === "openai-codex-responses") return "max_output_tokens";
   return "max_tokens";
 }
 

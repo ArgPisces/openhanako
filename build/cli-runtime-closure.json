@@ -1836,11 +1836,6 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "core/session-coordinator.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "core/engine.ts",
           "kind": "import-statement"
         },
@@ -1850,7 +1845,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); core/llm-client.ts (import-statement); core/session-coordinator.ts (import-statement); +2 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); core/llm-client.ts (import-statement); core/engine.ts (import-statement); +1 more importer(s)."
     },
     {
       "path": "core/provider-compat/agnes.ts",
@@ -1887,6 +1882,35 @@
         }
       ],
       "reason": "Reached via esbuild source module graph, imported by core/provider-compat.ts (import-statement)."
+    },
+    {
+      "path": "core/provider-compat/deepseek-responses.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/provider-compat.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/provider-compat.ts (import-statement)."
+    },
+    {
+      "path": "core/provider-compat/deepseek-thinking-budget.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/provider-compat/deepseek.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/provider-compat/deepseek-responses.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/provider-compat/deepseek.ts (import-statement); core/provider-compat/deepseek-responses.ts (import-statement)."
     },
     {
       "path": "core/provider-compat/deepseek.ts",
@@ -7258,6 +7282,18 @@
     },
     {
       "path": "lib/providers/dashscope.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/provider-registry.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/provider-registry.ts (import-statement)."
+    },
+    {
+      "path": "lib/providers/deepseek-responses.ts",
       "inputType": "source-graph",
       "provenance": [
         {
@@ -112388,9 +112424,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9621,
+    "totalFiles": 9624,
     "byInputType": {
-      "source-graph": 643,
+      "source-graph": 646,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

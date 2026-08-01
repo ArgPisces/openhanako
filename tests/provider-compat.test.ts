@@ -1302,7 +1302,25 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(result).toMatchObject({
       thinking: { type: "enabled" },
       reasoning_effort: "max",
-      max_tokens: 131072,
+      max_tokens: 384000,
+    });
+  });
+
+  it("DeepSeek V4 high 档保持保守预算，不顶格申请", () => {
+    const payload = {
+      model: "deepseek-v4-pro",
+      messages: [{ role: "user", content: "hello" }],
+      reasoning_effort: "high",
+      max_completion_tokens: 32000,
+    };
+    const result = normalizeProviderPayload(payload, deepseekModel, {
+      mode: "chat",
+      reasoningLevel: "high",
+    });
+    expect(result).toMatchObject({
+      thinking: { type: "enabled" },
+      reasoning_effort: "high",
+      max_tokens: 65536,
     });
   });
 
@@ -1356,7 +1374,7 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(result).toMatchObject({
       thinking: { type: "enabled" },
       reasoning_effort: "max",
-      max_tokens: 131072,
+      max_tokens: 384000,
     });
     expect(result).not.toHaveProperty("max_completion_tokens");
     expect(result.messages[1]).toHaveProperty("reasoning_content", "Need to call the date tool.");

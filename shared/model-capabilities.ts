@@ -54,8 +54,23 @@ function normalizeBoolean(value: unknown): boolean {
   return value === true;
 }
 
-function isOfficialDeepSeekEndpoint(model: any, context: any = {}) {
-  return getProvider(model, context) === "deepseek"
+/**
+ * DeepSeek 官方 endpoint 的 provider id。一个厂商多条协议通道各占一个 provider id
+ * （同 zhipu / zhipu-coding 的先例），新增通道时显式登记，不按前缀猜。
+ */
+const OFFICIAL_DEEPSEEK_PROVIDERS = new Set([
+  "deepseek",
+  "deepseek-responses",
+]);
+
+/**
+ * 是否为 DeepSeek 官方 endpoint，不区分协议通道。
+ *
+ * 与 provider-compat 的 `isDeepSeekModel`（只认 ChatCompletions 兼容路径）互补：
+ * 需要覆盖 DeepSeek 全部通道的关注点（可观测性、成本归属）用这个。
+ */
+export function isOfficialDeepSeekEndpoint(model: any, context: any = {}) {
+  return OFFICIAL_DEEPSEEK_PROVIDERS.has(getProvider(model, context))
     || getBaseUrl(model, context).includes("api.deepseek.com");
 }
 
@@ -92,6 +107,7 @@ const MODEL_REASONING_PROFILES = new Set([
   "anthropic-adaptive-only",
   "deepseek-v4-anthropic",
   "deepseek-v4-openai",
+  "deepseek-v4-responses",
   "mimo-openai",
   "openrouter-anthropic-adaptive",
   "zhipu-openai",
@@ -365,9 +381,13 @@ export function getThinkingFormat(model: any, context: any = {}) {
     return "volcengine";
   }
 
+  // DeepSeek 的 thinking / reasoning_effort / max_tokens 字段族只存在于官方
+  // ChatCompletions 通道。Anthropic 通道在本函数更前面的分支已经返回，Responses
+  // 通道用的是 OpenAI Responses 的 reasoning item 语义，不属于这个 wire 家族。
   if (
     isOfficialDeepSeekEndpoint(model, context)
     && (model.reasoning === true || isDeepSeekThinkingModelId(modelId))
+    && (api === "openai-completions" || api === "")
   ) {
     return "deepseek";
   }
@@ -444,7 +464,8 @@ export function getReasoningProfile(model: any, context: any = {}) {
 
     const api = getApi(model, context);
     if (api === "anthropic-messages") return "deepseek-v4-anthropic";
-    if (api === "openai-completions" || api === "openai-responses" || api === "") {
+    if (api === "openai-responses") return "deepseek-v4-responses";
+    if (api === "openai-completions" || api === "") {
       return "deepseek-v4-openai";
     }
   }
@@ -485,6 +506,11 @@ export function getReasoningReplayContract(model: any, context: any = {}) {
 
   if (profile === "deepseek-v4-anthropic") {
     return { carrier: "thinking_blocks", policy: "preserve" };
+  }
+  // Responses 协议原生保留思考链（reasoning item），不需要 ChatCompletions 那套
+  // reasoning_content 回填与 fail-closed 校验。
+  if (profile === "deepseek-v4-responses") {
+    return { carrier: "reasoning_items", policy: "preserve" };
   }
   if (
     profile === "deepseek-v4-openai"

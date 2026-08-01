@@ -19,6 +19,7 @@
  */
 
 import * as deepseek from "./provider-compat/deepseek.ts";
+import * as deepseekResponses from "./provider-compat/deepseek-responses.ts";
 import * as kimi from "./provider-compat/kimi.ts";
 import * as mimo from "./provider-compat/mimo.ts";
 import * as qwen from "./provider-compat/qwen.ts";
@@ -62,6 +63,9 @@ interface ProviderModule {
  * 新 provider 默认加在末尾；只有当模块的 matches 是另一模块子集（更具体规则）时才前置。
  */
 const PROVIDER_MODULES: ProviderModule[] = [
+  // deepseekResponses 前置于 deepseek：同一批 DeepSeek 官方 endpoint 上，Responses
+  // 协议是更具体的子集，落到 deepseek 会被按 ChatCompletions 语义改写。
+  deepseekResponses,
   deepseek,
   kimi,
   mimo,

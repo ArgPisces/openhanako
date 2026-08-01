@@ -25,6 +25,10 @@
 
 import { getReasoningProfile, getThinkingFormat } from "../../shared/model-capabilities.ts";
 import {
+  DEEPSEEK_THINKING_BUDGET_FLOOR,
+  resolveThinkingOutputBudget,
+} from "./deepseek-thinking-budget.ts";
+import {
   ensureAssistantContentForToolCalls,
   ensureReasoningContentForToolCalls as ensureReasoningContentForToolCallsBase,
   extractReasoningFromContent,
@@ -33,9 +37,6 @@ import {
 
 export { ensureAssistantContentForToolCalls, extractReasoningFromContent };
 
-const DEEPSEEK_HIGH_THINKING_BUDGET = 32768;
-const DEEPSEEK_HIGH_SAFE_MAX_TOKENS = 65536;
-const DEEPSEEK_MAX_SAFE_MAX_TOKENS = 131072;
 const DEEPSEEK_ROLEPLAY_MARKER_SIGNATURES = [
   "〖角色沉浸要求〗",
   "[Role immersion instruction]",
@@ -58,6 +59,9 @@ function positiveInteger(value) {
 
 export function matches(model) {
   if (!model || typeof model !== "object") return false;
+  // Responses 协议归 ./deepseek-responses.ts。这里显式排除，避免模型被显式声明
+  // compat.thinkingFormat = "deepseek" 时绕过 dispatcher 的前置顺序落回本模块。
+  if (lower(model.api) === "openai-responses") return false;
   if (getThinkingFormat(model) === "deepseek") return true;
   const provider = lower(model.provider);
   // base_url: 兼容上游 SDK 偶发的 snake_case 别名（pi-ai SDK / 用户自定 model 配置）
@@ -241,15 +245,11 @@ function normalizeMaxTokenField(payload) {
 
 function ensureThinkingTokenBudget(payload, model) {
   const current = positiveInteger(payload.max_tokens);
-  if (current && current > DEEPSEEK_HIGH_THINKING_BUDGET) return;
+  if (current && current > DEEPSEEK_THINKING_BUDGET_FLOOR) return;
 
-  const modelLimit = positiveInteger(model?.maxTokens || model?.maxOutput);
-  const desired = payload.reasoning_effort === "max"
-    ? DEEPSEEK_MAX_SAFE_MAX_TOKENS
-    : DEEPSEEK_HIGH_SAFE_MAX_TOKENS;
-  const target = modelLimit ? Math.min(modelLimit, desired) : desired;
+  const target = resolveThinkingOutputBudget(model, payload.reasoning_effort);
 
-  if (target <= DEEPSEEK_HIGH_THINKING_BUDGET) {
+  if (target <= DEEPSEEK_THINKING_BUDGET_FLOOR) {
     disableThinking(payload);
     return;
   }

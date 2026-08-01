@@ -59,7 +59,6 @@ import {
   DEEPSEEK_ROLEPLAY_REASONING_PATCH_EXPERIMENT_ID,
   getResolvedExperimentValue,
 } from "../lib/experiments/registry.ts";
-import { isDeepSeekModel } from "./provider-compat.ts";
 import {
   normalizePlainDescription,
   stripClosedInternalNarrationBlocks,
@@ -82,6 +81,7 @@ import {
   normalizeSessionTurnContext,
 } from "./session-turn-context.ts";
 import {
+  isOfficialDeepSeekEndpoint,
   modelSupportsDirectAudioInput,
   modelSupportsAudioInput,
   modelSupportsDirectVideoInput,
@@ -582,7 +582,9 @@ function recordAssistantUsage({ ledger, event, sessionPath, sessionId, agentId, 
 }
 
 function logDeepSeekReasoningVisibility({ event, model, sessionPath, agentId }: any) {
-  if (!isDeepSeekModel(model)) return;
+  // 覆盖 DeepSeek 全部协议通道（ChatCompletions / Responses / Anthropic），
+  // 思考链可见性是跨通道的关注点，不跟着 ChatCompletions 兼容路径一起收窄。
+  if (!isOfficialDeepSeekEndpoint(model)) return;
   const provider = textOrNull(model?.provider) || "deepseek";
   const modelId = modelIdFromModel(model) || "unknown";
   const sessionName = sessionPath ? path.basename(sessionPath) : "unknown";
