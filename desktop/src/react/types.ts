@@ -66,7 +66,27 @@ export interface AutoUpdateState {
     repo?: string;
     feedUrl?: string;
   } | null;
+  /** 当前生效的更新通道：默认公开货架，或经邀请码开通的测试通道。 */
+  updateChannel?: UpdateChannel;
+  /** 通道状态文件损坏时的原因；有值代表更新走的是默认通道且用户该被告知。 */
+  updateChannelError?: string | null;
 }
+
+export type UpdateChannel = 'default' | 'alpha';
+
+export interface InviteChannelStatus {
+  /** 核销服务是否已配置。false 时设置页不渲染任何邀请入口。 */
+  configured: boolean;
+  active: boolean;
+  inviteCodes: string[];
+  channel: UpdateChannel;
+  /** 通道状态文件读取失败的原因，正常为 null。 */
+  error?: string | null;
+}
+
+export type InviteRedeemResult =
+  | { ok: true; feedUrl: string; childCodes: string[] }
+  | { ok: false; reason: 'not-configured' | 'network' | 'invalid' | 'server' | 'storage'; message: string };
 
 /** train-update-status 里 `available` 字段的形状：检查阶段发现的、尚未下载的一班车 */
 export interface TrainUpdateAvailable {
@@ -622,6 +642,13 @@ export interface PlatformApi {
   autoUpdateState?(): Promise<AutoUpdateState>;
   autoUpdateSetChannel?(channel: 'stable' | 'beta'): Promise<void>;
   onAutoUpdateState?(callback: (state: AutoUpdateState) => void): (() => void) | void;
+  // ── 邀请制测试通道 ──
+  /** 当前通道状态；configured 为 false 时设置页不渲染邀请入口。 */
+  inviteStatus?(): Promise<InviteChannelStatus>;
+  /** 向核销服务兑换一枚邀请码。成功只返回结果，不改变本机任何状态。 */
+  inviteRedeem?(code: string): Promise<InviteRedeemResult>;
+  /** 用户在确认对话框点头之后才调用：写入通道状态并切换生效的更新地址。 */
+  inviteActivate?(payload: { feedUrl: string; inviteCodes: string[] }): Promise<InviteChannelStatus>;
   // ── 列车更新（OTA） ──
   trainUpdateStatus?(): Promise<TrainUpdateStatus>;
   trainUpdateCheck?(): Promise<{ outcome: string; train?: number; version?: string; minShellBlocked?: boolean; error?: string }>;

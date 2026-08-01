@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:27ca83b14bb67640d3cf04d69c099df6cde67cb2ebf060207c2f2c96003d56df",
+  "payloadFingerprint": "sha256:afb5e4092cbaf8744b725ed0fbdef78434e80cf33d6921313e129d1d1cfcc649",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -1333,6 +1333,44 @@
         "contract": "GPU startup state version, crash evidence, recovery mode, and legacy migration markers",
         "kind": "runtime-contract",
         "module": "desktop/src/shared/gpu-startup-policy.cjs"
+      }
+    },
+    {
+      "affectedByEpochMigration": false,
+      "bootstrapSafety": null,
+      "checkpointPolicy": "Optional compatible shell metadata; which update address this installation follows is not durable agent or session state.",
+      "epochPolicy": "compatible",
+      "exemption": null,
+      "firstPossibleOpenPhase": "runtime_ready",
+      "firstPossibleWritePhase": "runtime_ready",
+      "format": "json",
+      "id": "desktop-update-channel",
+      "identityContract": "One record per desktop installation data home; the device identifier never leaves the machine and is only ever sent as a hash.",
+      "migrationEntry": [],
+      "openEntry": [
+        "desktop update feed resolution",
+        "invite channel status",
+        "invite code redemption"
+      ],
+      "ownerModule": "desktop/auto-updater.cjs",
+      "pathExclusions": [],
+      "pathKind": "file",
+      "pathPattern": "update-channel.json",
+      "pathPatterns": [
+        "update-channel.json"
+      ],
+      "preCoordinatorReadProjection": null,
+      "protocolModules": [],
+      "restorePolicy": "Read only through the desktop updater reader; an unparsable or unknown-version record falls back to the default update address and reports the reason to the user instead of degrading silently.",
+      "schemaContract": {
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs.",
+        "kind": "runtime-source",
+        "source": "desktop/auto-updater.cjs"
+      },
+      "schemaSource": {
+        "contract": "update channel record version, device identifier, activation flag, update feed address, activation time, and held invite codes",
+        "kind": "runtime-contract",
+        "module": "desktop/auto-updater.cjs"
       }
     },
     {
@@ -2955,8 +2993,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "No persisted schema, store registry, or exemption changed. The payload moved only because two import lines were added and one removed in core/provider-registry.ts and core/session-coordinator.ts, shifting the recorded line numbers of unrelated persistence sites.",
-    "payloadFingerprint": "sha256:27ca83b14bb67640d3cf04d69c099df6cde67cb2ebf060207c2f2c96003d56df"
+    "compatibilityReason": "Additive only: a new desktop update-channel record joins the registry as its own store, and the surrounding line numbers of unrelated desktop persistence sites shift. No existing persisted schema, path ownership, or exemption changed.",
+    "payloadFingerprint": "sha256:afb5e4092cbaf8744b725ed0fbdef78434e80cf33d6921313e129d1d1cfcc649"
   },
   "schemas": [
     {
@@ -3134,6 +3172,13 @@
       "module": "desktop/src/shared/gpu-startup-policy.cjs",
       "sourceHash": "sha256:36e7b402215442172257835a6899002ec7d711fc9e2d8eeadc1e378d9bdc07ba",
       "storeId": "desktop-gpu-startup-state"
+    },
+    {
+      "contract": "update channel record version, device identifier, activation flag, update feed address, activation time, and held invite codes",
+      "kind": "runtime-contract",
+      "module": "desktop/auto-updater.cjs",
+      "sourceHash": "sha256:6902d2e473f2c2e90ebf125a2dacbe024e7c2de094e58f5cd22502bd541e245f",
+      "storeId": "desktop-update-channel"
     },
     {
       "contract": "desktop window bounds, release announcement bookmark, and update cache version marker readers",
@@ -5926,8 +5971,24 @@
     },
     {
       "exemptionId": null,
+      "kind": "write-file",
+      "line": 144,
+      "reason": "Writes the desktop update channel record through its temporary file and rename.",
+      "sourceFile": "desktop/auto-updater.cjs",
+      "storeId": "desktop-update-channel"
+    },
+    {
+      "exemptionId": null,
+      "kind": "rename",
+      "line": 145,
+      "reason": "Writes the desktop update channel record through its temporary file and rename.",
+      "sourceFile": "desktop/auto-updater.cjs",
+      "storeId": "desktop-update-channel"
+    },
+    {
+      "exemptionId": null,
       "kind": "mkdir",
-      "line": 182,
+      "line": 301,
       "reason": "Appends desktop auto-update diagnostics.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": "runtime-diagnostics"
@@ -5935,7 +5996,7 @@
     {
       "exemptionId": null,
       "kind": "append-file",
-      "line": 183,
+      "line": 302,
       "reason": "Appends desktop auto-update diagnostics.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": "runtime-diagnostics"
@@ -5943,7 +6004,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 411,
+      "line": 530,
       "reason": "Migrates or writes the current desktop update-cache version marker.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": "desktop-window-version-state"
@@ -5951,7 +6012,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 412,
+      "line": 531,
       "reason": "Migrates or writes the current desktop update-cache version marker.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": "desktop-window-version-state"
@@ -5959,7 +6020,7 @@
     {
       "exemptionId": "desktop-legacy-update-path-cleanup",
       "kind": "remove-path",
-      "line": 414,
+      "line": 533,
       "reason": "Deletes the exact legacy last-update-version source and its now-empty legacy directory outside the active HANA_HOME.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": null
@@ -5967,7 +6028,7 @@
     {
       "exemptionId": "desktop-legacy-update-path-cleanup",
       "kind": "remove-path",
-      "line": 417,
+      "line": 536,
       "reason": "Deletes the exact legacy last-update-version source and its now-empty legacy directory outside the active HANA_HOME.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": null
@@ -5975,7 +6036,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 440,
+      "line": 559,
       "reason": "Migrates or writes the current desktop update-cache version marker.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": "desktop-window-version-state"
@@ -5983,7 +6044,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 441,
+      "line": 560,
       "reason": "Migrates or writes the current desktop update-cache version marker.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": "desktop-window-version-state"
@@ -5991,7 +6052,7 @@
     {
       "exemptionId": "desktop-electron-update-cache",
       "kind": "remove-path",
-      "line": 456,
+      "line": 575,
       "reason": "Deletes Electron updater's regenerable pending cache under app.getPath(userData), not Hana application state.",
       "sourceFile": "desktop/auto-updater.cjs",
       "storeId": null

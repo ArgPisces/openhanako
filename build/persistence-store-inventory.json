@@ -753,6 +753,44 @@
       "exemption": null
     },
     {
+      "id": "desktop-update-channel",
+      "ownerModule": "desktop/auto-updater.cjs",
+      "pathPattern": "update-channel.json",
+      "pathPatterns": [
+        "update-channel.json"
+      ],
+      "pathExclusions": [],
+      "pathKind": "file",
+      "format": "json",
+      "schemaSource": {
+        "kind": "runtime-contract",
+        "module": "desktop/auto-updater.cjs",
+        "contract": "update channel record version, device identifier, activation flag, update feed address, activation time, and held invite codes"
+      },
+      "schemaContract": {
+        "kind": "runtime-source",
+        "source": "desktop/auto-updater.cjs",
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs."
+      },
+      "openEntry": [
+        "desktop update feed resolution",
+        "invite channel status",
+        "invite code redemption"
+      ],
+      "migrationEntry": [],
+      "protocolModules": [],
+      "firstPossibleOpenPhase": "runtime_ready",
+      "firstPossibleWritePhase": "runtime_ready",
+      "epochPolicy": "compatible",
+      "checkpointPolicy": "Optional compatible shell metadata; which update address this installation follows is not durable agent or session state.",
+      "restorePolicy": "Read only through the desktop updater reader; an unparsable or unknown-version record falls back to the default update address and reports the reason to the user instead of degrading silently.",
+      "affectedByEpochMigration": false,
+      "bootstrapSafety": null,
+      "preCoordinatorReadProjection": null,
+      "identityContract": "One record per desktop installation data home; the device identifier never leaves the machine and is only ever sent as a hash.",
+      "exemption": null
+    },
+    {
       "id": "desktop-window-version-state",
       "ownerModule": "desktop/main.cjs",
       "pathPattern": "user/window-state.json",
@@ -5091,7 +5129,25 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 182,
+      "line": 144,
+      "kind": "write-file",
+      "excerpt": "fs.writeFileSync(updateChannelTempPath, `${JSON.stringify(record, null, 2)}\\n`, \"utf-8\")",
+      "reason": "Writes the desktop update channel record through its temporary file and rename.",
+      "storeId": "desktop-update-channel",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "desktop/auto-updater.cjs",
+      "line": 145,
+      "kind": "rename",
+      "excerpt": "fs.renameSync(updateChannelTempPath, updateChannelFilePath)",
+      "reason": "Writes the desktop update channel record through its temporary file and rename.",
+      "storeId": "desktop-update-channel",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "desktop/auto-updater.cjs",
+      "line": 301,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(logDir, { recursive: true })",
       "reason": "Appends desktop auto-update diagnostics.",
@@ -5100,7 +5156,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 183,
+      "line": 302,
       "kind": "append-file",
       "excerpt": "fs.appendFileSync(path.join(logDir, \"auto-update.log\"), line + \"\\n\", \"utf-8\")",
       "reason": "Appends desktop auto-update diagnostics.",
@@ -5109,7 +5165,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 411,
+      "line": 530,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(versionFile), { recursive: true })",
       "reason": "Migrates or writes the current desktop update-cache version marker.",
@@ -5118,7 +5174,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 412,
+      "line": 531,
       "kind": "rename",
       "excerpt": "fs.renameSync(wrongFile, versionFile)",
       "reason": "Migrates or writes the current desktop update-cache version marker.",
@@ -5127,7 +5183,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 414,
+      "line": 533,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(wrongFile)",
       "reason": "Deletes the exact legacy last-update-version source and its now-empty legacy directory outside the active HANA_HOME.",
@@ -5136,7 +5192,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 417,
+      "line": 536,
       "kind": "remove-path",
       "excerpt": "fs.rmdirSync(wrongDir)",
       "reason": "Deletes the exact legacy last-update-version source and its now-empty legacy directory outside the active HANA_HOME.",
@@ -5145,7 +5201,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 440,
+      "line": 559,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(versionFile), { recursive: true })",
       "reason": "Migrates or writes the current desktop update-cache version marker.",
@@ -5154,7 +5210,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 441,
+      "line": 560,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(versionFile, currentVersion)",
       "reason": "Migrates or writes the current desktop update-cache version marker.",
@@ -5163,7 +5219,7 @@
     },
     {
       "sourceFile": "desktop/auto-updater.cjs",
-      "line": 456,
+      "line": 575,
       "kind": "remove-path",
       "excerpt": "fs.promises.rm(cacheDir, { recursive: true, force: true })",
       "reason": "Deletes Electron updater's regenerable pending cache under app.getPath(userData), not Hana application state.",

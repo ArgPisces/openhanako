@@ -10,9 +10,16 @@ const { ipcMain, app, BrowserWindow } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 
 const CHECK_INTERVAL = 4 * 60 * 60 * 1000; // 4 小时
 const DIGEST_ASSET_NAME = "release-digest.v1.json";
+const UPDATE_CHANNEL_FILE_NAME = "update-channel.json";
+const UPDATE_CHANNEL_VERSION = 1;
+// 邀请核销服务地址。内置默认值刻意留空：留空即"通道未配置"，设置页不渲染
+// 任何邀请入口，正式构建在服务上线前不会露出半个按钮。上线后填这里，
+// 或用 HANA_INVITE_API_URL 覆盖。
+const DEFAULT_INVITE_API_URL = "";
 const DEFAULT_GITHUB_OWNER = "liliMozi";
 const DEFAULT_GITHUB_REPO = "openhanako";
 const DEFAULT_ATOMGIT_OWNER = "liliMozi";
@@ -52,6 +59,8 @@ function createGithubFeedConfig(digestBaseUrl = "") {
     },
     digestBaseUrl: digestBaseUrl || `https://github.com/${DEFAULT_GITHUB_OWNER}/${DEFAULT_GITHUB_REPO}/releases/download`,
     fallbackConfigs: [],
+    channel: "default",
+    channelError: null,
   };
 }
 
@@ -65,7 +74,99 @@ function createAtomGitFeedConfig(env = process.env, digestBaseUrl = "") {
     },
     digestBaseUrl: digestBaseUrl || env.HANA_ATOMGIT_RELEASE_BASE_URL || DEFAULT_ATOMGIT_RELEASE_BASE_URL,
     fallbackConfigs: [createGithubFeedConfig()],
+    channel: "default",
+    channelError: null,
   };
+}
+
+/**
+ * 邀请通道的 feed 配置。fallbackConfigs 刻意留空：这条通道拿不到清单时
+ * 应该诚实报错，而不是悄悄换回公开货架把用户拉回正式版。
+ */
+function createInviteChannelFeedConfig(rawFeedUrl, digestBaseUrl = "") {
+  const feedUrl = ensureTrailingSlash(rawFeedUrl);
+  return {
+    feedURL: { provider: "generic", url: feedUrl },
+    source: { provider: "alpha", feedUrl },
+    digestBaseUrl: digestBaseUrl || `${feedUrl}{asset}`,
+    fallbackConfigs: [],
+    channel: "alpha",
+    channelError: null,
+  };
+}
+
+// ── 更新通道状态文件（{HANA_HOME}/update-channel.json）──
+
+function updateChannelFilePathOrNull() {
+  if (!_hanakoHome) return null;
+  return path.join(_hanakoHome, UPDATE_CHANNEL_FILE_NAME);
+}
+
+/**
+ * 读通道文件，返回 { record, error }：
+ *  - 文件不存在 → { record: null, error: null }（干净的"没有通道"）
+ *  - 解析失败 / 不是对象 / version 不认识 → { record: null, error: "<原因>" }
+ * 损坏绝不当作"没有通道"静默处理：错误会一路带进更新状态给用户看见。
+ */
+function readUpdateChannelRecord() {
+  const filePath = updateChannelFilePathOrNull();
+  if (!filePath) return { record: null, error: null };
+
+  let raw;
+  try {
+    raw = fs.readFileSync(filePath, "utf-8");
+  } catch (err) {
+    if (err && err.code === "ENOENT") return { record: null, error: null };
+    return { record: null, error: `update channel file is unreadable: ${err?.message || String(err)}` };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    return { record: null, error: `update channel file is not valid JSON: ${err?.message || String(err)}` };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { record: null, error: "update channel file is not a JSON object" };
+  }
+  if (parsed.version !== UPDATE_CHANNEL_VERSION) {
+    return { record: null, error: `update channel file has an unsupported version: ${JSON.stringify(parsed.version)}` };
+  }
+  return { record: parsed, error: null };
+}
+
+function writeUpdateChannelRecord(record) {
+  const updateChannelFilePath = updateChannelFilePathOrNull();
+  if (!updateChannelFilePath) {
+    throw new Error("the data home is not ready; the update channel cannot be persisted");
+  }
+  const updateChannelTempPath = `${updateChannelFilePath}.tmp`;
+  fs.writeFileSync(updateChannelTempPath, `${JSON.stringify(record, null, 2)}\n`, "utf-8");
+  fs.renameSync(updateChannelTempPath, updateChannelFilePath);
+  return record;
+}
+
+/**
+ * 设备标识：首次需要时生成并落盘（active 保持原样，生成 id 不等于开通通道）。
+ * 原始 id 永远不出机，上送核销服务的只有它的 sha256。
+ */
+function ensureDeviceId() {
+  const { record, error } = readUpdateChannelRecord();
+  if (error) throw new Error(error);
+  if (record && typeof record.deviceId === "string" && record.deviceId) return record.deviceId;
+
+  const deviceId = crypto.randomUUID();
+  writeUpdateChannelRecord({
+    ...(record || {}),
+    version: UPDATE_CHANNEL_VERSION,
+    deviceId,
+    active: record?.active === true,
+  });
+  return deviceId;
+}
+
+function hashDeviceId(deviceId) {
+  return crypto.createHash("sha256").update(String(deviceId), "utf-8").digest("hex");
 }
 
 function resolveUpdateFeedConfig(env = process.env) {
@@ -73,6 +174,7 @@ function resolveUpdateFeedConfig(env = process.env) {
   const source = String(env.HANA_UPDATE_SOURCE || env.HANA_UPDATE_PROVIDER || "").trim().toLowerCase();
   const digestBaseUrl = env.HANA_UPDATE_DIGEST_BASE_URL || "";
 
+  // 显式环境变量最优先：它是运维/调试的直接指令，压过任何持久化状态。
   if (explicitFeedUrl) {
     const feedUrl = ensureTrailingSlash(explicitFeedUrl);
     return {
@@ -83,14 +185,25 @@ function resolveUpdateFeedConfig(env = process.env) {
       },
       digestBaseUrl: digestBaseUrl || `${feedUrl}{asset}`,
       fallbackConfigs: [],
+      channel: "default",
+      channelError: null,
     };
   }
 
-  if (source === "github") {
-    return createGithubFeedConfig(digestBaseUrl);
+  const { record, error: channelError } = readUpdateChannelRecord();
+  if (channelError) logUpdate(`update channel override ignored: ${channelError}`);
+  if (!channelError
+    && record
+    && record.active === true
+    && typeof record.feedUrl === "string"
+    && record.feedUrl) {
+    return createInviteChannelFeedConfig(record.feedUrl, digestBaseUrl);
   }
 
-  return createAtomGitFeedConfig(env, digestBaseUrl);
+  const defaultConfig = source === "github"
+    ? createGithubFeedConfig(digestBaseUrl)
+    : createAtomGitFeedConfig(env, digestBaseUrl);
+  return { ...defaultConfig, channelError: channelError || null };
 }
 
 function feedSourceLabel(config) {
@@ -102,7 +215,11 @@ function feedSourceLabel(config) {
 
 function applyUpdateFeedConfig(config) {
   _updateFeedConfig = config;
-  setState({ updateSource: _updateFeedConfig.source });
+  setState({
+    updateSource: _updateFeedConfig.source,
+    updateChannel: _updateFeedConfig.channel || "default",
+    updateChannelError: _updateFeedConfig.channelError || null,
+  });
   autoUpdater.setFeedURL(_updateFeedConfig.feedURL);
 }
 
@@ -164,6 +281,8 @@ function createIdleState() {
     digestUrl: null,
     digestError: null,
     updateSource: _updateFeedConfig.source,
+    updateChannel: _updateFeedConfig.channel || "default",
+    updateChannelError: _updateFeedConfig.channelError || null,
   };
 }
 
@@ -577,6 +696,132 @@ function setupAutoUpdater() {
   });
 }
 
+// ── 邀请码核销 ──
+
+function resolveInviteApiUrl(env = process.env) {
+  return trimTrailingSlash(env.HANA_INVITE_API_URL || DEFAULT_INVITE_API_URL);
+}
+
+function inviteStatus() {
+  const { record, error } = readUpdateChannelRecord();
+  const active = !error
+    && record?.active === true
+    && typeof record.feedUrl === "string"
+    && Boolean(record.feedUrl);
+  const inviteCodes = !error && Array.isArray(record?.inviteCodes)
+    ? record.inviteCodes.filter(entry => typeof entry === "string" && entry)
+    : [];
+  return {
+    configured: Boolean(resolveInviteApiUrl()),
+    active,
+    inviteCodes,
+    channel: active ? "alpha" : "default",
+    error: error || null,
+  };
+}
+
+/**
+ * 核销一枚邀请码。返回 { ok: true, feedUrl, childCodes } 或结构化失败
+ * { ok: false, reason, message }——reason 区分"没配服务/网络断了/码不认"
+ * 三类，message 原样透传服务端说法，不吞、不美化、不自作主张重试。
+ * 核销成功本身不改变任何本机状态：切通道要等 invite:activate。
+ */
+async function redeemInviteCode(code) {
+  const apiUrl = resolveInviteApiUrl();
+  if (!apiUrl) {
+    return { ok: false, reason: "not-configured", message: "the invite redemption service is not configured" };
+  }
+  const trimmedCode = String(code || "").trim();
+  if (!trimmedCode) {
+    return { ok: false, reason: "invalid", message: "the invite code is empty" };
+  }
+  if (typeof fetch !== "function") {
+    return { ok: false, reason: "network", message: "this runtime has no fetch implementation" };
+  }
+
+  let deviceIdHash;
+  try {
+    deviceIdHash = hashDeviceId(ensureDeviceId());
+  } catch (err) {
+    const message = err?.message || String(err);
+    logUpdate(`invite redemption aborted before the request: ${message}`);
+    return { ok: false, reason: "storage", message };
+  }
+
+  let response;
+  try {
+    response = await fetch(`${apiUrl}/redeem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ code: trimmedCode, deviceIdHash }),
+    });
+  } catch (err) {
+    const message = err?.message || String(err);
+    logUpdate(`invite redemption transport failure: ${message}`);
+    return { ok: false, reason: "network", message };
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  const serverMessage = payload && typeof payload.error === "string" && payload.error ? payload.error : "";
+  if (!response.ok) {
+    logUpdate(`invite redemption rejected: status=${response.status}`);
+    return {
+      ok: false,
+      reason: response.status >= 400 && response.status < 500 ? "invalid" : "server",
+      message: serverMessage || `the redemption service answered with status ${response.status}`,
+    };
+  }
+  if (payload && payload.ok === false) {
+    logUpdate("invite redemption rejected by the service");
+    return {
+      ok: false,
+      reason: "invalid",
+      message: serverMessage || "this invite code is invalid or already used up",
+    };
+  }
+
+  const feedUrl = payload && typeof payload.feedUrl === "string" ? payload.feedUrl.trim() : "";
+  if (!feedUrl) {
+    return { ok: false, reason: "server", message: "the redemption response carries no update address" };
+  }
+  const childCodes = payload && Array.isArray(payload.childCodes)
+    ? payload.childCodes.filter(entry => typeof entry === "string" && entry)
+    : [];
+  logUpdate("invite redemption succeeded");
+  return { ok: true, feedUrl, childCodes };
+}
+
+/**
+ * 写入通道状态并让新 feed 立刻生效。只应在用户看过确认对话框并点头之后调用。
+ */
+function activateInviteChannel(payload) {
+  const feedUrl = payload && typeof payload.feedUrl === "string" ? payload.feedUrl.trim() : "";
+  if (!feedUrl) throw new Error("the update channel cannot be activated without a feed address");
+  if (!/^https:\/\//i.test(feedUrl)) throw new Error("the update channel feed address must use https");
+
+  const inviteCodes = payload && Array.isArray(payload.inviteCodes)
+    ? payload.inviteCodes.filter(entry => typeof entry === "string" && entry)
+    : [];
+
+  writeUpdateChannelRecord({
+    version: UPDATE_CHANNEL_VERSION,
+    deviceId: ensureDeviceId(),
+    active: true,
+    feedUrl,
+    activatedAt: new Date().toISOString(),
+    inviteCodes,
+  });
+  logUpdate("update channel activated from an invite redemption");
+  applyUpdateFeedConfig(resolveUpdateFeedConfig());
+  return inviteStatus();
+}
+
 // ── IPC handlers ──
 
 function registerIpcHandlers() {
@@ -608,6 +853,15 @@ function registerIpcHandlers() {
   ipcMain.handle("auto-update-set-channel", (_event, channel) => {
     autoUpdater.allowPrerelease = (channel === "beta");
   });
+
+  // 邀请通道三件套统一是 async：失败一律以 rejected promise 抵达 renderer，
+  // 调用侧不必区分"同步抛"和"异步拒"两种失败形状。
+  ipcMain.handle("invite:status", async () => inviteStatus());
+
+  ipcMain.handle("invite:redeem", async (_event, code) => redeemInviteCode(code));
+
+  // 只在 renderer 展示过"数据单行道"确认对话框、用户点头之后才会被调用。
+  ipcMain.handle("invite:activate", async (_event, payload) => activateInviteChannel(payload));
 }
 
 // ── 定时轮询 ──

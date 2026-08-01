@@ -217,6 +217,16 @@
       "breakingMigrationRequiresAccessMove": false
     },
     {
+      "id": "desktop-update-channel",
+      "firstPossibleOpenPhase": "runtime_ready",
+      "firstPossibleWritePhase": "runtime_ready",
+      "opensBeforeFutureCoordinator": false,
+      "writesBeforeFutureCoordinator": false,
+      "bootstrapSafety": null,
+      "preCoordinatorReadProjection": null,
+      "breakingMigrationRequiresAccessMove": false
+    },
+    {
       "id": "desktop-window-version-state",
       "firstPossibleOpenPhase": "runtime_ready",
       "firstPossibleWritePhase": "runtime_ready",
