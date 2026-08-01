@@ -7,36 +7,30 @@
  *
  * 解决的协议问题：
  *   1. effort 枚举不同源：Pi SDK 的 OpenAIResponsesOptions.reasoningEffort 是
- *      minimal/low/medium/high/xhigh（OpenAI 枚举），DeepSeek 只认 high / max。
- *      DeepSeek 对不支持的取值静默忽略而非报错，不翻译就等于思考档位悄悄失效。
+ *      OpenAI 枚举（含 minimal），DeepSeek 的词汇表是 low/high/max 加关思考的
+ *      none。DeepSeek 对不支持的取值静默忽略而非报错，minimal 不翻译就等于档位
+ *      悄悄失效。medium / xhigh 服务端自己会映射，不必代劳。
  *   2. 输出预算字段名：Responses 用 max_output_tokens，ChatCompletions 用 max_tokens。
- *      漏搬同样会被静默忽略，而 DeepSeek 在没收到预算时只给 4K 输出。注意这里
- *      只搬字段名，不改数值 —— 预算大小由 SDK 的 clampMaxTokensToContext 决定。
+ *      漏搬同样会被静默忽略。注意这里只搬字段名，不改数值 —— 预算大小由 SDK 的
+ *      clampMaxTokensToContext 决定，它才拿得到真实 token 数。
  *   3. ChatCompletions 残留字段：thinking / 顶层 reasoning_effort 只在 DeepSeek 的
  *      ChatCompletions 通道有效，发到 Responses 是无效噪声。
- *   4. 关思考：Responses 协议没有 thinking:{type:"disabled"} 的对应物，SDK 会退化成
- *      reasoning:{effort:"none"}，而 DeepSeek 只认 high / max。本模块选择整体删除
- *      reasoning 字段而不是发一个供应商不认识的档位（见下方"已知缺口"）。
+ *   4. 关思考：DeepSeek 的思考模式默认开启，关掉必须显式发 effort:"none"。这条
+ *      通道没有 thinking:{type:"disabled"} 可用，删掉 reasoning 字段等于落回
+ *      默认的思考开启，用户选的 off 档会静默失效。
  *
  *   官方文档：https://api-docs.deepseek.com/guides/responses_api/
- *
- * 已知缺口：
- *   DeepSeek Responses 通道目前没有公开的"关闭思考"开关。删除 reasoning 字段后由
- *   服务端决定默认行为，用户的 off 档位在这条通道上不保证生效。等官方补充关思考
- *   语义后，这里应改成显式发送对应字段。
+ *             https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
  *
  * 删除条件：
- *   - DeepSeek Responses 接受 OpenAI 原生 effort 枚举（不再需要 high/max 翻译），
+ *   - DeepSeek Responses 接受 OpenAI 原生 effort 枚举（不再需要 minimal 翻译），
  *     且 Pi SDK 通过 model.thinkingLevelMap 完成映射
  *   - 或 hana 不再支持 DeepSeek Responses 通道
  *
  * 接口契约：见 ./README.md
  */
 
-import {
-  isThinkingUnsupportedByOutputLimit,
-  resolveMissingThinkingBudget,
-} from "./deepseek-thinking-budget.ts";
+import { resolveMissingOutputBudget } from "./deepseek-thinking-budget.ts";
 
 const RESPONSES_API = "openai-responses";
 const OFFICIAL_DEEPSEEK_PROVIDERS = new Set(["deepseek", "deepseek-responses"]);
@@ -65,21 +59,26 @@ export function matches(model) {
   return lower(model.baseUrl || model.base_url).includes("api.deepseek.com");
 }
 
+/** DeepSeek 关闭思考的官方取值。 */
+const EFFORT_NONE = "none";
+
 function isThinkingOff(level) {
-  return level === "off" || level === "none" || level === "disabled";
+  return level === "off" || level === EFFORT_NONE || level === "disabled";
 }
 
 /**
- * DeepSeek Responses 只有 high / max 两档有效。SDK 送来的 OpenAI 枚举
- * （minimal/low/medium/high/xhigh）按语义就近归一，与 ChatCompletions 通道
- * 的 reasoningEffortForLevel 保持同一套映射。
+ * 收敛到 DeepSeek 的 effort 词汇表：low / high / max，外加关思考用的 none。
+ *
+ * medium 和 xhigh 服务端自己会映射到 high / max，原样透传即可；minimal 是
+ * OpenAI 专有档位，DeepSeek 不认，归到最接近的 low。
+ * 文档：https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
  */
 function translateEffort(effort) {
   const normalized = lower(effort);
   if (!normalized) return null;
-  if (isThinkingOff(normalized)) return null;
-  if (normalized === "xhigh" || normalized === "max") return "max";
-  return "high";
+  if (isThinkingOff(normalized)) return EFFORT_NONE;
+  if (normalized === "minimal") return "low";
+  return normalized;
 }
 
 /**
@@ -99,36 +98,45 @@ function resolveOutputCap(payload) {
   return null;
 }
 
+/**
+ * 决定本次请求的 reasoning 字段。
+ *
+ * DeepSeek 的思考模式默认开启，关思考必须显式发 `effort: "none"` —— 删掉
+ * reasoning 字段只会落回"思考开启"的服务端默认，用户选的 off 档就没生效。
+ */
+function resolveReasoning(payload, thinkingDisabled) {
+  const current = payload.reasoning && typeof payload.reasoning === "object"
+    ? payload.reasoning
+    : null;
+
+  if (thinkingDisabled) {
+    if (current?.effort === EFFORT_NONE) return current;
+    return { ...(current || {}), effort: EFFORT_NONE };
+  }
+
+  if (!current) return null;
+  const effort = translateEffort(current.effort);
+  // 没带 effort 就别凭空造一个，服务端默认 high。
+  if (!effort) return current;
+  return effort === current.effort ? current : { ...current, effort };
+}
+
 export function apply(payload, model, options: Record<string, any> = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
 
-  // 模型输出上限撑不起思考链时关掉思考（与 ChatCompletions 通道同规则）。
-  const thinkingDisabled = options.mode === "utility"
-    || isThinkingOff(options.reasoningLevel)
-    || isThinkingUnsupportedByOutputLimit(model);
-  // 供应商收不到预算时只给 4K，思考模式下正文出不来，仅在完全没有预算时兜底。
+  const thinkingDisabled = options.mode === "utility" || isThinkingOff(options.reasoningLevel);
+  // 官方没有公布 max_output_tokens 的默认值，只建议显式声明，所以完全没带预算时补一个。
   const resolvedCap = resolveOutputCap(payload);
   const outputCap = resolvedCap === null && !thinkingDisabled
-    ? resolveMissingThinkingBudget(model)
+    ? resolveMissingOutputBudget(model)
     : resolvedCap;
-  const nextReasoning = thinkingDisabled
-    ? null
-    : (() => {
-      if (!payload.reasoning || typeof payload.reasoning !== "object") return null;
-      const effort = translateEffort(payload.reasoning.effort);
-      if (!effort) return null;
-      return effort === payload.reasoning.effort
-        ? payload.reasoning
-        : { ...payload.reasoning, effort };
-    })();
+  const nextReasoning = resolveReasoning(payload, thinkingDisabled);
   const staleFields = [
     ...CHAT_COMPLETIONS_ONLY_FIELDS,
     ...LEGACY_OUTPUT_CAP_FIELDS,
   ].filter((field) => hasOwn(payload, field));
 
-  const reasoningChanged = hasOwn(payload, "reasoning")
-    ? nextReasoning !== payload.reasoning
-    : nextReasoning !== null;
+  const reasoningChanged = nextReasoning !== (payload.reasoning ?? null);
   const outputCapChanged = outputCap !== null
     && positiveInteger(payload.max_output_tokens) !== outputCap;
 

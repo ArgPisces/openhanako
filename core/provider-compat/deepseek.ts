@@ -24,10 +24,7 @@
  */
 
 import { getReasoningProfile, getThinkingFormat } from "../../shared/model-capabilities.ts";
-import {
-  isThinkingUnsupportedByOutputLimit,
-  resolveMissingThinkingBudget,
-} from "./deepseek-thinking-budget.ts";
+import { resolveMissingOutputBudget } from "./deepseek-thinking-budget.ts";
 import {
   ensureAssistantContentForToolCalls,
   ensureReasoningContentForToolCalls as ensureReasoningContentForToolCallsBase,
@@ -90,10 +87,21 @@ function isThinkingOff(level) {
   return level === "off" || level === "none" || level === "disabled";
 }
 
+/**
+ * Hana 思考档位 → DeepSeek reasoning_effort。
+ *
+ * 官方取值只有 low / high（默认）/ max，且服务端自己会把 medium 归到 high、
+ * xhigh 归到 max，所以这里只需要处理 DeepSeek 词汇表里没有的档位：minimal
+ * 归到最接近的 low。低档不再被吞成 high —— low 是官方有效档位。
+ *
+ * 注意 deepseek-v4-pro 目前把 low 当 high 处理，那是服务端的降级，不在这里预判。
+ * 文档：https://api-docs.deepseek.com/zh-cn/api/create-chat-completion
+ */
 function reasoningEffortForLevel(level) {
   if (!level) return null;
   if (level === "xhigh" || level === "max") return "max";
-  if (level === "minimal" || level === "low" || level === "medium" || level === "high") return "high";
+  if (level === "minimal" || level === "low") return "low";
+  if (level === "medium" || level === "high") return "high";
   return null;
 }
 
@@ -128,12 +136,16 @@ function shouldUseThinking(payload, model, reasoningLevel) {
   );
 }
 
+/**
+ * 把 payload 里已有的 effort 收敛到 DeepSeek 词汇表。
+ *
+ * medium / xhigh 服务端自己会映射，留着也对；只有 minimal 是 DeepSeek 完全不认
+ * 的 OpenAI 专有档位，需要归到 low。
+ */
 function normalizeReasoningEffort(payload) {
   if (!hasOwn(payload, "reasoning_effort")) return;
-  if (payload.reasoning_effort === "low" || payload.reasoning_effort === "medium") {
-    payload.reasoning_effort = "high";
-  } else if (payload.reasoning_effort === "xhigh") {
-    payload.reasoning_effort = "max";
+  if (payload.reasoning_effort === "minimal") {
+    payload.reasoning_effort = "low";
   }
 }
 
@@ -244,20 +256,15 @@ function normalizeMaxTokenField(payload) {
 }
 
 /**
- * 思考模式的输出预算保护。
+ * 请求完全没带输出预算时补一个，已有的数值不动。
  *
- * 不改已有的预算数值：payload 里的 max_tokens 来自 SDK 的
- * clampMaxTokensToContext，已经是 `min(模型输出上限, 剩余窗口 - 安全余量)`。
- * 值小只说明剩余窗口紧张，这时放大只会把请求推过窗口边界（输入和输出共用同一个
- * 上下文窗口）。
+ * payload 里的 max_tokens 来自 SDK 的 clampMaxTokensToContext，已经是
+ * `min(模型输出上限, 剩余窗口 - 安全余量)`。值小只说明剩余窗口紧张，这时放大
+ * 只会把请求推过窗口边界（输入和输出共用同一个上下文窗口）。
  */
-function ensureThinkingTokenBudget(payload, model) {
-  if (isThinkingUnsupportedByOutputLimit(model)) {
-    disableThinking(payload);
-    return;
-  }
+function ensureOutputBudget(payload, model) {
   if (positiveInteger(payload.max_tokens) === null) {
-    payload.max_tokens = resolveMissingThinkingBudget(model);
+    payload.max_tokens = resolveMissingOutputBudget(model);
   }
 }
 
@@ -400,10 +407,7 @@ export function apply(payload, model, options: Record<string, any> = {}) {
   applyRequestedReasoningLevel(p, reasoningLevel);
   normalizeReasoningEffort(p);
   enableThinking(p);
-  ensureThinkingTokenBudget(p, model);
-  if (p.thinking?.type === "disabled") {
-    return next;
-  }
+  ensureOutputBudget(p, model);
 
   if (shouldInjectRoleplayReasoningPatch(p, model, options)) {
     const patchedMessages = injectRoleplayReasoningMarker(p.messages, options);

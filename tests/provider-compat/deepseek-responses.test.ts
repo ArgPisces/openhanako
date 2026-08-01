@@ -162,33 +162,56 @@ describe("推导链 — Responses 流量不再被 ChatCompletions 语义吞掉",
 });
 
 describe("provider-compat/deepseek-responses — effort 翻译", () => {
-  it("把 SDK 的 xhigh 顶档翻译成 DeepSeek 的 max", () => {
+  it("保留 reasoning 里的其它字段，只动 effort", () => {
     const result = normalizeProviderPayload(
-      responsesPayload({ reasoning: { effort: "xhigh", summary: "auto" } }),
+      responsesPayload({ reasoning: { effort: "minimal", summary: "auto" } }),
       FLASH_RESPONSES_MODEL,
-      { mode: "chat", reasoningLevel: "xhigh" },
+      { mode: "chat", reasoningLevel: "low" },
     );
-    expect(result.reasoning).toEqual({ effort: "max", summary: "auto" });
+    expect(result.reasoning).toEqual({ effort: "low", summary: "auto" });
   });
 
-  it("DeepSeek 只认 high / max，低档一律归一到 high", () => {
-    for (const effort of ["minimal", "low", "medium", "high"]) {
+  it("low 是官方有效档位，不再被吞成 high", () => {
+    const result = normalizeProviderPayload(
+      responsesPayload({ reasoning: { effort: "low" } }),
+      FLASH_RESPONSES_MODEL,
+      { mode: "chat", reasoningLevel: "low" },
+    );
+    expect(result.reasoning).toMatchObject({ effort: "low" });
+  });
+
+  it("minimal 是 OpenAI 专有档位，归到最接近的 low", () => {
+    const result = normalizeProviderPayload(
+      responsesPayload({ reasoning: { effort: "minimal" } }),
+      FLASH_RESPONSES_MODEL,
+      { mode: "chat", reasoningLevel: "low" },
+    );
+    expect(result.reasoning).toMatchObject({ effort: "low" });
+  });
+
+  it("medium / xhigh 交给服务端自己映射，不代劳", () => {
+    for (const effort of ["medium", "xhigh"]) {
       const result = normalizeProviderPayload(
         responsesPayload({ reasoning: { effort } }),
         FLASH_RESPONSES_MODEL,
         { mode: "chat", reasoningLevel: "high" },
       );
-      expect(result.reasoning).toMatchObject({ effort: "high" });
+      expect(result.reasoning).toMatchObject({ effort });
     }
   });
 
-  it("SDK 的关思考占位 effort 不会伪装成有效档位", () => {
-    const result = normalizeProviderPayload(
-      responsesPayload({ reasoning: { effort: "none" } }),
-      FLASH_RESPONSES_MODEL,
-      { mode: "chat", reasoningLevel: "off" },
-    );
-    expect(result).not.toHaveProperty("reasoning");
+  it("关思考发官方的 effort none，而不是删掉 reasoning 字段", () => {
+    // DeepSeek 思考模式默认开启，删字段等于落回默认，用户选的 off 档会失效。
+    for (const payload of [
+      responsesPayload({ reasoning: { effort: "xhigh" } }),
+      responsesPayload(),
+    ]) {
+      const result = normalizeProviderPayload(payload, FLASH_RESPONSES_MODEL, {
+        mode: "chat",
+        reasoningLevel: "off",
+      });
+      expect(result.reasoning).toMatchObject({ effort: "none" });
+    }
   });
 });
 
@@ -223,7 +246,7 @@ describe("provider-compat/deepseek-responses — 字段搬运", () => {
         { mode: "chat", reasoningLevel: "xhigh" },
       );
       expect(result.max_output_tokens).toBe(cap);
-      expect(result.reasoning).toMatchObject({ effort: "max" });
+      expect(result.reasoning).toMatchObject({ effort: "xhigh" });
     }
   });
 
@@ -235,17 +258,18 @@ describe("provider-compat/deepseek-responses — 字段搬运", () => {
       FLASH_RESPONSES_MODEL,
       { mode: "chat", reasoningLevel: "xhigh" },
     );
-    expect(result.reasoning).toMatchObject({ effort: "max" });
+    expect(result.reasoning).toMatchObject({ effort: "xhigh" });
     expect(result.max_output_tokens).toBe(20_000);
   });
 
-  it("模型输出上限撑不起思考链时才关思考", () => {
+  it("模型输出上限小也不替用户关思考", () => {
+    // 官方对思考模式没有 max_tokens 最小值要求，凭空设阈值只会让用户选的档位失效。
     const result = normalizeProviderPayload(
       responsesPayload({ reasoning: { effort: "xhigh" }, max_output_tokens: 8_000 }),
       { ...FLASH_RESPONSES_MODEL, maxOutput: 8_192 },
       { mode: "chat", reasoningLevel: "xhigh" },
     );
-    expect(result).not.toHaveProperty("reasoning");
+    expect(result.reasoning).toMatchObject({ effort: "xhigh" });
   });
 
   it("已有的 max_output_tokens 不被 ChatCompletions 残留值覆盖", () => {
@@ -269,13 +293,13 @@ describe("provider-compat/deepseek-responses — 字段搬运", () => {
 });
 
 describe("provider-compat/deepseek-responses — utility 与不可变性", () => {
-  it("utility 模式关闭思考，避免短输出被思考链吃光预算", () => {
+  it("utility 模式显式关闭思考，避免短输出被思考链吃光预算", () => {
     const result = normalizeProviderPayload(
       responsesPayload({ reasoning: { effort: "high", summary: "auto" } }),
       FLASH_RESPONSES_MODEL,
       { mode: "utility" },
     );
-    expect(result).not.toHaveProperty("reasoning");
+    expect(result.reasoning).toMatchObject({ effort: "none" });
   });
 
   it("apply 不 mutate 输入 payload", () => {

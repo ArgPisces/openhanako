@@ -12,7 +12,11 @@
  * 文档上的状态是"即将支持"，这里先行登记，以便官方开放当天无需改代码；在那之前
  * 对 Pro 发起的 Responses 请求会被供应商拒绝。
  *
+ * 思考档位：Flash 支持 low / high / max 三档，Pro 目前只有 high / max（low 按
+ * high 处理）。这是服务端行为，客户端照常发用户选的档位即可。
+ *
  * 文档：https://api-docs.deepseek.com/guides/responses_api/
+ *       https://api-docs.deepseek.com/zh-cn/api/create-chat-completion
  */
 
 const DEEPSEEK_RESPONSES_MODELS = [

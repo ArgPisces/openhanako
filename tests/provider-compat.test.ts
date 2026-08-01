@@ -1281,7 +1281,8 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(result).not.toBe(payload);
     expect(result).toMatchObject({
       model: "deepseek-v4-pro",
-      reasoning_effort: "high",
+      // medium 由服务端自己映射到 high，兼容层不代劳。
+      reasoning_effort: "medium",
       max_tokens: 32000,
     });
     expect(result).not.toHaveProperty("max_completion_tokens");
@@ -1306,6 +1307,30 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     });
   });
 
+  it("DeepSeek low 是官方有效档位，不被吞成 high", () => {
+    // 官方 reasoning_effort 取值为 low / high / max，吞掉 low 等于让用户少一档，
+    // 且被迫用更贵更慢的档位。
+    const result = normalizeProviderPayload({
+      model: "deepseek-v4-pro",
+      messages: [{ role: "user", content: "hello" }],
+      max_tokens: 100_000,
+    }, deepseekModel, { mode: "chat", reasoningLevel: "low" });
+    expect(result).toMatchObject({
+      thinking: { type: "enabled" },
+      reasoning_effort: "low",
+    });
+  });
+
+  it("DeepSeek minimal 是 OpenAI 专有档位，归到最接近的 low", () => {
+    const result = normalizeProviderPayload({
+      model: "deepseek-v4-pro",
+      messages: [{ role: "user", content: "hello" }],
+      reasoning_effort: "minimal",
+      max_tokens: 100_000,
+    }, deepseekModel, { mode: "chat" });
+    expect(result.reasoning_effort).toBe("low");
+  });
+
   it("DeepSeek V4 不覆盖 SDK 按剩余窗口算好的输出预算", () => {
     // SDK 的 clampMaxTokensToContext 已经取过 min(模型上限, 剩余窗口 - 安全余量)，
     // 兼容层拿不到真实 token 数。放大只会把请求推过 1M 总窗口的边界，而且恰好
@@ -1326,7 +1351,8 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     }
   });
 
-  it("DeepSeek 模型输出上限撑不起思考链时才关思考", () => {
+  it("DeepSeek 模型输出上限小也不替用户关思考", () => {
+    // 官方对思考模式没有 max_tokens 最小值要求，凭空设阈值只会让用户选的档位失效。
     const result = normalizeProviderPayload({
       model: "deepseek-small",
       messages: [{ role: "user", content: "hello" }],
@@ -1335,8 +1361,11 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
       mode: "chat",
       reasoningLevel: "xhigh",
     });
-    expect(result).toMatchObject({ thinking: { type: "disabled" } });
-    expect(result).not.toHaveProperty("reasoning_effort");
+    expect(result).toMatchObject({
+      thinking: { type: "enabled" },
+      reasoning_effort: "max",
+      max_tokens: 8000,
+    });
   });
 
   it("DeepSeek V4 off 会显式关闭官方思考模式", () => {
