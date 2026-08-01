@@ -616,7 +616,7 @@ describe("normalizeProviderPayload — 通用层", () => {
     expect(result.max_tokens).toBe(98304);
   });
 
-  it("官方 DeepSeek 仍交给 DeepSeek 子模块抬升 thinking 输出预算", () => {
+  it("官方 DeepSeek 只把输出预算搬到官方字段名，不改数值", () => {
     const payload = {
       model: "deepseek-v4-flash",
       messages: [{ role: "user", content: "hi" }],
@@ -631,7 +631,7 @@ describe("normalizeProviderPayload — 通用层", () => {
       maxTokens: 384000,
     }, { mode: "chat", reasoningLevel: "high" });
     expect(result).not.toHaveProperty("max_completion_tokens");
-    expect(result.max_tokens).toBe(65536);
+    expect(result.max_tokens).toBe(32000);
     expect(result.thinking).toEqual({ type: "enabled" });
   });
 
@@ -1270,7 +1270,7 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(payload.reasoning_effort).toBe("none");
   });
 
-  it("DeepSeek 无工具思考请求使用官方 max_tokens，并抬过 high thinking budget", () => {
+  it("DeepSeek 无工具思考请求把预算搬到官方 max_tokens 字段", () => {
     const payload = {
       model: "deepseek-v4-pro",
       messages: [{ role: "user", content: "hello" }],
@@ -1282,7 +1282,7 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(result).toMatchObject({
       model: "deepseek-v4-pro",
       reasoning_effort: "high",
-      max_tokens: 65536,
+      max_tokens: 32000,
     });
     expect(result).not.toHaveProperty("max_completion_tokens");
     expect(payload).toHaveProperty("max_completion_tokens", 32000);
@@ -1302,26 +1302,41 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(result).toMatchObject({
       thinking: { type: "enabled" },
       reasoning_effort: "max",
-      max_tokens: 384000,
+      max_tokens: 32000,
     });
   });
 
-  it("DeepSeek V4 high 档保持保守预算，不顶格申请", () => {
-    const payload = {
-      model: "deepseek-v4-pro",
+  it("DeepSeek V4 不覆盖 SDK 按剩余窗口算好的输出预算", () => {
+    // SDK 的 clampMaxTokensToContext 已经取过 min(模型上限, 剩余窗口 - 安全余量)，
+    // 兼容层拿不到真实 token 数。放大只会把请求推过 1M 总窗口的边界，而且恰好
+    // 发生在剩余窗口最紧张的时候。思考档位与能输出多长是两个正交的维度。
+    for (const [level, effort] of [["high", "high"], ["xhigh", "max"]]) {
+      for (const cap of [20_000, 65_536, 384_000]) {
+        const result = normalizeProviderPayload({
+          model: "deepseek-v4-pro",
+          messages: [{ role: "user", content: "hello" }],
+          max_tokens: cap,
+        }, deepseekModel, { mode: "chat", reasoningLevel: level });
+        expect(result).toMatchObject({
+          thinking: { type: "enabled" },
+          reasoning_effort: effort,
+          max_tokens: cap,
+        });
+      }
+    }
+  });
+
+  it("DeepSeek 模型输出上限撑不起思考链时才关思考", () => {
+    const result = normalizeProviderPayload({
+      model: "deepseek-small",
       messages: [{ role: "user", content: "hello" }],
-      reasoning_effort: "high",
-      max_completion_tokens: 32000,
-    };
-    const result = normalizeProviderPayload(payload, deepseekModel, {
+      max_tokens: 8000,
+    }, { ...deepseekModel, maxTokens: 8192 }, {
       mode: "chat",
-      reasoningLevel: "high",
+      reasoningLevel: "xhigh",
     });
-    expect(result).toMatchObject({
-      thinking: { type: "enabled" },
-      reasoning_effort: "high",
-      max_tokens: 65536,
-    });
+    expect(result).toMatchObject({ thinking: { type: "disabled" } });
+    expect(result).not.toHaveProperty("reasoning_effort");
   });
 
   it("DeepSeek V4 off 会显式关闭官方思考模式", () => {
@@ -1374,7 +1389,7 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(result).toMatchObject({
       thinking: { type: "enabled" },
       reasoning_effort: "max",
-      max_tokens: 384000,
+      max_tokens: 32000,
     });
     expect(result).not.toHaveProperty("max_completion_tokens");
     expect(result.messages[1]).toHaveProperty("reasoning_content", "Need to call the date tool.");
@@ -1391,6 +1406,7 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
       id: "deepseek-v4-pro",
       provider: "deepseek",
     }, { mode: "chat" });
+    // 请求完全没带预算：供应商默认只给 4K，思考链一开正文就没了，这里补兜底值。
     expect(result).toMatchObject({
       thinking: { type: "enabled" },
       max_tokens: 65536,
@@ -1433,15 +1449,16 @@ describe("normalizeProviderPayload — DeepSeek utility 模式", () => {
     expect(result.max_tokens).toBe(100);
   });
 
-  it("utility 模式默认就是 utility，不传 mode 时按 chat 处理", () => {
+  it("不传 mode 时按 chat 处理，不套用 utility 的关思考规则", () => {
     const payload = {
       model: "deepseek-v4-flash",
       messages: [{ role: "user", content: "hi" }],
       max_tokens: 50,
     };
-    // 默认 mode = "chat"，会拉 max_tokens
     const result = normalizeProviderPayload(payload, deepseekV4);
-    expect(result.max_tokens).toBe(65536);
+    expect(result.thinking).toEqual({ type: "enabled" });
+    // 调用方显式声明的预算就是意图，兼容层不替它改主意。
+    expect(result.max_tokens).toBe(50);
   });
 
   it("utility 模式尊重自定义 provider 显式声明的 DeepSeek thinking format", () => {

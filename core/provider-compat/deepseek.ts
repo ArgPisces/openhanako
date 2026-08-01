@@ -25,8 +25,8 @@
 
 import { getReasoningProfile, getThinkingFormat } from "../../shared/model-capabilities.ts";
 import {
-  DEEPSEEK_THINKING_BUDGET_FLOOR,
-  resolveThinkingOutputBudget,
+  isThinkingUnsupportedByOutputLimit,
+  resolveMissingThinkingBudget,
 } from "./deepseek-thinking-budget.ts";
 import {
   ensureAssistantContentForToolCalls,
@@ -243,18 +243,22 @@ function normalizeMaxTokenField(payload) {
   delete payload.max_completion_tokens;
 }
 
+/**
+ * 思考模式的输出预算保护。
+ *
+ * 不改已有的预算数值：payload 里的 max_tokens 来自 SDK 的
+ * clampMaxTokensToContext，已经是 `min(模型输出上限, 剩余窗口 - 安全余量)`。
+ * 值小只说明剩余窗口紧张，这时放大只会把请求推过窗口边界（输入和输出共用同一个
+ * 上下文窗口）。
+ */
 function ensureThinkingTokenBudget(payload, model) {
-  const current = positiveInteger(payload.max_tokens);
-  if (current && current > DEEPSEEK_THINKING_BUDGET_FLOOR) return;
-
-  const target = resolveThinkingOutputBudget(model, payload.reasoning_effort);
-
-  if (target <= DEEPSEEK_THINKING_BUDGET_FLOOR) {
+  if (isThinkingUnsupportedByOutputLimit(model)) {
     disableThinking(payload);
     return;
   }
-
-  payload.max_tokens = target;
+  if (positiveInteger(payload.max_tokens) === null) {
+    payload.max_tokens = resolveMissingThinkingBudget(model);
+  }
 }
 
 /**

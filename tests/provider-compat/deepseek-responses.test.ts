@@ -86,7 +86,7 @@ describe("deepseek-responses provider plugin", () => {
       defaultBaseUrl: "https://api.deepseek.com",
       defaultApi: "openai-responses",
     });
-    expect(deepseekResponsesPlugin.models).toEqual([
+    expect(deepseekResponsesPlugin.models).toContainEqual(
       expect.objectContaining({
         id: "deepseek-v4-flash",
         api: "openai-responses",
@@ -94,12 +94,17 @@ describe("deepseek-responses provider plugin", () => {
         maxOutput: 384_000,
         reasoning: true,
       }),
-    ]);
+    );
   });
 
-  it("只登记官方确认支持 Responses 的模型", () => {
-    // V4-Pro 的 Responses 支持尚未开放，混进来会让用户配出一条静默失败的通道。
-    expect(deepseekResponsesPlugin.models.map((m) => m.id)).not.toContain("deepseek-v4-pro");
+  it("登记 V4 全系，Pro 与 Flash 走同一套协议元数据", () => {
+    expect(deepseekResponsesPlugin.models.map((m) => m.id)).toEqual([
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+    ]);
+    for (const model of deepseekResponsesPlugin.models) {
+      expect(model).toMatchObject({ api: "openai-responses", reasoning: true, image: false });
+    }
   });
 
   it("不进 default-models.json，否则带协议元数据的 plugin.models 会被裸 id 覆盖", () => {
@@ -208,40 +213,39 @@ describe("provider-compat/deepseek-responses — 字段搬运", () => {
     expect(result.max_output_tokens).toBe(131_072);
   });
 
-  it("思考开启时把 SDK 的隐式小预算抬到与 ChatCompletions 通道一致的档位", () => {
-    // SDK 的隐式默认是 32000，不抬升的话 Responses 通道的输出上限反而比
-    // ChatCompletions 通道更小，384K 长输出永远出不来。
-    const maxDoc = normalizeProviderPayload(
-      responsesPayload({ reasoning: { effort: "xhigh" }, max_output_tokens: 32_000 }),
+  it("不覆盖 SDK 已按剩余窗口算好的输出预算", () => {
+    // SDK 的 clampMaxTokensToContext 已经取过 min(模型上限, 剩余窗口 - 安全余量)。
+    // 兼容层拿不到真实 token 数，放大只会把请求推过 1M 总窗口的边界。
+    for (const cap of [50_000, 120_000, 384_000]) {
+      const result = normalizeProviderPayload(
+        responsesPayload({ reasoning: { effort: "xhigh" }, max_output_tokens: cap }),
+        FLASH_RESPONSES_MODEL,
+        { mode: "chat", reasoningLevel: "xhigh" },
+      );
+      expect(result.max_output_tokens).toBe(cap);
+      expect(result.reasoning).toMatchObject({ effort: "max" });
+    }
+  });
+
+  it("剩余窗口紧张不会让模型突然停止思考", () => {
+    // 预算小只说明这一轮上下文长，思考能力没变。跟着单轮预算关思考是用户没法
+    // 预料的静默降级。
+    const result = normalizeProviderPayload(
+      responsesPayload({ reasoning: { effort: "xhigh" }, max_output_tokens: 20_000 }),
       FLASH_RESPONSES_MODEL,
       { mode: "chat", reasoningLevel: "xhigh" },
     );
-    expect(maxDoc.max_output_tokens).toBe(384_000);
-
-    const highDoc = normalizeProviderPayload(
-      responsesPayload({ reasoning: { effort: "high" }, max_output_tokens: 32_000 }),
-      FLASH_RESPONSES_MODEL,
-      { mode: "chat", reasoningLevel: "high" },
-    );
-    expect(highDoc.max_output_tokens).toBe(65_536);
+    expect(result.reasoning).toMatchObject({ effort: "max" });
+    expect(result.max_output_tokens).toBe(20_000);
   });
 
-  it("调用方给足预算时不再放大", () => {
+  it("模型输出上限撑不起思考链时才关思考", () => {
     const result = normalizeProviderPayload(
-      responsesPayload({ reasoning: { effort: "high" }, max_output_tokens: 50_000 }),
-      FLASH_RESPONSES_MODEL,
-      { mode: "chat", reasoningLevel: "high" },
+      responsesPayload({ reasoning: { effort: "xhigh" }, max_output_tokens: 8_000 }),
+      { ...FLASH_RESPONSES_MODEL, maxOutput: 8_192 },
+      { mode: "chat", reasoningLevel: "xhigh" },
     );
-    expect(result.max_output_tokens).toBe(50_000);
-  });
-
-  it("关思考时不抬预算", () => {
-    const result = normalizeProviderPayload(
-      responsesPayload({ max_output_tokens: 32_000 }),
-      FLASH_RESPONSES_MODEL,
-      { mode: "utility" },
-    );
-    expect(result.max_output_tokens).toBe(32_000);
+    expect(result).not.toHaveProperty("reasoning");
   });
 
   it("已有的 max_output_tokens 不被 ChatCompletions 残留值覆盖", () => {

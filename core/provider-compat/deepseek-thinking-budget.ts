@@ -1,24 +1,35 @@
 /**
- * DeepSeek 思考模式的输出预算档位
+ * DeepSeek 思考模式的输出预算下限
  *
- * DeepSeek 的思考链和正文共用一份输出预算。预算给小了，思考链会把额度吃光，
- * 正文被截断；给到顶格又会在长上下文里挤压输入空间。这套档位是两条官方通道
- * （ChatCompletions / Responses）共享的厂商级事实，放在这里避免双源真相。
+ * DeepSeek 的思考链和正文共用一份输出预算（reasoning_content 计入输出 token），
+ * 而输入和输出又共用同一个上下文窗口。预算给小了思考链会把额度吃光、正文出不来；
+ * 给大了会挤爆总窗口让请求直接失败。
  *
- * 档位语义：
- *   - FLOOR：思考模式下的最小可用预算。低于这个值说明调用方没有真正给预算，
- *     需要抬升；高于则视为调用方的明确意图，不再改写。
- *   - high 档保持保守值：思考深度中等，顶格申请只会挤压长对话的输入空间。
- *   - max 档顶格到模型上限：用户明确选了最深思考，长输出就是意图本身。
+ * **这里不负责决定已有预算的大小。** Pi SDK 的 clampMaxTokensToContext 已经按
+ * `min(模型输出上限, 剩余窗口 - 安全余量)` 算好了，它掌握 payload 层拿不到的
+ * 真实 token 数。兼容层只做协议翻译，不覆盖这个值 —— 覆盖只会在剩余窗口本来
+ * 就紧张时把请求推过窗口边界。思考档位决定想多深，剩余窗口决定能多长，两个
+ * 正交的维度不该互相绑定。
+ *
+ * 保留两个判断：
+ *   1. 模型自身的输出上限就撑不起思考链时关掉思考，把额度让给正文。依据是模型
+ *      能力而不是单次请求的剩余预算 —— 前者静态可预期，后者会让同一个模型在长
+ *      对话里突然不思考了，那是用户没法预料的静默降级。
+ *   2. 请求完全没带预算时补一个兜底值，否则供应商只给 4K。
  *
  * 官方文档：https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
  */
 
-/** 思考模式下的最小可用输出预算，低于此值视为调用方未给预算。 */
+/** 思考模式可用的最小输出上限。模型上限低于此值时，思考链会吃光正文空间。 */
 export const DEEPSEEK_THINKING_BUDGET_FLOOR = 32768;
 
-const DEEPSEEK_HIGH_SAFE_MAX_TOKENS = 65536;
-const DEEPSEEK_MAX_SAFE_MAX_TOKENS = 384000;
+/**
+ * 请求完全没带输出预算时的兜底值。
+ *
+ * DeepSeek 在收不到预算时只给 4K 输出，思考链一开就把正文挤没了。这里给一个
+ * 够用又不顶格的值：顶格需要知道剩余窗口，而走到这条分支恰恰说明上游没算过。
+ */
+const DEEPSEEK_MISSING_BUDGET_FALLBACK = 65536;
 
 function positiveInteger(value) {
   const n = Number(value);
@@ -26,16 +37,25 @@ function positiveInteger(value) {
 }
 
 /**
- * 解析该 effort 档位下应申请的输出预算，受模型自身上限约束。
+ * 请求没带输出预算时该补上的值。已有预算的请求不该调用这里。
  *
  * @param {object|null|undefined} model
- * @param {string|null|undefined} effort — 已翻译成 DeepSeek 枚举的 effort（high / max）
  * @returns {number}
  */
-export function resolveThinkingOutputBudget(model, effort) {
+export function resolveMissingThinkingBudget(model) {
   const modelLimit = positiveInteger(model?.maxTokens || model?.maxOutput);
-  const desired = effort === "max"
-    ? DEEPSEEK_MAX_SAFE_MAX_TOKENS
-    : DEEPSEEK_HIGH_SAFE_MAX_TOKENS;
-  return modelLimit ? Math.min(modelLimit, desired) : desired;
+  return modelLimit
+    ? Math.min(modelLimit, DEEPSEEK_MISSING_BUDGET_FALLBACK)
+    : DEEPSEEK_MISSING_BUDGET_FALLBACK;
+}
+
+/**
+ * 模型的输出上限是否撑不起思考模式。
+ *
+ * @param {object|null|undefined} model
+ * @returns {boolean} 模型未声明输出上限时返回 false（不替供应商做决定）
+ */
+export function isThinkingUnsupportedByOutputLimit(model) {
+  const modelLimit = positiveInteger(model?.maxTokens || model?.maxOutput);
+  return modelLimit !== null && modelLimit <= DEEPSEEK_THINKING_BUDGET_FLOOR;
 }

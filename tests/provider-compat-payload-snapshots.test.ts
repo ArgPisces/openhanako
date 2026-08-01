@@ -163,7 +163,7 @@ describe("provider payload snapshots", () => {
           "reasoning_effort": "high",
         },
         "officialDeepSeekOpenAI": {
-          "max_tokens": 65536,
+          "max_tokens": 32000,
           "messages": [
             {
               "content": "hi",

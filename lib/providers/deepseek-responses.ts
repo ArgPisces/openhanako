@@ -8,8 +8,9 @@
  * 字段、思考链回放载体都不同，混在一个 provider 里只能靠用户手改 api 字段，切错
  * 协议时供应商静默忽略参数而不报错。
  *
- * 覆盖范围：V4-Flash 正式版（2026-07-31）起原生支持 Responses；V4-Pro 尚未开放，
- * 官方开放后在 models 里补一行即可。
+ * 覆盖范围：V4-Flash 正式版（2026-07-31）起原生支持 Responses。V4-Pro 在官方
+ * 文档上的状态是"即将支持"，这里先行登记，以便官方开放当天无需改代码；在那之前
+ * 对 Pro 发起的 Responses 请求会被供应商拒绝。
  *
  * 文档：https://api-docs.deepseek.com/guides/responses_api/
  */
@@ -18,6 +19,16 @@ const DEEPSEEK_RESPONSES_MODELS = [
   {
     id: "deepseek-v4-flash",
     name: "DeepSeek V4 Flash",
+    api: "openai-responses",
+    context: 1_000_000,
+    maxOutput: 384_000,
+    image: false,
+    reasoning: true,
+    xhigh: true,
+  },
+  {
+    id: "deepseek-v4-pro",
+    name: "DeepSeek V4 Pro",
     api: "openai-responses",
     context: 1_000_000,
     maxOutput: 384_000,

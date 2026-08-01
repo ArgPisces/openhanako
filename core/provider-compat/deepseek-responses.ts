@@ -10,7 +10,8 @@
  *      minimal/low/medium/high/xhigh（OpenAI 枚举），DeepSeek 只认 high / max。
  *      DeepSeek 对不支持的取值静默忽略而非报错，不翻译就等于思考档位悄悄失效。
  *   2. 输出预算字段名：Responses 用 max_output_tokens，ChatCompletions 用 max_tokens。
- *      漏搬同样会被静默忽略，384K 长输出被服务端默认值截断。
+ *      漏搬同样会被静默忽略，而 DeepSeek 在没收到预算时只给 4K 输出。注意这里
+ *      只搬字段名，不改数值 —— 预算大小由 SDK 的 clampMaxTokensToContext 决定。
  *   3. ChatCompletions 残留字段：thinking / 顶层 reasoning_effort 只在 DeepSeek 的
  *      ChatCompletions 通道有效，发到 Responses 是无效噪声。
  *   4. 关思考：Responses 协议没有 thinking:{type:"disabled"} 的对应物，SDK 会退化成
@@ -33,8 +34,8 @@
  */
 
 import {
-  DEEPSEEK_THINKING_BUDGET_FLOOR,
-  resolveThinkingOutputBudget,
+  isThinkingUnsupportedByOutputLimit,
+  resolveMissingThinkingBudget,
 } from "./deepseek-thinking-budget.ts";
 
 const RESPONSES_API = "openai-responses";
@@ -82,35 +83,34 @@ function translateEffort(effort) {
 }
 
 /**
- * 解析本次请求最终要发的 max_output_tokens。
+ * 解析本次请求最终要发的 max_output_tokens：只做字段搬运，不改数值。
  *
- * 先把 ChatCompletions 同义字段搬过来，再在思考开启时抬到该档位的合理预算 ——
- * SDK 的隐式默认只有 32000，不抬升的话 Responses 通道的输出上限反而比
- * ChatCompletions 通道更小，模型标称的 384K 长输出永远出不来。
+ * 预算大小由 SDK 的 clampMaxTokensToContext 决定（`min(模型输出上限,
+ * 剩余窗口 - 安全余量)`），兼容层不覆盖 —— 它拿不到真实 token 数，覆盖只会
+ * 在剩余窗口紧张时把请求推过窗口边界。
  */
-function resolveOutputCap(payload, model, effort) {
-  let cap = positiveInteger(payload.max_output_tokens);
-  if (!cap) {
-    for (const field of LEGACY_OUTPUT_CAP_FIELDS) {
-      const value = positiveInteger(payload[field]);
-      if (value) {
-        cap = value;
-        break;
-      }
-    }
+function resolveOutputCap(payload) {
+  const explicit = positiveInteger(payload.max_output_tokens);
+  if (explicit) return explicit;
+  for (const field of LEGACY_OUTPUT_CAP_FIELDS) {
+    const value = positiveInteger(payload[field]);
+    if (value) return value;
   }
-
-  if (!effort) return cap;
-  if (cap && cap > DEEPSEEK_THINKING_BUDGET_FLOOR) return cap;
-
-  const target = resolveThinkingOutputBudget(model, effort);
-  return target > DEEPSEEK_THINKING_BUDGET_FLOOR ? target : cap;
+  return null;
 }
 
 export function apply(payload, model, options: Record<string, any> = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
 
-  const thinkingDisabled = options.mode === "utility" || isThinkingOff(options.reasoningLevel);
+  // 模型输出上限撑不起思考链时关掉思考（与 ChatCompletions 通道同规则）。
+  const thinkingDisabled = options.mode === "utility"
+    || isThinkingOff(options.reasoningLevel)
+    || isThinkingUnsupportedByOutputLimit(model);
+  // 供应商收不到预算时只给 4K，思考模式下正文出不来，仅在完全没有预算时兜底。
+  const resolvedCap = resolveOutputCap(payload);
+  const outputCap = resolvedCap === null && !thinkingDisabled
+    ? resolveMissingThinkingBudget(model)
+    : resolvedCap;
   const nextReasoning = thinkingDisabled
     ? null
     : (() => {
@@ -121,8 +121,6 @@ export function apply(payload, model, options: Record<string, any> = {}) {
         ? payload.reasoning
         : { ...payload.reasoning, effort };
     })();
-
-  const outputCap = resolveOutputCap(payload, model, nextReasoning?.effort);
   const staleFields = [
     ...CHAT_COMPLETIONS_ONLY_FIELDS,
     ...LEGACY_OUTPUT_CAP_FIELDS,
