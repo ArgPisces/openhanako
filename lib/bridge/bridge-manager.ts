@@ -2081,6 +2081,118 @@ export class BridgeManager {
     }
   }
 
+  /**
+   * 主动外呼轮：以给定文本为输入让 bridge 会话跑一轮，回复经平台适配器送回聊天。
+   * 循环唤醒的桥接投递通道。与入站消息共用 per-sessionKey 锁；占用中返回 busy，
+   * 由调用方（闹钟层）顺延重试，绝不与用户消息并发写同一会话。
+   *
+   * 结果消费与入站 flush 保持同一套语义：底层错误只进日志，正文清洗后 finish，
+   * 媒体逐条发送，失败时只发人话提示。
+   */
+  async executeLoopTurn(sessionKey, promptText, { agentId } = {} as any) {
+    if (this._processing.has(sessionKey)) return { mode: "busy" };
+    // 缓冲区形状与 _takePendingBatch 一致：群聊排队 batches，私聊聚合 lines。
+    const pending = this._pending.get(sessionKey);
+    const hasBufferedInbound = pending
+      ? (pending.kind === "group-queue"
+        ? (pending.batches?.length ?? 0) > 0
+        : (pending.lines?.length ?? 0) > 0)
+      : false;
+    if (hasBufferedInbound) return { mode: "busy" };
+    if (this.engine?.isBridgeSessionStreaming?.(sessionKey)) return { mode: "busy" };
+
+    const platform = this._platformFromSessionKey(sessionKey);
+    const chatId = this._chatIdFromBridgeSessionKey(sessionKey);
+    const entry = this._findPlatformEntry(platform, agentId);
+    const adapter = entry?.adapter;
+    if (!adapter || !chatId) {
+      throw new Error(`loop turn: bridge platform unavailable for ${sessionKey}`);
+    }
+
+    this._processing.add(sessionKey);
+    try {
+      const delivery: any = this._createStreamDelivery({
+        adapter,
+        chatId,
+        isGroup: false,
+        platform,
+        messageThreadId: null,
+        replyContext: null,
+      });
+
+      const result = await this._hub.send(promptText, {
+        sessionKey,
+        agentId,
+        role: "owner",
+        meta: { source: "loop" },
+        onDelta: delivery.onDelta,
+      });
+
+      const reply = result?.text || null;
+      const toolMedia = Array.isArray(result?.toolMedia) ? result.toolMedia : [];
+      const replyError = result?.error || null;
+      const replyTruncated = result?.truncated === true;
+
+      // provider/transport 层错误只进诊断通道，低层错误字符串不作为聊天正文发出。
+      if (replyError) {
+        log.error(`${platform} 循环轮回复生成出错 (${sessionKey}): ${replyError}`);
+        debugLog()?.error("bridge", `${platform} loop turn reply generation error (${sessionKey}): ${replyError}`);
+      }
+
+      if (reply) {
+        const cleaned = this._cleanReplyForPlatform(reply);
+        let allMediaUrls = await delivery.finish(cleaned);
+
+        if (replyTruncated) {
+          // best-effort 说明：说明本身发送失败不影响已送达的正文。
+          try { await this._sendAdapterReply(adapter, chatId, t("bridge.replyInterrupted"), null); } catch {}
+        }
+
+        if (toolMedia.length) {
+          this._appendMediaItems(allMediaUrls, toolMedia);
+        }
+        allMediaUrls = normalizeMediaItems(allMediaUrls);
+
+        for (const item of allMediaUrls) {
+          try { await this._sendMediaItem(adapter, chatId, item, { platform, isGroup: false, agentId, replyContext: null }); }
+          catch (err) {
+            debugLog()?.warn("bridge", `loop turn media send failed: ${err.message} (${this._describeMediaSource(item)})`);
+            await this._mediaDelivery.sendFailureNotice(adapter, chatId, err, null);
+          }
+        }
+
+        debugLog()?.log("bridge", `→ ${platform} loop turn reply (${cleaned.length} chars, mode: ${delivery.mode}${allMediaUrls.length ? `, ${allMediaUrls.length} media` : ""})`);
+        const agentObj = this.engine.getAgent?.(agentId);
+        const sender = agentObj?.agentName || this.engine.agentName;
+        this._pushMessage({
+          platform, direction: "out", sessionKey,
+          sender, text: cleaned,
+          isGroup: false, ts: Date.now(),
+        });
+      } else if (replyError) {
+        // 完全没有可见正文时才发用户可理解的失败提示。
+        // best-effort 提示：提示本身发送失败时无法再通知用户，吞掉即可。
+        try {
+          if (typeof delivery.fail === "function") await delivery.fail(t("bridge.replyFailed"));
+          else await this._sendAdapterReply(adapter, chatId, t("bridge.replyFailed"), null);
+        } catch {}
+      }
+      return { mode: "triggerTurn" };
+    } finally {
+      this._processing.delete(sessionKey);
+    }
+  }
+
+  /** 循环暂停/终止/完成通知的桥接投递：发平台消息并补记会话历史，不跑轮。 */
+  async sendLoopNotice(sessionKey, agentId, text) {
+    const platform = this._platformFromSessionKey(sessionKey);
+    const chatId = this._chatIdFromBridgeSessionKey(sessionKey);
+    return this.sendProactive(text, agentId || null, {
+      contextPolicy: "record_when_delivered",
+      deliveryTarget: { kind: "bridge", platform, chatId, sessionKey, agentId },
+    });
+  }
+
   async _desktopSessionStillExists(sessionPath) {
     let hadAuthoritativeCheck = false;
 

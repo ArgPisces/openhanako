@@ -627,7 +627,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:0b7b7f8f07774a1175b9800697f5391414b0de4fa02b573d0a3363ce2429729f",
+  "payloadFingerprint": "sha256:63877f1f5d8ac97408004307cfb692a3ff681cb9f7ee7ae0e8535b1d60875134",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -1600,6 +1600,42 @@
         "contract": "local authentication secret reader and atomic serializer",
         "kind": "runtime-contract",
         "module": "core/local-user-account.ts"
+      }
+    },
+    {
+      "affectedByEpochMigration": true,
+      "bootstrapSafety": null,
+      "checkpointPolicy": "Include running/paused loop records so restart recovery can re-arm alarms; terminal records may be pruned.",
+      "epochPolicy": "epoch-managed",
+      "exemption": null,
+      "firstPossibleOpenPhase": "engine_construct",
+      "firstPossibleWritePhase": "engine_construct",
+      "format": "json",
+      "id": "loop-state",
+      "identityContract": "sessionId is the loop key for desktop and bridge targets alike; bridge sessionKey and any session path are delivery locators only.",
+      "migrationEntry": [],
+      "openEntry": [
+        "new LoopStore"
+      ],
+      "ownerModule": "lib/loop/loop-store.ts",
+      "pathExclusions": [],
+      "pathKind": "file",
+      "pathPattern": ".ephemeral/loop-state.json",
+      "pathPatterns": [
+        ".ephemeral/loop-state.json"
+      ],
+      "preCoordinatorReadProjection": null,
+      "protocolModules": [],
+      "restorePolicy": "Load through LoopStore so corrupt-file quarantine and record normalization apply before recovery runs.",
+      "schemaContract": {
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs.",
+        "kind": "runtime-source",
+        "source": "lib/loop/loop-store.ts"
+      },
+      "schemaSource": {
+        "contract": "LoopStore schemaVersion-1 sessionId-keyed record shape, corrupt-file quarantine, and atomic serializer",
+        "kind": "runtime-contract",
+        "module": "lib/loop/loop-store.ts"
       }
     },
     {
@@ -2919,8 +2955,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Directory uploads now register external path references instead of copying bytes into the session-files cache: the recursive fs.cp write site in server/routes/upload.ts is removed and the remaining upload.ts sites shift lines. No persisted shape changed: no store gained, lost, renamed, or retyped a field; session-file sidecar entries already supported storageKind external. All other inventory diffs are line drift from the same edit.",
-    "payloadFingerprint": "sha256:0b7b7f8f07774a1175b9800697f5391414b0de4fa02b573d0a3363ce2429729f"
+    "compatibilityReason": "merge of session loop modules into main: loop-state store addition plus source-hash drift from merged edits to task-registry, bridge managers, agent wiring, and tool categories; no persisted field shape changes",
+    "payloadFingerprint": "sha256:63877f1f5d8ac97408004307cfb692a3ff681cb9f7ee7ae0e8535b1d60875134"
   },
   "schemas": [
     {
@@ -3002,7 +3038,7 @@
       "contract": "agent config and authored Markdown/image profile protocol",
       "kind": "directory-contract",
       "module": "core/agent-manager.ts",
-      "sourceHash": "sha256:1c1e3f0e3b5e36d85365a5c9b211ecb10a46ca61536e4e27348d2a0b6c4f4e0c",
+      "sourceHash": "sha256:eb023de460e8fb2e2362760c1a97e1845f3ca97185bf261fa15d01573fd7ea76",
       "storeId": "agent-profile"
     },
     {
@@ -3149,6 +3185,13 @@
       "storeId": "local-user-auth"
     },
     {
+      "contract": "LoopStore schemaVersion-1 sessionId-keyed record shape, corrupt-file quarantine, and atomic serializer",
+      "kind": "runtime-contract",
+      "module": "lib/loop/loop-store.ts",
+      "sourceHash": "sha256:8bd163b3bf77441c4aa92af152cec545872e8aa239b7d92ad84bf19fb350a4d6",
+      "storeId": "loop-state"
+    },
+    {
       "contract": "managed search-tool binary and Windows sandbox runtime cache validation",
       "kind": "directory-contract",
       "module": "lib/pi-sdk/search-tools.ts",
@@ -3200,7 +3243,7 @@
       "contract": "TaskRegistry task/schedule normalization and persistence serializer",
       "kind": "runtime-contract",
       "module": "lib/task-registry.ts",
-      "sourceHash": "sha256:4b18d7a9d9cd64ab40d0790a4a2b3a17ebad9658c9b47b38d3df2eb7678d01ad",
+      "sourceHash": "sha256:2a4ad8276b7c5ae657799498fcc72bfba194027c8923e57b9d2a357a55a4558e",
       "storeId": "plugin-task-registry"
     },
     {
@@ -3256,7 +3299,7 @@
       "contract": "server-info writer and desktop bootstrap reader",
       "kind": "runtime-contract",
       "module": "server/index.ts",
-      "sourceHash": "sha256:0d16a722b850fc2c8ef84d9c449bd68b9d903e1c18fb9e4dcfc5ff99eb84b81f",
+      "sourceHash": "sha256:3b3358e98078826c8ac6452fecf2cb3faa79bd42b20b704558434491f7d5dba5",
       "storeId": "server-runtime-info"
     },
     {
@@ -3376,7 +3419,7 @@
       "contract": "bridge index, legacy session metadata, title, and vision sidecar readers",
       "kind": "runtime-contract",
       "module": "core/bridge-session-manager.ts",
-      "sourceHash": "sha256:cd47d2433fc8e21eb5514ee70488db2a3c9faa07be2b10b59873d7442c624712",
+      "sourceHash": "sha256:81ef662bae437c43a96f986019ad5457628022f106b4eca7b27ad885b083adc8",
       "storeId": "session-sidecars"
     },
     {
@@ -3572,7 +3615,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 349,
+      "line": 352,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3580,7 +3623,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 350,
+      "line": 353,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-facts-sqlite"
@@ -3588,7 +3631,7 @@
     {
       "exemptionId": null,
       "kind": "database-open",
-      "line": 360,
+      "line": 363,
       "reason": "Constructs or migrates a FactStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-facts-sqlite"
@@ -3596,7 +3639,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 375,
+      "line": 378,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3604,7 +3647,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 379,
+      "line": 382,
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
@@ -3612,7 +3655,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 508,
+      "line": 511,
       "reason": "Constructs an agent or studio CronStore.",
       "sourceFile": "core/agent.ts",
       "storeId": "cron-automation"
@@ -3636,7 +3679,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 1024,
+      "line": 718,
       "reason": "Writes a session-owned sidecar or bridge index.",
       "sourceFile": "core/bridge-session-manager.ts",
       "storeId": "session-sidecars"
@@ -3644,7 +3687,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 1390,
+      "line": 1125,
       "reason": "Writes a session-owned sidecar or bridge index.",
       "sourceFile": "core/bridge-session-manager.ts",
       "storeId": "session-sidecars"
@@ -3884,7 +3927,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 348,
+      "line": 354,
       "reason": "Creates the channel root.",
       "sourceFile": "core/engine.ts",
       "storeId": "channels"
@@ -3892,7 +3935,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 394,
+      "line": 400,
       "reason": "Constructs the preferences owner.",
       "sourceFile": "core/engine.ts",
       "storeId": "user-preferences"
@@ -3900,7 +3943,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 395,
+      "line": 401,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -3908,7 +3951,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 424,
+      "line": 430,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -3916,7 +3959,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 658,
+      "line": 664,
       "reason": "Constructs the plugin task registry.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-task-registry"
@@ -3924,7 +3967,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1282,
+      "line": 1427,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -3932,7 +3975,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1303,
+      "line": 1448,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -3940,7 +3983,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2286,
+      "line": 2431,
       "reason": "Creates the user skill root.",
       "sourceFile": "core/engine.ts",
       "storeId": "skill-state"
@@ -3948,7 +3991,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 2468,
+      "line": 2613,
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-jsonl"
@@ -3956,7 +3999,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2524,
+      "line": 2671,
       "reason": "Creates the plugin development source root.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-development-state"
@@ -7035,6 +7078,30 @@
     },
     {
       "exemptionId": null,
+      "kind": "rename",
+      "line": 61,
+      "reason": "Persists sessionId-keyed loop state.",
+      "sourceFile": "lib/loop/loop-store.ts",
+      "storeId": "loop-state"
+    },
+    {
+      "exemptionId": null,
+      "kind": "mkdir",
+      "line": 71,
+      "reason": "Persists sessionId-keyed loop state.",
+      "sourceFile": "lib/loop/loop-store.ts",
+      "storeId": "loop-state"
+    },
+    {
+      "exemptionId": null,
+      "kind": "atomic-write",
+      "line": 77,
+      "reason": "Persists sessionId-keyed loop state.",
+      "sourceFile": "lib/loop/loop-store.ts",
+      "storeId": "loop-state"
+    },
+    {
+      "exemptionId": null,
       "kind": "mkdir",
       "line": 81,
       "reason": "Writes a named per-agent memory protocol file.",
@@ -8196,7 +8263,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 494,
+      "line": 502,
       "reason": "Persists plugin task and schedule metadata.",
       "sourceFile": "lib/task-registry.ts",
       "storeId": "plugin-task-registry"
@@ -8204,7 +8271,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 499,
+      "line": 507,
       "reason": "Persists plugin task and schedule metadata.",
       "sourceFile": "lib/task-registry.ts",
       "storeId": "plugin-task-registry"
@@ -8468,7 +8535,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 288,
+      "line": 290,
       "reason": "Writes or deletes live server discovery state.",
       "sourceFile": "server/index.ts",
       "storeId": "server-runtime-info"
@@ -8476,15 +8543,23 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 479,
+      "line": 481,
       "reason": "Constructs the deferred result store.",
       "sourceFile": "server/index.ts",
       "storeId": "deferred-result-state"
     },
     {
+      "exemptionId": null,
+      "kind": "persistent-store-constructor",
+      "line": 489,
+      "reason": "Constructs the loop store.",
+      "sourceFile": "server/index.ts",
+      "storeId": "loop-state"
+    },
+    {
       "exemptionId": "in-memory-confirm-registry",
       "kind": "persistent-store-constructor",
-      "line": 692,
+      "line": 699,
       "reason": "ConfirmStore is deliberately process-memory-only: pending approvals time out or abort with their session and have no restart replay contract.",
       "sourceFile": "server/index.ts",
       "storeId": null
@@ -8492,7 +8567,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 697,
+      "line": 704,
       "reason": "Constructs subagent stores.",
       "sourceFile": "server/index.ts",
       "storeId": "subagent-state"
@@ -8500,7 +8575,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 703,
+      "line": 710,
       "reason": "Constructs subagent stores.",
       "sourceFile": "server/index.ts",
       "storeId": "subagent-state"
@@ -8508,7 +8583,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 714,
+      "line": 721,
       "reason": "Constructs the workflow activity store.",
       "sourceFile": "server/index.ts",
       "storeId": "workflow-state"
@@ -8516,7 +8591,7 @@
     {
       "exemptionId": null,
       "kind": "append-file",
-      "line": 1136,
+      "line": 1175,
       "reason": "Appends the browser worker log.",
       "sourceFile": "server/index.ts",
       "storeId": "runtime-diagnostics"
@@ -8524,7 +8599,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 1195,
+      "line": 1234,
       "reason": "Writes or deletes live server discovery state.",
       "sourceFile": "server/index.ts",
       "storeId": "server-runtime-info"
@@ -8532,7 +8607,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1296,
+      "line": 1335,
       "reason": "Writes or deletes live server discovery state.",
       "sourceFile": "server/index.ts",
       "storeId": "server-runtime-info"

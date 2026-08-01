@@ -91,6 +91,7 @@ const SUBAGENT_BLOCKED_TOOLS = new Set([
   "install_skill",
   "update_settings",
   "session_folders",
+  "loop_control",      // 循环归主会话管，子代理不得约闹钟/收束循环
 ]);
 
 // session 工具（跨 session 协作）：读侧零副作用；send/create 的 execute 只产草稿卡，

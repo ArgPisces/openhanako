@@ -78,6 +78,7 @@ const PERSISTENT_CONSTRUCTORS = new Set([
   "DeferredResultStore",
   "FactStore",
   "InputDraftsStore",
+  "LoopStore",
   "PreferencesManager",
   "SessionManifestStore",
   "SessionProjectCatalogStore",

@@ -482,6 +482,7 @@
     "stop": "停止當前回覆",
     "new": "開啟新會話（歸檔歷史）",
     "reset": "重置會話（清除歷史）",
+    "loop": "在目前會話循環執行任務",
     "commandError": "[命令错误] {message}",
     "usage": "用法：{usage}",
     "commandTimeout": "命令超时（>{ms}ms）"
@@ -918,6 +919,14 @@
       "noActiveSession": "当前无活跃 session。",
       "noTasks": "当前对话没有后台任务{qualifier}。",
       "noTasksQualifier": "（状态: {status}）"
+    },
+    "loopControl": {
+      "serviceUnavailable": "循環服務未就緒。",
+      "noActiveSession": "沒有活躍會話。",
+      "noActiveLoop": "目前會話沒有活躍循環，用 /loop <任務> 啟動。",
+      "delayRequired": "action=schedule 需要 delay_seconds。",
+      "scheduled": "已排定 {seconds} 秒後的喚醒（{wakeAt} 觸發），並取代先前的鬧鐘。",
+      "completed": "循環已完成並關閉。"
     },
     "installSkill": {
       "safetyBlocked": "[安全策略] 技能安全审查未通过，已阻止安装。\n原因：{reason}\n\n请告知用户此技能未通过安全审查，说明具体原因。用户可以在設定中关闭安全审查（不推荐）。"

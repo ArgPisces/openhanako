@@ -482,6 +482,7 @@
     "stop": "현재 응답 중지",
     "new": "새 세션 시작 (기록 보관)",
     "reset": "세션 초기화 (기록 삭제)",
+    "loop": "이 세션에서 반복 작업 실행",
     "commandError": "[명령 오류] {message}",
     "usage": "사용법: {usage}",
     "commandTimeout": "명령 시간 초과 (>{ms}ms)"
@@ -918,6 +919,14 @@
       "noActiveSession": "활성 세션이 없어요.",
       "noTasks": "현재 대화에 백그라운드 작업이 없어요{qualifier}.",
       "noTasksQualifier": " (상태: {status})"
+    },
+    "loopControl": {
+      "serviceUnavailable": "루프 서비스를 사용할 수 없습니다.",
+      "noActiveSession": "활성 세션이 없습니다.",
+      "noActiveLoop": "이 세션에 활성 루프가 없습니다. /loop <작업> 으로 시작하세요.",
+      "delayRequired": "action=schedule 에는 delay_seconds 가 필요합니다.",
+      "scheduled": "{seconds}초 후 웨이크업을 예약했습니다({wakeAt} 발동). 이전 알람은 대체됩니다.",
+      "completed": "루프를 완료하고 종료했습니다."
     },
     "installSkill": {
       "safetyBlocked": "[보안 정책] Skill 안전 검토 실패. 설치가 차단되었어요.\n사유: {reason}\n\n이 Skill이 안전 검토를 통과하지 못했으며 구체적인 사유를 사용자에게 알려 주세요. 설정에서 안전 검토를 비활성화할 수 있어요(권장하지 않음)."

@@ -482,6 +482,7 @@
     "stop": "Stop current reply",
     "new": "Start new session (archive history)",
     "reset": "Reset session (clear history)",
+    "loop": "Run a recurring loop task in this session",
     "commandError": "[Command error] {message}",
     "usage": "Usage: {usage}",
     "commandTimeout": "Command timed out (>{ms}ms)"
@@ -907,6 +908,14 @@
       "noActiveSession": "No active session.",
       "noTasks": "No background tasks in current conversation{qualifier}.",
       "noTasksQualifier": " (status: {status})"
+    },
+    "loopControl": {
+      "serviceUnavailable": "Loop service is not available.",
+      "noActiveSession": "No active session.",
+      "noActiveLoop": "No active loop in this session. Start one with /loop <task>.",
+      "delayRequired": "delay_seconds is required for action=schedule.",
+      "scheduled": "Wakeup scheduled in {seconds}s (fires at {wakeAt}). It replaces any previous alarm.",
+      "completed": "Loop completed and closed."
     },
     "workflow": {
       "running": "🔄 {name} is orchestrating a workflow",

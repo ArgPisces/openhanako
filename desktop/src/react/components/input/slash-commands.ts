@@ -256,6 +256,17 @@ export function buildSlashCommands(
       type: 'builtin',
       execute: executeCompactFn,
     },
+    // /loop 是服务端命令且必须带参数（任务描述 / 子命令），所以走 server-command 通道：
+    // 提交时由 InputArea 经 applySlashCompletion 保留参数原文，再整条发给服务端 dispatcher。
+    {
+      name: 'loop',
+      label: '/loop',
+      description: t('slash.loop'),
+      busyLabel: '',
+      icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+      type: 'server-command',
+      execute: () => {},
+    },
   ];
   // slashViaWsFactory 由 InputArea 注入；没传则兼容既有调用方（如测试）
   if (slashViaWsFactory) {

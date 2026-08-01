@@ -787,6 +787,24 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     ],
   }),
   defineStore({
+    id: "loop-state",
+    ownerModule: "lib/loop/loop-store.ts",
+    pathPatterns: [".ephemeral/loop-state.json"],
+    format: "json",
+    schemaSource: runtimeSource("lib/loop/loop-store.ts", "LoopStore schemaVersion-1 sessionId-keyed record shape, corrupt-file quarantine, and atomic serializer"),
+    openEntry: ["new LoopStore"],
+    migrationEntry: [],
+    firstPossibleOpenPhase: "engine_construct",
+    firstPossibleWritePhase: "engine_construct",
+    checkpointPolicy: "Include running/paused loop records so restart recovery can re-arm alarms; terminal records may be pruned.",
+    restorePolicy: "Load through LoopStore so corrupt-file quarantine and record normalization apply before recovery runs.",
+    identityContract: "sessionId is the loop key for desktop and bridge targets alike; bridge sessionKey and any session path are delivery locators only.",
+    siteRules: [
+      ...rules(["lib/loop/loop-store.ts"], "Persists sessionId-keyed loop state."),
+      ...rules(["server/index.ts"], "Constructs the loop store.", ["persistent-store-constructor"], "LoopStore"),
+    ],
+  }),
+  defineStore({
     id: "terminal-session-state",
     ownerModule: "lib/terminal/terminal-session-manager.ts",
     pathPatterns: [

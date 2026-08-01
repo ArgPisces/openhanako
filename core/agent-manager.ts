@@ -1151,6 +1151,7 @@ export class AgentManager {
       emitEvent:            (event, sp) => getEngine()?._emitEvent?.(event, sp),
       emitSessionEvent:     (event) => getEngine()?.emitSessionEvent?.(event),
       getDeferredResults:   () => getEngine()?.deferredResults ?? null,
+      getLoopController:    () => getEngine()?.loopController ?? null,
       getSubagentRunStore:  () => getEngine()?.subagentRuns ?? null,
       getSubagentThreadStore: () => getEngine()?.subagentThreads ?? null,
       getActivityHub:       () => getEngine()?.activityHub ?? null,

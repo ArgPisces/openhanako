@@ -46,6 +46,7 @@ export const STANDARD_TOOL_NAMES = [
   "stop_task",
   "hana_card_guide",
   "show_card",
+  "loop_control",
 ];
 
 export const GLOBAL_TOOL_NAMES = [

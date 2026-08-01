@@ -482,6 +482,7 @@
     "stop": "現在の返信を停止",
     "new": "新しいセッションを開始（履歴を保管）",
     "reset": "セッションをリセット（履歴を消去）",
+    "loop": "このセッションでループタスクを実行",
     "commandError": "[コマンドエラー] {message}",
     "usage": "使い方: {usage}",
     "commandTimeout": "コマンドがタイムアウトしました（>{ms}ms）"
@@ -918,6 +919,14 @@
       "noActiveSession": "アクティブなセッションがありません。",
       "noTasks": "現在の会話にバックグラウンドタスクはありません{qualifier}。",
       "noTasksQualifier": "（ステータス: {status}）"
+    },
+    "loopControl": {
+      "serviceUnavailable": "ループサービスは利用できません。",
+      "noActiveSession": "アクティブなセッションがありません。",
+      "noActiveLoop": "このセッションにアクティブなループはありません。/loop <タスク> で開始してください。",
+      "delayRequired": "action=schedule には delay_seconds が必要です。",
+      "scheduled": "{seconds} 秒後のウェイクアップを予約しました（{wakeAt} 発火）。以前のアラームは置き換えられます。",
+      "completed": "ループを完了して終了しました。"
     },
     "installSkill": {
       "safetyBlocked": "[セキュリティポリシー] Skill の安全審査に失敗しました。インストールはブロックされました。\n理由: {reason}\n\nこの Skill が安全審査を通過しなかったことをユーザーに伝え、具体的な理由を説明してください。設定で安全審査を無効にできます（非推奨）。"

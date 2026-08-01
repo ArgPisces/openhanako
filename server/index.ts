@@ -60,6 +60,7 @@ import { registerOpenRoutes } from "./composition/open-root.ts";
 import type { CompositionRoot, CompositionContext } from "./composition/contract.ts";
 import { registerTaskRegistryBusHandlers } from "./task-bus-handlers.ts";
 import { registerDeferredResultBusHandlers } from "./deferred-result-bus-handlers.ts";
+import { registerLoopBusHandlers } from "./loop-bus-handlers.ts";
 import { resolveHanakoHome } from "../shared/hana-runtime-paths.ts";
 import { DATA_EPOCH } from "../shared/contract-versions.cjs";
 import { readDataEpochStamp } from "../shared/data-epoch.cjs";
@@ -76,6 +77,7 @@ import { createDataEpochCheckpointProvider } from "../core/data-epoch-checkpoint
 import { BrowserManager } from "../lib/browser/browser-manager.ts";
 import { ConfirmStore } from "../lib/confirm-store.ts";
 import { DeferredResultStore } from "../lib/deferred-result-store.ts";
+import { LoopStore } from "../lib/loop/loop-store.ts";
 import { SubagentRunStore } from "../lib/subagent-run-store.ts";
 import { SubagentThreadStore } from "../lib/subagent-thread-store.ts";
 import { ActivityHub } from "../lib/activity-hub.ts";
@@ -483,6 +485,11 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
   );
   engine.setDeferredResultStore(deferredResultStore);
   registerDeferredResultBusHandlers(hub.eventBus, deferredResultStore);
+
+  const loopStore = new LoopStore(
+    path.join(hanakoHome, ".ephemeral", "loop-state.json"),
+    { log },
+  );
 
   await engine.registerExtensionFactory(createDeferredResultExtension(deferredResultStore));
   await engine.registerExtensionFactory(createCompactionGuardExtension({
@@ -910,6 +917,38 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
       error: bridgeManagerInitError?.message || null,
     }),
   };
+
+  // ── 循环服务接线 ──
+  // 位置要求：启动期 session 恢复之后（recoverAtBoot 会重新武装闹钟并按需续跑），
+  // 且桥接投递地址可取之后。bridge manager 是按需初始化的，因此桥接钩子在调用
+  // 时才取实例；未就绪时抛错而不静默降级（fail-closed）。
+  const requireBridgeManager = () => {
+    const manager = bridgeManagerRef.get();
+    if (!manager) throw new Error("loop: bridge delivery is not available");
+    return manager;
+  };
+  engine.setLoopServices({
+    store: loopStore,
+    bridgeHooks: {
+      executeLoopTurn: (sessionKey: string, agentId: string, text: string) =>
+        requireBridgeManager().executeLoopTurn(sessionKey, text, { agentId }),
+      sendNotice: (sessionKey: string, agentId: string, text: string) =>
+        requireBridgeManager().sendLoopNotice(sessionKey, agentId, text),
+      resolveSessionId: (sessionKey: string, agentId: string) => {
+        const agent = engine.getAgent?.(agentId);
+        return agent
+          ? engine.bridgeSessionManager?.resolveSessionIdForSessionKey?.(sessionKey, agent) ?? null
+          : null;
+      },
+      ensureSessionId: async (sessionKey: string, agentId: string) => {
+        const agent = engine.getAgent?.(agentId);
+        if (!agent) return null;
+        return engine.bridgeSessionManager?.ensureSessionForSessionKey?.(sessionKey, agent) ?? null;
+      },
+    },
+  });
+  registerLoopBusHandlers(hub.eventBus, () => engine.loopController);
+  engine.loopController?.recoverAtBoot();
 
   // `/mobile`、`/desktop` 网页客户端入口的供货模式判定（HANA_RENDERER_DIST /
   // desktop/dist-renderer / guide 三分支）已随路由挂载移入
