@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { InlineErrorEntry } from '../../stores/streaming-slice';
 
 type MockState = Record<string, unknown>;
 
@@ -51,7 +52,7 @@ const initialStateFactory = (): MockState => ({
   unreadOutputSessionPaths: [] as string[],
   capabilityDriftBySession: {} as Record<string, unknown>,
   capabilityRefreshingSessions: [] as string[],
-  inlineErrors: {} as Record<string, string | null>,
+  inlineErrors: {} as Record<string, InlineErrorEntry | null>,
   addToast: vi.fn(),
   activePanel: null,
   currentTab: 'chat',
@@ -245,9 +246,11 @@ function installStoreMethods() {
     const versions = mockState.todosLiveVersionBySession as Record<string, number>;
     versions[path] = (versions[path] ?? 0) + 1;
   });
-  s.setInlineError = vi.fn((path: string, text: string) => {
-    const inlineErrors = mockState.inlineErrors as Record<string, string | null>;
-    inlineErrors[path] = text;
+  s.setInlineError = vi.fn((path: string, error: string | InlineErrorEntry) => {
+    const inlineErrors = mockState.inlineErrors as Record<string, InlineErrorEntry | null>;
+    inlineErrors[path] = typeof error === 'string'
+      ? { text: error, detail: null, code: null }
+      : error;
   });
   s.appendItem = vi.fn((path: string, item: unknown) => {
     const chat = mockState.chatSessions as Record<string, { items: unknown[] }>;
@@ -1160,8 +1163,11 @@ function mockPermissionDefault(mode = 'ask') {
     });
 
     it('surfaces the server error when pending session creation fails', async () => {
-      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) =>
-        key === 'session.createFailed' ? 'Create session failed' : key;
+      const copy: Record<string, string> = {
+        'session.createFailed': 'Create session failed',
+        'error.code.unexpected': 'Something went wrong',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
       Object.assign(mockState, {
         pendingNewSession: true,
         pendingDraftId: 'draft-error',
@@ -1172,12 +1178,17 @@ function mockPermissionDefault(mode = 'ask') {
       await expect(ensureSession()).resolves.toBeNull();
 
       expect(mockState.inlineErrors).toMatchObject({
-        '': 'Create session failed: session skill snapshot failed',
+        '': {
+          text: 'Create session failed: Something went wrong',
+          detail: 'session skill snapshot failed',
+          code: null,
+        },
       });
       expect(mockState.addToast).toHaveBeenCalledWith(
-        'Create session failed: session skill snapshot failed',
+        'Create session failed: Something went wrong',
         'error',
         6000,
+        undefined,
       );
       expect(mockState.pendingNewSession).toBe(true);
     });
@@ -1626,8 +1637,11 @@ function mockPermissionDefault(mode = 'ask') {
     });
 
     it('surfaces the server error when switching to an old session fails', async () => {
-      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) =>
-        key === 'session.switchFailed' ? 'Switch session failed' : key;
+      const copy: Record<string, string> = {
+        'session.switchFailed': 'Switch session failed',
+        'error.code.unexpected': 'Something went wrong',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
       Object.assign(mockState, {
         currentSessionPath: '/session/current.jsonl',
       });
@@ -1639,12 +1653,17 @@ function mockPermissionDefault(mode = 'ask') {
 
       expect(mockState.currentSessionPath).toBe('/session/current.jsonl');
       expect(mockState.inlineErrors).toMatchObject({
-        '/session/current.jsonl': 'Switch session failed: Invalid session path',
+        '/session/current.jsonl': {
+          text: 'Switch session failed: Something went wrong',
+          detail: 'Invalid session path',
+          code: null,
+        },
       });
       expect(mockState.addToast).toHaveBeenCalledWith(
-        'Switch session failed: Invalid session path',
+        'Switch session failed: Something went wrong',
         'error',
         6000,
+        undefined,
       );
     });
 
@@ -2049,7 +2068,11 @@ function mockPermissionDefault(mode = 'ask') {
       (mockState.todosBySession as Record<string, unknown>)['/archived'] = [{ id: 'todo-1' }];
       (mockState.todosLiveVersionBySession as Record<string, number>)['/archived'] = 3;
       (mockState.streamingSessions as string[]) = ['/current', '/archived'];
-      (mockState.inlineErrors as Record<string, string | null>)['/archived'] = 'boom';
+      (mockState.inlineErrors as Record<string, InlineErrorEntry | null>)['/archived'] = {
+        text: 'boom',
+        detail: null,
+        code: null,
+      };
 
       mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
       mockFetch.mockResolvedValueOnce(jsonResponse([{ path: '/current' }]));
@@ -2072,7 +2095,7 @@ function mockPermissionDefault(mode = 'ask') {
       expect((mockState.draftDocs as Record<string, unknown>)['/archived']).toBeUndefined();
       expect((mockState.todosBySession as Record<string, unknown>)['/archived']).toBeUndefined();
       expect((mockState.streamingSessions as string[])).toEqual(['/current']);
-      expect((mockState.inlineErrors as Record<string, string | null>)['/archived']).toBeNull();
+      expect((mockState.inlineErrors as Record<string, InlineErrorEntry | null>)['/archived']).toBeNull();
       expect(mockClearChat).not.toHaveBeenCalled();
     });
 
@@ -2511,7 +2534,8 @@ function mockPermissionDefault(mode = 'ask') {
       expect(ok).toBe(false);
       expect((mockState.capabilityDriftBySession as Record<string, unknown>)[target]).toEqual(drift);
       expect((mockState.capabilityRefreshingSessions as string[]).includes(target)).toBe(false);
-      expect((mockState.inlineErrors as Record<string, string | null>)[target]).toContain('already compacting');
+      const capabilityError = (mockState.inlineErrors as Record<string, InlineErrorEntry | null>)[target];
+      expect(capabilityError?.text).toContain('already compacting');
     });
   });
 });

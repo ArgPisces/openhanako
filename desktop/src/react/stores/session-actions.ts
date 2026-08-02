@@ -20,6 +20,8 @@ import { loadModels } from '../utils/ui-helpers';
 import { browserStateForPath, setBrowserStateForPath } from './browser-slice';
 import { computerOverlayForSession } from './computer-overlay-slice';
 import { snapshotStreamBuffer, type StreamBufferSnapshot } from './stream-invalidator';
+import { errorWithCode, presentError, presentErrorWithLabel } from '../errors/error-presenter';
+import { errorCodeFromResponseBody } from '../../../../shared/error-user-messages.ts';
 import { renderMarkdown } from '../utils/markdown';
 import type { ChatMessage, ContentBlock } from './chat-types';
 import { readMessageLiveVersion } from './message-live-version';
@@ -442,8 +444,13 @@ export async function completeSessionTodos(sessionPath: string): Promise<boolean
     useStore.getState().bumpTodosLiveVersion(sessionPath);
     return true;
   } catch (err) {
-    const message = errorMessage(err);
-    useStore.getState().addToast(message, 'error', 6000);
+    const presented = presentError(err);
+    useStore.getState().addToast(
+      presented.text,
+      'error',
+      6000,
+      presented.code ? { errorCode: presented.code } : undefined,
+    );
     return false;
   }
 }
@@ -958,7 +965,7 @@ export async function switchSession(path: string): Promise<void> {
       state.pendingSessionSwitchPath === path ? { pendingSessionSwitchPath: null } : {}
     ));
     console.error('[session] switch failed:', err);
-    showSessionSwitchError(path, errorMessage(err));
+    showSessionSwitchError(path, err);
   } finally {
     if (_switchAbortController === abortController) {
       _switchAbortController = null;
@@ -1222,7 +1229,8 @@ export async function ensureSession(expectedPendingDraftId?: string | null): Pro
     if (expectedPendingDraftId && draftId !== expectedPendingDraftId) return null;
 
     const data = await postPendingSessionCreate(draft.body);
-    if (data?.error) throw new Error(data.error);
+    // 带上错误码，呈现层才能把它翻成人话；没有码的原生崩溃走兜底文案 + 详情。
+    if (data?.error) throw errorWithCode(String(data.error), errorCodeFromResponseBody(data));
     const ref = frozenSessionRefFromCreateResponse(data);
     if (!ref) throw new Error('session creation returned an incomplete session identity');
 
@@ -1244,7 +1252,7 @@ export async function ensureSession(expectedPendingDraftId?: string | null): Pro
     return ref;
   } catch (err) {
     console.error('[session] create failed:', err);
-    showSessionCreationError(errorMessage(err));
+    showSessionCreationError(err);
     return null;
   }
 }
@@ -1276,7 +1284,11 @@ export async function continueDeletedAgentSession(path: string): Promise<boolean
     return true;
   } catch (err) {
     console.error('[session] continue deleted-agent session failed:', err);
-    useStore.getState().addToast(`${tr('session.deletedAgent.continueFailed')}: ${errorMessage(err)}`, 'error', 6000);
+    useStore.getState().addToast(
+      presentErrorWithLabel(tr('session.deletedAgent.continueFailed'), err).text,
+      'error',
+      6000,
+    );
     return false;
   }
 }
@@ -1583,14 +1595,16 @@ export async function refreshSessionCapabilities(path: string): Promise<boolean>
       timeout: 180_000,
     });
     const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || res.statusText);
+    if (!res.ok || data.error) {
+      throw errorWithCode(String(data.error || res.statusText), errorCodeFromResponseBody(data));
+    }
     useStore.getState().setSessionCapabilityDrift(path, data.capabilityDrift || null);
     await loadMessages(path);
     return true;
   } catch (err) {
     console.error('[session] capability refresh failed:', err);
     const state = useStore.getState();
-    state.setInlineError?.(path, `${tr('session.capabilityDrift.refreshFailed')}: ${errorMessage(err)}`, 6000);
+    state.setInlineError?.(path, presentErrorWithLabel(tr('session.capabilityDrift.refreshFailed'), err), 6000);
     return false;
   } finally {
     useStore.getState().setSessionCapabilityRefreshing(path, false);
@@ -1615,18 +1629,19 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err || 'Unknown error');
 }
 
-function showSessionCreationError(detail: unknown): void {
-  const label = tr('session.createFailed');
-  const message = `${label}: ${errorMessage(detail)}`;
+/** 内联错误说人话、原始报错留在展开区；toast 一闪而过，只带正文和错误码。 */
+function showSessionActionError(labelKey: string, path: string, detail: unknown): void {
+  const entry = presentErrorWithLabel(tr(labelKey), detail);
   const state = useStore.getState();
-  state.setInlineError?.(state.currentSessionPath || '', message, 6000);
-  state.addToast(message, 'error', 6000);
+  state.setInlineError?.(path, entry, 6000);
+  state.addToast(entry.text, 'error', 6000, entry.code ? { errorCode: entry.code } : undefined);
+}
+
+function showSessionCreationError(detail: unknown): void {
+  showSessionActionError('session.createFailed', useStore.getState().currentSessionPath || '', detail);
 }
 
 function showSessionSwitchError(targetPath: string, detail: unknown): void {
-  const label = tr('session.switchFailed');
-  const message = `${label}: ${errorMessage(detail)}`;
   const state = useStore.getState();
-  state.setInlineError?.(state.currentSessionPath || targetPath || '', message, 6000);
-  state.addToast(message, 'error', 6000);
+  showSessionActionError('session.switchFailed', state.currentSessionPath || targetPath || '', detail);
 }

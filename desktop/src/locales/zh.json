@@ -3014,7 +3014,34 @@
     "stopTaskAlready": "任务 {taskId} 已经被终止过了",
     "stopTaskNoHandler": "任务 {taskId} 的类型不支持终止",
     "stopTaskDone": "已终止任务 {taskId}",
-    "regionUnavailable": "此区域暂时无法显示"
+    "regionUnavailable": "此区域暂时无法显示",
+    "detailShow": "详情",
+    "detailHide": "收起",
+    "code": {
+      "unexpected": "操作没能完成",
+      "sessionForkActiveTask": "这段对话里还有任务在运行，等它结束再创建分支，或者从更早的位置分支",
+      "sessionForkUnavailable": "当前版本不支持创建分支会话",
+      "subagentSessionForkCycle": "不能把子代理会话分支回它自己的上游",
+      "subagentRunBusy": "子代理还在运行，等它结束再试",
+      "subagentThreadBusy": "子代理线程正忙，稍候再试",
+      "workflowRunBusy": "工作流还在运行，等它结束再试",
+      "workflowNodeBusy": "工作流节点正忙，稍候再试",
+      "sessionBusy": "这个会话正忙，等当前操作结束再试",
+      "sessionNotLoaded": "会话还没加载完成，稍候再试",
+      "sessionIdentityConflict": "会话身份对不上，刷新一下再试",
+      "sessionIdentityUnresolved": "认不出这条消息属于哪个会话",
+      "sessionIdentityMismatch": "这条消息不属于当前会话",
+      "sessionManifestNotFound": "找不到这个会话的记录",
+      "sessionLocatorNotActive": "这个会话已经不是当前版本，刷新一下列表",
+      "activeSessionConflict": "已经有另一个会话在进行中",
+      "sessionDeleteStagedConflict": "这个会话正在删除中，暂时不能操作",
+      "fileTooLarge": "文件太大，超出了允许的大小",
+      "invalidUpload": "上传的内容无法识别",
+      "invalidPath": "路径无效",
+      "noAvailableModel": "没有可用的模型，去设置里检查供应商配置",
+      "workspaceNotFound": "找不到这个工作台",
+      "capabilityDenied": "这个操作没有获得授权"
+    }
   },
   "main": {
     "tray": {

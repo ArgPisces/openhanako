@@ -7,6 +7,8 @@ import { loadSessions, switchSession } from './session-actions';
 import type { ChatMessage } from './chat-types';
 import { hanaFetch } from '../hooks/use-hana-fetch';
 import { collectUiContext } from '../utils/ui-context';
+import { errorWithCode, presentError } from '../errors/error-presenter';
+import { errorCodeFromResponseBody } from '../../../../shared/error-user-messages.ts';
 import type { Session } from '../types';
 
 export type SessionNodeTarget =
@@ -39,8 +41,7 @@ function resolveSessionIdentity(sessionPath: string): { sessionId: string; sessi
 }
 
 function reportActionError(sessionPath: string, error: unknown): void {
-  const text = error instanceof Error ? error.message : String(error);
-  useStore.getState().setInlineError?.(sessionPath, text, 6000);
+  useStore.getState().setInlineError?.(sessionPath, presentError(error), 6000);
 }
 
 async function readSessionActionResponse(response: Response, fallback: string): Promise<any> {
@@ -56,8 +57,8 @@ async function readSessionActionResponse(response: Response, fallback: string): 
       : typeof data?.reason === 'string' && data.reason.trim()
         ? data.reason.trim()
         : `${response.status} ${response.statusText || fallback}`.trim();
-    const code = typeof data?.code === 'string' && data.code.trim() ? data.code.trim() : null;
-    throw new Error(code && code !== detail ? `${detail} (${code})` : detail);
+    // 错误码跟着异常走，由呈现层翻成人话；这里不再把 code 拼进 message 字符串。
+    throw errorWithCode(detail, errorCodeFromResponseBody(data));
   }
   return data;
 }

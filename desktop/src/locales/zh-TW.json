@@ -3013,7 +3013,34 @@
     "stopTaskNotFound": "找不到任務 {taskId}，可能已完成或不存在",
     "stopTaskAlready": "任務 {taskId} 已經被終止了",
     "stopTaskNoHandler": "任務 {taskId} 的類型不支援終止",
-    "stopTaskDone": "已終止任務 {taskId}"
+    "stopTaskDone": "已終止任務 {taskId}",
+    "detailShow": "詳情",
+    "detailHide": "收合",
+    "code": {
+      "unexpected": "操作沒能完成",
+      "sessionForkActiveTask": "這段對話裡還有任務在執行，等它結束再建立分支，或者從更早的位置分支",
+      "sessionForkUnavailable": "目前版本不支援建立分支工作階段",
+      "subagentSessionForkCycle": "不能把子代理工作階段分支回它自己的上游",
+      "subagentRunBusy": "子代理還在執行，等它結束再試",
+      "subagentThreadBusy": "子代理執行緒正忙，稍候再試",
+      "workflowRunBusy": "工作流程還在執行，等它結束再試",
+      "workflowNodeBusy": "工作流程節點正忙，稍候再試",
+      "sessionBusy": "這個工作階段正忙，等目前的操作結束再試",
+      "sessionNotLoaded": "工作階段還沒載入完成，稍候再試",
+      "sessionIdentityConflict": "工作階段身分對不上，重新整理後再試",
+      "sessionIdentityUnresolved": "認不出這則訊息屬於哪個工作階段",
+      "sessionIdentityMismatch": "這則訊息不屬於目前的工作階段",
+      "sessionManifestNotFound": "找不到這個工作階段的紀錄",
+      "sessionLocatorNotActive": "這個工作階段已經不是目前版本，重新整理一下清單",
+      "activeSessionConflict": "已經有另一個工作階段在進行中",
+      "sessionDeleteStagedConflict": "這個工作階段正在刪除中，暫時不能操作",
+      "fileTooLarge": "檔案太大，超出允許的大小",
+      "invalidUpload": "上傳的內容無法辨識",
+      "invalidPath": "路徑無效",
+      "noAvailableModel": "沒有可用的模型，去設定裡檢查供應商設定",
+      "workspaceNotFound": "找不到這個工作台",
+      "capabilityDenied": "這個操作沒有取得授權"
+    }
   },
   "main": {
     "tray": {

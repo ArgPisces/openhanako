@@ -22,6 +22,7 @@ import {
   upsertConversationAgentActivity as upsertConversationAgentActivityAction,
 } from '../stores/channel-actions';
 import { showError } from '../utils/ui-helpers';
+import { errorWithCode, presentError } from '../errors/error-presenter';
 import { handleAppEvent } from './app-event-actions';
 import {
   PREVIEW_DOCUMENT_CHANGE_REFRESH_OPTIONS,
@@ -1006,15 +1007,19 @@ export function handleServerMessage(msg: any): void {
 
     case 'error': {
       const { sessionPath: sp } = sessionIdentityFromMessage(msg);
+      const presented = presentError(errorWithCode(
+        String(msg.message ?? ''),
+        typeof msg.code === 'string' ? msg.code : null,
+      ));
       if (!sp) {
         if (msg.code === 'session_identity_unresolved' || msg.code === 'session_identity_mismatch') {
-          useStore.getState().addToast(msg.message || 'Unable to resolve session identity', 'error', 6000);
+          useStore.getState().addToast(presented.text, 'error', 6000, { errorCode: msg.code });
         } else {
           console.warn('[ws] event missing sessionPath:', msg.type);
         }
         break;
       }
-      useStore.getState().setInlineError(sp, msg.message);
+      useStore.getState().setInlineError(sp, presented);
       break;
     }
 

@@ -3013,7 +3013,34 @@
     "stopTaskNotFound": "タスク {taskId} が見つかりません。すでに完了しているか存在しない可能性があります",
     "stopTaskAlready": "タスク {taskId} はすでに終了しています",
     "stopTaskNoHandler": "タスク {taskId} は終了操作に対応していません",
-    "stopTaskDone": "タスク {taskId} を終了しました"
+    "stopTaskDone": "タスク {taskId} を終了しました",
+    "detailShow": "詳細",
+    "detailHide": "閉じる",
+    "code": {
+      "unexpected": "処理を完了できませんでした",
+      "sessionForkActiveTask": "この範囲にはまだ実行中のタスクがあります。終了を待つか、もっと前の位置から分岐してください",
+      "sessionForkUnavailable": "このバージョンでは分岐セッションを作成できません",
+      "subagentSessionForkCycle": "サブエージェントのセッションを自身の親へ分岐させることはできません",
+      "subagentRunBusy": "サブエージェントがまだ実行中です。終了を待ってください",
+      "subagentThreadBusy": "サブエージェントのスレッドが処理中です。しばらくしてからお試しください",
+      "workflowRunBusy": "ワークフローがまだ実行中です。終了を待ってください",
+      "workflowNodeBusy": "ワークフローのノードが処理中です。しばらくしてからお試しください",
+      "sessionBusy": "このセッションは処理中です。現在の操作が終わるまでお待ちください",
+      "sessionNotLoaded": "セッションの読み込みが完了していません。しばらくしてからお試しください",
+      "sessionIdentityConflict": "セッションの識別が一致しません。再読み込みしてからお試しください",
+      "sessionIdentityUnresolved": "このメッセージがどのセッションのものか判別できません",
+      "sessionIdentityMismatch": "このメッセージは現在のセッションのものではありません",
+      "sessionManifestNotFound": "このセッションの記録が見つかりません",
+      "sessionLocatorNotActive": "このセッションは最新版ではありません。一覧を更新してください",
+      "activeSessionConflict": "別のセッションがすでに進行中です",
+      "sessionDeleteStagedConflict": "このセッションは削除中のため、今は操作できません",
+      "fileTooLarge": "ファイルが上限のサイズを超えています",
+      "invalidUpload": "アップロードされた内容を読み取れません",
+      "invalidPath": "パスが正しくありません",
+      "noAvailableModel": "利用できるモデルがありません。設定でプロバイダーを確認してください",
+      "workspaceNotFound": "このワークスペースが見つかりません",
+      "capabilityDenied": "この操作は許可されていません"
+    }
   },
   "main": {
     "tray": {

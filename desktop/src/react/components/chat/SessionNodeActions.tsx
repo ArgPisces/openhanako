@@ -8,6 +8,7 @@ import {
   type ForkedSessionHandler,
   type SessionNodeTarget,
 } from '../../stores/message-turn-actions';
+import { presentError } from '../../errors/error-presenter';
 import type { MessageFooterAction } from './MessageFooterActions';
 
 interface Options {
@@ -57,8 +58,7 @@ export function useSessionNodeActions({
         await retrySessionTurn(forked.sessionPath, target, { message: retryMessage });
       }
     } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
-      useStore.getState().setInlineError?.(sessionPath, text, 6000);
+      useStore.getState().setInlineError?.(sessionPath, presentError(error), 6000);
     } finally {
       busyRef.current = false;
       setBusy(false);
