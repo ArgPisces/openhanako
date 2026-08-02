@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import YAML from "js-yaml";
 import { CONFIG_SCHEMA } from './config-schema.ts';
-import { atomicWriteSync } from "./safe-fs.ts";
+import { writeSecretFileSync } from "./secret-fs.ts";
 
 /**
  * 一次性迁移：将 agent config.yaml 中的 global scope 字段
@@ -146,10 +146,11 @@ export function migrateConfigScope({ agentsDir, prefs, primaryAgentId, log = () 
       // 备份
       const backupPath = ac.path + ".pre-scope-migration";
       if (!fs.existsSync(backupPath)) {
-        fs.writeFileSync(backupPath, ac.content, "utf-8");
+        // 备份的是 agent 配置原文，带凭证，权限与源文件一致
+        writeSecretFileSync(backupPath, ac.content);
       }
       // 写回清理后的 config
-      atomicWriteSync(ac.path, YAML.dump(ac.config, { lineWidth: -1 }));
+      writeSecretFileSync(ac.path, YAML.dump(ac.config, { lineWidth: -1 }));
       log(`[migrate] cleaned global fields from ${ac.id}/config.yaml`);
     }
   }

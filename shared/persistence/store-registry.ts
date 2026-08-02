@@ -19,6 +19,7 @@ const ALL_SITE_KINDS: readonly PersistenceSiteKind[] = [
   "remove-path",
   "truncate-file",
   "atomic-write",
+  "secret-write",
   "persistent-store-constructor",
 ];
 
@@ -254,7 +255,7 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     identityContract: "userId and studioId are durable identities; spaces.json is a legacy locator/source only.",
     siteRules: [
       ...rules(["core/server-identity.ts"], "Seeds user or studio identity registries.", ["atomic-write"], "(?:usersPath|studiosPath)"),
-      ...rules(["core/local-user-account.ts"], "Updates the local user record in users.json.", ["atomic-write"], "USERS_FILE"),
+      ...rules(["core/local-user-account.ts"], "Updates the local user record in users.json.", ["secret-write"], "USERS_FILE"),
     ],
   }),
   defineStore({
@@ -269,7 +270,7 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     checkpointPolicy: "Checkpoint as permission-preserving secret material with its matching users.json identity.",
     restorePolicy: "Restore atomically before local authentication is enabled.",
     identityContract: "The credential belongs to the local userId in the same HANA_HOME.",
-    siteRules: rules(["core/local-user-account.ts"], "Writes the local user authentication record.", ["atomic-write"], "LOCAL_USER_AUTH_FILE"),
+    siteRules: rules(["core/local-user-account.ts"], "Writes the local user authentication record.", ["secret-write"], "LOCAL_USER_AUTH_FILE"),
   }),
   defineStore({
     id: "device-access-registries",
@@ -444,6 +445,7 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     firstPossibleWritePhase: "engine_construct",
     identityContract: "providerId is the durable key; YAML/JSON paths are storage locators.",
     siteRules: rules([
+      "core/credential-backup-retention.ts",
       "core/local-provider-plugin-store.ts",
       "core/migrate-providers.ts",
       "core/model-sync.ts",
@@ -452,7 +454,7 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
       "core/provider-media-config.ts",
       "core/provider-registry.ts",
       "server/routes/providers.ts",
-    ], "Owns provider catalog, authentication, model compatibility, or local provider plugin state."),
+    ], "Owns provider catalog, authentication, model compatibility, local provider plugin state, or the retention of their migration backups."),
   }),
   defineStore({
     id: "agent-profile",
@@ -1438,8 +1440,8 @@ export const PERSISTENCE_EXEMPTIONS: readonly PersistenceExemption[] = Object.fr
     "core/local-user-account.ts",
     "The file-local atomic helper receives paths only from the separately registered users.json and local-user-auth.json call sites.",
     "2026-10-31",
-    ["mkdir", "atomic-write"],
-    "(?:path[.]dirname\\(filePath\\)|atomicWriteSync\\(filePath)",
+    ["mkdir", "secret-write"],
+    "(?:path[.]dirname\\(filePath\\)|writeSecretFileSync\\(filePath)",
   ),
   exemption(
     "character-card-copy-helper",
@@ -1513,6 +1515,13 @@ export const PERSISTENCE_EXEMPTIONS: readonly PersistenceExemption[] = Object.fr
     "shared/safe-fs.ts",
     "shared/safe-fs.ts",
     "Shared atomic-write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
+    "2027-01-31",
+  ),
+  exemption(
+    "generic-secret-fs-primitives",
+    "shared/secret-fs.ts",
+    "shared/secret-fs.ts",
+    "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
     "2027-01-31",
   ),
   exemption(

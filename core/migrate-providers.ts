@@ -16,6 +16,7 @@ import fs from "fs";
 import path from "path";
 import YAML from "js-yaml";
 import { fromRoot } from "../shared/hana-root.ts";
+import { writeSecretFileSync } from "../shared/secret-fs.ts";
 
 const _defaultModels = JSON.parse(
   fs.readFileSync(fromRoot("lib", "default-models.json"), "utf-8"),
@@ -39,15 +40,11 @@ function atomicWriteYAML(filePath: string, data: any, header = "") {
     quotingType: "\"",
     forceQuotes: false,
   });
-  const tmp = filePath + ".tmp";
-  fs.writeFileSync(tmp, yamlStr, "utf-8");
-  fs.renameSync(tmp, filePath);
+  writeSecretFileSync(filePath, yamlStr);
 }
 
 function atomicWriteJSON(filePath: string, data: any) {
-  const tmp = filePath + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", "utf-8");
-  fs.renameSync(tmp, filePath);
+  writeSecretFileSync(filePath, JSON.stringify(data, null, 2) + "\n");
 }
 
 // ── 主迁移函数 ────────────────────────────────────────────────────────────────

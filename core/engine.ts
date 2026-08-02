@@ -19,6 +19,8 @@ import { migrateConfigScope } from "../shared/migrate-config-scope.ts";
 import { migrateToProvidersYaml } from "./migrate-providers.ts";
 import { migrateProviderMediaConfig } from "./provider-media-config.ts";
 import { runMigrations } from "./migrations.ts";
+import { healCredentialFileModes } from "./credential-file-healer.ts";
+import { pruneStaleCredentialBackups } from "./credential-backup-retention.ts";
 import { createServerRuntimeContext } from "./server-runtime-context.ts";
 import { StudioCronService } from "./studio-cron-service.ts";
 import { createRuntimeExecutionBoundary } from "./execution-boundary.ts";
@@ -2388,6 +2390,21 @@ export class HanaEngine {
     } else {
       log("[migrations] migration-registry 等待启动迁移前置步骤；应用继续启动，下次启动重试");
     }
+
+    // 0e. 凭证文件权限自愈。放在所有迁移之后，让本轮迁移刚写出的文件也被覆盖。
+    // 每次启动都跑：权限会因为备份恢复、跨机拷贝、外部同步而回退，
+    // 只跑一次的迁移覆盖不到这些情况。
+    // 拆成两步：清理和矫正互不依赖，任一步出意外都不该连累另一步
+    runBestEffortStartupMigrationStep("credential-backup-retention", () => {
+      pruneStaleCredentialBackups({ hanakoHome: this.hanakoHome, log });
+    }, log);
+    runBestEffortStartupMigrationStep("credential-custody", () => {
+      const healed = healCredentialFileModes({ hanakoHome: this.hanakoHome, log });
+      if (healed.failed.length > 0) {
+        log(`[credential-custody] ${healed.failed.length} 个文件未能收紧权限，已记录；应用继续启动`);
+      }
+    }, log);
+
     this._runtimeContext = createServerRuntimeContext({
       hanakoHome: this.hanakoHome,
       appVersion: this.appVersion,

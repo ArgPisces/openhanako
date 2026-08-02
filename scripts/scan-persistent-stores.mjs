@@ -71,6 +71,12 @@ const ATOMIC_HELPERS = new Set([
   "safeWriteJson",
   "writeJson",
 ]);
+// Writers that force owner-only permissions. Tracked as their own kind so the
+// guard test can tell a credential write apart from an ordinary one.
+const SECRET_HELPERS = new Set([
+  "writeSecretFileSync",
+  "writeSecretJson",
+]);
 const PERSISTENT_CONSTRUCTORS = new Set([
   "ActivityStore",
   "ConfirmStore",
@@ -157,6 +163,7 @@ function collectBindings(source) {
     if (importedName === "promises") fsNamespaces.add(localName);
     if (FS_METHOD_KINDS.has(importedName)) directCalls.set(localName, FS_METHOD_KINDS.get(importedName));
     if (ATOMIC_HELPERS.has(importedName)) directCalls.set(localName, "atomic-write");
+    if (SECRET_HELPERS.has(importedName)) directCalls.set(localName, "secret-write");
   };
 
   for (const statement of source.statements) {
@@ -205,6 +212,7 @@ function callKind(node, bindings) {
   if (ts.isIdentifier(callee)) {
     if (bindings.directCalls.has(callee.text)) return bindings.directCalls.get(callee.text);
     if (ATOMIC_HELPERS.has(callee.text)) return "atomic-write";
+    if (SECRET_HELPERS.has(callee.text)) return "secret-write";
     return null;
   }
   if (!ts.isPropertyAccessExpression(callee)) return null;
@@ -225,6 +233,7 @@ function callKind(node, bindings) {
     }
   }
   if (ATOMIC_HELPERS.has(method)) return "atomic-write";
+  if (SECRET_HELPERS.has(method)) return "secret-write";
   return null;
 }
 

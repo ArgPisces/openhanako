@@ -8,7 +8,7 @@
 import fs from "fs";
 import { getPiModel } from "../lib/pi-sdk/index.ts";
 import { lookupKnown, lookupKnownProvider } from "../shared/known-models.ts";
-import { atomicWriteSync } from "../shared/safe-fs.ts";
+import { writeSecretFileSync } from "../shared/secret-fs.ts";
 import {
   getEndpointDefaultReasoningCapability,
   normalizeModelProtocolCompat,
@@ -490,7 +490,7 @@ export function syncModels(providers, opts: Record<string, any> = {}) {
   if (oldStr === newStr) return false;
 
   // 原子写入：先写 tmp 文件，再 rename
-  atomicWriteSync(modelsJsonPath, newStr);
+  writeSecretFileSync(modelsJsonPath, newStr);
 
   return true;
 }

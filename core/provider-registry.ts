@@ -13,7 +13,7 @@
 import fs from "fs";
 import path from "path";
 import YAML from "js-yaml";
-import { atomicWriteSync } from "../shared/safe-fs.ts";
+import { writeSecretFileSync } from "../shared/secret-fs.ts";
 import { fromRoot } from "../shared/hana-root.ts";
 import { lookupKnown } from "../shared/known-models.ts";
 import {
@@ -837,7 +837,7 @@ export class ProviderRegistry {
       const header = "# HanaAgent 助手配置\n# 由设置页面管理，手动编辑也可以\n\n";
       for (const { cfgPath, cfg } of pendingConfigWrites) {
         const yamlStr = header + YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"', forceQuotes: false });
-        atomicWriteSync(cfgPath, yamlStr);
+        writeSecretFileSync(cfgPath, yamlStr);
       }
       log("[migrate] model overrides migrated to Provider Catalog");
     }

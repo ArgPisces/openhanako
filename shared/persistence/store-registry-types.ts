@@ -22,6 +22,7 @@ export const PERSISTENCE_SITE_KINDS = [
   "remove-path",
   "truncate-file",
   "atomic-write",
+  "secret-write",
   "persistent-store-constructor",
 ] as const;
 

@@ -2231,7 +2231,8 @@ function writeCrashLog(errorMessage) {
   // 写入文件（best effort）
   try {
     const crashLogPath = path.join(hanakoHome, "crash.log");
-    fs.mkdirSync(hanakoHome, { recursive: true });
+    // 数据目录存放凭证，只对当前用户开放（Windows 上 NTFS 忽略该位，由用户目录 ACL 兜底）
+    fs.mkdirSync(hanakoHome, { recursive: true, mode: 0o700 });
     fs.writeFileSync(crashLogPath, content, "utf-8");
   } catch (e) {
     console.error("[desktop] 写入 crash.log 失败:", e.message);

@@ -19,6 +19,7 @@ import fs from "fs";
 import path from "path";
 import YAML from "js-yaml";
 import { atomicWriteSync, safeReadYAMLSync } from "../shared/safe-fs.ts";
+import { ensureSecretDirModeSync, ensureSecretFileModeSync, writeSecretFileSync } from "../shared/secret-fs.ts";
 import {
   ensureLocalIdentityRegistries,
   ensureRemoteAccessFoundationRegistries,
@@ -2094,9 +2095,12 @@ function writeProviderModelMetadataMigrationBackup({ store, hanakoHome, repairs 
 
   const backupRoot = path.join(hanakoHome, "migration-backups");
   fs.mkdirSync(backupRoot, { recursive: true });
+  ensureSecretDirModeSync(backupRoot);
   const backupDir = fs.mkdtempSync(path.join(backupRoot, "provider-model-metadata-v46-"));
   const backupPath = path.join(backupDir, path.basename(store.catalogPath));
+  // 逐字节复制，不做解码再编码：备份必须与源文件完全一致
   fs.copyFileSync(store.catalogPath, backupPath);
+  ensureSecretFileModeSync(backupPath);
 
   const report = {
     migration: 46,
@@ -2104,7 +2108,7 @@ function writeProviderModelMetadataMigrationBackup({ store, hanakoHome, repairs 
     sourceFile: path.basename(store.catalogPath),
     repairs,
   };
-  atomicWriteSync(
+  writeSecretFileSync(
     path.join(backupDir, "migration-report.json"),
     JSON.stringify(report, null, 2) + "\n",
   );
@@ -2209,9 +2213,12 @@ function writeCodexEventIdPollutionRepairBackup({ store, hanakoHome, removed }) 
 
   const backupRoot = path.join(hanakoHome, "migration-backups");
   fs.mkdirSync(backupRoot, { recursive: true });
+  ensureSecretDirModeSync(backupRoot);
   const backupDir = fs.mkdtempSync(path.join(backupRoot, "codex-model-id-pollution-v49-"));
   const backupPath = path.join(backupDir, path.basename(store.catalogPath));
+  // 逐字节复制，不做解码再编码：备份必须与源文件完全一致
   fs.copyFileSync(store.catalogPath, backupPath);
+  ensureSecretFileModeSync(backupPath);
 
   const report = {
     migration: 49,
@@ -2219,7 +2226,7 @@ function writeCodexEventIdPollutionRepairBackup({ store, hanakoHome, removed }) 
     sourceFile: path.basename(store.catalogPath),
     removed,
   };
-  atomicWriteSync(
+  writeSecretFileSync(
     path.join(backupDir, "migration-report.json"),
     JSON.stringify(report, null, 2) + "\n",
   );
