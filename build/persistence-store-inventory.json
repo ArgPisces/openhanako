@@ -8603,7 +8603,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 376,
+      "line": 381,
       "kind": "copy-file",
       "excerpt": "fs.copyFile(srcPath, destPath)",
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
@@ -8612,7 +8612,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 429,
+      "line": 434,
       "kind": "mkdir",
       "excerpt": "fs.mkdir(uploadsDir, { recursive: true })",
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
@@ -8621,7 +8621,7 @@
     },
     {
       "sourceFile": "server/routes/upload.ts",
-      "line": 488,
+      "line": 493,
       "kind": "write-file",
       "excerpt": "fs.writeFile(destPath, buf)",
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",

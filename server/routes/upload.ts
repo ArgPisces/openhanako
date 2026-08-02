@@ -312,9 +312,14 @@ export function createUploadRoute(engine) {
           continue;
         }
 
+        // 必须用 JS 版 realpathSync，与 SessionFileRegistry 的路径规范化同源。
+        // fs/promises.realpath 只有 native 语义，会把路径改写成磁盘上的真实拼写
+        // （macOS 上是大小写，Windows 上是 8.3 短名），而 registry 用 fs.realpathSync
+        // 保留调用方的拼写。两边不一致时，同一个目录经不同入口会算出两个 realPath，
+        // 去重键、SessionFile id 和沙箱路径匹配会一起失准。
         let realSrcPath;
         try {
-          realSrcPath = await fs.realpath(srcPath);
+          realSrcPath = fsSync.realpathSync(srcPath);
         } catch {
           realSrcPath = path.resolve(srcPath);
         }

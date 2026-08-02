@@ -668,7 +668,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:90a43da413212f213ef64288aea6fded19c05bad3716fba5bc6c01d787e990b1",
+  "payloadFingerprint": "sha256:2fb79c197d3439cb5a2237663a29eba0bb57252011ffc2ba04c228df704c47bf",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3034,8 +3034,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Additive only: stores that hold credentials declare an owner-only write kind, three file-local JSON writers are renamed to match that kind, one helper exemption and one shared write primitive are tracked accordingly, a backup retention module joins the provider-state rule, and two data-directory creation sites gain an explicit mode argument. No persisted schema, field, path ownership, or store identity changed.",
-    "payloadFingerprint": "sha256:90a43da413212f213ef64288aea6fded19c05bad3716fba5bc6c01d787e990b1"
+    "compatibilityReason": "No schema change: the upload route swaps one realpath call for the sync variant and gains an explanatory comment, which shifts three tracked write sites in that file down by five lines. No persisted schema, field, path ownership, store identity, or write kind changed.",
+    "payloadFingerprint": "sha256:2fb79c197d3439cb5a2237663a29eba0bb57252011ffc2ba04c228df704c47bf"
   },
   "schemas": [
     {
@@ -3260,7 +3260,7 @@
       "contract": "sessionless upload naming and age-based cleanup protocol",
       "kind": "directory-contract",
       "module": "server/routes/upload.ts",
-      "sourceHash": "sha256:7a7df391230bb8b342024389348f3451ee3e3f357a18f16c84467e0b1f3c5aba",
+      "sourceHash": "sha256:8c6992876024494ce3f66e0d9aa851aeebb4c841167c3bb5bdcc07d170d91077",
       "storeId": "legacy-upload-cache"
     },
     {
@@ -9101,7 +9101,7 @@
     {
       "exemptionId": "conditional-upload-target",
       "kind": "copy-file",
-      "line": 376,
+      "line": 381,
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
       "sourceFile": "server/routes/upload.ts",
       "storeId": null
@@ -9109,7 +9109,7 @@
     {
       "exemptionId": "conditional-upload-target",
       "kind": "mkdir",
-      "line": 429,
+      "line": 434,
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
       "sourceFile": "server/routes/upload.ts",
       "storeId": null
@@ -9117,7 +9117,7 @@
     {
       "exemptionId": "conditional-upload-target",
       "kind": "write-file",
-      "line": 488,
+      "line": 493,
       "reason": "resolveUploadTarget sends the same syntactic write sites to registered session-files storage when sessionPath is present or to the registered legacy uploads cache otherwise; flow-sensitive site attribution is required to distinguish them.",
       "sourceFile": "server/routes/upload.ts",
       "storeId": null
