@@ -4,6 +4,7 @@ import os from "os";
 import path from "path";
 
 import { healCredentialFileModes } from "../core/credential-file-healer.ts";
+import { LOCAL_PROVIDER_PLUGINS_DIR } from "../core/local-provider-plugin-store.ts";
 
 const POSIX = process.platform !== "win32";
 
@@ -92,6 +93,27 @@ describe.skipIf(!POSIX)("healCredentialFileModes", () => {
     expect(modeOf(backupDir)).toBe(0o700);
     expect(modeOf(path.join(backupDir, "added-models.yaml"))).toBe(0o600);
     expect(modeOf(path.join(backupDir, "models.json"))).toBe(0o600);
+  });
+
+  // The tree is located through LOCAL_PROVIDER_PLUGINS_DIR rather than a
+  // literal, because the healer reads a directory name that the store owns.
+  // A guard that only asserts a string is in SECRET_TREES passes even when the
+  // two names have drifted apart and the healer walks a path that never exists.
+  it("tightens locally defined provider plugins, whose files carry that provider's key", () => {
+    const root = makeHome();
+    const pluginRoot = path.join(root, LOCAL_PROVIDER_PLUGINS_DIR);
+    const providerDir = path.join(pluginRoot, "acme");
+    const keyFile = path.join(LOCAL_PROVIDER_PLUGINS_DIR, "acme", "providers", "acme.json");
+    writeOpen(keyFile, JSON.stringify({ api_key: "value" }));
+    fs.chmodSync(providerDir, 0o755);
+    fs.chmodSync(pluginRoot, 0o755);
+
+    const result = healCredentialFileModes({ hanakoHome: root });
+
+    expect(modeOf(pluginRoot)).toBe(0o700);
+    expect(modeOf(providerDir)).toBe(0o700);
+    expect(modeOf(path.join(root, keyFile))).toBe(0o600);
+    expect(result.healed).toContain(keyFile);
   });
 
   it("tightens agent configuration captured inside migration checkpoints", () => {

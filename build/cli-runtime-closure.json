@@ -1032,11 +1032,16 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "core/credential-file-healer.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/provider-registry.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/provider-registry.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/credential-file-healer.ts (import-statement); core/provider-registry.ts (import-statement)."
     },
     {
       "path": "core/local-user-account.ts",
@@ -111577,6 +111582,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/local-provider-plugin-store.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/model-execution-config.ts",
           "kind": "import-statement"
         },
@@ -111588,11 +111598,6 @@
         {
           "root": "server-bootstrap",
           "from": "core/llm-client.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "core/local-provider-plugin-store.ts",
           "kind": "import-statement"
         },
         {
@@ -111621,7 +111626,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/provider-auth-migration.ts (import-statement); core/model-execution-config.ts (import-statement); lib/llm/provider-client.ts (import-statement); +7 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/provider-auth-migration.ts (import-statement); core/local-provider-plugin-store.ts (import-statement); core/model-execution-config.ts (import-statement); +7 more importer(s)."
     },
     {
       "path": "shared/provider-model-validation.ts",
@@ -112095,12 +112100,12 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "core/credential-file-healer.ts",
+          "from": "core/local-provider-plugin-store.ts",
           "kind": "import-statement"
         },
         {
           "root": "server-bootstrap",
-          "from": "core/local-provider-plugin-store.ts",
+          "from": "core/credential-file-healer.ts",
           "kind": "import-statement"
         },
         {

@@ -23,6 +23,7 @@ import path from "path";
 import { AppError } from "../shared/errors.ts";
 import { errorBus } from "../shared/error-bus.ts";
 import { ensureSecretDirModeSync, ensureSecretFileModeSync } from "../shared/secret-fs.ts";
+import { LOCAL_PROVIDER_PLUGINS_DIR } from "./local-provider-plugin-store.ts";
 
 /** Files directly under the data directory that hold credentials. */
 export const TOP_LEVEL_SECRET_FILES = [
@@ -40,10 +41,15 @@ export const TOP_LEVEL_SECRET_FILES = [
 
 /**
  * Directory trees whose contents are credential material throughout.
- * "providers" holds each locally defined provider plugin, whose provider.json
- * carries that provider's key.
+ * The local provider plugin tree holds each locally defined provider, whose
+ * definition carries that provider's key.
+ *
+ * The plugin directory name is taken from the store that owns it rather than
+ * repeated here. Spelling it out once cost real coverage: this list said
+ * "providers" while the store wrote to "provider-plugins", so the healer walked
+ * a path that never existed and silently corrected nothing.
  */
-export const SECRET_TREES = ["migration-backups", "providers"];
+export const SECRET_TREES = ["migration-backups", LOCAL_PROVIDER_PLUGINS_DIR];
 
 const AGENT_CONFIG_FILE = "config.yaml";
 const MAX_TREE_DEPTH = 6;

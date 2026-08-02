@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { discoverSites } from "../scripts/scan-persistent-stores.mjs";
 import { SECRET_TREES, TOP_LEVEL_SECRET_FILES } from "../core/credential-file-healer.ts";
+import { LOCAL_PROVIDER_PLUGINS_DIR } from "../core/local-provider-plugin-store.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -80,8 +81,11 @@ describe("credential write custody", () => {
 });
 
 describe("startup healer coverage", () => {
+  // Asserted against the store's own constant, not a literal: a literal here
+  // passes even when the healer and the store disagree on the directory name,
+  // which is exactly how this tree went uncovered.
   it("covers the local provider plugin tree that holds per-provider keys", () => {
-    expect(SECRET_TREES).toContain("providers");
+    expect(SECRET_TREES).toContain(LOCAL_PROVIDER_PLUGINS_DIR);
   });
 
   it("covers the migration backups that copy credentials aside", () => {
