@@ -1,5 +1,12 @@
+import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { createMaterializeTool } from "../lib/resource-io/materialize-tool.ts";
+
+// 相对 resource 会被解析成 cwd 下的绝对路径，而绝对路径的形态是平台相关的
+// （Windows 上 "/workspace" 会补上当前盘符）。用 path.resolve 构造 cwd 和期望值，
+// 让断言跟着平台走，而不是钉死 POSIX 写法。
+const CWD = path.resolve("/workspace");
+const RESOLVED_NOTE = path.resolve(CWD, "notes/a.md");
 
 function makeTool(overrides: any = {}) {
   const resourceIO = {
@@ -15,7 +22,7 @@ function makeTool(overrides: any = {}) {
     resourceIO,
     getSessionPath: () => "/sessions/a.jsonl",
     getSessionIdForPath: (p: string) => (p === "/sessions/a.jsonl" ? "sess_1" : null),
-    cwd: "/workspace",
+    cwd: CWD,
     ...overrides.options,
   });
   return { tool, resourceIO };
@@ -71,9 +78,9 @@ describe("materialize tool", () => {
     const { tool, resourceIO } = makeTool({
       resourceIO: {
         materialize: vi.fn(async () => ({
-          resourceKey: "local_fs:/workspace/notes/a.md",
-          resource: { kind: "local-file", path: "/workspace/notes/a.md", provider: "local_fs" },
-          filePath: "/workspace/notes/a.md",
+          resourceKey: `local_fs:${RESOLVED_NOTE}`,
+          resource: { kind: "local-file", path: RESOLVED_NOTE, provider: "local_fs" },
+          filePath: RESOLVED_NOTE,
           isDirectory: false,
         })),
       },
@@ -83,7 +90,7 @@ describe("materialize tool", () => {
 
     expect(resourceIO.materialize.mock.calls[0][0]).toEqual({
       kind: "local-file",
-      path: "/workspace/notes/a.md",
+      path: RESOLVED_NOTE,
     });
   });
 

@@ -155,14 +155,18 @@ describe("BridgeManager.executeLoopTurn", () => {
   });
 
   it("delivers tool media with the inbound context shape", async () => {
+    // 媒体项规范化会对 filePath 做 path.resolve，绝对路径的形态是平台相关的
+    // （Windows 上 "/tmp/a.png" 会补上当前盘符）。先 resolve 一次再喂进去，
+    // 断言就跟着平台走，且 resolve 幂等，不改变这条用例要验的编排行为。
+    const mediaPath = path.resolve("/tmp/a.png");
     const ft = makeFakeThis({
-      _hub: { send: vi.fn(async () => ({ text: "body", toolMedia: [{ type: "legacy_local_path", filePath: "/tmp/a.png" }] })) },
+      _hub: { send: vi.fn(async () => ({ text: "body", toolMedia: [{ type: "legacy_local_path", filePath: mediaPath }] })) },
     });
     await exec(ft, "tg_dm_1@a1", "p", { agentId: "a1" });
     expect(ft.media).toHaveLength(1);
     const [chatId, item, context] = ft.media[0];
     expect(chatId).toBe("1");
-    expect(item).toMatchObject({ filePath: "/tmp/a.png" });
+    expect(item).toMatchObject({ filePath: mediaPath });
     expect(context).toEqual({ platform: "tg", isGroup: false, agentId: "a1", replyContext: null });
   });
 });
