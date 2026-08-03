@@ -117,6 +117,65 @@ function normalizeToolPermissions(value) {
   return normalized;
 }
 
+function hasOwn(record, key) {
+  return !!record && Object.prototype.hasOwnProperty.call(record, key);
+}
+
+/** The previous agent-facing id, retained only for reading historical keys. */
+function toLegacyMcpToolId(serverId, toolName) {
+  return sanitizeId(`${serverId}_${toolName}`);
+}
+
+/**
+ * All persisted spellings that have identified one MCP tool over time.
+ *
+ * The MCP server's exact tool name remains the primary storage key. Older
+ * builds and external clients may instead have stored the qualified id, with
+ * or without the public `mcp_` namespace, so those spellings stay readable.
+ */
+function mcpToolIdentityAliases(connectorId, toolName) {
+  const canonical = toMcpToolId(connectorId, toolName);
+  const legacy = toLegacyMcpToolId(connectorId, toolName);
+  return [...new Set([
+    canonical,
+    `${MCP_TOOL_NAMESPACE}_${canonical}`,
+    legacy,
+    `${MCP_TOOL_NAMESPACE}_${legacy}`,
+  ])].filter((key) => key && key !== toolName);
+}
+
+/**
+ * Read a raw-name setting first, then historical qualified spellings.
+ * Conflicting legacy values fail closed by returning undefined.
+ */
+function readMcpToolIdentitySetting(record, connectorId, toolName) {
+  if (!isPlainObject(record)) return undefined;
+  if (hasOwn(record, toolName)) return record[toolName];
+  const values = mcpToolIdentityAliases(connectorId, toolName)
+    .filter((key) => hasOwn(record, key))
+    .map((key) => record[key]);
+  if (values.length === 0) return undefined;
+  return values.every((value) => value === values[0]) ? values[0] : undefined;
+}
+
+/**
+ * Give known historical keys a raw-name mirror for current UI/runtime readers.
+ * Unknown keys are retained: a stopped connector may not have refreshed the
+ * tool they belong to yet, so dropping them would erase user intent.
+ */
+function mirrorHistoricalToolSettings(record, connectorId, tools) {
+  const mirrored = { ...record };
+  for (const tool of tools) {
+    const value = readMcpToolIdentitySetting(mirrored, connectorId, tool.name);
+    if (value === undefined) continue;
+    mirrored[tool.name] = value;
+    for (const alias of mcpToolIdentityAliases(connectorId, tool.name)) {
+      delete mirrored[alias];
+    }
+  }
+  return mirrored;
+}
+
 /**
  * Decide the permission kind for a single MCP tool invocation.
  *
@@ -186,6 +245,16 @@ function normalizeConnector(connector, fallbackId = "") {
   const tools = Array.isArray(connector.tools)
     ? connector.tools.map(normalizeTool).filter(Boolean)
     : [];
+  const toolPermissions = mirrorHistoricalToolSettings(
+    normalizeToolPermissions(connector.toolPermissions),
+    id,
+    tools,
+  );
+  const pinnedTools = mirrorHistoricalToolSettings(
+    normalizePinnedTools(connector.pinnedTools),
+    id,
+    tools,
+  );
   const transport = normalizeTransport(connector);
   const authorizationToken = stringOrEmpty(connector.authorizationToken || connector.authorization_token);
   const oauth = normalizeOAuthState(connector.oauth);
@@ -225,13 +294,13 @@ function normalizeConnector(connector, fallbackId = "") {
     // pre-existing behaviour (every invocation reviewed), so no write-time
     // migration is needed and an untouched config keeps its old semantics.
     permissionMode: normalizePermissionMode(connector.permissionMode),
-    toolPermissions: normalizeToolPermissions(connector.toolPermissions),
+    toolPermissions,
     // Only an explicit `true` opts in; a truthy non-boolean must not be
     // coerced into an implicit grant.
     trustReadOnlyHint: connector.trustReadOnlyHint === true,
     // Read-time compatibility: connectors saved before deferred loading existed
     // have no pins, which is exactly the default.
-    pinnedTools: normalizePinnedTools(connector.pinnedTools),
+    pinnedTools,
     tools,
   };
 }
@@ -245,7 +314,40 @@ export function sanitizeId(value) {
 }
 
 export function toMcpToolId(serverId, toolName) {
-  return sanitizeId(`${serverId}_${toolName}`);
+  const normalized = toLegacyMcpToolId(serverId, toolName).toLowerCase();
+  if (!normalized) return "tool";
+  // The permission layer and strict model providers require a letter first.
+  // Prefixing digit-led server ids keeps the raw connector id untouched while
+  // giving the model a valid, deterministic internal name.
+  return /^[a-z]/.test(normalized) ? normalized : `tool_${normalized}`;
+}
+
+/**
+ * Refuse any ambiguous projection before tools reach the model or catalog.
+ * Lowercasing is intentionally lossy for display names; this check is what
+ * prevents two distinct server identities from silently sharing one executor.
+ */
+export function assertUniqueMcpToolIds(connectors) {
+  const seen = new Map([
+    [MCP_CONNECTORS_STATUS_TOOL_NAME, { connectorId: MCP_TOOL_NAMESPACE, toolName: MCP_CONNECTORS_STATUS_TOOL_NAME }],
+  ]);
+  for (const connector of Array.isArray(connectors) ? connectors : []) {
+    for (const tool of connector?.tools || []) {
+      const canonical = toMcpToolId(connector.id, tool.name);
+      const previous = seen.get(canonical);
+      if (!previous) {
+        seen.set(canonical, { connectorId: connector.id, toolName: tool.name });
+        continue;
+      }
+      const error: any = new Error(
+        `MCP tool id collision "${canonical}": `
+        + `"${previous.connectorId}/${previous.toolName}" and "${connector.id}/${tool.name}" `
+        + "both normalize to the same lowercase model-facing name. Rename the connector id or server tool.",
+      );
+      error.code = "MCP_TOOL_ID_COLLISION";
+      throw error;
+    }
+  }
 }
 
 /** One-line parameter digest for a catalog row, cheap enough to hold in memory. */
@@ -274,6 +376,7 @@ export function normalizeMcpConfig(value) {
   const connectors = rawConnectors
     .map((connector, index) => normalizeConnector(connector, `connector_${index + 1}`))
     .filter(Boolean);
+  assertUniqueMcpToolIds(connectors);
   return {
     ...DEFAULT_CONFIG,
     enabled: input.enabled === true,
@@ -304,7 +407,7 @@ export function isMcpToolEnabledForAgentConfig(agentConfig, { globalEnabled, ser
   const mcp = normalizeAgentMcpConfig(agentConfig);
   const connector = mcp.connectors?.[id] || mcp.servers?.[id];
   if (connector?.enabled !== true) return false;
-  return connector?.tools?.[toolName] === true;
+  return readMcpToolIdentitySetting(connector?.tools, id, toolName) === true;
 }
 
 interface McpLiveAvailabilityInput {
@@ -1509,7 +1612,7 @@ export class McpManager {
             const current = this.getConfig().connectors.find((item) => item.id === connector.id);
             return {
               permissionMode: current?.permissionMode,
-              toolPermission: current?.toolPermissions?.[tool.name],
+              toolPermission: readMcpToolIdentitySetting(current?.toolPermissions, connector.id, tool.name),
               trustReadOnlyHint: current?.trustReadOnlyHint,
             };
           },
@@ -1551,7 +1654,7 @@ export class McpManager {
           serverLabel: connector.name || connector.id,
           // Only an explicit false opts a tool out of deferral.
           deferrable: tool.deferrable !== false,
-          pinned: connector.pinnedTools?.[tool.name] === true,
+          pinned: readMcpToolIdentitySetting(connector.pinnedTools, connector.id, tool.name) === true,
           schemaRef: () => tool.inputSchema || { type: "object", properties: {} },
         });
       }
@@ -1568,7 +1671,7 @@ export class McpManager {
     const connector = this.getConfig().connectors.find((item) => item.id === connectorId);
     return resolveMcpToolPermissionKind({
       permissionMode: connector?.permissionMode,
-      toolPermission: connector?.toolPermissions?.[toolName],
+      toolPermission: readMcpToolIdentitySetting(connector?.toolPermissions, connectorId, toolName),
       trustReadOnlyHint: connector?.trustReadOnlyHint,
     }, this.getRuntimeToolAnnotations(connectorId, toolName));
   }

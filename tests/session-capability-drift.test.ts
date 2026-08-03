@@ -417,4 +417,28 @@ describe("repairRestoredToolSnapshotDetailed", () => {
     );
     expect(detailed.droppedToolNames).toEqual(["dead"]);
   });
+
+  it("migrates an uppercase historical MCP snapshot to its unique lowercase runtime name", () => {
+    const detailed = repairRestoredToolSnapshotDetailed(
+      ["read", "mcp_GitHub_SearchIssues"],
+      ["read", "mcp_github_searchissues"],
+      { coreToolNames: [] },
+    );
+
+    expect(detailed.toolNames).toEqual(["read", "mcp_github_searchissues"]);
+    expect(detailed.contractToolNames).toEqual(["read", "mcp_github_searchissues"]);
+    expect(detailed.droppedToolNames).toEqual([]);
+  });
+
+  it("does not guess when historical MCP case folding has multiple runtime matches", () => {
+    const detailed = repairRestoredToolSnapshotDetailed(
+      ["mcp_GitHub_SearchIssues"],
+      ["mcp_github_searchissues", "mcp_GITHUB_SEARCHISSUES"],
+      { coreToolNames: [] },
+    );
+
+    expect(detailed.toolNames).toEqual([]);
+    expect(detailed.contractToolNames).toEqual(["mcp_GitHub_SearchIssues"]);
+    expect(detailed.droppedToolNames).toEqual(["mcp_GitHub_SearchIssues"]);
+  });
 });

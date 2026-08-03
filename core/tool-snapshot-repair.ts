@@ -5,8 +5,31 @@ const LEGACY_TOOL_ALIASES: Record<string, string[]> = {
   terminal: ["exec_command", "write_stdin"],
 };
 
-function mappedToolNames(name) {
-  return LEGACY_TOOL_ALIASES[name] || [name];
+function availableMcpNamesByLowercase(availableNames) {
+  const names = new Map<string, string[]>();
+  for (const name of availableNames) {
+    if (!name.startsWith("mcp_")) continue;
+    const key = name.toLowerCase();
+    const matches = names.get(key) || [];
+    matches.push(name);
+    names.set(key, matches);
+  }
+  return names;
+}
+
+function mappedToolNames(name, availableMcpNames) {
+  const legacy = LEGACY_TOOL_ALIASES[name];
+  if (legacy) return legacy;
+
+  // MCP tool ids became lowercase while the server's own display/wire names
+  // stayed untouched. Frozen sessions may therefore carry the earlier cased
+  // model-facing name. Reuse the live published names as the authority instead
+  // of reimplementing MCP normalization here, and only migrate a unique match.
+  if (name.startsWith("mcp_")) {
+    const matches = availableMcpNames.get(name.toLowerCase()) || [];
+    if (matches.length === 1) return matches;
+  }
+  return [name];
 }
 
 /**
@@ -18,6 +41,7 @@ export function repairRestoredToolSnapshotDetailed(snapshotToolNames, allToolNam
   coreToolNames = CORE_TOOL_NAMES,
 } = {}) {
   const available = new Set(uniqueToolNames(allToolNames));
+  const availableMcpNames = availableMcpNamesByLowercase(available);
   const toolNames = [];
   const contractToolNames = [];
   const droppedToolNames = [];
@@ -28,7 +52,7 @@ export function repairRestoredToolSnapshotDetailed(snapshotToolNames, allToolNam
   for (const name of uniqueToolNames(snapshotToolNames)) {
     if (seenSnapshotNames.has(name)) continue;
     seenSnapshotNames.add(name);
-    const mappedNames = mappedToolNames(name);
+    const mappedNames = mappedToolNames(name, availableMcpNames);
     const kept = mappedNames.filter((mapped) => available.has(mapped));
     if (!kept.length) {
       droppedToolNames.push(name);
