@@ -90,6 +90,15 @@ function readRepositorySource(rootDir, relativePath, sourceOverrides) {
   return fs.readFileSync(absolutePath);
 }
 
+/**
+ * Names the digest algorithm below. Bump it whenever the algorithm changes, so
+ * a committed fingerprint carries enough provenance to say *why* its hashes
+ * stopped matching: same method and compiler means a guarded module changed;
+ * anything else means the toolchain moved and every hash is incomparable for
+ * reasons that have nothing to do with persisted shape.
+ */
+export const SOURCE_DIGEST_METHOD = "parse-tree-v1";
+
 const SCRIPT_KINDS = new Map([
   [".ts", ts.ScriptKind.TS],
   [".tsx", ts.ScriptKind.TSX],
@@ -146,7 +155,7 @@ function isJsDocKind(kind) {
  * Parse failures throw. Falling back to a raw byte hash would silently restore
  * the old semantics on exactly the files least understood.
  */
-function executableSourceHash(rootDir, relativePath, sourceOverrides) {
+export function executableSourceHash(rootDir, relativePath, sourceOverrides) {
   const sourcePath = normalizeRepositoryPath(relativePath);
   const text = readRepositorySource(rootDir, sourcePath, sourceOverrides).toString("utf-8");
   const scriptKind = SCRIPT_KINDS.get(path.extname(sourcePath).toLowerCase());
@@ -472,8 +481,17 @@ async function generatePersistenceSchemaPayload({
       .sort((left, right) => left.sourceFile.localeCompare(right.sourceFile)
         || left.kind.localeCompare(right.kind)
         || left.ordinal - right.ordinal),
-    // version 2 anchors site mappings by ordinal instead of absolute line.
-    version: 2,
+    // Source hashes are whatever this parser says they are, so the payload
+    // names its parser. A toolchain upgrade then shows up in the committed
+    // diff as the compiler line changing — and the mismatch error below can
+    // name the real cause instead of implying persisted shape drifted.
+    sourceDigest: {
+      compiler: `typescript@${ts.version}`,
+      method: SOURCE_DIGEST_METHOD,
+    },
+    // version 2 anchored site mappings by ordinal instead of absolute line;
+    // version 3 records the source digest method and compiler.
+    version: 3,
   };
   const payloadFingerprint = sha256(canonicalJson(payload));
   const result = canonicalize({ ...payload, payloadFingerprint });
@@ -616,6 +634,21 @@ export async function assertCommittedPersistenceSchemaFingerprint({
     ...options,
   });
   if (canonicalJson(actualPayload) !== canonicalJson(expectedPayload)) {
+    const describeDigest = (digest) => (digest
+      ? `${digest.compiler} (method ${digest.method})`
+      : "a fingerprint format without digest provenance (payload v2 or older)");
+    if (canonicalJson(expectedPayload.sourceDigest ?? null) !== canonicalJson(actualPayload.sourceDigest ?? null)) {
+      // Module hashes computed by different parsers (or digest methods) are
+      // incomparable for reasons that have nothing to do with persisted shape.
+      // Saying "schema fingerprint mismatch" here would point the review at
+      // stored data when the true subject is the toolchain.
+      throw new Error(
+        `persistence schema digest provenance changed: committed fingerprint was sealed by ${describeDigest(expectedPayload.sourceDigest)}, `
+        + `this run digests with ${describeDigest(actualPayload.sourceDigest)}. Source hashes come from the parser, so `
+        + `every module hash may differ for toolchain reasons rather than schema reasons; review the toolchain change and repin.`
+        + `\n\n${SCHEMA_CHANGE_GUIDANCE}`,
+      );
+    }
     throw new Error(
       `persistence schema fingerprint mismatch: committed ${expectedPayload.payloadFingerprint}, `
       + `generated ${actualPayload.payloadFingerprint}\n\n${SCHEMA_CHANGE_GUIDANCE}`,

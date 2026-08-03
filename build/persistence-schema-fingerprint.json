@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:f33b52365401e48a74acf268274b741011de1d3b320cdda02408d1745e85c842",
+  "payloadFingerprint": "sha256:0326c45cd3dcf5863594b5210b3be4b9595d7c895e6b98ba5eebaa1789b94d15",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3080,8 +3080,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Digest method only: schema source hashes now cover the parse tree — non-leaf node kind names with explicit structure markers plus length-prefixed leaf token text — instead of a flat token stream. Statement-boundary rewrites that ASI makes semantic (return followed by a line break) now change the digest; JSDoc blocks, line and block comments, and inter-token whitespace never enter it, while string and template literal content and shebang lines stay hashed. No store, stored shape, or persisted byte changed.",
-    "payloadFingerprint": "sha256:f33b52365401e48a74acf268274b741011de1d3b320cdda02408d1745e85c842"
+    "compatibilityReason": "Payload provenance only: the fingerprint now records its source digest method (parse-tree-v1) and the exact TypeScript compiler that computed the module hashes, and the payload format steps to version 3. When a toolchain change makes every hash incomparable, the guard now names the compiler change instead of reporting it as persisted-schema drift. No store, stored shape, persisted byte, or module hash changed.",
+    "payloadFingerprint": "sha256:0326c45cd3dcf5863594b5210b3be4b9595d7c895e6b98ba5eebaa1789b94d15"
   },
   "schemas": [
     {
@@ -9736,5 +9736,9 @@
       "storeId": null
     }
   ],
-  "version": 2
+  "sourceDigest": {
+    "compiler": "typescript@5.9.3",
+    "method": "parse-tree-v1"
+  },
+  "version": 3
 }

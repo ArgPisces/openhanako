@@ -1,11 +1,15 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  SOURCE_DIGEST_METHOD,
   assertCommittedPersistenceSchemaFingerprint,
+  executableSourceHash,
   generatePersistenceSchemaFingerprint,
   validateSchemaChangeDeclaration,
   writePersistenceSchemaFingerprint,
@@ -216,6 +220,131 @@ describe("persistence schema tripwire", () => {
       inventory,
       sourceOverrides: new Map([[module, `${original}\nexport const probe = \`a  b\`;\n`]]),
     })).rejects.toThrow(/persistence schema fingerprint mismatch/);
+  });
+
+  it("records the digest method and the compiler in the payload it pins", async () => {
+    // Source hashes are whatever the pinned TypeScript parser says they are.
+    // Without naming that parser in the payload, a toolchain upgrade surfaces
+    // as a bare "schema fingerprint mismatch" — an alarm that points at
+    // persisted shape when nothing persisted changed. The payload carries its
+    // own provenance so both the committed diff and the error can say why.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+    const generated = await generatePersistenceSchemaFingerprint({
+      rootDir: ROOT,
+      inventory,
+      review: committed.review,
+    });
+    expect(generated.sourceDigest).toEqual({
+      compiler: `typescript@${ts.version}`,
+      method: SOURCE_DIGEST_METHOD,
+    });
+    expect(committed.sourceDigest).toEqual(generated.sourceDigest);
+  });
+
+  it("names the toolchain change instead of a bare mismatch when digest provenance differs", async () => {
+    // A fingerprint pinned by another compiler (or digest method) makes every
+    // module hash incomparable for reasons that have nothing to do with
+    // persisted shape. The guard must say that, not cry schema drift.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+
+    // Re-seal a committed fingerprint whose provenance names a different
+    // compiler, the way an older toolchain would have sealed it. The local
+    // canonicalization mirrors the generator's stable JSON form; if the two
+    // ever drift apart, this test fails loudly on the staleness check instead
+    // of silently passing.
+    const canonicalize = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(canonicalize);
+      if (!value || typeof value !== "object") return value;
+      return Object.fromEntries(Object.keys(value as Record<string, unknown>)
+        .sort((left, right) => left.localeCompare(right))
+        .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])]));
+    };
+    const seal = (body: Record<string, unknown>) => (
+      `sha256:${crypto.createHash("sha256").update(JSON.stringify(canonicalize(body))).digest("hex")}`
+    );
+    const { review } = committed;
+    const foreignBody: Record<string, unknown> = {
+      ...committed,
+      sourceDigest: { compiler: "typescript@0.0.0-foreign", method: SOURCE_DIGEST_METHOD },
+    };
+    delete foreignBody.review;
+    delete foreignBody.payloadFingerprint;
+    const foreignFingerprint = {
+      ...foreignBody,
+      payloadFingerprint: seal(foreignBody),
+      review: { ...review, payloadFingerprint: seal(foreignBody) },
+    };
+
+    await expect(assertCommittedPersistenceSchemaFingerprint({
+      rootDir: ROOT,
+      committedFingerprint: foreignFingerprint,
+      inventory,
+    })).rejects.toThrow(/digest provenance[\s\S]*typescript@0\.0\.0-foreign[\s\S]*typescript@/);
+  });
+
+  it("holds digest invariants that no toolchain upgrade may break silently", () => {
+    // Equal-token pairs that must stay separated (whitespace is semantic at
+    // JavaScript's restricted productions) and comment variants that must stay
+    // identical. These are properties, not snapshots: they never need updating,
+    // and a compiler upgrade that breaks one is a real regression of the guard.
+    const digestOf = (module: string, code: string) => (
+      executableSourceHash(ROOT, module, new Map([[module, code]]))
+    );
+    const M = "core/digest-invariant-probe.ts";
+
+    // Restricted productions: same token stream, different program.
+    expect(digestOf(M, "function f(){ return { ok: true }; }"))
+      .not.toBe(digestOf(M, "function f(){ return\n{ ok: true }; }"));
+    expect(digestOf(M, "function f(){ a++\nb; }"))
+      .not.toBe(digestOf(M, "function f(){ a\n++b; }"));
+    expect(digestOf(M, "async function g(){}"))
+      .not.toBe(digestOf(M, "async\nfunction g(){}"));
+
+    // Comments in every shape are invisible.
+    expect(digestOf(M, "/** doc */ export function g(){}"))
+      .toBe(digestOf(M, "export function g(){}"));
+    expect(digestOf(M, "// note\nexport const x = 1; /* trailing */"))
+      .toBe(digestOf(M, "export const x = 1;"));
+
+    // Formatting between tokens is invisible; content inside tokens is not.
+    expect(digestOf(M, "export  const x =\n  1;")).toBe(digestOf(M, "export const x = 1;"));
+    expect(digestOf(M, "export const t = `a  b`;")).not.toBe(digestOf(M, "export const t = `a b`;"));
+    expect(digestOf("core/probe.cjs", "#!/usr/bin/env node\nconsole.log(1);"))
+      .not.toBe(digestOf("core/probe.cjs", "#!/usr/bin/env other\nconsole.log(1);"));
+  });
+
+  it("pins parse-behavior snapshots so toolchain drift is separable from module drift", () => {
+    // Fixed snippets with fixed digests. Nothing in day-to-day work moves
+    // these: they change only when the digest method or the pinned TypeScript
+    // parser changes, which is exactly the event they exist to make visible.
+    // On mismatch, the committed module hashes changed for toolchain reasons,
+    // not because any guarded module was edited.
+    const snapshots: Array<{ name: string; module: string; code: string; digest: string }> = [
+      { name: "return-object", module: "core/digest-snap.ts", code: "function f(){ return { ok: true }; }", digest: "sha256:6dbf8d2bcadf21826429d2a8ff4c9c4fe4ed1f6a2899d1134ff3fcbc92504a75" },
+      { name: "return-split-asi", module: "core/digest-snap.ts", code: "function f(){ return\n{ ok: true }; }", digest: "sha256:259416511ba3964de4766bd855385c4d4d52975bfd016cfe4fc269280a992ae9" },
+      { name: "jsdoc-invisible", module: "core/digest-snap.ts", code: "/** doc */ export function g(){}", digest: "sha256:fa76a67ae833821e5d21c2b0cfefd2dd56119a092ea895157fd7ba45b2f8a682" },
+      { name: "template-content", module: "core/digest-snap.ts", code: "export const t = `a  b ${1} c`;", digest: "sha256:3d0506278b4e662266b09a9e07453e582435851dbf877dc84354d2478444c0da" },
+      { name: "optional-chain", module: "core/digest-snap.ts", code: "export const v = globalThis?.process?.[\"argv\"];", digest: "sha256:08fce65a4301dcb051938b4b07e195f01a648a97fe28f8ee07c067057cde27b6" },
+      { name: "decorator-class", module: "core/digest-snap.ts", code: "declare const dec: ClassDecorator;\n@dec class C { #p = 1; static { void 0; } }", digest: "sha256:b6427d533ec54746dc5646d17b3cfdb6e1b3538258b9a8573e3c0ff83c923083" },
+      { name: "jsx-element", module: "core/digest-snap.tsx", code: "export const el = <div a={1}>t x</div>;", digest: "sha256:26e03cb6af00d200b24c49dd338c3be1cdaa877921b0c9a0d6435b3643be7840" },
+      { name: "cjs-script", module: "core/digest-snap.cjs", code: "\"use strict\";\nmodule.exports = { n: 1 };", digest: "sha256:6e8af28a51bd5fcb4b9aa85334bac8a8da09623d576da8a2d2fb979469cef803" },
+      { name: "shebang", module: "core/digest-snap.cjs", code: "#!/usr/bin/env node\nconsole.log(1);", digest: "sha256:ea6740a08ee7145dc59e84cef6118e5029b944899163e60f81fab54c57966eb4" },
+    ];
+    const drifted = snapshots
+      .map((snapshot) => ({
+        name: snapshot.name,
+        expected: snapshot.digest,
+        actual: executableSourceHash(ROOT, snapshot.module, new Map([[snapshot.module, snapshot.code]])),
+      }))
+      .filter((entry) => entry.actual !== entry.expected);
+    expect(
+      drifted,
+      "parse-behavior snapshots drifted — expected only on a digest method change or a TypeScript upgrade, "
+      + "never from editing guarded modules. Update the pinned digests in the same change that moves the toolchain:\n"
+      + drifted.map((entry) => `  ${entry.name}: ${entry.actual}`).join("\n"),
+    ).toEqual([]);
   });
 
   it("rejects a repinned payload until the committed review pins that exact payload", async () => {
