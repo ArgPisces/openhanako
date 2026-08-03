@@ -3,6 +3,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { detectMime, extOfName, inferFileKind } from "../file-metadata.ts";
 import { isSessionJsonlFilename } from "../session-jsonl.ts";
+import { canonicalFilesystemPathSync, filesystemIdentityKeySync } from "../../shared/link-aware-fs.ts";
 
 export const SESSION_FILE_SIDECAR_VERSION = 1;
 export const SESSION_FILE_CACHE_INACTIVE_TTL_MS = 72 * 60 * 60 * 1000;
@@ -57,7 +58,7 @@ export class SessionFileRegistry {
   constructor({ now = () => Date.now(), managedCacheRoot = null, getSessionIdForPath = null }: any = {}) {
     this._now = now;
     this._getSessionIdForPath = typeof getSessionIdForPath === "function" ? getSessionIdForPath : null;
-    this._managedCacheRoot = managedCacheRoot ? normalizeExistingOrResolvedPath(managedCacheRoot) : null;
+    this._managedCacheRoot = managedCacheRoot ? canonicalFilesystemPathSync(managedCacheRoot) : null;
     this._byId = new Map();
     this._idsBySession = new Map();
     this._sidecarsBySession = new Map();
@@ -88,7 +89,8 @@ export class SessionFileRegistry {
 
     let incomingRealPath;
     try {
-      incomingRealPath = fs.realpathSync(filePath);
+      fs.accessSync(filePath, fs.constants.F_OK);
+      incomingRealPath = canonicalFilesystemPathSync(filePath);
     } catch {
       throw new Error(`file not found: ${filePath}`);
     }
@@ -108,7 +110,7 @@ export class SessionFileRegistry {
       && existingMaterializationExists(existing);
     const materializedFilePath = shouldKeepExistingMaterialization ? existing.filePath : filePath;
     const realPath = shouldKeepExistingMaterialization
-      ? fs.realpathSync(existing.realPath || existing.filePath)
+      ? canonicalFilesystemPathSync(existing.realPath || existing.filePath)
       : incomingRealPath;
 
     const stat = fs.statSync(realPath);
@@ -193,7 +195,8 @@ export class SessionFileRegistry {
   getByFilePath(filePath, { sessionId = null, sessionPath = null }: any = {}) {
     if (!filePath) return null;
     if (sessionPath) this._hydrateSession(sessionPath, sessionId);
-    const target = normalizeExistingOrResolvedPath(filePath);
+    const target = filesystemIdentityKeyOrNull(filePath);
+    if (!target) return null;
     const ids = sessionPath
       ? (this._idsBySession.get(this._sessionKeyForPath(sessionPath, sessionId)) || [])
       : Array.from(this._byId.keys());
@@ -205,7 +208,7 @@ export class SessionFileRegistry {
         entry.realPath,
         ...(sessionPath ? normalizeStringList(entry.legacyFilePaths) : []),
       ].filter(Boolean);
-      if (candidates.some((candidate) => normalizeExistingOrResolvedPath(candidate) === target)) {
+      if (candidates.some((candidate) => filesystemIdentityKeyOrNull(candidate) === target)) {
         return entry;
       }
     }
@@ -588,12 +591,13 @@ export class SessionFileRegistry {
 
   _findSessionFileByRealPath(sessionPath, realPath) {
     const ids = this._idsBySession.get(this._sessionKeyForPath(sessionPath)) || [];
-    const target = normalizeExistingOrResolvedPath(realPath);
+    const target = filesystemIdentityKeyOrNull(realPath);
+    if (!target) return null;
     for (const id of ids) {
       const entry = this._byId.get(id);
       if (!entry) continue;
-      const entryRealPath = normalizeExistingOrResolvedPath(entry.realPath || entry.filePath);
-      if (entryRealPath === target) return entry;
+      const entryRealPath = filesystemIdentityKeyOrNull(entry.realPath || entry.filePath);
+      if (entryRealPath && entryRealPath === target) return entry;
     }
     return null;
   }
@@ -682,8 +686,8 @@ export class SessionFileRegistry {
 
   _assertManagedCacheTarget(filePath) {
     if (!this._managedCacheRoot) return;
-    const realPath = normalizeExistingOrResolvedPath(filePath);
-    if (!isInsideRoot(realPath, this._managedCacheRoot)) {
+    const realPath = filesystemIdentityKeySync(filePath);
+    if (!isInsideRoot(realPath, filesystemIdentityKeySync(this._managedCacheRoot))) {
       throw new Error(`managed cache file is outside session-files root: ${filePath}`);
     }
   }
@@ -815,15 +819,22 @@ function collectJsonlFiles(dir, out) {
   }
 }
 
-function normalizeExistingOrResolvedPath(filePath) {
-  const resolved = path.resolve(filePath);
-  try { return fs.realpathSync(resolved); }
-  catch { return resolved; }
+/**
+ * Identity key for comparing two paths, not for storing: it canonicalizes through
+ * the OS and folds case where the platform ignores it, so the same file spelled
+ * two ways compares equal. Anything that reads or mounts the file must use the
+ * canonical path instead, which keeps the spelling the filesystem reports.
+ */
+function filesystemIdentityKeyOrNull(filePath) {
+  if (typeof filePath !== "string" || !filePath) return null;
+  return filesystemIdentityKeySync(filePath);
 }
 
 function pathsReferToSameFile(a, b) {
-  if (!a || !b) return false;
-  return normalizeExistingOrResolvedPath(a) === normalizeExistingOrResolvedPath(b);
+  const left = filesystemIdentityKeyOrNull(a);
+  const right = filesystemIdentityKeyOrNull(b);
+  if (!left || !right) return false;
+  return left === right;
 }
 
 function existingMaterializationExists(file) {
@@ -850,7 +861,7 @@ function readSample(filePath) {
 
 function buildSessionFileId({ ownerKey, realPath, sourceKey }) {
   const hash = createHash("sha256")
-    .update(JSON.stringify([ownerKey, sourceKey || realPath]))
+    .update(JSON.stringify([ownerKey, sourceKey || filesystemIdentityKeySync(realPath)]))
     .digest("hex")
     .slice(0, 16);
   return `sf_${hash}`;

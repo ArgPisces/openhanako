@@ -4,6 +4,16 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import { SessionFileRegistry, sessionFilesCacheDir } from "../lib/session-files/session-file-registry.ts";
 
+const FILESYSTEM_IGNORES_CASE = (() => {
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-session-file-case-probe-"));
+  try {
+    fs.writeFileSync(path.join(probeDir, "probe.txt"), "probe");
+    return fs.existsSync(path.join(probeDir, "PROBE.TXT"));
+  } finally {
+    fs.rmSync(probeDir, { recursive: true, force: true });
+  }
+})();
+
 describe("SessionFileRegistry", () => {
   let tmpDir = null;
 
@@ -256,6 +266,64 @@ describe("SessionFileRegistry", () => {
     expect(first.createdAt).toBe(1234);
     expect(registry.get(first.id)).toEqual(first);
     expect(registry.list(sessionPath)).toEqual([first]);
+  });
+
+  it.skipIf(!FILESYSTEM_IGNORES_CASE)(
+    "reuses the path-scoped entry when the same file is registered under another spelling",
+    () => {
+      const filePath = makeTempFile("case-path/Note.md", "# hello\n");
+      const variantPath = path.join(path.dirname(filePath), "NOTE.MD");
+      const sessionPath = makeSessionPath("case-path.jsonl");
+      const registry = new SessionFileRegistry({ now: () => 1234 });
+
+      const first = registry.registerFile({ sessionPath, filePath, origin: "stage_files" });
+      const second = registry.registerFile({ sessionPath, filePath: variantPath, origin: "stage_files" });
+
+      expect(second.id).toBe(first.id);
+      expect(Object.keys(readSidecar(sessionPath).files)).toEqual([first.id]);
+    },
+  );
+
+  it.skipIf(!FILESYSTEM_IGNORES_CASE)(
+    "reuses the id-scoped entry when the same file is registered under another spelling",
+    () => {
+      const filePath = makeTempFile("case-id/Note.md", "# hello\n");
+      const variantPath = path.join(path.dirname(filePath), "NOTE.MD");
+      const sessionPath = makeSessionPath("case-id.jsonl");
+      const registry = new SessionFileRegistry({ now: () => 1234 });
+
+      const first = registry.registerFile({
+        sessionId: "sess_case",
+        sessionPath,
+        filePath,
+        origin: "stage_files",
+      });
+      const second = registry.registerFile({
+        sessionId: "sess_case",
+        sessionPath,
+        filePath: variantPath,
+        origin: "stage_files",
+      });
+
+      expect(second.id).toBe(first.id);
+      expect(Object.keys(readSidecar(sessionPath).files)).toEqual([first.id]);
+    },
+  );
+
+  it("stores the natively canonicalized real path without case folding it", () => {
+    const filePath = makeTempFile("canonical-case/MixedCase.TXT", "hi");
+    const sessionPath = makeSessionPath("canonical-case.jsonl");
+    const registry = new SessionFileRegistry({ now: () => 1234 });
+
+    const entry = registry.registerFile({
+      sessionId: "sess_canonical_case",
+      sessionPath,
+      filePath,
+      origin: "stage_files",
+    });
+
+    expect(entry.realPath).toBe(fs.realpathSync.native(filePath));
+    expect(readSidecar(sessionPath).files[entry.id].realPath).toBe(fs.realpathSync.native(filePath));
   });
 
   it("keeps one session file for the same truth source even when cache paths differ", () => {
