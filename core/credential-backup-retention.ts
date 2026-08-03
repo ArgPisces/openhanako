@@ -27,12 +27,13 @@
 import fs from "fs";
 import path from "path";
 
+import { migrationBackupsRoot } from "./migration-backups.ts";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** How long a migration backup stays useful for rolling back. */
 export const CREDENTIAL_BACKUP_MAX_AGE_MS = 90 * DAY_MS;
 
-const BACKUP_DIR = "migration-backups";
 const LIVE_CATALOG_FILE = "provider-catalog.json";
 
 export interface BackupRetentionResult {
@@ -60,7 +61,7 @@ export function pruneStaleCredentialBackups({
   // an absent data directory means a caller mistake, not an empty workload.
   if (!hanakoHome) throw new Error("credential backup retention requires a data directory");
 
-  const backupRoot = path.join(hanakoHome, BACKUP_DIR);
+  const backupRoot = migrationBackupsRoot(hanakoHome);
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(backupRoot, { withFileTypes: true });

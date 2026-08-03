@@ -57,6 +57,7 @@ import { parseSkillMetadata } from "../lib/skills/skill-metadata.ts";
 import { safeConversationStem } from "../lib/conversations/agent-phone-projection.ts";
 import { DEFAULT_DISABLED_TOOL_NAMES } from "../shared/tool-categories.ts";
 import { ProviderCatalogStore } from "./provider-catalog.ts";
+import { migrationBackupsRoot } from "./migration-backups.ts";
 import { repairProviderModelMetadata } from "./provider-model-metadata-migration.ts";
 import { sessionIdFromFilename } from "../lib/session-jsonl.ts";
 import {
@@ -2093,7 +2094,7 @@ function writeProviderModelMetadataMigrationBackup({ store, hanakoHome, repairs 
     throw new Error("provider catalog source is missing before metadata repair");
   }
 
-  const backupRoot = path.join(hanakoHome, "migration-backups");
+  const backupRoot = migrationBackupsRoot(hanakoHome);
   fs.mkdirSync(backupRoot, { recursive: true });
   ensureSecretDirModeSync(backupRoot);
   const backupDir = fs.mkdtempSync(path.join(backupRoot, "provider-model-metadata-v46-"));
@@ -2211,7 +2212,7 @@ function writeCodexEventIdPollutionRepairBackup({ store, hanakoHome, removed }) 
     throw new Error("provider catalog source is missing before Codex event-id pollution repair");
   }
 
-  const backupRoot = path.join(hanakoHome, "migration-backups");
+  const backupRoot = migrationBackupsRoot(hanakoHome);
   fs.mkdirSync(backupRoot, { recursive: true });
   ensureSecretDirModeSync(backupRoot);
   const backupDir = fs.mkdtempSync(path.join(backupRoot, "codex-model-id-pollution-v49-"));

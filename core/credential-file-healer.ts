@@ -25,6 +25,7 @@ import { errorBus } from "../shared/error-bus.ts";
 import { CONFIG_SCOPE_BACKUP_SUFFIX } from "../shared/migrate-config-scope.ts";
 import { ensureSecretDirModeSync, ensureSecretFileModeSync } from "../shared/secret-fs.ts";
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "./local-provider-plugin-store.ts";
+import { MIGRATION_BACKUPS_DIR } from "./migration-backups.ts";
 import { PLUGIN_CONFIG_FILENAME, PLUGIN_DATA_DIRNAME } from "./plugin-config.ts";
 
 /** Files directly under the data directory that hold credentials. */
@@ -46,12 +47,12 @@ export const TOP_LEVEL_SECRET_FILES = [
  * The local provider plugin tree holds each locally defined provider, whose
  * definition carries that provider's key.
  *
- * The plugin directory name is taken from the store that owns it rather than
- * repeated here. Spelling it out once cost real coverage: this list said
+ * Both directory names are taken from the modules that own them rather than
+ * repeated here. Spelling one out once cost real coverage: this list said
  * "providers" while the store wrote to "provider-plugins", so the healer walked
  * a path that never existed and silently corrected nothing.
  */
-export const SECRET_TREES = ["migration-backups", LOCAL_PROVIDER_PLUGINS_DIR];
+export const SECRET_TREES = [MIGRATION_BACKUPS_DIR, LOCAL_PROVIDER_PLUGINS_DIR];
 
 const AGENT_CONFIG_FILE = "config.yaml";
 /**

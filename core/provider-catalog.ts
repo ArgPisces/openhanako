@@ -9,6 +9,7 @@ import {
   writeSecretFileSync,
 } from "../shared/secret-fs.ts";
 import { SEARCH_CAPABILITY_KIND, SEARCH_CAPABILITY_PROVIDERS } from "../shared/search-providers.ts";
+import { migrationBackupsRoot } from "./migration-backups.ts";
 
 export const PROVIDER_CATALOG_VERSION = 2;
 export const PROVIDER_CATALOG_FILE = "provider-catalog.json";
@@ -220,8 +221,7 @@ export class ProviderCatalogStore {
     if (existingFiles.length === 0) return;
 
     const backupDir = path.join(
-      this._hanakoHome,
-      "migration-backups",
+      migrationBackupsRoot(this._hanakoHome),
       `provider-catalog-v1-${timestampSlug()}`,
     );
     fs.mkdirSync(backupDir, { recursive: true, mode: SECRET_DIR_MODE });
