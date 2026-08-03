@@ -1,11 +1,11 @@
 /**
  * HanaAgent Server — HTTP + WebSocket API
  *
- * 启动方式：
- *   node server/index.js              （独立运行）
- *   Electron main.js fork 启动        （桌面应用内嵌）
+ * 启动方式（本文件只导出 startServer，自身不自举，由上层组合入口调用）：
+ *   npm run server                              （独立运行，经 launch.js）
+ *   Electron main.cjs spawn server/bootstrap.ts （桌面应用内嵌）
  *
- * 当通过 fork() 启动时，会通过 IPC 通知父进程端口号。
+ * 无 IPC 通道：就绪与端口写入 HANA_HOME/server-info.json，桌面端轮询该文件。
  */
 import crypto from "crypto";
 import fs from "fs";

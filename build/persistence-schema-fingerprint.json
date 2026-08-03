@@ -668,7 +668,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:610b389b43eb34452979c0b3dc79527fe5352bec39e6861fcee82df690011c4c",
+  "payloadFingerprint": "sha256:189b1324ab8e42b7ca313320f10c12e15cd48f3fa3dc0468736d221eb8e231e8",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3080,8 +3080,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Registers the new desktop install ACL heal state store (user/win32-install-acl-heal.json) and refreshes shifted desktop/main.cjs write-site line numbers; no existing stored schema or payload changed.",
-    "payloadFingerprint": "sha256:610b389b43eb34452979c0b3dc79527fe5352bec39e6861fcee82df690011c4c"
+    "compatibilityReason": "Header comment correction only; no executable bytes or persisted shape changed.",
+    "payloadFingerprint": "sha256:189b1324ab8e42b7ca313320f10c12e15cd48f3fa3dc0468736d221eb8e231e8"
   },
   "schemas": [
     {
@@ -3438,7 +3438,7 @@
       "contract": "server-info writer and desktop bootstrap reader",
       "kind": "runtime-contract",
       "module": "server/index.ts",
-      "sourceHash": "sha256:3b3358e98078826c8ac6452fecf2cb3faa79bd42b20b704558434491f7d5dba5",
+      "sourceHash": "sha256:427c09a90e3b68796d30ce8bcb0878dc9a8175047dc1de788f3443f093c511a7",
       "storeId": "server-runtime-info"
     },
     {
