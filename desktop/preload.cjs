@@ -98,7 +98,7 @@ contextBridge.exposeInMainWorld("hana", {
   appReady: () => ipcRenderer.invoke("app-ready"),
   syncWindowTheme: (theme) => ipcRenderer.send("window-theme-changed", theme),
   selectFolder: () => ipcRenderer.invoke("select-folder"),
-  selectFiles: () => ipcRenderer.invoke("select-files"),
+  selectFiles: (options) => ipcRenderer.invoke("select-files", options),
   selectSkill: () => ipcRenderer.invoke("select-skill"),
   selectPlugin: () => ipcRenderer.invoke("select-plugin"),
   openFolder: (path) => ipcRenderer.invoke("open-folder", path),

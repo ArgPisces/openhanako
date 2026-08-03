@@ -256,10 +256,9 @@ async function pickResource(_ctx: PluginUiRequestContext, payload: unknown): Pro
       resources: folder ? [{ kind: 'local-file', path: folder, name: pathName(folder), isDirectory: true }] : [],
     };
   }
-  const files = await requirePlatformMethod('selectFiles')();
-  const selected = multiple ? files : files.slice(0, 1);
+  const files = await requirePlatformMethod('selectFiles')({ multiple });
   return {
-    resources: selected.map(filePath => ({
+    resources: files.map(filePath => ({
       kind: 'local-file',
       path: filePath,
       name: pathName(filePath),

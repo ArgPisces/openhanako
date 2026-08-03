@@ -3,20 +3,32 @@ import fs from "fs";
 import path from "path";
 
 const root = process.cwd();
+const mainPath = path.join(root, "desktop", "main.cjs");
+const preloadPath = path.join(root, "desktop", "preload.cjs");
 
-function selectFilesDialogProperties(source) {
-  const match = source.match(/wrapIpcBestEffortHandler\("select-files"[\s\S]*?properties:\s*\[([^\]]+)\]/);
-  if (!match) throw new Error("select-files dialog properties not found");
-  return match[1];
+function selectFilesHandler(source) {
+  const match = source.match(/wrapIpcBestEffortHandler\("select-files"[\s\S]*?\n\}\);/);
+  if (!match) throw new Error("select-files handler not found");
+  return match[0];
 }
 
 describe("select-files dialog contract", () => {
-  it("opens a file picker without directory mode for Windows compatibility", () => {
-    const mainSource = fs.readFileSync(path.join(root, "desktop", "main.cjs"), "utf-8");
-    const properties = selectFilesDialogProperties(mainSource);
+  it("forwards selection options across the preload IPC bridge", () => {
+    const preloadSource = fs.readFileSync(preloadPath, "utf-8");
 
-    expect(properties).toContain('"openFile"');
-    expect(properties).toContain('"multiSelections"');
-    expect(properties).not.toContain('"openDirectory"');
+    expect(preloadSource).toContain(
+      'selectFiles: (options) => ipcRenderer.invoke("select-files", options)',
+    );
+  });
+
+  it("keeps omitted options multi-select while explicit false opens a native single-file picker", () => {
+    const mainSource = fs.readFileSync(mainPath, "utf-8");
+    const handler = selectFilesHandler(mainSource);
+
+    expect(handler).toContain("const allowMultiple = options?.multiple !== false;");
+    expect(handler).toContain(
+      'properties: allowMultiple ? ["openFile", "multiSelections"] : ["openFile"]',
+    );
+    expect(handler).not.toContain('"openDirectory"');
   });
 });

@@ -5465,12 +5465,13 @@ wrapIpcBestEffortHandler("select-folder", async (event) => {
   return result.filePaths[0];
 });
 
-// 选择附件文件（多选文件；Windows/Linux 不支持同一 dialog 同时选文件和文件夹）
-wrapIpcBestEffortHandler("select-files", async (event) => {
+// 选择附件文件（默认多选；Windows/Linux 不支持同一 dialog 同时选文件和文件夹）
+wrapIpcBestEffortHandler("select-files", async (event, options) => {
   const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
   if (!win) return [];
+  const allowMultiple = options?.multiple !== false;
   const result = await dialog.showOpenDialog(win, {
-    properties: ["openFile", "multiSelections"],
+    properties: allowMultiple ? ["openFile", "multiSelections"] : ["openFile"],
     title: mt("dialog.selectFiles", null, "Select Files"),
   });
   if (result.canceled || !result.filePaths.length) return [];
