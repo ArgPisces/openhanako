@@ -37,6 +37,7 @@ const EXCLUSIVE_CREDENTIAL_WRITERS = [
   "core/local-user-account.ts",
   "core/web-session-store.ts",
   "core/migrate-providers.ts",
+  "core/plugin-config.ts",
   "lib/memory/config-loader.ts",
   "shared/migrate-config-scope.ts",
 ];

@@ -20,6 +20,7 @@ import { migrateToProvidersYaml } from "./migrate-providers.ts";
 import { migrateProviderMediaConfig } from "./provider-media-config.ts";
 import { runMigrations } from "./migrations.ts";
 import { healCredentialFileModes } from "./credential-file-healer.ts";
+import { PLUGIN_DATA_DIRNAME } from "./plugin-config.ts";
 import { pruneStaleCredentialBackups } from "./credential-backup-retention.ts";
 import { createServerRuntimeContext } from "./server-runtime-context.ts";
 import { StudioCronService } from "./studio-cron-service.ts";
@@ -421,7 +422,7 @@ export class HanaEngine {
     // The data directory keeps the historical `plugin-data/mcp` location: it is
     // where existing installs already store their connector config.
     this._mcp = new McpManager({
-      dataDir: path.join(this.hanakoHome, "plugin-data", "mcp"),
+      dataDir: path.join(this.hanakoHome, PLUGIN_DATA_DIRNAME, "mcp"),
       log: mcpLog,
     }, {
       // A connector tool may come back asking the user a question. The store is
@@ -2684,7 +2685,7 @@ export class HanaEngine {
     const devPluginsDir = path.join(this.hanakoHome, "plugins-dev");
     const pluginDevRunsDir = path.join(this.hanakoHome, "plugin-dev-runs");
     const pluginDevSourcesDir = path.join(this.hanakoHome, "plugin-dev-sources");
-    const pluginDataDir = path.join(this.hanakoHome, "plugin-data");
+    const pluginDataDir = path.join(this.hanakoHome, PLUGIN_DATA_DIRNAME);
     fs.mkdirSync(pluginDevSourcesDir, { recursive: true });
 
     // Read app version for plugin compatibility check

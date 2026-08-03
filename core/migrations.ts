@@ -2508,7 +2508,7 @@ function removeCodexImageSizeDefaultFromPluginConfig(hanakoHome, log) {
   const changed = removeCodexImageSizeDefault(config?.global?.providerDefaults);
   if (!changed) return false;
 
-  atomicWriteSync(configPath, JSON.stringify(config, null, 2) + "\n");
+  writeSecretFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
   return true;
 }
 
@@ -2670,7 +2670,7 @@ function migrateGeminiPluginConfig(hanakoHome, log) {
   }
   const changed = migrateGeminiImageConfigRecord(config?.global);
   if (!changed) return false;
-  atomicWriteSync(configPath, JSON.stringify(config, null, 2) + "\n");
+  writeSecretFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
   return true;
 }
 

@@ -2888,7 +2888,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 356,
+      "line": 357,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.channelsDir, { recursive: true })",
       "reason": "Creates the channel root.",
@@ -2897,7 +2897,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 402,
+      "line": 403,
       "kind": "persistent-store-constructor",
       "excerpt": "new PreferencesManager({ userDir: this.userDir, agentsDir: this.agentsDir })",
       "reason": "Constructs the preferences owner.",
@@ -2906,7 +2906,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 403,
+      "line": 404,
       "kind": "persistent-store-constructor",
       "excerpt": "new InputDraftsStore({ hanakoHome: this.hanakoHome })",
       "reason": "Constructs draft/project stores.",
@@ -2915,7 +2915,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 432,
+      "line": 433,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionProjectCatalogStore({ userDir: this.userDir })",
       "reason": "Constructs draft/project stores.",
@@ -2924,7 +2924,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 666,
+      "line": 667,
       "kind": "persistent-store-constructor",
       "excerpt": "new TaskRegistry({ persistencePath: path.join(this.hanakoHome, \".ephemeral\", \"plugin-tasks.json\"), getSessionIdForPath: (sessionPath) => this.getSessionIdForPath(sessionPath), })",
       "reason": "Constructs the plugin task registry.",
@@ -2933,7 +2933,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1429,
+      "line": 1430,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2942,7 +2942,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 1450,
+      "line": 1451,
       "kind": "persistent-store-constructor",
       "excerpt": "new SessionManifestStore({ dbPath })",
       "reason": "Constructs the manifest store during engine construction.",
@@ -2951,7 +2951,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2448,
+      "line": 2449,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(skillsDir, { recursive: true })",
       "reason": "Creates the user skill root.",
@@ -2960,7 +2960,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2630,
+      "line": 2631,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
@@ -2969,7 +2969,7 @@
     },
     {
       "sourceFile": "core/engine.ts",
-      "line": 2688,
+      "line": 2689,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(pluginDevSourcesDir, { recursive: true })",
       "reason": "Creates the plugin development source root.",
@@ -3735,8 +3735,8 @@
     {
       "sourceFile": "core/migrations.ts",
       "line": 2511,
-      "kind": "atomic-write",
-      "excerpt": "atomicWriteSync(configPath, JSON.stringify(config, null, 2) + \"\\n\")",
+      "kind": "secret-write",
+      "excerpt": "writeSecretFileSync(configPath, JSON.stringify(config, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "storeId": null,
       "exemptionId": "cross-store-legacy-migrations"
@@ -3753,8 +3753,8 @@
     {
       "sourceFile": "core/migrations.ts",
       "line": 2673,
-      "kind": "atomic-write",
-      "excerpt": "atomicWriteSync(configPath, JSON.stringify(config, null, 2) + \"\\n\")",
+      "kind": "secret-write",
+      "excerpt": "writeSecretFileSync(configPath, JSON.stringify(config, null, 2) + \"\\n\")",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "storeId": null,
       "exemptionId": "cross-store-legacy-migrations"
@@ -4247,19 +4247,19 @@
     },
     {
       "sourceFile": "core/plugin-config.ts",
-      "line": 53,
+      "line": 61,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(dataDir, { recursive: true })",
-      "reason": "Writes data within the active pluginId-scoped data directory.",
+      "reason": "Writes the plugin configuration file for the active pluginId.",
       "storeId": "plugin-runtime-data",
       "exemptionId": null
     },
     {
       "sourceFile": "core/plugin-config.ts",
-      "line": 60,
-      "kind": "atomic-write",
-      "excerpt": "atomicWriteSync(configPath, `${JSON.stringify(next, null, 2)}\\n`)",
-      "reason": "Writes data within the active pluginId-scoped data directory.",
+      "line": 70,
+      "kind": "secret-write",
+      "excerpt": "writeSecretFileSync(configPath, `${JSON.stringify(next, null, 2)}\\n`)",
+      "reason": "Writes the plugin configuration file for the active pluginId.",
       "storeId": "plugin-runtime-data",
       "exemptionId": null
     },

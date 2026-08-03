@@ -914,15 +914,25 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
       reason: "Dynamic plugin schemas must be registered by pluginId and migrationVersion before a coordinated data migration consumes them.",
       expiresOn: "2026-12-31",
     },
-    siteRules: rules([
-      "core/plugin-config.ts",
-      "core/media/download.ts",
-      "core/media/local-cli-wrapper.ts",
-      "core/media/task-store.ts",
-      "core/media/universal-media-manager.ts",
-      "core/media-adapters/agnes.ts",
-      "plugins/jimeng-cli/adapters/dreamina.ts",
-    ], "Writes data within the active pluginId-scoped data directory."),
+    siteRules: [
+      // Pinned to the owner-only kind on purpose: plugin configuration holds
+      // whatever credentials a plugin asks its user for, so a write here that
+      // reverts to the generic writer must fail the census rather than pass as
+      // ordinary plugin data.
+      ...rules(
+        ["core/plugin-config.ts"],
+        "Writes the plugin configuration file for the active pluginId.",
+        ["secret-write", "mkdir"],
+      ),
+      ...rules([
+        "core/media/download.ts",
+        "core/media/local-cli-wrapper.ts",
+        "core/media/task-store.ts",
+        "core/media/universal-media-manager.ts",
+        "core/media-adapters/agnes.ts",
+        "plugins/jimeng-cli/adapters/dreamina.ts",
+      ], "Writes data within the active pluginId-scoped data directory."),
+    ],
   }),
   defineStore({
     id: "plugin-development-state",

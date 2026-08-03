@@ -668,7 +668,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:282255dd0c244fff69763c091c0d31ae10fb1eda214d4027947191ceb731e9db",
+  "payloadFingerprint": "sha256:d3dcb5a84de4a9eec5fd8aa0894591e2e2647cf13cfe5b3c255926a176f3d3a6",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3034,8 +3034,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "The owner-only write primitive hardens its temporary-file handling and the persistence scanner recognizes synchronous descriptor-based writes; no store schema or serialized layout changes.",
-    "payloadFingerprint": "sha256:282255dd0c244fff69763c091c0d31ae10fb1eda214d4027947191ceb731e9db"
+    "compatibilityReason": "Plugin configuration files are written through the owner-only primitive and verified at startup; serialized structure and schema are unchanged.",
+    "payloadFingerprint": "sha256:d3dcb5a84de4a9eec5fd8aa0894591e2e2647cf13cfe5b3c255926a176f3d3a6"
   },
   "schemas": [
     {
@@ -4021,7 +4021,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 356,
+      "line": 357,
       "reason": "Creates the channel root.",
       "sourceFile": "core/engine.ts",
       "storeId": "channels"
@@ -4029,7 +4029,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 402,
+      "line": 403,
       "reason": "Constructs the preferences owner.",
       "sourceFile": "core/engine.ts",
       "storeId": "user-preferences"
@@ -4037,7 +4037,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 403,
+      "line": 404,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -4045,7 +4045,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 432,
+      "line": 433,
       "reason": "Constructs draft/project stores.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-drafts-and-projects"
@@ -4053,7 +4053,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 666,
+      "line": 667,
       "reason": "Constructs the plugin task registry.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-task-registry"
@@ -4061,7 +4061,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1429,
+      "line": 1430,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -4069,7 +4069,7 @@
     {
       "exemptionId": null,
       "kind": "persistent-store-constructor",
-      "line": 1450,
+      "line": 1451,
       "reason": "Constructs the manifest store during engine construction.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-manifest-sqlite"
@@ -4077,7 +4077,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2448,
+      "line": 2449,
       "reason": "Creates the user skill root.",
       "sourceFile": "core/engine.ts",
       "storeId": "skill-state"
@@ -4085,7 +4085,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 2630,
+      "line": 2631,
       "reason": "Deletes an expired legacy ephemeral session JSONL locator.",
       "sourceFile": "core/engine.ts",
       "storeId": "session-jsonl"
@@ -4093,7 +4093,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2688,
+      "line": 2689,
       "reason": "Creates the plugin development source root.",
       "sourceFile": "core/engine.ts",
       "storeId": "plugin-development-state"
@@ -4772,7 +4772,7 @@
     },
     {
       "exemptionId": "cross-store-legacy-migrations",
-      "kind": "atomic-write",
+      "kind": "secret-write",
       "line": 2511,
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "sourceFile": "core/migrations.ts",
@@ -4788,7 +4788,7 @@
     },
     {
       "exemptionId": "cross-store-legacy-migrations",
-      "kind": "atomic-write",
+      "kind": "secret-write",
       "line": 2673,
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "sourceFile": "core/migrations.ts",
@@ -5229,16 +5229,16 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 53,
-      "reason": "Writes data within the active pluginId-scoped data directory.",
+      "line": 61,
+      "reason": "Writes the plugin configuration file for the active pluginId.",
       "sourceFile": "core/plugin-config.ts",
       "storeId": "plugin-runtime-data"
     },
     {
       "exemptionId": null,
-      "kind": "atomic-write",
-      "line": 60,
-      "reason": "Writes data within the active pluginId-scoped data directory.",
+      "kind": "secret-write",
+      "line": 70,
+      "reason": "Writes the plugin configuration file for the active pluginId.",
       "sourceFile": "core/plugin-config.ts",
       "storeId": "plugin-runtime-data"
     },

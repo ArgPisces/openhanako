@@ -25,6 +25,7 @@ import { errorBus } from "../shared/error-bus.ts";
 import { CONFIG_SCOPE_BACKUP_SUFFIX } from "../shared/migrate-config-scope.ts";
 import { ensureSecretDirModeSync, ensureSecretFileModeSync } from "../shared/secret-fs.ts";
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "./local-provider-plugin-store.ts";
+import { PLUGIN_CONFIG_FILENAME, PLUGIN_DATA_DIRNAME } from "./plugin-config.ts";
 
 /** Files directly under the data directory that hold credentials. */
 export const TOP_LEVEL_SECRET_FILES = [
@@ -122,6 +123,15 @@ export function healCredentialFileModes({ hanakoHome, log = () => {} }: HealOpti
 
   for (const tree of SECRET_TREES) {
     healTree(path.join(hanakoHome, tree), 0, healDir, healFile);
+  }
+
+  // Plugin configuration can hold connector and service credentials. Only the
+  // configuration file is corrected: the rest of a plugin's data directory
+  // holds downloads, job state and generated output owned by other stores, and
+  // flattening those would both overstep this pass and strip modes those files
+  // legitimately carry. Names come from the module that writes them.
+  for (const pluginDir of subdirectories(path.join(hanakoHome, PLUGIN_DATA_DIRNAME))) {
+    healFile(path.join(pluginDir, PLUGIN_CONFIG_FILENAME));
   }
 
   // Migration checkpoints copy the agents directory wholesale, so the same

@@ -608,7 +608,12 @@ describe("migration #43: Codex image generation defaults follow mode schema", ()
     });
     expect(nextPrefs.imageGeneration.providerDefaults.openai).toEqual({ size: "1024x1024" });
 
-    const pluginConfig = readJson(path.join(tmpDir, "plugin-data", "image-gen", "config.json"));
+    const pluginConfigPath = path.join(tmpDir, "plugin-data", "image-gen", "config.json");
+    if (process.platform !== "win32") {
+      // A migration must leave the file under the same contract the store writes it with.
+      expect(fs.statSync(pluginConfigPath).mode & 0o777).toBe(0o600);
+    }
+    const pluginConfig = readJson(pluginConfigPath);
     expect(pluginConfig.global.providerDefaults["openai-codex-oauth"]).toEqual({
       models: {
         "gpt-image-2": {
@@ -1883,7 +1888,11 @@ describe("migration #50: Gemini image preview IDs converge to stable IDs", () =>
       "gemini-3.1-flash-image-preview",
     );
 
-    const pluginConfig = readJson(path.join(tmpDir, "plugin-data", "image-gen", "config.json"));
+    const pluginConfigPath = path.join(tmpDir, "plugin-data", "image-gen", "config.json");
+    if (process.platform !== "win32") {
+      expect(fs.statSync(pluginConfigPath).mode & 0o777).toBe(0o600);
+    }
+    const pluginConfig = readJson(pluginConfigPath);
     expect(pluginConfig.global.defaultImageModel.id).toBe("gemini-3-pro-image");
     expect(pluginConfig.global.providerDefaults.gemini.models).toEqual({
       "gemini-3-pro-image": { resolution: "4K" },

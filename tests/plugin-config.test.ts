@@ -8,6 +8,32 @@ import {
   normalizePluginConfigSchema,
 } from "../core/plugin-config.ts";
 
+describe.skipIf(process.platform === "win32")("plugin config storage", () => {
+  // Plugin configuration can hold connector and third-party service
+  // credentials, so it is written under the same contract as the other
+  // credential stores rather than with the generic writer.
+  it("keeps the configuration file readable only by its owner", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-plugin-config-"));
+    try {
+      const schema = normalizePluginConfigSchema("demo", {
+        properties: { token: { type: "string", sensitive: true } },
+      });
+      const store = createPluginConfigStore({ dataDir: dir, schema });
+      const configPath = path.join(dir, "config.json");
+
+      store.set("token", "abc");
+      expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+
+      // A file left open by an older version is tightened by the next write.
+      fs.chmodSync(configPath, 0o644);
+      store.set("token", "def");
+      expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("plugin config schema", () => {
   it("normalizes fields and materializes global defaults", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-plugin-config-"));
