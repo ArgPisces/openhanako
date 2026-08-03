@@ -27,6 +27,7 @@ import { ensureSecretDirModeSync, ensureSecretFileModeSync, SECRET_TMP_SUFFIX } 
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "./local-provider-plugin-store.ts";
 import { MIGRATION_BACKUPS_DIR } from "./migration-backups.ts";
 import { PLUGIN_CONFIG_FILENAME, PLUGIN_DATA_DIRNAME } from "./plugin-config.ts";
+import { SECURITY_DIR } from "./security-dir.ts";
 
 /** Files directly under the data directory that hold credentials. */
 export const TOP_LEVEL_SECRET_FILES = [
@@ -45,14 +46,18 @@ export const TOP_LEVEL_SECRET_FILES = [
 /**
  * Directory trees whose contents are credential material throughout.
  * The local provider plugin tree holds each locally defined provider, whose
- * definition carries that provider's key.
+ * definition carries that provider's key. The security tree holds the signing
+ * keys behind resource tickets and plugin sessions, plus the grant and lease
+ * records those keys authorise; they are written owner-only, but nothing else
+ * ever rewrites a key file, so permissions a backup restore or a copied data
+ * directory reintroduces would stay loose for good.
  *
- * Both directory names are taken from the modules that own them rather than
+ * Every directory name is taken from the module that owns it rather than
  * repeated here. Spelling one out once cost real coverage: this list said
  * "providers" while the store wrote to "provider-plugins", so the healer walked
  * a path that never existed and silently corrected nothing.
  */
-export const SECRET_TREES = [MIGRATION_BACKUPS_DIR, LOCAL_PROVIDER_PLUGINS_DIR];
+export const SECRET_TREES = [MIGRATION_BACKUPS_DIR, LOCAL_PROVIDER_PLUGINS_DIR, SECURITY_DIR];
 
 const AGENT_CONFIG_FILE = "config.yaml";
 /**

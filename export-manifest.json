@@ -135,6 +135,7 @@
     "core/resource-service.ts",
     "core/resource-ticket-service.ts",
     "core/security-audit-log.ts",
+    "core/security-dir.ts",
     "core/security-principal.ts",
     "core/server-auth.ts",
     "core/server-identity.ts",

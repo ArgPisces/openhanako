@@ -6,6 +6,7 @@ import path from "path";
 import { healCredentialFileModes } from "../core/credential-file-healer.ts";
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "../core/local-provider-plugin-store.ts";
 import { PLUGIN_CONFIG_FILENAME, PLUGIN_DATA_DIRNAME } from "../core/plugin-config.ts";
+import { SECURITY_DIR } from "../core/security-dir.ts";
 import { SECRET_TMP_SUFFIX } from "../shared/secret-fs.ts";
 
 const POSIX = process.platform !== "win32";
@@ -155,6 +156,28 @@ describe.skipIf(!POSIX)("healCredentialFileModes", () => {
     expect(modeOf(providerDir)).toBe(0o700);
     expect(modeOf(path.join(root, keyFile))).toBe(0o600);
     expect(result.healed).toContain(keyFile);
+  });
+
+  // The signing keys here are written owner-only, but a restored backup or a
+  // copied data directory reintroduces the permissions the copy was made with,
+  // and nothing rewrites a key file afterwards. Located through the constant the
+  // services use, so a rename cannot leave this walking a path that never exists.
+  it("tightens the security directory that holds signing keys and grant records", () => {
+    const root = makeHome();
+    const securityRoot = path.join(root, SECURITY_DIR);
+    const keyFile = path.join(SECURITY_DIR, "resource-ticket-key");
+    const grantsFile = path.join(SECURITY_DIR, "grants.json");
+    writeOpen(keyFile, "key-material\n");
+    writeOpen(grantsFile, "{}\n");
+    fs.chmodSync(securityRoot, 0o755);
+
+    const result = healCredentialFileModes({ hanakoHome: root });
+
+    expect(modeOf(securityRoot)).toBe(0o700);
+    expect(modeOf(path.join(root, keyFile))).toBe(0o600);
+    expect(modeOf(path.join(root, grantsFile))).toBe(0o600);
+    expect(result.healed).toContain(keyFile);
+    expect(result.healed).toContain(grantsFile);
   });
 
   // Only the configuration file is corrected. The rest of a plugin's data

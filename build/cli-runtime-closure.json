@@ -2359,6 +2359,53 @@
       "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement); server/http/security-audit.ts (import-statement)."
     },
     {
+      "path": "core/security-dir.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/execution-lease-registry.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/grant-registry.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/server-identity.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/credential-file-healer.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/plugin-iframe-ticket-service.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/plugin-asset-session-service.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/plugin-surface-session-service.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/resource-ticket-service.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/execution-lease-registry.ts (import-statement); core/grant-registry.ts (import-statement); core/server-identity.ts (import-statement); +5 more importer(s)."
+    },
+    {
       "path": "core/security-principal.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112552,9 +112599,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9628,
+    "totalFiles": 9629,
     "byInputType": {
-      "source-graph": 650,
+      "source-graph": 651,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

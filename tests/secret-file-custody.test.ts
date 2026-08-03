@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 import { discoverSites } from "../scripts/scan-persistent-stores.mjs";
 import { SECRET_TREES, TOP_LEVEL_SECRET_FILES } from "../core/credential-file-healer.ts";
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "../core/local-provider-plugin-store.ts";
+import { SECURITY_DIR } from "../core/security-dir.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -100,6 +101,12 @@ describe("startup healer coverage", () => {
 
   it("covers the migration backups that copy credentials aside", () => {
     expect(SECRET_TREES).toContain("migration-backups");
+  });
+
+  // Same reasoning as above: taken from the module the key services import, not
+  // spelled again here.
+  it("covers the security tree that holds signing keys and grant records", () => {
+    expect(SECRET_TREES).toContain(SECURITY_DIR);
   });
 
   it.each([

@@ -4103,7 +4103,7 @@
     },
     {
       "sourceFile": "core/plugin-asset-session-service.ts",
-      "line": 159,
+      "line": 160,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4112,7 +4112,7 @@
     },
     {
       "sourceFile": "core/plugin-asset-session-service.ts",
-      "line": 161,
+      "line": 162,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, `${key}\\n`, { mode: 0o600 })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4211,7 +4211,7 @@
     },
     {
       "sourceFile": "core/plugin-iframe-ticket-service.ts",
-      "line": 132,
+      "line": 133,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4220,7 +4220,7 @@
     },
     {
       "sourceFile": "core/plugin-iframe-ticket-service.ts",
-      "line": 134,
+      "line": 135,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, `${key}\\n`, { mode: 0o600 })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4229,7 +4229,7 @@
     },
     {
       "sourceFile": "core/plugin-surface-session-service.ts",
-      "line": 137,
+      "line": 138,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4238,7 +4238,7 @@
     },
     {
       "sourceFile": "core/plugin-surface-session-service.ts",
-      "line": 139,
+      "line": 140,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, `${key}\\n`, { mode: 0o600 })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4346,7 +4346,7 @@
     },
     {
       "sourceFile": "core/resource-ticket-service.ts",
-      "line": 127,
+      "line": 128,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4355,7 +4355,7 @@
     },
     {
       "sourceFile": "core/resource-ticket-service.ts",
-      "line": 129,
+      "line": 130,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, `${key}\\n`, { mode: 0o600 })",
       "reason": "Creates one service-specific signing key with mode 0600.",
@@ -4382,7 +4382,7 @@
     },
     {
       "sourceFile": "core/server-identity.ts",
-      "line": 83,
+      "line": 88,
       "kind": "atomic-write",
       "excerpt": "writeJsonAtomic(serverNodePath, serverNode)",
       "reason": "Seeds the server-node identity registry.",
@@ -4391,7 +4391,7 @@
     },
     {
       "sourceFile": "core/server-identity.ts",
-      "line": 84,
+      "line": 89,
       "kind": "atomic-write",
       "excerpt": "writeJsonAtomic(usersPath, users)",
       "reason": "Seeds user or studio identity registries.",
@@ -4400,7 +4400,7 @@
     },
     {
       "sourceFile": "core/server-identity.ts",
-      "line": 85,
+      "line": 90,
       "kind": "atomic-write",
       "excerpt": "writeJsonAtomic(usersPath, users)",
       "reason": "Seeds user or studio identity registries.",
@@ -4409,7 +4409,7 @@
     },
     {
       "sourceFile": "core/server-identity.ts",
-      "line": 86,
+      "line": 91,
       "kind": "atomic-write",
       "excerpt": "writeJsonAtomic(studiosPath, studios)",
       "reason": "Seeds user or studio identity registries.",
@@ -4418,7 +4418,7 @@
     },
     {
       "sourceFile": "core/server-identity.ts",
-      "line": 87,
+      "line": 92,
       "kind": "atomic-write",
       "excerpt": "writeJsonAtomic(studiosPath, studios)",
       "reason": "Seeds user or studio identity registries.",
@@ -4427,7 +4427,7 @@
     },
     {
       "sourceFile": "core/server-identity.ts",
-      "line": 183,
+      "line": 188,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
       "reason": "The file-local atomic helper receives paths only from the separately registered server-node and user/studio registry call sites.",
@@ -4436,7 +4436,7 @@
     },
     {
       "sourceFile": "core/server-identity.ts",
-      "line": 184,
+      "line": 189,
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, JSON.stringify(data, null, 2) + \"\\n\")",
       "reason": "The file-local atomic helper receives paths only from the separately registered server-node and user/studio registry call sites.",

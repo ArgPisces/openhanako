@@ -668,7 +668,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:b748a49b09b18bb53dafdce554e98ca3b6f00d517a66a6e6d7e3d90f998cb31c",
+  "payloadFingerprint": "sha256:44a6af00b29a57961cd7ce457c1e0c2864190583690847b8681a608b8a4261bb",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3034,8 +3034,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Credential-bearing migration and first-run rewrites moved from the generic temporary-file-and-rename sequence to the owner-only writer; stored bytes, serialized structure, and schema are unchanged.",
-    "payloadFingerprint": "sha256:b748a49b09b18bb53dafdce554e98ca3b6f00d517a66a6e6d7e3d90f998cb31c"
+    "compatibilityReason": "The security key directory is now named in one module that every service and the startup custody pass import, and that pass walks the tree; stored bytes, serialized structure, and schema are unchanged.",
+    "payloadFingerprint": "sha256:44a6af00b29a57961cd7ce457c1e0c2864190583690847b8681a608b8a4261bb"
   },
   "schemas": [
     {
@@ -3239,7 +3239,7 @@
       "contract": "execution lease registry validator and atomic serializer",
       "kind": "runtime-contract",
       "module": "core/execution-lease-registry.ts",
-      "sourceHash": "sha256:5b1db3e18466a103d4c011b4dfecb0f7d9572466ffa27f0122826c080814c98a",
+      "sourceHash": "sha256:bb58ec4c6dca1a129cc16e48028a98f54ee52a7b5ad7deeb18d1c4905f2c9f90",
       "storeId": "execution-leases"
     },
     {
@@ -3357,14 +3357,14 @@
       "contract": "grant registry validator, quarantine, and atomic serializer",
       "kind": "runtime-contract",
       "module": "core/grant-registry.ts",
-      "sourceHash": "sha256:1d21274c35fdb1bd38efbd61d45b20cac8e0c0f33cdce46ee24a99889eca50a4",
+      "sourceHash": "sha256:011f04739064177a52e9543f21126a3b1362da4ae6f85b3e3f06d2c3c8135bbc",
       "storeId": "security-grants"
     },
     {
       "contract": "independent 0600 random key-file protocols for resource and plugin ticket services",
       "kind": "directory-contract",
       "module": "core/resource-ticket-service.ts",
-      "sourceHash": "sha256:0fa2e3960df085eb03ba1d495d7eb688982dafddfc9fe406e1f3a15e63fd94c4",
+      "sourceHash": "sha256:fe215ca46533353b95e17c90ed734fd11cff1f152d2a1432164e505d39026b9e",
       "storeId": "security-key-material"
     },
     {
@@ -3378,7 +3378,7 @@
       "contract": "server-node identity parser and ensureLocalIdentityRegistries seed",
       "kind": "runtime-contract",
       "module": "core/server-identity.ts",
-      "sourceHash": "sha256:6b7472b4c219e3a5ca6650458c470981e85d9e61ff9bb85237a270f54100f722",
+      "sourceHash": "sha256:6f8cb08f4a5c8f938cb6e0a6d4da41e9bdaa1e35b4a665fd310fbc08f5bd45e2",
       "storeId": "server-node-identity"
     },
     {
@@ -3568,7 +3568,7 @@
       "contract": "user/studio registry readers plus legacy spaces.json compatibility projection",
       "kind": "runtime-contract",
       "module": "core/server-identity.ts",
-      "sourceHash": "sha256:6b7472b4c219e3a5ca6650458c470981e85d9e61ff9bb85237a270f54100f722",
+      "sourceHash": "sha256:6f8cb08f4a5c8f938cb6e0a6d4da41e9bdaa1e35b4a665fd310fbc08f5bd45e2",
       "storeId": "user-studio-registries"
     },
     {
@@ -5101,7 +5101,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 159,
+      "line": 160,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/plugin-asset-session-service.ts",
       "storeId": "security-key-material"
@@ -5109,7 +5109,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 161,
+      "line": 162,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/plugin-asset-session-service.ts",
       "storeId": "security-key-material"
@@ -5197,7 +5197,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 132,
+      "line": 133,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/plugin-iframe-ticket-service.ts",
       "storeId": "security-key-material"
@@ -5205,7 +5205,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 134,
+      "line": 135,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/plugin-iframe-ticket-service.ts",
       "storeId": "security-key-material"
@@ -5213,7 +5213,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 137,
+      "line": 138,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/plugin-surface-session-service.ts",
       "storeId": "security-key-material"
@@ -5221,7 +5221,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 139,
+      "line": 140,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/plugin-surface-session-service.ts",
       "storeId": "security-key-material"
@@ -5317,7 +5317,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 127,
+      "line": 128,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/resource-ticket-service.ts",
       "storeId": "security-key-material"
@@ -5325,7 +5325,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 129,
+      "line": 130,
       "reason": "Creates one service-specific signing key with mode 0600.",
       "sourceFile": "core/resource-ticket-service.ts",
       "storeId": "security-key-material"
@@ -5349,7 +5349,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 83,
+      "line": 88,
       "reason": "Seeds the server-node identity registry.",
       "sourceFile": "core/server-identity.ts",
       "storeId": "server-node-identity"
@@ -5357,7 +5357,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 84,
+      "line": 89,
       "reason": "Seeds user or studio identity registries.",
       "sourceFile": "core/server-identity.ts",
       "storeId": "user-studio-registries"
@@ -5365,7 +5365,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 85,
+      "line": 90,
       "reason": "Seeds user or studio identity registries.",
       "sourceFile": "core/server-identity.ts",
       "storeId": "user-studio-registries"
@@ -5373,7 +5373,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 86,
+      "line": 91,
       "reason": "Seeds user or studio identity registries.",
       "sourceFile": "core/server-identity.ts",
       "storeId": "user-studio-registries"
@@ -5381,7 +5381,7 @@
     {
       "exemptionId": null,
       "kind": "atomic-write",
-      "line": 87,
+      "line": 92,
       "reason": "Seeds user or studio identity registries.",
       "sourceFile": "core/server-identity.ts",
       "storeId": "user-studio-registries"
@@ -5389,7 +5389,7 @@
     {
       "exemptionId": "server-identity-atomic-helper",
       "kind": "mkdir",
-      "line": 183,
+      "line": 188,
       "reason": "The file-local atomic helper receives paths only from the separately registered server-node and user/studio registry call sites.",
       "sourceFile": "core/server-identity.ts",
       "storeId": null
@@ -5397,7 +5397,7 @@
     {
       "exemptionId": "server-identity-atomic-helper",
       "kind": "atomic-write",
-      "line": 184,
+      "line": 189,
       "reason": "The file-local atomic helper receives paths only from the separately registered server-node and user/studio registry call sites.",
       "sourceFile": "core/server-identity.ts",
       "storeId": null
