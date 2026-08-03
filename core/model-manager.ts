@@ -571,27 +571,35 @@ export class ModelManager {
     if (!provider) {
       throw new Error(t("error.modelNoProvider", { role: "resolve", model: String(entry?.id || "") }));
     }
-    const effectiveApi = entry.api || creds.api;
-    if (!effectiveApi) {
+    const declaredCredentialSource = creds?.credential_source || creds?.credentialSource;
+    const inferredCredentialSource = declaredCredentialSource
+      || this.providerRegistry?.resolveChatProvider?.(provider)?.credentialSource
+      || (this.providerRegistry?.getAuthType?.(provider) === "oauth" ? "auth-storage" : "");
+    const execution = composeResolvedModelExecution({
+      model: entry,
+      credential: inferredCredentialSource
+        ? { ...creds, credential_source: inferredCredentialSource }
+        : creds,
+    });
+    if (!execution.api) {
       throw new Error(t("error.providerMissingApi", { provider }));
     }
-    const allowsMissingApiKey = this.providerRegistry?.allowsMissingApiKey?.(provider, creds.base_url)
-      ?? isLocalBaseUrl(creds.base_url);
-    const headers = (creds as any).headers || {};
-    const hasHeaders = Object.keys(headers).length > 0;
-    if (!creds.base_url || (!creds.api_key && !hasHeaders && !allowsMissingApiKey)) {
+    const allowsMissingApiKey = this.providerRegistry?.allowsMissingApiKey?.(provider, execution.baseUrl)
+      ?? isLocalBaseUrl(execution.baseUrl);
+    const credentialHeaders = creds?.headers && typeof creds.headers === "object" ? creds.headers : {};
+    const hasCredentialHeaders = Object.keys(credentialHeaders).length > 0;
+    if (!execution.baseUrl || (!execution.apiKey && !hasCredentialHeaders && !allowsMissingApiKey)) {
       throw new Error(t("error.providerMissingCreds", { provider }));
     }
-    const execution = composeResolvedModelExecution({ model: entry, credential: creds });
     return {
       model: execution.model,
       provider,
-      api: effectiveApi,
-      api_key: creds.api_key,
-      base_url: creds.base_url,
+      api: execution.api,
+      api_key: execution.apiKey,
+      base_url: execution.baseUrl,
       headers: execution.headers,
-      ...(creds.credential_source ? { credential_source: creds.credential_source } : {}),
-      ...(creds.accountId ? { accountId: creds.accountId } : {}),
+      ...(execution.credentialSource ? { credential_source: execution.credentialSource } : {}),
+      ...(execution.accountId ? { accountId: execution.accountId } : {}),
     };
   }
 
@@ -625,8 +633,9 @@ export class ModelManager {
 
   /**
    * 请求时解析模型与凭证。模型身份始终先从 Hana availableModels 解析，
-   * OAuth 凭证随后通过 AuthStorage 在请求边界刷新；不会回退到 ProviderRegistry
-   * 缓存中的旧 access token。
+   * 其协议和规范化 endpoint 保持权威。凭证随后在请求边界刷新并只补充
+   * auth/account/headers；OAuth 的动态 resourceUrl 是 endpoint 唯一例外。
+   * 不会回退到 ProviderRegistry 缓存中的旧 access token。
    */
   async resolveModelWithCredentialsFresh(modelRef) {
     const entry = this.resolveExecutionModel(modelRef);

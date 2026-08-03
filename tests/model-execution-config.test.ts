@@ -7,6 +7,50 @@ import {
 } from "../core/model-execution-config.ts";
 
 describe("model execution config", () => {
+  it("keeps the selected model protocol and normalized endpoint ahead of catalog credential metadata", () => {
+    const resolved = composeResolvedModelExecution({
+      model: {
+        id: "k3",
+        provider: "kimi-coding",
+        api: "openai-completions",
+        baseUrl: "https://api.kimi.com/coding/v1",
+      },
+      credential: {
+        api: "anthropic-messages",
+        apiKey: "sk-kimi",
+        baseUrl: "https://api.kimi.com/coding/",
+        credentialSource: "provider-catalog",
+      },
+    });
+
+    expect(resolved).toMatchObject({
+      api: "openai-completions",
+      apiKey: "sk-kimi",
+      baseUrl: "https://api.kimi.com/coding/v1",
+      credentialSource: "provider-catalog",
+    });
+  });
+
+  it("preserves an AuthStorage resource URL as the dynamic execution endpoint", () => {
+    const resolved = composeResolvedModelExecution({
+      model: {
+        id: "oauth-model",
+        provider: "oauth-provider",
+        api: "openai-responses",
+        baseUrl: "https://static.example/v1",
+      },
+      credential: {
+        api: "openai-responses",
+        apiKey: "fresh-token",
+        baseUrl: "https://tenant-resource.example/v1",
+        credentialSource: "auth-storage",
+      },
+    });
+
+    expect(resolved.api).toBe("openai-responses");
+    expect(resolved.baseUrl).toBe("https://tenant-resource.example/v1");
+  });
+
   it("composes safe AuthStorage protocol and model headers into an explicit call config", () => {
     const resolved = composeResolvedModelExecution({
       model: {
@@ -61,6 +105,7 @@ describe("model execution config", () => {
       model: {
         id: "proxy-model",
         provider: "proxy",
+        baseUrl: "https://model.example/v1",
         headers: { Authorization: "Bearer stale", "X-Route": "stale" },
         accountId: "acct_stale",
       },
@@ -71,6 +116,7 @@ describe("model execution config", () => {
         credentialSource: "explicit-utility-override",
       },
     });
+    expect(override.baseUrl).toBe("https://override.example/v1");
     expect(override.headers).toEqual({});
     expect(override.model).not.toHaveProperty("headers");
     expect(override.model).not.toHaveProperty("accountId");

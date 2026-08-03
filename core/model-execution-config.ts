@@ -48,6 +48,16 @@ export function composeResolvedModelExecution({
   }
 
   const cleanModel = stripsModelCredentials ? modelWithoutCredentialMetadata(model) : model;
+  const modelBaseUrl = model?.baseUrl ?? model?.base_url ?? "";
+  // Selected models are normalized after provider catalog loading, so their
+  // protocol/base URL is the execution contract. Credential metadata only
+  // owns the endpoint when it is inherently dynamic (OAuth resourceUrl) or an
+  // explicit utility override chosen by the user.
+  const credentialOwnsEndpoint = cred.credentialSource === "auth-storage"
+    || cred.credentialSource === "explicit-utility-override";
+  const baseUrl = credentialOwnsEndpoint
+    ? (cred.baseUrl || modelBaseUrl)
+    : (modelBaseUrl || cred.baseUrl);
   const hasCredentialHeaders = Object.keys(cred.headers).length > 0;
   const canReuseModel = !stripsModelCredentials && !hasCredentialHeaders && !cred.accountId;
   let resolvedModel = canReuseModel
@@ -67,7 +77,7 @@ export function composeResolvedModelExecution({
     provider,
     api: model?.api || cred.api,
     apiKey: cred.apiKey,
-    baseUrl: cred.baseUrl,
+    baseUrl,
     headers,
     ...(cred.credentialSource ? { credentialSource: cred.credentialSource } : {}),
     ...(cred.accountId ? { accountId: cred.accountId } : {}),
