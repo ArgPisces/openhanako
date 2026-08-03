@@ -892,6 +892,83 @@ function recordGpuInfoUpdate({
   return true;
 }
 
+const GPU_MODE_DEPTH = {
+  [GPU_MODE_HARDWARE]: 0,
+  [GPU_MODE_GPU_SANDBOX_COMPAT]: 1,
+  [GPU_MODE_GPU_BACKEND_COMPAT]: 2,
+  [GPU_MODE_SOFTWARE_SAFE]: 3,
+  [GPU_MODE_DEEP_COMPAT]: 4,
+  [GPU_MODE_DIAGNOSTIC_FAILED]: 5,
+};
+
+function getGpuRecoveryEvidence(hanakoHome) {
+  if (!hanakoHome) throw new Error("getGpuRecoveryEvidence requires hanakoHome");
+  const state = readState(hanakoHome);
+  return {
+    autoGpuMode: state.autoGpuMode || null,
+    latestCrashAt: state.lastGpuCrash?.at || null,
+    startup: state.startup
+      ? {
+          status: state.startup.status || null,
+          startedAt: state.startup.startedAt || null,
+          readyAt: state.startup.readyAt || null,
+          policyMode: state.startup.policy?.mode || null,
+        }
+      : null,
+    incompleteClassification: classifyIncompleteStartup(state),
+  };
+}
+
+function clearAutoGpuModeForRecovery({ hanakoHome, reason, now } = {}) {
+  if (!hanakoHome) throw new Error("clearAutoGpuModeForRecovery requires hanakoHome");
+  const state = readState(hanakoHome);
+  const clearedMode = state.autoGpuMode?.mode || null;
+  const stalePendingIsGpuEvidence =
+    state.startup?.status === "pending" && classifyIncompleteStartup(state) === "gpu-recovery";
+  if (!clearedMode && !stalePendingIsGpuEvidence) {
+    return { cleared: false, clearedMode: null };
+  }
+  const next = { ...state };
+  delete next.autoGpuMode;
+  let clearedPendingPhase = null;
+  if (stalePendingIsGpuEvidence) {
+    clearedPendingPhase = state.startup.phase || null;
+    delete next.startup;
+  }
+  next.lastGpuRecovery = {
+    reason: reason || "unknown",
+    clearedMode,
+    clearedPendingPhase,
+    at: nowIso(now),
+  };
+  writeState(hanakoHome, next);
+  return { cleared: true, clearedMode };
+}
+
+function restoreDeeperAutoGpuMode({ hanakoHome, mode, reason, now } = {}) {
+  if (!hanakoHome) throw new Error("restoreDeeperAutoGpuMode requires hanakoHome");
+  if (!(mode in GPU_MODE_DEPTH)) throw new Error(`restoreDeeperAutoGpuMode received unknown GPU mode: ${mode}`);
+  const state = readState(hanakoHome);
+  const currentMode = state.autoGpuMode?.mode && state.autoGpuMode.mode in GPU_MODE_DEPTH
+    ? state.autoGpuMode.mode
+    : GPU_MODE_HARDWARE;
+  if (GPU_MODE_DEPTH[mode] <= GPU_MODE_DEPTH[currentMode]) {
+    return { restored: false, currentMode };
+  }
+  const next = { ...state };
+  if (next.startup?.status === "pending" && classifyIncompleteStartup(state) === "gpu-recovery") {
+    delete next.startup;
+  }
+  next.autoGpuMode = {
+    mode,
+    reason: reason || "acl-heal-ineffective",
+    previousMode: currentMode,
+    updatedAt: nowIso(now),
+  };
+  writeState(hanakoHome, next);
+  return { restored: true, currentMode: mode };
+}
+
 function buildGpuStartupDiagnostics({ hanakoHome, policy, app } = {}) {
   const items = [
     ``,
@@ -933,6 +1010,8 @@ function buildGpuStartupDiagnostics({ hanakoHome, policy, app } = {}) {
 module.exports = {
   applyGpuStartupPolicy,
   buildGpuStartupDiagnostics,
+  clearAutoGpuModeForRecovery,
+  getGpuRecoveryEvidence,
   getGpuStartupStatePath,
   getPreferencesPath,
   markGpuStartupFailed,
@@ -942,5 +1021,6 @@ module.exports = {
   recordGpuChildProcessGone,
   recordGpuInfoUpdate,
   resolveGpuStartupPolicy,
+  restoreDeeperAutoGpuMode,
   settleLegacyGpuPreferenceMigration,
 };

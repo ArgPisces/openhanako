@@ -9,12 +9,15 @@ const require = createRequire(import.meta.url);
 const {
   applyGpuStartupPolicy,
   buildGpuStartupDiagnostics,
+  clearAutoGpuModeForRecovery,
+  getGpuRecoveryEvidence,
   markGpuStartupFailed,
   markGpuStartupPending,
   markGpuStartupPhase,
   markGpuStartupReady,
   recordGpuChildProcessGone,
   resolveGpuStartupPolicy,
+  restoreDeeperAutoGpuMode,
   settleLegacyGpuPreferenceMigration,
 } = require("../desktop/src/shared/gpu-startup-policy.cjs");
 
@@ -1564,5 +1567,118 @@ describe("desktop GPU startup policy", () => {
     expect(policy.shouldApplyUnsafeNoSandboxSwitch).toBe(false);
     expect(diagnostics).toContain("GPU sandbox diagnostic classification: sandbox-init-failure-suspected");
     expect(diagnostics).toContain("Unsafe no-sandbox note: only enabled by --hana-gpu-unsafe-no-sandbox for one diagnostic launch");
+  });
+});
+
+describe("GPU recovery primitives", () => {
+  it("getGpuRecoveryEvidence returns a normalized snapshot of crash evidence", () => {
+    const hanakoHome = makeHome();
+    writeGpuState(hanakoHome, {
+      version: 2,
+      autoGpuMode: { mode: "software-safe", reason: "gpu-child-process-gone", updatedAt: "2026-08-01T00:00:00.000Z" },
+      lastGpuCrash: { type: "GPU", reason: "crashed", at: "2026-08-01T00:00:00.000Z", platform: "win32" },
+      startup: {
+        status: "pending",
+        startupId: "1-1",
+        phase: "main-window-starting",
+        platform: "win32",
+        startedAt: "2026-08-02T00:00:00.000Z",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+        policy: { mode: "hardware" },
+      },
+    });
+
+    const evidence = getGpuRecoveryEvidence(hanakoHome);
+    expect(evidence.autoGpuMode.mode).toBe("software-safe");
+    expect(evidence.latestCrashAt).toBe("2026-08-01T00:00:00.000Z");
+    expect(evidence.startup).toMatchObject({
+      status: "pending",
+      startedAt: "2026-08-02T00:00:00.000Z",
+      readyAt: null,
+      policyMode: "hardware",
+    });
+    expect(evidence.incompleteClassification).toBe("gpu-recovery");
+  });
+
+  it("getGpuRecoveryEvidence handles an empty state file", () => {
+    const hanakoHome = makeHome();
+    const evidence = getGpuRecoveryEvidence(hanakoHome);
+    expect(evidence).toEqual({
+      autoGpuMode: null,
+      latestCrashAt: null,
+      startup: null,
+      incompleteClassification: "none",
+    });
+  });
+
+  it("clearAutoGpuModeForRecovery clears auto mode plus stale gpu pending marker and records an audit", () => {
+    const hanakoHome = makeHome();
+    writeGpuState(hanakoHome, {
+      version: 2,
+      autoGpuMode: { mode: "deep-compat", reason: "gpu-child-process-gone", updatedAt: "2026-08-01T00:00:00.000Z" },
+      lastGpuCrash: { type: "GPU", reason: "crashed", at: "2026-08-01T00:00:00.000Z", platform: "win32" },
+      startup: { status: "pending", startupId: "1-1", phase: "splash-ready", platform: "win32", startedAt: "2026-08-02T00:00:00.000Z", updatedAt: "2026-08-02T00:00:00.000Z" },
+    });
+
+    const result = clearAutoGpuModeForRecovery({
+      hanakoHome,
+      reason: "win32-install-acl-heal",
+      now: "2026-08-03T00:00:00.000Z",
+    });
+    expect(result).toEqual({ cleared: true, clearedMode: "deep-compat" });
+
+    const state = readJson(path.join(hanakoHome, "user", "gpu-startup.json"));
+    expect(state.autoGpuMode).toBeUndefined();
+    expect(state.startup).toBeUndefined();
+    expect(state.lastGpuCrash).toBeDefined();
+    expect(state.lastGpuRecovery).toMatchObject({
+      reason: "win32-install-acl-heal",
+      clearedMode: "deep-compat",
+      clearedPendingPhase: "splash-ready",
+      at: "2026-08-03T00:00:00.000Z",
+    });
+  });
+
+  it("clearAutoGpuModeForRecovery keeps a non-gpu pending marker and reports cleared=false when nothing applies", () => {
+    const hanakoHome = makeHome();
+    writeGpuState(hanakoHome, {
+      version: 2,
+      startup: { status: "pending", startupId: "1-1", phase: "server-starting", platform: "win32", startedAt: "2026-08-02T00:00:00.000Z", updatedAt: "2026-08-02T00:00:00.000Z" },
+    });
+
+    const result = clearAutoGpuModeForRecovery({ hanakoHome, reason: "win32-install-acl-heal" });
+    expect(result).toEqual({ cleared: false, clearedMode: null });
+    const state = readJson(path.join(hanakoHome, "user", "gpu-startup.json"));
+    expect(state.startup).toBeDefined();
+    expect(state.lastGpuRecovery).toBeUndefined();
+  });
+
+  it("restoreDeeperAutoGpuMode restores only when the requested mode is deeper than the current one", () => {
+    const hanakoHome = makeHome();
+    writeGpuState(hanakoHome, {
+      version: 2,
+      autoGpuMode: { mode: "gpu-sandbox-compat", reason: "previous-startup-incomplete", updatedAt: "2026-08-03T01:00:00.000Z" },
+      startup: { status: "pending", startupId: "2-2", phase: "splash-ready", platform: "win32", startedAt: "2026-08-03T01:00:00.000Z", updatedAt: "2026-08-03T01:00:00.000Z" },
+    });
+
+    const restored = restoreDeeperAutoGpuMode({
+      hanakoHome,
+      mode: "deep-compat",
+      reason: "acl-heal-ineffective",
+      now: "2026-08-03T02:00:00.000Z",
+    });
+    expect(restored).toEqual({ restored: true, currentMode: "deep-compat" });
+
+    const state = readJson(path.join(hanakoHome, "user", "gpu-startup.json"));
+    expect(state.autoGpuMode).toMatchObject({ mode: "deep-compat", reason: "acl-heal-ineffective", updatedAt: "2026-08-03T02:00:00.000Z" });
+    expect(state.startup).toBeUndefined();
+
+    const noop = restoreDeeperAutoGpuMode({ hanakoHome, mode: "gpu-sandbox-compat", reason: "acl-heal-ineffective" });
+    expect(noop).toEqual({ restored: false, currentMode: "deep-compat" });
+  });
+
+  it("restoreDeeperAutoGpuMode rejects unknown modes", () => {
+    const hanakoHome = makeHome();
+    expect(() => restoreDeeperAutoGpuMode({ hanakoHome, mode: "warp-speed", reason: "x" })).toThrow(/unknown GPU mode/i);
   });
 });
