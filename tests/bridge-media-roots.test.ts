@@ -4,6 +4,9 @@ import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { collectBridgeMediaAllowedRoots, isInsideBridgeMediaRoot } from "../lib/bridge/media-roots.ts";
+// 期望值必须与生产代码同一条规范化路径（native realpath 会展开 Windows 8.3
+// 短名，JS 版 fs.realpathSync 不会；CI runner 的 TEMP 恰好是短名形式）。
+import { canonicalFilesystemPathSync } from "../shared/link-aware-fs.ts";
 
 const FILESYSTEM_IGNORES_CASE = (() => {
   const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-bridge-roots-case-probe-"));
@@ -52,9 +55,9 @@ describe("Bridge media allowed roots", () => {
 
     const roots = collectBridgeMediaAllowedRoots(engine, { agentId: "owner" });
 
-    expect(roots).toContain(fs.realpathSync(hanakoHome));
-    expect(roots).toContain(fs.realpathSync(ownerHome));
-    expect(roots).toContain(fs.realpathSync(otherHome));
+    expect(roots).toContain(canonicalFilesystemPathSync(hanakoHome));
+    expect(roots).toContain(canonicalFilesystemPathSync(ownerHome));
+    expect(roots).toContain(canonicalFilesystemPathSync(otherHome));
     expect(engine.getHomeCwd).toHaveBeenCalledWith("owner");
     expect(engine.getHomeCwd).toHaveBeenCalledWith("other");
   });
@@ -81,7 +84,7 @@ describe("Bridge media allowed roots", () => {
     fs.writeFileSync(filePath, "ok");
 
     const roots = collectBridgeMediaAllowedRoots({ hanakoHome });
-    const realTmp = fs.realpathSync("/tmp");
+    const realTmp = canonicalFilesystemPathSync("/tmp");
 
     expect(roots).toContain(realTmp);
     expect(isInsideBridgeMediaRoot(filePath, roots)).toBe(true);

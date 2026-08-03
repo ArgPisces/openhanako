@@ -3,6 +3,9 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionFileRegistry } from "../lib/session-files/session-file-registry.ts";
+// 期望值必须与生产代码同一条规范化路径（native realpath 会展开 Windows 8.3
+// 短名，JS 版 fs.realpathSync 不会；CI runner 的 TEMP 恰好是短名形式）。
+import { canonicalFilesystemPathSync } from "../shared/link-aware-fs.ts";
 
 const createSandboxedTools = vi.fn(() => ({ tools: [], customTools: [] }));
 
@@ -102,7 +105,7 @@ describe("HanaEngine.buildTools session external sandbox grants", () => {
       id: "sf-active",
       sessionPath,
       filePath: externalFile,
-      realPath: fs.realpathSync(externalFile),
+      realPath: canonicalFilesystemPathSync(externalFile),
       storageKind: "external",
       status: "available",
     };
@@ -110,14 +113,14 @@ describe("HanaEngine.buildTools session external sandbox grants", () => {
       id: "sf-hidden",
       sessionPath,
       filePath: hiddenExternalFile,
-      realPath: fs.realpathSync(hiddenExternalFile),
+      realPath: canonicalFilesystemPathSync(hiddenExternalFile),
       storageKind: "external",
       status: "available",
     };
     const activeProjection = [
       activeFile,
-      { id: "sf-workspace", sessionPath, filePath: workspaceFile, realPath: fs.realpathSync(workspaceFile), storageKind: "external", status: "available" },
-      { id: "sf-managed", sessionPath, filePath: managedFile, realPath: fs.realpathSync(managedFile), storageKind: "managed_cache", status: "available" },
+      { id: "sf-workspace", sessionPath, filePath: workspaceFile, realPath: canonicalFilesystemPathSync(workspaceFile), storageKind: "external", status: "available" },
+      { id: "sf-managed", sessionPath, filePath: managedFile, realPath: canonicalFilesystemPathSync(managedFile), storageKind: "managed_cache", status: "available" },
     ];
     engine.listSessionFiles = vi.fn(() => [...activeProjection, hiddenFile]);
     engine.listActiveSessionFiles = vi.fn(() => activeProjection);
@@ -131,7 +134,7 @@ describe("HanaEngine.buildTools session external sandbox grants", () => {
     });
 
     const sandboxOpts = (createSandboxedTools.mock.calls as any)[0][2];
-    expect(sandboxOpts!.getExternalReadPaths()).toEqual([fs.realpathSync(externalFile)]);
+    expect(sandboxOpts!.getExternalReadPaths()).toEqual([canonicalFilesystemPathSync(externalFile)]);
     expect(sandboxOpts!.resolveSessionFile("sf-active", { sessionPath })).toBe(activeFile);
     expect(sandboxOpts!.resolveSessionFile("sf-hidden", { sessionPath })).toBeNull();
     await expect(sandboxOpts!.resourceIO.read({
@@ -394,13 +397,13 @@ describe("HanaEngine.buildTools session external sandbox grants", () => {
     engine.listActiveSessionFiles = vi.fn((sessionPath) => {
       if (sessionPath === childSessionPath) {
         return [
-          { filePath: childExternal, realPath: fs.realpathSync(childExternal), storageKind: "external", status: "available" },
+          { filePath: childExternal, realPath: canonicalFilesystemPathSync(childExternal), storageKind: "external", status: "available" },
         ];
       }
       if (sessionPath === parentSessionPath) {
         return [
-          { filePath: parentExternal, realPath: fs.realpathSync(parentExternal), storageKind: "external", status: "available" },
-          { filePath: parentWorkspaceFile, realPath: fs.realpathSync(parentWorkspaceFile), storageKind: "external", status: "available" },
+          { filePath: parentExternal, realPath: canonicalFilesystemPathSync(parentExternal), storageKind: "external", status: "available" },
+          { filePath: parentWorkspaceFile, realPath: canonicalFilesystemPathSync(parentWorkspaceFile), storageKind: "external", status: "available" },
         ];
       }
       return [];
@@ -415,8 +418,8 @@ describe("HanaEngine.buildTools session external sandbox grants", () => {
 
     const sandboxOpts = (createSandboxedTools.mock.calls as any)[0][2];
     expect(sandboxOpts!.getExternalReadPaths()).toEqual([
-      fs.realpathSync(childExternal),
-      fs.realpathSync(parentExternal),
+      canonicalFilesystemPathSync(childExternal),
+      canonicalFilesystemPathSync(parentExternal),
     ]);
   });
 
@@ -482,7 +485,7 @@ describe("HanaEngine.buildTools session external sandbox grants", () => {
     });
 
     const sandboxOpts = (createSandboxedTools.mock.calls as any)[0][2];
-    expect(sandboxOpts!.getExternalReadPaths()).toEqual([fs.realpathSync(parentExternal)]);
+    expect(sandboxOpts!.getExternalReadPaths()).toEqual([canonicalFilesystemPathSync(parentExternal)]);
     expect(sandboxOpts!.resolveSessionFile(parentFile.id, {
       sessionPath: parentSessionPath,
     })).toEqual(parentFile);
