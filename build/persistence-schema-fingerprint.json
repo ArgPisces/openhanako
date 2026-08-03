@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:4e77214f9c0fb74f91446eef298e9916a293fa8e3adfe5ac964a734326d9c494",
+  "payloadFingerprint": "sha256:12461611adbd187cee4c2d77f7dfaccb438caa26b2346df6425a6f5ebaa0fe6b",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3080,8 +3080,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Session title hygiene: a new startup migration deletes session-titles.json entries whose stored value is an injected prompt envelope rather than a title, and the shared visible-prompt projection it reuses now lives in the reminder module. The titles file keeps its shape (session key to title string), entries are only removed and never rewritten, and no store, stored shape, or persisted byte layout changed.",
-    "payloadFingerprint": "sha256:4e77214f9c0fb74f91446eef298e9916a293fa8e3adfe5ac964a734326d9c494"
+    "compatibilityReason": "The MCP normalizer retains raw-name and legacy-key read compatibility, session prompt receipts add no JSONL fields, public update source selection preserves the versioned update-channel record shape, and existing desktop state readers are unchanged; no stored value requires migration.",
+    "payloadFingerprint": "sha256:12461611adbd187cee4c2d77f7dfaccb438caa26b2346df6425a6f5ebaa0fe6b"
   },
   "schemas": [
     {
@@ -3264,7 +3264,7 @@
       "contract": "update channel record version, device identifier, activation flag, update feed address, activation time, and held invite codes",
       "kind": "runtime-contract",
       "module": "desktop/auto-updater.cjs",
-      "sourceHash": "sha256:2259fbd5c99545339c1149f289aa9d3d5eccc61570127d27771999fbdcd37e1c",
+      "sourceHash": "sha256:739190e68c9f0a66775c72424e335f3182abec97c91dc932179be8aabf46a591",
       "storeId": "desktop-update-channel"
     },
     {
@@ -3278,7 +3278,7 @@
       "contract": "desktop window bounds, release announcement bookmark, and update cache version marker readers",
       "kind": "directory-contract",
       "module": "desktop/main.cjs",
-      "sourceHash": "sha256:aba3a95b3f949668b055bc0e5a4db842ad02eeddb44325ba47192260d46c4956",
+      "sourceHash": "sha256:ab00d3a87caf3b994faba151ed6c370ee093dd545564535f9fefbaee314640e0",
       "storeId": "desktop-window-version-state"
     },
     {
@@ -3341,7 +3341,7 @@
       "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:3921362126d805b3ed48da82633c1e002891e1bb031df162dd0a751045d2d7b8",
+      "sourceHash": "sha256:fe4e19635fe814011dd1a2e8b45129fe8ca3c84f8534dd77f057a598de3994c7",
       "storeId": "mcp-config"
     },
     {
@@ -3460,7 +3460,7 @@
         {
           "contract": "core/session-coordinator.ts Hana metadata extensions",
           "module": "core/session-coordinator.ts",
-          "sourceHash": "sha256:c7a413bf90b0ed76bb840120d123abe7144e58f550076d0793989ca577652ccb"
+          "sourceHash": "sha256:5d73c0f7eada05c8e35a69fd2c8d1df8b633400dafceecb231e1776ff0edd23b"
         },
         {
           "contract": "core/session-jsonl-file.ts repair contract",

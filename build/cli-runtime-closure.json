@@ -351,16 +351,11 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "core/session-coordinator.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "lib/extensions/compaction-guard-ext.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); core/session-coordinator.ts (import-statement); lib/extensions/compaction-guard-ext.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); lib/extensions/compaction-guard-ext.ts (import-statement)."
     },
     {
       "path": "core/computer-use/computer-host.ts",
@@ -2164,11 +2159,16 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/session-compactor.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/extensions/compaction-guard-ext.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/provider-compat/deepseek.ts (import-statement); core/provider-compat/kimi.ts (import-statement); core/provider-compat/mimo.ts (import-statement); +5 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/provider-compat/deepseek.ts (import-statement); core/provider-compat/kimi.ts (import-statement); core/provider-compat/mimo.ts (import-statement); +6 more importer(s)."
     },
     {
       "path": "core/provider-compat/tool-pairing.ts",
@@ -8642,11 +8642,21 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "lib/tools/session-tool.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/engine.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "server/routes/session-collab.ts",
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by lib/tools/session-tool.ts (import-statement); core/engine.ts (import-statement); server/routes/session-collab.ts (import-statement)."
     },
     {
       "path": "lib/session-collab/handbook.ts",
@@ -111513,6 +111523,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/tools/session-tool.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/agent-manager.ts",
           "kind": "import-statement"
         },
@@ -111552,7 +111567,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/desk/cron-store.ts (import-statement); core/model-manager.ts (import-statement); core/bridge-session-manager.ts (import-statement); +9 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/desk/cron-store.ts (import-statement); core/model-manager.ts (import-statement); core/bridge-session-manager.ts (import-statement); +10 more importer(s)."
     },
     {
       "path": "shared/net-utils.ts",
