@@ -140,6 +140,31 @@ describe("known-models dictionary", () => {
       image: true,
       reasoning: true,
     });
+    for (const [id, name] of [
+      ["claude-opus-5", "Claude Opus 5"],
+      ["claude-sonnet-5", "Claude Sonnet 5"],
+    ]) {
+      expect(lookupKnown("anthropic", id)).toMatchObject({
+        name,
+        context: 1000000,
+        maxOutput: 128000,
+        image: true,
+        reasoning: true,
+        xhigh: true,
+        compat: {
+          thinkingFormat: "anthropic",
+          reasoningProfile: "anthropic-adaptive-only",
+        },
+      });
+      expect(lookupKnown("unknown-provider", `anthropic/${id}`)).toMatchObject({
+        name,
+        context: 1000000,
+        maxOutput: 128000,
+        image: true,
+        reasoning: true,
+        xhigh: true,
+      });
+    }
     expect(lookupKnown("anthropic", "claude-fable-5")).toMatchObject({
       name: "Claude Fable 5",
       context: 1000000,
@@ -176,6 +201,23 @@ describe("known-models dictionary", () => {
         reasoningProfile: "openrouter-anthropic-adaptive",
       },
     });
+    for (const [id, name] of [
+      ["anthropic/claude-opus-5", "Anthropic/Claude Opus 5"],
+      ["anthropic/claude-sonnet-5", "Anthropic/Claude Sonnet 5"],
+    ]) {
+      expect(lookupKnown("openrouter", id)).toMatchObject({
+        name,
+        context: 1000000,
+        maxOutput: 128000,
+        image: true,
+        reasoning: true,
+        xhigh: true,
+        compat: {
+          thinkingFormat: "openrouter",
+          reasoningProfile: "openrouter-anthropic-adaptive",
+        },
+      });
+    }
     expect(lookupKnown("unknown-provider", "anthropic/claude-mythos-5")).toMatchObject({
       name: "Claude Mythos 5",
       context: 1000000,

@@ -72,6 +72,24 @@ const KNOWN_MODELS = {
     },
   },
   anthropic: {
+    "claude-opus-5": {
+      name: "Claude Opus 5",
+      context: 1000000,
+      maxOutput: 128000,
+      image: true,
+      reasoning: true,
+      xhigh: true,
+      compat: { thinkingFormat: "anthropic", reasoningProfile: "anthropic-adaptive-only" },
+    },
+    "claude-sonnet-5": {
+      name: "Claude Sonnet 5",
+      context: 1000000,
+      maxOutput: 128000,
+      image: true,
+      reasoning: true,
+      xhigh: true,
+      compat: { thinkingFormat: "anthropic", reasoningProfile: "anthropic-adaptive-only" },
+    },
     "claude-fable-5": {
       name: "Claude Fable 5",
       context: 1000000,
@@ -191,6 +209,24 @@ const KNOWN_MODELS = {
     },
   },
   openrouter: {
+    "anthropic/claude-opus-5": {
+      name: "Anthropic/Claude Opus 5",
+      context: 1000000,
+      maxOutput: 128000,
+      image: true,
+      reasoning: true,
+      xhigh: true,
+      compat: { thinkingFormat: "openrouter", reasoningProfile: "openrouter-anthropic-adaptive" },
+    },
+    "anthropic/claude-sonnet-5": {
+      name: "Anthropic/Claude Sonnet 5",
+      context: 1000000,
+      maxOutput: 128000,
+      image: true,
+      reasoning: true,
+      xhigh: true,
+      compat: { thinkingFormat: "openrouter", reasoningProfile: "openrouter-anthropic-adaptive" },
+    },
     "anthropic/claude-fable-5": {
       name: "Anthropic/Claude Fable 5",
       context: 1000000,
@@ -1305,7 +1341,7 @@ describe("syncModels", () => {
     });
   });
 
-  it("projects Claude Fable adaptive-only profile for Anthropic Messages providers", async () => {
+  it("projects Claude 5 adaptive-only profiles for Anthropic Messages providers", async () => {
     const syncModels = await loadSync();
 
     const providers = {
@@ -1313,26 +1349,31 @@ describe("syncModels", () => {
         base_url: "https://api.anthropic.com",
         api: "anthropic-messages",
         api_key: "sk-test",
-        models: ["claude-fable-5"],
+        models: ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"],
       },
     };
 
     syncModels(providers, { modelsJsonPath });
 
     const result = JSON.parse(fs.readFileSync(modelsJsonPath, "utf-8"));
-    const model = result.providers.anthropic.models[0];
-    expect(model).toMatchObject({
-      id: "claude-fable-5",
-      contextWindow: 1000000,
-      maxTokens: 128000,
-      input: ["text", "image"],
-      reasoning: true,
-      compat: {
-        supportsDeveloperRole: false,
-        thinkingFormat: "anthropic",
-        reasoningProfile: "anthropic-adaptive-only",
-      },
-    });
+    expect(result.providers.anthropic.models.map((model) => model.id)).toEqual([
+      "claude-fable-5",
+      "claude-opus-5",
+      "claude-sonnet-5",
+    ]);
+    for (const model of result.providers.anthropic.models) {
+      expect(model).toMatchObject({
+        contextWindow: 1000000,
+        maxTokens: 128000,
+        input: ["text", "image"],
+        reasoning: true,
+        compat: {
+          supportsDeveloperRole: false,
+          thinkingFormat: "anthropic",
+          reasoningProfile: "anthropic-adaptive-only",
+        },
+      });
+    }
   });
 
   it("writes a custom entry when an Anthropic builtin has a model-level API override", async () => {
@@ -1365,7 +1406,7 @@ describe("syncModels", () => {
     expect(result.providers.anthropic.modelOverrides).toBeUndefined();
   });
 
-  it("projects Claude Fable OpenRouter profile without Anthropic Messages fields", async () => {
+  it("projects Claude 5 OpenRouter profiles without Anthropic Messages fields", async () => {
     const syncModels = await loadSync();
 
     const providers = {
@@ -1373,26 +1414,35 @@ describe("syncModels", () => {
         base_url: "https://openrouter.ai/api/v1",
         api: "openai-completions",
         api_key: "sk-test",
-        models: ["anthropic/claude-fable-5"],
+        models: [
+          "anthropic/claude-fable-5",
+          "anthropic/claude-opus-5",
+          "anthropic/claude-sonnet-5",
+        ],
       },
     };
 
     syncModels(providers, { modelsJsonPath });
 
     const result = JSON.parse(fs.readFileSync(modelsJsonPath, "utf-8"));
-    const model = result.providers.openrouter.models[0];
-    expect(model).toMatchObject({
-      id: "anthropic/claude-fable-5",
-      contextWindow: 1000000,
-      maxTokens: 128000,
-      input: ["text", "image"],
-      reasoning: true,
-      compat: {
-        supportsDeveloperRole: false,
-        thinkingFormat: "openrouter",
-        reasoningProfile: "openrouter-anthropic-adaptive",
-      },
-    });
+    expect(result.providers.openrouter.models.map((model) => model.id)).toEqual([
+      "anthropic/claude-fable-5",
+      "anthropic/claude-opus-5",
+      "anthropic/claude-sonnet-5",
+    ]);
+    for (const model of result.providers.openrouter.models) {
+      expect(model).toMatchObject({
+        contextWindow: 1000000,
+        maxTokens: 128000,
+        input: ["text", "image"],
+        reasoning: true,
+        compat: {
+          supportsDeveloperRole: false,
+          thinkingFormat: "openrouter",
+          reasoningProfile: "openrouter-anthropic-adaptive",
+        },
+      });
+    }
   });
 
   it("writes Pi-loadable models when Hana video capability is enabled", async () => {

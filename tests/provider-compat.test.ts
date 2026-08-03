@@ -92,6 +92,28 @@ describe("Anthropic Max effort normalization", () => {
     expect(payload.thinking).toEqual({ type: "enabled", budget_tokens: 8192, display: "omitted" });
   });
 
+  it.each(["claude-opus-5", "claude-sonnet-5"])(
+    "maps %s Max to native Anthropic adaptive max effort",
+    (modelId) => {
+      const result = normalizeProviderPayload({
+        model: modelId,
+        messages: [{ role: "user", content: "hi" }],
+        thinking: { type: "enabled", budget_tokens: 8192 },
+        max_tokens: 42666,
+      }, {
+        id: modelId,
+        provider: "anthropic",
+        api: "anthropic-messages",
+        reasoning: true,
+        maxTokens: 128000,
+      }, { mode: "chat", reasoningLevel: "xhigh" });
+
+      expect(result.thinking).toEqual({ type: "adaptive", display: "summarized" });
+      expect(result.output_config).toEqual({ effort: "max" });
+      expect(result.max_tokens).toBe(64000);
+    },
+  );
+
   it("keeps Claude Fable/Mythos adaptive thinking explicit when no thinking field is present", () => {
     const result = normalizeProviderPayload({
       model: "claude-mythos-5",
@@ -688,16 +710,20 @@ describe("normalizeProviderPayload — 通用层", () => {
     }
   });
 
-  it("OpenRouter Claude Fable adaptive thinking 用 verbosity 控制 effort，不发送无效 reasoning.effort", () => {
+  it.each([
+    "anthropic/claude-fable-5",
+    "anthropic/claude-opus-5",
+    "anthropic/claude-sonnet-5",
+  ])("OpenRouter %s adaptive thinking 用 verbosity 控制 effort，不发送无效 reasoning.effort", (modelId) => {
     const payload = {
-      model: "anthropic/claude-fable-5",
+      model: modelId,
       messages: [{ role: "user", content: "hi" }],
       reasoning: { effort: "medium" },
       thinking: { type: "enabled", budget_tokens: 8192 },
       max_completion_tokens: 32000,
     };
     const model = {
-      id: "anthropic/claude-fable-5",
+      id: modelId,
       provider: "openrouter",
       api: "openai-completions",
       baseUrl: "https://openrouter.ai/api/v1",

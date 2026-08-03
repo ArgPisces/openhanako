@@ -250,8 +250,12 @@ function isDeepSeekV4ModelId(id: string): boolean {
 }
 
 function isAnthropicAdaptiveOnlyModelId(id: string): boolean {
-  return id === "claude-fable-5"
+  return id === "claude-opus-5"
+    || id === "claude-sonnet-5"
+    || id === "claude-fable-5"
     || id === "claude-mythos-5"
+    || id === "anthropic/claude-opus-5"
+    || id === "anthropic/claude-sonnet-5"
     || id === "anthropic/claude-fable-5"
     || id === "anthropic/claude-mythos-5";
 }

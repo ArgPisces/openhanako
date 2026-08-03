@@ -1805,6 +1805,48 @@
     }
   },
   "anthropic": {
+    "claude-opus-5": {
+      "name": "Claude Opus 5",
+      "context": 1000000,
+      "maxOutput": 128000,
+      "image": true,
+      "reasoning": true,
+      "xhigh": true,
+      "compat": {
+        "thinkingFormat": "anthropic",
+        "reasoningProfile": "anthropic-adaptive-only"
+      },
+      "visionCapabilities": {
+        "grounding": true,
+        "boxes": true,
+        "points": true,
+        "coordinateSpace": "norm-1000",
+        "boxOrder": "xyxy",
+        "outputFormat": "anchor",
+        "groundingMode": "prompted"
+      }
+    },
+    "claude-sonnet-5": {
+      "name": "Claude Sonnet 5",
+      "context": 1000000,
+      "maxOutput": 128000,
+      "image": true,
+      "reasoning": true,
+      "xhigh": true,
+      "compat": {
+        "thinkingFormat": "anthropic",
+        "reasoningProfile": "anthropic-adaptive-only"
+      },
+      "visionCapabilities": {
+        "grounding": true,
+        "boxes": true,
+        "points": true,
+        "coordinateSpace": "norm-1000",
+        "boxOrder": "xyxy",
+        "outputFormat": "anchor",
+        "groundingMode": "prompted"
+      }
+    },
     "claude-fable-5": {
       "name": "Claude Fable 5",
       "context": 1000000,
@@ -5768,6 +5810,30 @@
       "maxOutput": 128000,
       "image": true,
       "reasoning": true
+    },
+    "anthropic/claude-opus-5": {
+      "name": "Anthropic/Claude Opus 5",
+      "context": 1000000,
+      "maxOutput": 128000,
+      "image": true,
+      "reasoning": true,
+      "xhigh": true,
+      "compat": {
+        "thinkingFormat": "openrouter",
+        "reasoningProfile": "openrouter-anthropic-adaptive"
+      }
+    },
+    "anthropic/claude-sonnet-5": {
+      "name": "Anthropic/Claude Sonnet 5",
+      "context": 1000000,
+      "maxOutput": 128000,
+      "image": true,
+      "reasoning": true,
+      "xhigh": true,
+      "compat": {
+        "thinkingFormat": "openrouter",
+        "reasoningProfile": "openrouter-anthropic-adaptive"
+      }
     },
     "anthropic/claude-fable-5": {
       "name": "Anthropic/Claude Fable 5",
