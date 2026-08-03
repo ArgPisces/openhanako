@@ -1,4 +1,4 @@
-// lib/tools/workflow-tool.js
+// lib/tools/workflow-tool.ts
 import path from "node:path";
 import { Type } from "../pi-sdk/index.ts";
 import { t } from "../i18n.ts";

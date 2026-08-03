@@ -117,7 +117,7 @@ export {
   parseSessionEntries, buildSessionContext,
 } from "@earendil-works/pi-coding-agent";
 
-// Diary material summarization only. Context compaction must go through core/session-compactor.js.
+// Diary material summarization only. Context compaction must go through core/session-compactor.ts.
 export { generateSummary } from "@earendil-works/pi-coding-agent";
 export {
   buildNativeCompactionRequestShapes,

@@ -28,7 +28,7 @@ export const ACCESS_MODE_READ_ONLY = "read_only";
 
 // COMPAT: 旧 access-mode 枚举，仅 computer-host 仍用（待迁到 canonical session-permission-mode 后删）。
 // 只读工具白名单（READ_ONLY_TOOL_NAMES / filterReadOnlyToolNames 等）已删——零调用方的死代码，
-// 真正的只读判定收口在 core/session-permission-mode.js 的 classifySessionPermission。
+// 真正的只读判定收口在 core/session-permission-mode.ts 的 classifySessionPermission。
 export function normalizeAccessMode(mode, { legacyPlanMode = false } = {}) {
   if (mode === ACCESS_MODE_READ_ONLY) return ACCESS_MODE_READ_ONLY;
   if (mode === ACCESS_MODE_OPERATE) return ACCESS_MODE_OPERATE;

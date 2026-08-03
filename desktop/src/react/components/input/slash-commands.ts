@@ -186,7 +186,7 @@ export function executeCompact(
 /**
  * 通用的 WS slash 命令发送器。
  * 一期服务 /stop /new /reset 三条系统命令；未来扩展时（插件命令、skill 命令）也共用这条 WS 通道。
- * 后端在 server/routes/chat.js 接收 {type:'slash'}，走 engine.slashDispatcher.tryDispatch。
+ * 后端在 server/routes/chat.ts 接收 {type:'slash'}，走 engine.slashDispatcher.tryDispatch。
  *
  * TODO(frontend): 服务端会通过 WS {type:'slash_result'} 回复结果（未知命令 / handler reply），
  *   目前前端没有 consumer——/new /reset 的 not-found、已归档等 distinct reply 无法显示给用户。

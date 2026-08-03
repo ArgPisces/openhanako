@@ -119,7 +119,7 @@ copyServerDataFiles({
   outDir,
   libFiles: LIB_DATA_GLOBS,
   libDirs: LIB_TEMPLATE_DIRS,
-  // i18n locales（lib/i18n.js 通过 fromRoot("desktop","src","locales") 引用）
+  // i18n locales（lib/i18n.ts 通过 fromRoot("desktop","src","locales") 引用）
   extraDirs: [{ relSource: path.join("desktop", "src", "locales") }],
 });
 

@@ -33,7 +33,7 @@ export function formatContext(n: number): string {
  *
  * 契约：调用方尽可能传 provider，消除多 provider 同名歧义。
  * UI 展示场景仅有 id 可不传，接受展示层降级（取第一个命中）。
- * 运行时查找/比较**必须**用 shared/model-ref.js 的 findModel。
+ * 运行时查找/比较**必须**用 shared/model-ref.ts 的 findModel。
  */
 export function lookupModelMeta(modelId: string, provider?: string): any {
   if (!modelId) return null;

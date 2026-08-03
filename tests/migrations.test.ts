@@ -1,5 +1,5 @@
 /**
- * core/migrations.js 单元测试
+ * core/migrations.ts 单元测试
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";

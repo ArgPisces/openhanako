@@ -1,5 +1,5 @@
 /**
- * sandbox/index.js — 沙盒入口（无状态工厂）
+ * sandbox/index.ts — 沙盒入口（无状态工厂）
  *
  * 每次 buildTools 调用时创建 session 级的 PathGuard + OS 沙盒 exec。
  * 不持有 engine 级状态，天然支持多 agent 并发。

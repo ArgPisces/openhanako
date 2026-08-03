@@ -1,4 +1,4 @@
-// tests/workflow-integration.test.js
+// tests/workflow-integration.test.ts
 import { describe, expect, it, vi } from "vitest";
 import { runWorkflowScript } from "../lib/workflow/sandbox.ts";
 import { createHostApi } from "../lib/workflow/host-api.ts";

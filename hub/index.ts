@@ -321,7 +321,7 @@ export class Hub {
 
   /**
    * 初始化所有调度器（Scheduler + ChannelRouter）
-   * 在 engine.init() 完成后由 server/index.js 调用
+   * 在 engine.init() 完成后由 server/index.ts 调用
    */
   initSchedulers() {
     const engine = this._engine;

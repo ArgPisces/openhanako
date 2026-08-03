@@ -1,4 +1,4 @@
-// shared/migrate-config-scope.js
+// shared/migrate-config-scope.ts
 
 import fs from "fs";
 import path from "path";

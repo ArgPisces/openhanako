@@ -1,7 +1,7 @@
 /**
- * lib/llm/provider-client.js — Provider 认证 header 和连通性探测 URL 构造
+ * lib/llm/provider-client.ts — Provider 认证 header 和连通性探测 URL 构造
  *
- * callProviderText 已迁移到 core/llm-client.js（走 Pi SDK），
+ * callProviderText 已迁移到 core/llm-client.ts（走 Pi SDK），
  * 本文件只保留 test/health 路由需要的辅助函数。
  */
 

@@ -1,5 +1,5 @@
 /**
- * core/message-sanitizer.js 单元测试
+ * core/message-sanitizer.ts 单元测试
  *
  * 覆盖：
  *   - 支持 image 的模型：放行不改

@@ -5,9 +5,9 @@ import { SettingsSection } from "../../components/SettingsSection";
 import { SettingsRow } from "../../components/SettingsRow";
 
 // Local copy of OPTIONAL_TOOL_NAMES. Frontend intentionally does NOT import
-// from shared/tool-categories.js to keep the desktop bundle independent of
+// from shared/tool-categories.ts to keep the desktop bundle independent of
 // node-only server code. Drift between this constant and the backend's
-// shared/tool-categories.js is caught by tests/optional-tool-names-drift.test.js
+// shared/tool-categories.ts is caught by tests/optional-tool-names-drift.test.ts
 // (Task 10b) which imports both and asserts equality.
 const OPTIONAL_TOOL_NAMES = [
   "automation",

@@ -86,7 +86,7 @@ const migrations = {
   // 尊重老用户显式意图：任一 agent 显式 true → 保留开，否则默认关
   6: migrateChannelsToGlobalDefaultOff,
   // 模型能力字段 vision → image 全量重命名（added-models.yaml + agent config.yaml）
-  // 配合 core/model-sync.js 和 core/provider-registry.js 的读时兼容形成双保险
+  // 配合 core/model-sync.ts 和 core/provider-registry.ts 的读时兼容形成双保险
   7: migrateVisionToImage,
   // 修复 migration #5 之后仍有入口把 models.* 写回旧字符串格式的问题
   8: repairPostMigrationModelRefs,

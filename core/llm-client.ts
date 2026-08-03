@@ -64,7 +64,7 @@ export type CallTextOptions = {
 };
 
 /**
- * core/llm-client.js — 统一的非流式 LLM 调用入口
+ * core/llm-client.ts — 统一的非流式 LLM 调用入口
  *
  * 直接 HTTP POST（非流式），不走 Pi SDK 的 completeSimple（强制流式）。
  * Pi SDK completeSimple 对 DashScope 等供应商有 20-40x 延迟膨胀（stream SSE 首 token 慢），

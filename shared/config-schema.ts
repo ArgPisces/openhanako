@@ -1,4 +1,4 @@
-// shared/config-schema.js
+// shared/config-schema.ts
 
 /**
  * 配置字段 scope 声明 — 单一事实来源。

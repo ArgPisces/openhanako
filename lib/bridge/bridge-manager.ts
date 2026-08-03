@@ -187,7 +187,7 @@ const MAX_INBOUND_ATTACHMENT_BYTES = 50 * 1024 * 1024;
  *   - <|...|> channel marker token-only 删
  *   - code fence / 行内 backtick code 内的字面标签一律原样保留
  *
- * 桌面 ThinkTagParser（core/events.js）是「保留并渲染」语义，与此处「删除」相反，
+ * 桌面 ThinkTagParser（core/events.ts）是「保留并渲染」语义，与此处「删除」相反，
  * 故只在 Bridge 侧共享，不并入桌面。
  */
 const STRIP_TAGS = ["mood", "pulse", "reflect", "tool_code", "think", "thinking"];

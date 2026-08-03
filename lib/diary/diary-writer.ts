@@ -111,7 +111,7 @@ Memo format:
 Write in your own style and personality, the way you normally speak.`;
 }
 
-// getLogicalDay 已提取到 lib/time-utils.js，re-export 保持兼容
+// getLogicalDay 已提取到 lib/time-utils.ts，re-export 保持兼容
 export { getLogicalDay } from "../time-utils.ts";
 
 /**
