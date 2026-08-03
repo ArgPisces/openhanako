@@ -146,7 +146,6 @@ function TrainUpdateArea({
   lastError,
   lastCheckedAt,
   manifestReleasedAt,
-  originUnreachable,
   phase,
   progress,
   onApply,
@@ -157,7 +156,6 @@ function TrainUpdateArea({
   lastError: string | null;
   lastCheckedAt: string | null;
   manifestReleasedAt: string | null;
-  originUnreachable: boolean;
   phase: 'idle' | 'checking' | 'downloading' | 'applying';
   progress: { receivedBytes: number; totalBytes: number } | null;
   onApply: () => void;
@@ -241,19 +239,11 @@ function TrainUpdateArea({
             {t('settings.about.updateLatestCheckedAt', { time: formatCheckedAt(lastCheckedAt) })}
           </span>
         </div>
-        {/* 中性背景信息：货架清单本身的签发日期，不是告警——不设阈值、不
-            设颜色。仅当产地这一轮没能参与比较时才追加"经备用源"，镜像与
-            产地同车号而采信镜像不算异常，不标注（见 artifact-ota.cjs 的
-            "dual-source manifest fetch" 设计注释）。 */}
+        {/* 中性背景信息：货架清单本身的签发日期，不是告警。 */}
         {manifestReleasedAt && (
           <div className={updateStyles.row}>
             <span className={updateStyles.message}>
-              {t(
-                originUnreachable
-                  ? 'settings.about.updateManifestReleasedAtViaMirror'
-                  : 'settings.about.updateManifestReleasedAt',
-                { date: formatManifestDate(manifestReleasedAt) },
-              )}
+              {t('settings.about.updateManifestReleasedAt', { date: formatManifestDate(manifestReleasedAt) })}
             </span>
           </div>
         )}
@@ -451,7 +441,6 @@ export function AboutTab() {
     lastError,
     lastCheckedAt,
     manifestReleasedAt,
-    originUnreachable,
     phase,
     progress,
     checkNow: checkTrainNow,
@@ -462,8 +451,9 @@ export function AboutTab() {
   const autoCheck = readConfigBoolean(settingsConfig, cfg => cfg.auto_check_updates, true);
 
   const handleCheck = useCallback(() => {
+    void hana?.autoUpdateCheck?.();
     void checkTrainNow();
-  }, [checkTrainNow]);
+  }, [checkTrainNow, hana]);
 
   const handleApply = useCallback(() => {
     void applyTrainNow();
@@ -531,7 +521,6 @@ export function AboutTab() {
           lastError={lastError}
           lastCheckedAt={lastCheckedAt}
           manifestReleasedAt={manifestReleasedAt}
-          originUnreachable={originUnreachable}
           phase={phase}
           progress={progress}
           onApply={handleApply}

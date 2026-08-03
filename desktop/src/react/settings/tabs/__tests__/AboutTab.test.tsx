@@ -236,7 +236,8 @@ describe('AboutTab', () => {
   });
 
   it('lastError: shows the error text with a retry button that calls checkNow', () => {
-    installHana();
+    const autoUpdateCheck = vi.fn();
+    installHana({ autoUpdateCheck });
     useSettingsStore.setState({ settingsConfig: { auto_check_updates: true, update_channel: 'stable' } });
     trainOverride = { ...DEFAULT_TRAIN_OVERRIDE, lastError: 'network down' };
 
@@ -247,6 +248,9 @@ describe('AboutTab', () => {
 
     fireEvent.click(screen.getByText('settings.about.updateRetryBtn'));
     expect(checkTrainNow).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('settings.about.updateRetryBtn'));
+    expect(checkTrainNow).toHaveBeenCalledTimes(2);
+    expect(autoUpdateCheck).toHaveBeenCalledTimes(2);
     // The generic check button is redundant once the retry button is showing.
     expect(screen.queryByText('settings.about.updateCheckBtn')).toBeNull();
   });
@@ -284,7 +288,7 @@ describe('AboutTab', () => {
     expect(screen.queryByText('settings.about.updateManifestReleasedAtViaMirror')).toBeNull();
   });
 
-  it('up-to-date: switches to the "via backup source" copy only when originUnreachable is true, never merely because the mirror answered', () => {
+  it('up-to-date: ignores legacy source flags and always uses the single-source manifest copy', () => {
     installHana();
     useSettingsStore.setState({ settingsConfig: { auto_check_updates: true, update_channel: 'stable' } });
     trainOverride = {
@@ -297,8 +301,8 @@ describe('AboutTab', () => {
 
     render(<AboutTab />);
 
-    expect(screen.getByText('settings.about.updateManifestReleasedAtViaMirror')).toBeTruthy();
-    expect(screen.queryByText('settings.about.updateManifestReleasedAt')).toBeNull();
+    expect(screen.getByText('settings.about.updateManifestReleasedAt')).toBeTruthy();
+    expect(screen.queryByText('settings.about.updateManifestReleasedAtViaMirror')).toBeNull();
   });
 
   it('never checked: renders no conclusion text, only the manual check button', () => {

@@ -45,17 +45,11 @@
  * write bytes to an artifacts directory without a human in the loop.
  *
  * Gate order (both entry points), each short-circuits the rest on failure:
- *   fetch channel manifest: races BOTH sources in parallel — GitHub (the
- *   release origin) and AtomGit (an accelerator mirror) — verifies
- *   whichever side(s) respond, and keeps the higher-train side when both
- *   verify (ETag-cached per-source for checkOnce, ETag-bypassed for
- *   downloadAndApplyArtifacts); see the "dual-source manifest fetch" note
- *   below for the full rationale
+ *   fetch the GitHub channel manifest once (ETag-cached for checkOnce,
+ *   ETag-bypassed for downloadAndApplyArtifacts)
  *     -> ed25519 verify + schema validate happens INSIDE the fetch step
- *        above now (one atomic call per candidate into the protected
- *        artifact-core `manifest.verifyManifest` — see the "verify-order
- *        note" below), because the fetch step needs each candidate's
- *        `train` number to pick a winner
+ *        above (one atomic call into the protected artifact-core
+ *        `manifest.verifyManifest` — see the "verify-order note" below)
  *     -> channel namespace assertion (checkOnce/downloadAndApplyArtifacts
  *        only, on the winning manifest — see the "channel assertion" note
  *        below): the manifest's own `channel` field must equal the channel
@@ -125,67 +119,25 @@
  * XML/YAML parser would have), the net security delta between the two
  * orderings is negligible.
  *
- * Dual-source manifest fetch (why a race, not a priority order): the user
- * base is China-heavy, where GitHub is the unreliable hop — but GitHub is
- * also the release origin, the only source guaranteed fresh the moment a
- * train ships. A mirror (AtomGit) that only gets mirrored occasionally can
- * silently freeze every client on it at "already up to date" for as long as
- * the mirror job lags, with zero visible symptom. Picking one of
- * "mirror-first" or "origin-first" as a fixed sequential order always
- * trades one failure mode for the other (mirror-first risks silent
- * freezing; origin-first risks slow/unreliable checks for the China-heavy
- * base). Racing both in parallel avoids the trade entirely: whichever side
- * answers becomes usable, and when both answer, the one with the strictly
- * higher `train` number wins (a tie keeps the origin's copy — "相等取产地
- * 那份" — since both should be byte-identical announcements of the same
- * release and origin needs no extra trust bonus, it's just the tiebreak
- * default). GitHub gets its own short race budget
- * (`ORIGIN_MANIFEST_RACE_TIMEOUT_MS`, 8s) layered under the existing 30s
- * per-hop idle timeout so a slow/unreachable origin never holds up a round
- * whose mirror leg already answered; the mirror leg keeps the full 30s
- * budget since it isn't racing against anything. No re-signing, expiry, or
- * staleness-threshold machinery is needed anywhere in this scheme — the
- * comparison is a single monotonic integer (`train`) that both sides
- * either agree on or don't, and quietly using a lagging mirror's ANSWER
- * (not its absence) is not a failure mode this design needs to guard
- * against: an honest mirror only ever reports a `train` number it actually
- * has, so if it's behind, the origin's higher number simply wins whenever
- * origin is reachable, and the whole "how do I know this manifest hasn't
- * gone stale" question this design deliberately declines to introduce.
- * The origin's short race budget is only justified while the mirror leg
- * actually answers — its whole purpose is "don't make an answered round
- * wait on a slow origin". When BOTH legs come back without a usable
- * candidate that premise is gone: there is no answered leg to protect, and
- * failing the round on an 8s budget throws away the only source guaranteed
- * to carry a train the moment it ships (on a slow hop, 8s routinely times
- * out where the full 30s succeeds). So a totally failed round ends with one
- * final origin attempt at the full per-hop budget, unraced, under exactly
- * the same signature verification as the raced legs — a retry can never
- * introduce content a raced leg couldn't have introduced, only more
- * patience about reaching it.
- * A per-source boolean (`originUnreachable`, persisted in `ota-state.json`
- * and returned by `readStagedTrainStatus`) records whether the origin
- * failed to contribute a verified candidate THIS round, independent of
- * which side ultimately won — it exists purely so the settings page can
- * show a neutral "(via backup source)" annotation only when the origin
- * genuinely didn't participate, not merely when the mirror happened to
- * have the newer train.
+ * Public channel lookup deliberately has one source and one bounded
+ * attempt: GitHub. A failed round is recorded and returned to the UI so a
+ * person can press Retry again; the transport never performs a hidden
+ * source switch or an internal retry loop. Detached signature verification,
+ * ETag handling, and the trusted archive URLs inside a verified manifest
+ * remain unchanged.
  *
  * Channel assertion (why it lives in checkOnce/downloadAndApplyArtifacts,
  * not deeper): `verifyManifest` is a context-free validator — it has no
  * idea which channel the caller actually asked for, only whether the bytes
  * it was handed are well-formed and validly signed by SOME known key. The
- * dual-source race/selection logic one level up (inside
- * `fetchChannelManifest`) only ever compares "is this candidate verified"
- * and "which train is higher" — it doesn't know channel semantics either,
- * by design, so a signature/schema failure on one side can never poison
- * the other side's otherwise-valid candidate. The channel pointer
+ * fetch logic one level up (inside `fetchChannelManifest`) verifies bytes
+ * but doesn't know channel semantics either. The channel pointer
  * namespace (`stable` vs `beta`, etc.) is a concept that only the caller
  * of `checkOnce`/`downloadAndApplyArtifacts` — the code that decided which
  * channel to poll in the first place — actually holds. So the one and only
  * place a signed-but-wrong-channel manifest (e.g. a validly-signed `beta`
  * manifest served back from a `stable` URL, whether by misconfiguration or
- * attack) gets rejected is right here, immediately after the winning
+ * attack) gets rejected is right here, immediately after the
  * manifest comes back trusted and before any pointer/version logic runs.
  *
  * Why a rollback instead of a true joint write: `activateFromArchive` is
@@ -235,7 +187,7 @@ const OTA_STATE_FILENAME = "ota-state.json";
 const ROLLOUT_ID_FILENAME = "rollout-id";
 
 const FIRST_CHECK_DELAY_MS = 30_000;
-const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const RECHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 const MAX_REDIRECTS = 5;
 const MANIFEST_REQUEST_TIMEOUT_MS = 30_000;
@@ -251,49 +203,21 @@ const DOWNLOAD_STALL_MIN_BYTES = 64 * 1024;
 const DOWNLOAD_ATTEMPT_DEADLINE_MS = 60 * 60 * 1000;
 const MAX_MANIFEST_BYTES = 256 * 1024; // generous for a schema-1 manifest + mirrors array
 const MAX_SIG_BYTES = 4 * 1024; // raw ed25519 sig is 64 bytes; PEM-wrapped is still tiny
-// GitHub's race leg gets this short budget instead of the full 30s idle
-// timeout above — see the file header's "dual-source manifest fetch" note
-// for why: it must never hold up a round the mirror leg already answered.
-// This budget applies to the RACED leg only: when both sources fail to
-// produce a candidate, the origin gets one final retry with the full
-// MANIFEST_REQUEST_TIMEOUT_MS budget (see `fetchChannelManifest`).
-const ORIGIN_MANIFEST_RACE_TIMEOUT_MS = 8_000;
+// Kept as an exported compatibility alias for consumers that used the old
+// constant name. There is no separate race budget anymore: the one GitHub
+// attempt uses the ordinary bounded manifest timeout.
+const ORIGIN_MANIFEST_RACE_TIMEOUT_MS = MANIFEST_REQUEST_TIMEOUT_MS;
 
 // ── channel pointer URLs: clients poll ONLY these static asset
 //    URLs, never the GitHub API ───────────────────────────────────────────
-// Both sources are fetched in PARALLEL every round (see
-// `fetchChannelManifest` and the file header's "dual-source manifest
-// fetch" note) — there is no fixed primary/fallback order to reason about
-// here anymore. GitHub is the release ORIGIN: the one source guaranteed to
-// carry a train the moment it ships. AtomGit is an accelerator MIRROR for
-// the China-heavy user base, used whenever it answers, but never load-
-// bearing for freshness — a lagging or unreachable mirror can only ever
-// make itself less useful this round, never freeze a client on stale
-// content the way a mirror-first sequential order could. Zero security
-// delta either way: both sources are untrusted by construction (the
-// manifest signature governs, not the URL it came from).
 const GITHUB_CHANNEL_BASE = "https://github.com/liliMozi/openhanako/releases/download/channels";
-// Mirror base URL SHAPE verified against desktop/auto-updater.cjs's
-// DEFAULT_ATOMGIT_RELEASE_BASE_URL (same owner/repo/host, same
-// /releases/download/<tag>/<asset> layout; scripts/mirror-release-to-atomgit.mjs
-// preserves the GitHub tag name verbatim on the AtomGit side). NOT YET
-// OPERATIONAL for the `channels` pointer release yet:
-// .github/workflows/mirror-release-to-atomgit.yml only mirrors releases
-// explicitly selected via --tag/--newest/--stable, and no scheduled job
-// runs `--tag channels` yet. Until that job exists the AtomGit leg 404s
-// fast every round and the origin leg alone decides the outcome — that's
-// fine, a race degrades gracefully to "whichever side answers" the moment
-// one side is absent, no code-path branch needed for "mirror not live yet".
-// TODO(release-publishing): schedule a `--tag channels` mirror run, then drop this note.
-const ATOMGIT_CHANNEL_BASE = "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/channels";
 
 /**
- * @returns {[string, string]} `[originUrl, mirrorUrl]` — order is a role
- *   label (index 0 is always the GitHub origin, index 1 always the AtomGit
- *   mirror), not a priority order; both are fetched in parallel.
+ * One-element array retained for compatibility with existing callers.
+ * @returns {[string]} the GitHub channel manifest URL.
  */
 function channelManifestUrls(channel) {
-  return [`${GITHUB_CHANNEL_BASE}/${channel}.json`, `${ATOMGIT_CHANNEL_BASE}/${channel}.json`];
+  return [`${GITHUB_CHANNEL_BASE}/${channel}.json`];
 }
 
 // ── low-level https transport: manual redirect following, injectable for
@@ -471,14 +395,7 @@ async function downloadToFile(url, destPath, opts = {}) {
   return { statusCode, headers, bytesWritten: total };
 }
 
-// ── channel manifest fetch (dual-source parallel race, per-source ETag
-//    cache, dev bypass) ─────────────────────────────────────────────────
-//
-// See the file header's "dual-source manifest fetch" note for the full
-// rationale. Verification happens IN HERE (not in checkOnce/
-// downloadAndApplyArtifacts) because picking a winner requires comparing
-// each candidate's verified `train` number — an unverified byte blob has
-// no trustworthy `train` to compare.
+// ── channel manifest fetch (one GitHub source, ETag cache, dev bypass) ──
 
 function fetchDevOverrideManifest(devOverride, keyset, log) {
   if (/^https?:\/\//i.test(devOverride)) {
@@ -499,19 +416,15 @@ function fetchDevOverrideManifest(devOverride, keyset, log) {
   const manifestBytes = fs.readFileSync(devOverride);
   const sigBytes = fs.readFileSync(`${devOverride}.sig`);
   const manifest = manifestModule.verifyManifest(manifestBytes, sigBytes, keyset);
-  // Dev bypass reads a single local fixture — there's no real origin/mirror
-  // distinction to make, so it's tagged "origin"/not-unreachable so
-  // downstream fields (manifestSource, originUnreachable) always have a
-  // definite value, in dev and in tests that use this path.
+  // Dev bypass reads a single local fixture and uses the same provenance
+  // shape as the public GitHub path.
   return { manifest, etag: null, sourceUrl: devOverride, sourceKind: "origin", originUnreachable: false, localDir: path.dirname(devOverride) };
 }
 
 /**
  * Fetches ONE channel-manifest source (manifest.json + its detached .sig),
- * honoring a per-source cached ETag for a conditional GET. Never throws —
- * every outcome (200, 304, network/timeout failure) comes back as a tagged
- * result so the caller can race and compare sources without try/catch
- * scaffolding at each call site.
+ * honoring its cached ETag for a conditional GET. Never throws: every
+ * outcome comes back tagged so the caller can produce one clear error.
  * @returns {Promise<{status:"not-modified"} |
  *   {status:"fetched", manifestBytes:Buffer, sigBytes:Buffer, etag:string|null, sourceUrl:string} |
  *   {status:"error", error:Error}>}
@@ -536,198 +449,86 @@ async function fetchOneChannelSource(url, { cachedEtag, fetchOnce, log, timeoutM
 }
 
 /**
- * Races `promise` against a fixed budget. If the budget elapses first,
- * resolves (never rejects) to `{status:"error", error}` so a slow origin
- * can never turn into an unhandled rejection or block the mirror leg,
- * which isn't wrapped in any budget at all. The abandoned underlying
- * request isn't force-aborted here — it still carries the per-hop
- * `timeoutMs` threaded into `fetchOneChannelSource`, which destroys its
- * own socket on its own schedule (see `realFetchOnce`'s `timeout` handler)
- * — reusing the transport's existing timeout/destroy path instead of
- * adding a parallel AbortController this file doesn't otherwise need.
+ * Verifies the fetched candidate, returning `null` on failure so the
+ * caller can wrap the failure with source context. Channel namespace
+ * checking remains at the call site, where the requested channel is known.
  */
-function raceWithBudget(promise, budgetMs, timeoutMessage) {
-  return new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      resolve({ status: "error", error: new Error(timeoutMessage) });
-    }, budgetMs);
-    if (typeof timer.unref === "function") timer.unref();
-    promise.then((result) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(result);
-    });
-  });
-}
-
-/**
- * Verifies one fetched candidate, returning `null` (never throwing) on
- * failure — a bad signature/schema on ONE source must never poison the
- * other source's otherwise-valid candidate (see the file header's
- * "channel assertion" note for why channel-namespace checking is
- * deliberately NOT done here, at a level that has no notion of "which
- * channel did the caller ask for").
- */
-function tryVerifyManifestCandidate(fetchResult, keyset, log, sourceLabel) {
+function tryVerifyManifestCandidate(fetchResult, keyset, log) {
   try {
     return manifestModule.verifyManifest(fetchResult.manifestBytes, fetchResult.sigBytes, keyset);
   } catch (err) {
-    log(`[ota] ${sourceLabel} manifest failed verification, excluding it from this round's comparison: ${err.message}`);
+    log(`[ota] GitHub channel manifest failed verification: ${err.message}`);
     return null;
   }
 }
 
-function describeSourceOutcome(result, verifiedManifest) {
-  if (result.status === "error") return result.error.message;
-  if (result.status === "not-modified") return "not modified (304)";
-  if (result.status === "fetched" && !verifiedManifest) return "manifest failed verification";
-  return "ok";
-}
-
 /**
- * Fetches and resolves this round's channel manifest by racing both
- * sources in parallel — see the file header's "dual-source manifest
- * fetch" note for the full design rationale. When the race yields no
- * verified candidate and no 304, the origin is retried once with the full
- * `MANIFEST_REQUEST_TIMEOUT_MS` budget (unraced) before the round fails,
- * since the short race budget only earns its keep while the mirror leg is
- * answering.
+ * Fetches this round's channel manifest from GitHub exactly once. A failed
+ * round returns an error to the caller; retrying is a separate user action.
  * @param {{channel: string, keyset: Array<{keyId:string, publicKey:string}>,
- *   cachedEtags?: {origin?: string|null, mirror?: string|null},
+ *   cachedEtags?: {origin?: string|null},
  *   log?: (msg: string) => void, fetchOnce?: Function,
  *   devBypass?: {hasDevOverride: () => boolean, resolveDevManifestOverride: () => string|null}}} opts
  *   `devBypass` defaults to "no override, ever" (see `NO_DEV_OVERRIDE`) —
  *   only the desktop shell ever passes the real dev-bypass module in.
  * @returns {Promise<
- *   {notModified: true, sourceEtagUpdate: {origin?: string|null, mirror?: string|null}} |
- *   {manifest: object, sourceUrl: string, sourceKind: "origin"|"mirror",
+ *   {notModified: true, sourceEtagUpdate: {origin?: string|null}} |
+ *   {manifest: object, sourceUrl: string, sourceKind: "origin",
  *    originUnreachable: boolean, etag: string|null, localDir: string|null,
- *    sourceEtagUpdate: {origin?: string|null, mirror?: string|null}}>}
+ *    sourceEtagUpdate: {origin?: string|null}}>}
  */
 async function fetchChannelManifest({ channel, keyset, cachedEtags = {}, log = () => {}, fetchOnce, devBypass = NO_DEV_OVERRIDE }) {
   if (devBypass.hasDevOverride()) {
     return fetchDevOverrideManifest(devBypass.resolveDevManifestOverride(), keyset, log);
   }
-  const [originUrl, mirrorUrl] = channelManifestUrls(channel);
+  const [originUrl] = channelManifestUrls(channel);
+  const originResult = await fetchOneChannelSource(originUrl, {
+    cachedEtag: cachedEtags.origin,
+    fetchOnce,
+    log,
+    timeoutMs: MANIFEST_REQUEST_TIMEOUT_MS,
+  });
 
-  const originPromise = raceWithBudget(
-    fetchOneChannelSource(originUrl, { cachedEtag: cachedEtags.origin, fetchOnce, log, timeoutMs: ORIGIN_MANIFEST_RACE_TIMEOUT_MS }),
-    ORIGIN_MANIFEST_RACE_TIMEOUT_MS,
-    `artifact-ota: origin manifest fetch exceeded its ${ORIGIN_MANIFEST_RACE_TIMEOUT_MS}ms race budget`,
-  );
-  const mirrorPromise = fetchOneChannelSource(mirrorUrl, { cachedEtag: cachedEtags.mirror, fetchOnce, log, timeoutMs: MANIFEST_REQUEST_TIMEOUT_MS });
-
-  const [originResult, mirrorResult] = await Promise.all([originPromise, mirrorPromise]);
-
-  const originVerified = originResult.status === "fetched" ? tryVerifyManifestCandidate(originResult, keyset, log, "origin") : null;
-  const mirrorVerified = mirrorResult.status === "fetched" ? tryVerifyManifestCandidate(mirrorResult, keyset, log, "mirror") : null;
-
-  // Only overwrite a source's cached ETag when this round's attempt
-  // actually reached it (200, with or without a fresh ETag header) — a
-  // source that errored or timed out contributes no key here at all, so
-  // `mergeSourceEtags` at the call site leaves its previous cached value
-  // untouched instead of erasing it.
   const sourceEtagUpdate = {};
   if (originResult.status === "fetched") sourceEtagUpdate.origin = originResult.etag;
-  if (mirrorResult.status === "fetched") sourceEtagUpdate.mirror = mirrorResult.etag;
-
-  const candidates = [];
-  if (originVerified) candidates.push({ sourceKind: "origin", sourceUrl: originResult.sourceUrl, etag: originResult.etag, manifest: originVerified });
-  if (mirrorVerified) candidates.push({ sourceKind: "mirror", sourceUrl: mirrorResult.sourceUrl, etag: mirrorResult.etag, manifest: mirrorVerified });
-
-  // "Did the origin fail to participate in this round's comparison" —
-  // independent of who ultimately wins below: even when a verified origin
-  // candidate exists but loses to a strictly-newer mirror train, origin
-  // still participated, so this stays false. See the file header's
-  // "dual-source manifest fetch" note for what this drives in the UI.
-  const originUnreachable = !originVerified;
-
-  if (candidates.length === 0) {
-    // At least one side explicitly said "nothing changed" (304): treat the
-    // whole round as not-modified rather than erroring just because the
-    // OTHER side had a transient blip or (rarer) sent bytes that failed
-    // verification — we never trusted or acted on that bad content, so it
-    // can't have poisoned anything; it's simply excluded, same as any
-    // other failed candidate.
-    const anyNotModified = originResult.status === "not-modified" || mirrorResult.status === "not-modified";
-    if (anyNotModified) {
-      return { notModified: true, sourceEtagUpdate };
-    }
-    // Nobody produced a candidate, so the premise behind the origin's short
-    // race budget ("don't hold up a round the mirror already answered") no
-    // longer holds — there is no answered mirror leg to protect. Give the
-    // origin one final attempt with the full per-hop budget before failing
-    // the round: it's the only source guaranteed to carry a train the
-    // moment it ships, and on a slow hop 8s is routinely too tight while
-    // 30s succeeds. The retry is deliberately NOT wrapped in
-    // `raceWithBudget` (nothing left to race) and stays under exactly the
-    // same signature verification as the raced legs.
-    log(`[ota] both manifest sources failed this round; retrying origin once with the full ${MANIFEST_REQUEST_TIMEOUT_MS}ms budget`);
-    const retryResult = await fetchOneChannelSource(originUrl, { cachedEtag: cachedEtags.origin, fetchOnce, log, timeoutMs: MANIFEST_REQUEST_TIMEOUT_MS });
-    // Same conditional GET as the raced leg, so a 304 here means the same
-    // thing it means anywhere else: nothing changed, end the round quietly.
-    if (retryResult.status === "not-modified") {
-      return { notModified: true, sourceEtagUpdate };
-    }
-    const retryVerified = retryResult.status === "fetched" ? tryVerifyManifestCandidate(retryResult, keyset, log, "origin retry") : null;
-    if (retryVerified) {
-      sourceEtagUpdate.origin = retryResult.etag;
-      return {
-        manifest: retryVerified,
-        sourceUrl: retryResult.sourceUrl,
-        sourceKind: "origin",
-        // The origin ultimately DID contribute this round, so the UI must
-        // not annotate the result as coming from the backup source.
-        originUnreachable: false,
-        etag: retryResult.etag,
-        localDir: null,
-        sourceEtagUpdate,
-      };
-    }
-    throw new Error(
-      `all channel manifest sources failed (origin: ${describeSourceOutcome(originResult, originVerified)}; `
-        + `mirror: ${describeSourceOutcome(mirrorResult, mirrorVerified)}; `
-        + `origin retry: ${describeSourceOutcome(retryResult, retryVerified)})`,
-    );
+  if (originResult.status === "not-modified") return { notModified: true, sourceEtagUpdate };
+  if (originResult.status === "error") {
+    throw new Error(`artifact-ota: GitHub channel manifest request failed: ${originResult.error.message}`);
   }
 
-  // Tie-break rule: origin wins an exact train-number tie. `candidates` is
-  // built origin-first above and `reduce` below only replaces the running
-  // winner on a STRICTLY greater train, so an equal mirror train never
-  // displaces it — "相等取产地那份".
-  const winner = candidates.reduce((best, candidate) => (candidate.manifest.train > best.manifest.train ? candidate : best));
+  const verified = tryVerifyManifestCandidate(originResult, keyset, log);
+  if (!verified) throw new Error("artifact-ota: GitHub channel manifest failed signature or schema verification");
 
   return {
-    manifest: winner.manifest,
-    sourceUrl: winner.sourceUrl,
-    sourceKind: winner.sourceKind,
-    originUnreachable,
-    etag: winner.etag,
+    manifest: verified,
+    sourceUrl: originResult.sourceUrl,
+    sourceKind: "origin",
+    originUnreachable: false,
+    etag: originResult.etag,
     localDir: null,
     sourceEtagUpdate,
   };
 }
 
 /**
- * Per-source ETag cache merge: only overwrite a source's cached value when
- * this round's fetch attempt actually produced an update for it (see
- * `sourceEtagUpdate`'s doc comment above); a source that errored, timed
- * out, or wasn't attempted this round keeps whatever it last cached — the
- * same "a bad/quiet round must never erase a good round's bookkeeping"
- * principle `checkOnce`'s 304 handling already applies to
- * `available`/`lastError`.
+ * GitHub ETag cache merge. Legacy state may still carry extra source keys;
+ * reading it is safe, while every successful new write normalizes the
+ * persisted shape back to the single `origin` key.
  */
 function mergeSourceEtags(previous, update) {
   const prev = previous && typeof previous === "object" ? previous : {};
   const upd = update && typeof update === "object" ? update : {};
   return {
     origin: Object.prototype.hasOwnProperty.call(upd, "origin") ? upd.origin : (prev.origin ?? null),
-    mirror: Object.prototype.hasOwnProperty.call(upd, "mirror") ? upd.mirror : (prev.mirror ?? null),
   };
+}
+
+function cachedGithubEtags(channelState) {
+  const manifestEtags = channelState?.manifestEtags;
+  if (!manifestEtags || typeof manifestEtags !== "object") return {};
+  return Object.prototype.hasOwnProperty.call(manifestEtags, "origin")
+    ? { origin: manifestEtags.origin ?? null }
+    : {};
 }
 
 // ── minShell comparison (major.minor.patch only; no new semver dep) ───────
@@ -1099,17 +900,11 @@ async function checkOnce(opts) {
   if (!platformArch) throw new Error("artifact-ota: platformArch is required");
 
   const priorChannelState = (await readOtaState(homeDir))[channel] || {};
-  // Legacy single `etag`/`lastManifestUrl` fields (pre-dual-source) are
-  // intentionally NOT migrated into the new per-source `manifestEtags`
-  // shape — we can't attribute an old single etag to either source with
-  // certainty, and guessing wrong would risk a false 304 (trusting a
-  // conditional GET against the wrong source's cache). Starting cold
-  // (both null) costs one extra pair of unconditional fetches on the
-  // first post-upgrade check; that's the cleanest option that can never
-  // misjudge a 304.
-  const cachedEtags = priorChannelState.manifestEtags && typeof priorChannelState.manifestEtags === "object"
-    ? priorChannelState.manifestEtags
-    : {};
+  // Read the old multi-source state safely, but only carry GitHub's ETag
+  // forward. Legacy extra keys are ignored and disappear on the next
+  // successful state write, so an old backup-source token can never be
+  // sent to GitHub by mistake.
+  const cachedEtags = cachedGithubEtags(priorChannelState);
 
   try {
     const fetched = await fetchChannelManifest({ channel, keyset, cachedEtags, log, fetchOnce, devBypass });
@@ -1124,14 +919,13 @@ async function checkOnce(opts) {
       });
       return { outcome: "not-modified" };
     }
-    // Verification already happened inside fetchChannelManifest (it needed
-    // each candidate's verified `train` to pick a winner — see that
-    // function's doc comment); `manifest` here is already trusted.
+    // Verification already happened inside fetchChannelManifest;
+    // `manifest` here is already trusted.
     const { manifest, sourceUrl, sourceKind, originUnreachable, localDir } = fetched;
 
     // Channel namespace assertion — see the file header's "channel
     // assertion" note for why this lives here and not inside
-    // verifyManifest or fetchChannelManifest's race/selection logic. A
+    // verifyManifest or the transport layer. A
     // signed-but-wrong-channel manifest (e.g. a validly-signed `beta`
     // manifest served back from the `stable` URL) must never be silently
     // accepted onto this channel's pointer namespace.
@@ -1342,13 +1136,9 @@ async function downloadAndApplyArtifacts(opts) {
   if (!currentShellVersion) throw new Error("artifact-ota: currentShellVersion is required");
   if (!platformArch) throw new Error("artifact-ota: platformArch is required");
 
-  // Read purely for etag-merge bookkeeping on the eventual state write below
-  // — the fetch itself still bypasses the cache (empty `cachedEtags`, see
-  // the comment on that call), this is only so a source that doesn't
-  // respond THIS round (e.g. the mirror leg errors) doesn't have its
-  // last-known-good etag overwritten with null.
-  const priorManifestEtags = ((await readOtaState(homeDir))[channel] || {}).manifestEtags;
-  const priorCachedEtags = priorManifestEtags && typeof priorManifestEtags === "object" ? priorManifestEtags : {};
+  // The apply fetch itself bypasses ETag, but keep the last GitHub token in
+  // bookkeeping if this manually triggered round does not return a new one.
+  const priorCachedEtags = cachedGithubEtags((await readOtaState(homeDir))[channel] || {});
 
   try {
     // Bypass the ETag cache on purpose: the point of a click-triggered
@@ -1568,8 +1358,8 @@ async function downloadAndApplyArtifacts(opts) {
  * the same human-in-the-loop rule `downloadAndApplyArtifacts` carries; no
  * timer, daemon, or background code may ever call this.
  *
- * Gates kept from the desktop pipeline (same semantics): signed manifest +
- * dual-source race (inside `fetchChannelManifest`), channel namespace
+ * Gates kept from the desktop pipeline (same semantics): signed GitHub
+ * manifest fetch, channel namespace
  * assertion, renderer version already-current short-circuit, train
  * monotonic, version never goes backward, quarantine — plus the
  * serverProtocol contract gate, which replaces the desktop's preload gate
@@ -1634,10 +1424,8 @@ async function downloadAndApplyRendererArtifact(opts) {
   if (!Array.isArray(keyset) || keyset.length === 0) throw new Error("artifact-ota: keyset is required");
   if (!Number.isInteger(serverProtocolVersion)) throw new Error("artifact-ota: serverProtocolVersion is required");
 
-  // Read purely for etag-merge bookkeeping on the eventual state write —
-  // same rationale as downloadAndApplyArtifacts' identical preamble.
-  const priorManifestEtags = ((await readOtaState(homeDir))[channel] || {}).manifestEtags;
-  const priorCachedEtags = priorManifestEtags && typeof priorManifestEtags === "object" ? priorManifestEtags : {};
+  // Same GitHub-only ETag bookkeeping as downloadAndApplyArtifacts.
+  const priorCachedEtags = cachedGithubEtags((await readOtaState(homeDir))[channel] || {});
 
   try {
     // Bypass the ETag cache on purpose: an operator-triggered pull wants
@@ -1945,13 +1733,11 @@ async function readStagedTrainStatus(homeDir, opts = {}) {
     available,
     lastError: typeof channelState.lastError === "string" ? channelState.lastError : null,
     lastCheckedAt: typeof channelState.lastCheckedAt === "string" ? channelState.lastCheckedAt : null,
-    // Neutral provenance for the settings page — see the file header's
-    // "dual-source manifest fetch" note. A pre-upgrade ota-state.json has
-    // none of these fields; they read as null/false rather than crashing
-    // or guessing, same read-time-compat posture as minShellBlocked above.
-    manifestSource: typeof channelState.manifestSource === "string" ? channelState.manifestSource : null,
+    // Normalize legacy multi-source provenance to the one public source.
+    // Old fields remain readable but cannot produce backup-source UI copy.
+    manifestSource: channelState.manifestSource === "origin" ? "origin" : null,
     manifestReleasedAt: typeof channelState.manifestReleasedAt === "string" ? channelState.manifestReleasedAt : null,
-    originUnreachable: channelState.originUnreachable === true,
+    originUnreachable: false,
   };
 }
 

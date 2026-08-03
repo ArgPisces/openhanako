@@ -82,8 +82,6 @@ describe("auto-updater", () => {
     delete process.env.HANA_UPDATE_SOURCE;
     delete process.env.HANA_UPDATE_PROVIDER;
     delete process.env.HANA_UPDATE_DIGEST_BASE_URL;
-    delete process.env.HANA_ATOMGIT_UPDATE_FEED_URL;
-    delete process.env.HANA_ATOMGIT_RELEASE_BASE_URL;
     delete process.env.HANA_INVITE_API_URL;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: false,
@@ -130,35 +128,33 @@ describe("auto-updater", () => {
   it("should configure autoUpdater correctly", () => {
     initWithMockWindow();
     expect(mockAutoUpdater.setFeedURL).toHaveBeenCalledWith({
-      provider: "generic",
-      url: "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/latest/",
+      provider: "github",
+      owner: "liliMozi",
+      repo: "openhanako",
     });
     expect(mockAutoUpdater.autoDownload).toBe(false);
     expect(mockAutoUpdater.autoInstallOnAppQuit).toBe(false);
   });
 
-  it("resolves AtomGit as the default feed with GitHub fallback", () => {
+  it("resolves GitHub as the only public update feed", () => {
     const config = mod.resolveUpdateFeedConfig({});
     expect(config.feedURL).toEqual({
-      provider: "generic",
-      url: "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/latest/",
-    });
-    expect(config.fallbackConfigs).toHaveLength(1);
-    expect(config.fallbackConfigs[0].feedURL).toEqual({
       provider: "github",
       owner: "liliMozi",
       repo: "openhanako",
     });
+    expect(config).not.toHaveProperty("fallbackConfigs");
   });
 
-  it("resolves AtomGit as a generic update feed with matching digest URLs", () => {
-    const config = mod.resolveUpdateFeedConfig({ HANA_UPDATE_SOURCE: "atomgit" });
+  it.each(["gitcode", "atomgit"])("ignores legacy public source selector %s and keeps GitHub", (source) => {
+    const config = mod.resolveUpdateFeedConfig({ HANA_UPDATE_SOURCE: source });
     expect(config.feedURL).toEqual({
-      provider: "generic",
-      url: "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/latest/",
+      provider: "github",
+      owner: "liliMozi",
+      repo: "openhanako",
     });
     expect(mod.buildReleaseDigestUrl("0.425.4", config)).toBe(
-      "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/v0.425.4/release-digest.v1.json",
+      "https://github.com/liliMozi/openhanako/releases/download/v0.425.4/release-digest.v1.json",
     );
   });
 
@@ -169,7 +165,7 @@ describe("auto-updater", () => {
       owner: "liliMozi",
       repo: "openhanako",
     });
-    expect(config.fallbackConfigs).toEqual([]);
+    expect(config).not.toHaveProperty("fallbackConfigs");
   });
 
   it("loads digest from the generic feed directory when an explicit feed URL is configured", () => {
@@ -217,24 +213,28 @@ describe("auto-updater", () => {
     expect(mod.getState().status).toBe("latest");
   });
 
-  it("falls back to GitHub when the default AtomGit check fails", async () => {
+  it("makes one bounded public attempt per click and remains retryable after every failure", async () => {
     mockAutoUpdater.checkForUpdates
-      .mockRejectedValueOnce(new Error("Cannot find latest.yml in the latest release artifacts"))
-      .mockResolvedValueOnce({});
+      .mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND github.com"))
+      .mockRejectedValueOnce(new Error("connect ETIMEDOUT github.com"));
 
     initWithMockWindow();
     await ipcHandlers["auto-update-check"]();
 
+    expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
+    expect(mod.getState()).toEqual(expect.objectContaining({
+      status: "error",
+      error: "getaddrinfo ENOTFOUND github.com",
+    }));
+
+    await ipcHandlers["auto-update-check"]();
+
     expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalledTimes(2);
-    expect(mockAutoUpdater.setFeedURL).toHaveBeenNthCalledWith(1, {
-      provider: "generic",
-      url: "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/latest/",
-    });
-    expect(mockAutoUpdater.setFeedURL).toHaveBeenNthCalledWith(2, {
-      provider: "generic",
-      url: "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/latest/",
-    });
-    expect(mockAutoUpdater.setFeedURL).toHaveBeenNthCalledWith(3, {
+    expect(mod.getState()).toEqual(expect.objectContaining({
+      status: "error",
+      error: "connect ETIMEDOUT github.com",
+    }));
+    expect(mockAutoUpdater.setFeedURL).toHaveBeenLastCalledWith({
       provider: "github",
       owner: "liliMozi",
       repo: "openhanako",
@@ -264,8 +264,18 @@ describe("auto-updater", () => {
     initWithMockWindow();
     mod.setUpdateChannel("beta");
     expect(mockAutoUpdater.allowPrerelease).toBe(true);
+    expect(mockAutoUpdater.setFeedURL).toHaveBeenLastCalledWith({
+      provider: "github",
+      owner: "liliMozi",
+      repo: "openhanako",
+    });
     mod.setUpdateChannel("stable");
     expect(mockAutoUpdater.allowPrerelease).toBe(false);
+    expect(mockAutoUpdater.setFeedURL).toHaveBeenLastCalledWith({
+      provider: "github",
+      owner: "liliMozi",
+      repo: "openhanako",
+    });
   });
 
   it("should map download-progress to downloading state", () => {
@@ -455,8 +465,8 @@ describe("auto-updater", () => {
       url: "https://updates.example.com/alpha/",
     });
     expect(config.channel).toBe("alpha");
-    // 邀请通道不回落公开源：失败就诚实报错，不悄悄换回正式版货架。
-    expect(config.fallbackConfigs).toEqual([]);
+    // 邀请通道失败就诚实报错，不悄悄换回正式版货架。
+    expect(config).not.toHaveProperty("fallbackConfigs");
     expect(mod.buildReleaseDigestUrl("0.440.0", config)).toBe(
       "https://updates.example.com/alpha/release-digest.v1.json",
     );
@@ -493,8 +503,9 @@ describe("auto-updater", () => {
 
     const config = mod.resolveUpdateFeedConfig({});
     expect(config.feedURL).toEqual({
-      provider: "generic",
-      url: "https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/latest/",
+      provider: "github",
+      owner: "liliMozi",
+      repo: "openhanako",
     });
     expect(config.channel).toBe("default");
     expect(config.channelError).toBeNull();

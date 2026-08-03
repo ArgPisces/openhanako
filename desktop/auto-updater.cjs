@@ -22,9 +22,6 @@ const UPDATE_CHANNEL_VERSION = 1;
 const DEFAULT_INVITE_API_URL = "";
 const DEFAULT_GITHUB_OWNER = "liliMozi";
 const DEFAULT_GITHUB_REPO = "openhanako";
-const DEFAULT_ATOMGIT_OWNER = "liliMozi";
-const DEFAULT_ATOMGIT_REPO = "OpenHanako-Releases";
-const DEFAULT_ATOMGIT_RELEASE_BASE_URL = `https://gitcode.com/${DEFAULT_ATOMGIT_OWNER}/${DEFAULT_ATOMGIT_REPO}/releases/download`;
 
 let _mainWindow = null;
 let _setIsUpdating = null;  // 由 main.cjs 注入
@@ -34,7 +31,6 @@ let _ipcHandlersRegistered = false;
 let _updaterConfigured = false;
 let _installPromise = null;
 let _digestRequestId = 0;
-let _fallbackCheckInProgress = false;
 
 function trimTrailingSlash(value) {
   return String(value || "").replace(/\/+$/, "");
@@ -58,30 +54,14 @@ function createGithubFeedConfig(digestBaseUrl = "") {
       repo: DEFAULT_GITHUB_REPO,
     },
     digestBaseUrl: digestBaseUrl || `https://github.com/${DEFAULT_GITHUB_OWNER}/${DEFAULT_GITHUB_REPO}/releases/download`,
-    fallbackConfigs: [],
-    channel: "default",
-    channelError: null,
-  };
-}
-
-function createAtomGitFeedConfig(env = process.env, digestBaseUrl = "") {
-  const feedUrl = env.HANA_ATOMGIT_UPDATE_FEED_URL || `${DEFAULT_ATOMGIT_RELEASE_BASE_URL}/latest`;
-  return {
-    feedURL: { provider: "generic", url: ensureTrailingSlash(feedUrl) },
-    source: {
-      provider: "atomgit",
-      feedUrl: ensureTrailingSlash(feedUrl),
-    },
-    digestBaseUrl: digestBaseUrl || env.HANA_ATOMGIT_RELEASE_BASE_URL || DEFAULT_ATOMGIT_RELEASE_BASE_URL,
-    fallbackConfigs: [createGithubFeedConfig()],
     channel: "default",
     channelError: null,
   };
 }
 
 /**
- * 邀请通道的 feed 配置。fallbackConfigs 刻意留空：这条通道拿不到清单时
- * 应该诚实报错，而不是悄悄换回公开货架把用户拉回正式版。
+ * 邀请通道的 feed 配置。它拿不到清单时应该诚实报错，而不是悄悄换回
+ * 公开货架把用户拉回正式版。
  */
 function createInviteChannelFeedConfig(rawFeedUrl, digestBaseUrl = "") {
   const feedUrl = ensureTrailingSlash(rawFeedUrl);
@@ -89,7 +69,6 @@ function createInviteChannelFeedConfig(rawFeedUrl, digestBaseUrl = "") {
     feedURL: { provider: "generic", url: feedUrl },
     source: { provider: "alpha", feedUrl },
     digestBaseUrl: digestBaseUrl || `${feedUrl}{asset}`,
-    fallbackConfigs: [],
     channel: "alpha",
     channelError: null,
   };
@@ -184,7 +163,6 @@ function resolveUpdateFeedConfig(env = process.env) {
         feedUrl,
       },
       digestBaseUrl: digestBaseUrl || `${feedUrl}{asset}`,
-      fallbackConfigs: [],
       channel: "default",
       channelError: null,
     };
@@ -200,9 +178,9 @@ function resolveUpdateFeedConfig(env = process.env) {
     return createInviteChannelFeedConfig(record.feedUrl, digestBaseUrl);
   }
 
-  const defaultConfig = source === "github"
-    ? createGithubFeedConfig(digestBaseUrl)
-    : createAtomGitFeedConfig(env, digestBaseUrl);
+  // 公开 stable/beta 固定使用 GitHub。旧环境里即使还留着其它 source 值，
+  // 也不再触发第二个公共更新源；只有上面的显式 feed URL 和邀请通道可以改源。
+  const defaultConfig = createGithubFeedConfig(digestBaseUrl);
   return { ...defaultConfig, channelError: channelError || null };
 }
 
@@ -223,28 +201,12 @@ function applyUpdateFeedConfig(config) {
   autoUpdater.setFeedURL(_updateFeedConfig.feedURL);
 }
 
-async function checkForUpdatesWithFallback(source = "manual") {
-  const primaryConfig = resolveUpdateFeedConfig();
-  applyUpdateFeedConfig(primaryConfig);
-
-  _fallbackCheckInProgress = primaryConfig.fallbackConfigs.length > 0;
+async function checkForUpdatesOnce(source = "manual") {
+  const config = resolveUpdateFeedConfig();
+  applyUpdateFeedConfig(config);
   try {
     return await autoUpdater.checkForUpdates();
-  } catch (primaryError) {
-    for (const fallbackConfig of primaryConfig.fallbackConfigs) {
-      const primaryMessage = primaryError?.message || String(primaryError);
-      logUpdate(`update check via ${feedSourceLabel(primaryConfig)} failed; retrying via ${feedSourceLabel(fallbackConfig)}: ${primaryMessage}`);
-      applyUpdateFeedConfig(fallbackConfig);
-      setState({ status: "checking", progress: null, error: null, digest: null, digestUrl: null, digestError: null });
-      try {
-        return await autoUpdater.checkForUpdates();
-      } catch (fallbackError) {
-        primaryError = fallbackError;
-      }
-    }
-    throw primaryError;
   } finally {
-    _fallbackCheckInProgress = false;
     logUpdate(`update check finished: source=${source}, activeFeed=${feedSourceLabel(_updateFeedConfig)}`);
   }
 }
@@ -678,10 +640,6 @@ function setupAutoUpdater() {
 
   autoUpdater.on("error", (err) => {
     if (isMissingLatestMetadataError(err)) {
-      if (_fallbackCheckInProgress && _updateFeedConfig.fallbackConfigs.length > 0) {
-        logUpdate(`update metadata unavailable from ${feedSourceLabel(_updateFeedConfig)}; waiting for fallback: ${err?.message || String(err)}`);
-        return;
-      }
       logUpdate(`update metadata not ready; treating as no update available: ${err?.message || String(err)}`);
       if (_updateState.status === "installing" && _setIsUpdating) _setIsUpdating(false);
       setState({ status: "latest", error: null, progress: null });
@@ -831,7 +789,7 @@ function registerIpcHandlers() {
     if (_updateState.status === "installing") return getState();
     resetState();
     try {
-      await checkForUpdatesWithFallback("manual");
+      await checkForUpdatesOnce("manual");
     } catch (err) {
       if (isMissingLatestMetadataError(err)) {
         setState({ status: "latest", error: null, progress: null });
@@ -871,7 +829,7 @@ function startPolling() {
   _checkTimer = setInterval(() => {
     // 每 tick 都重新读 preferences：用户关掉开关后，下一 tick 就不再自动查
     if (!isAutoCheckEnabled()) return;
-    checkForUpdatesWithFallback("poll").catch(() => {});
+    checkForUpdatesOnce("poll").catch(() => {});
   }, CHECK_INTERVAL);
 }
 
@@ -911,7 +869,7 @@ async function checkForUpdatesAuto() {
   // 用户关了自动检查开关：启动时也不自动 check
   if (!isAutoCheckEnabled()) return;
   try {
-    await checkForUpdatesWithFallback("startup");
+    await checkForUpdatesOnce("startup");
   } catch {}
 }
 

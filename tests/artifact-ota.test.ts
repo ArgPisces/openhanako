@@ -36,6 +36,7 @@ const {
   hasDevOverrideConfigured,
   readStagedTrainStatus,
   SEED_CHANNEL,
+  RECHECK_INTERVAL_MS,
 } = ota;
 
 const PLATFORM_ARCH = "darwin-arm64";
@@ -158,8 +159,8 @@ async function makeOtaFixture(root: string, keys: ReturnType<typeof makeKeys>, o
 
 /**
  * Builds a schema-valid, signed manifest as bytes only — no archives, no
- * fixture directory on disk. Used by the dual-source race tests below,
- * which exercise `fetchChannelManifest`/`checkOnce` via injected
+ * fixture directory on disk. Used by the channel-manifest tests below,
+ * which exercise `fetchChannelManifest` via injected
  * `fetchOnce` (never reach staging/download), so the `artifacts` entries
  * only need to be schema-shaped, not backed by real files.
  */
@@ -408,218 +409,59 @@ describe("artifact-ota: downloadToFile stall/deadline guards (trickle-attack mit
 });
 
 describe("artifact-ota: channelManifestUrls", () => {
-  it("returns [origin(GitHub), mirror(AtomGit)] — a role label, not a priority order (both are fetched in parallel)", () => {
-    const urls = channelManifestUrls("stable");
-    expect(urls[0]).toBe("https://github.com/liliMozi/openhanako/releases/download/channels/stable.json");
-    expect(urls[1]).toBe("https://gitcode.com/liliMozi/OpenHanako-Releases/releases/download/channels/stable.json");
+  it.each(["stable", "beta"])("returns only the GitHub %s channel pointer", (channel) => {
+    expect(channelManifestUrls(channel)).toEqual([
+      `https://github.com/liliMozi/openhanako/releases/download/channels/${channel}.json`,
+    ]);
+  });
+
+  it("keeps background public checks on the four-hour cadence", () => {
+    expect(RECHECK_INTERVAL_MS).toBe(4 * 60 * 60 * 1000);
   });
 });
 
-// ── dual-source manifest fetch: both channel-manifest sources are raced in
-//    parallel, verified independently, and the higher-train side wins (tie
-//    goes to the origin) — see artifact-ota.cjs's file header "dual-source
-//    manifest fetch" note for the full design rationale ─────────────────
-
-function installTwoSourceFetch(
-  originUrl: string,
-  mirrorUrl: string,
-  origin: { manifestBytes: Buffer; sigBytes: Buffer } | "error" | "not-modified" | null,
-  mirror: { manifestBytes: Buffer; sigBytes: Buffer } | "error" | "not-modified" | null,
-) {
-  return async (url: string) => {
-    const respond = (side: typeof origin, base: string, label: string) => {
-      if (side === "error" || side === null) throw new Error(`${label} unreachable`);
-      if (side === "not-modified") return fakeStreamResponse(304, {});
-      if (url === base) return fakeStreamResponse(200, {}, [side.manifestBytes]);
-      if (url === `${base}.sig`) return fakeStreamResponse(200, {}, [side.sigBytes]);
-      throw new Error(`unexpected url ${url}`);
-    };
-    if (url === originUrl || url === `${originUrl}.sig`) return respond(origin, originUrl, "origin");
-    if (url === mirrorUrl || url === `${mirrorUrl}.sig`) return respond(mirror, mirrorUrl, "mirror");
-    throw new Error(`unexpected url ${url}`);
-  };
-}
-
-describe("artifact-ota: fetchChannelManifest (dual-source parallel race)", () => {
-  it("keeps the origin's manifest when its train is higher than the mirror's (mirror lagging behind origin)", async () => {
+describe("artifact-ota: fetchChannelManifest (GitHub-only)", () => {
+  it("fetches and verifies one GitHub manifest and its detached signature", async () => {
     const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
+    const [originUrl] = channelManifestUrls("stable");
     const origin = buildSignedManifestBytes(keys, { train: 4, version: "0.402.0" });
-    const mirror = buildSignedManifestBytes(keys, { train: 3, version: "0.401.0" });
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, origin, mirror);
-
-    const result = await fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} });
-
-    expect(result.notModified).toBeUndefined();
-    expect(result.manifest.train).toBe(4);
-    expect(result.sourceKind).toBe("origin");
-    expect(result.originUnreachable).toBe(false);
-  });
-
-  it("keeps the mirror's manifest when its train is strictly higher than the origin's (mirror ahead, reverse case)", async () => {
-    const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    const origin = buildSignedManifestBytes(keys, { train: 3, version: "0.401.0" });
-    const mirror = buildSignedManifestBytes(keys, { train: 5, version: "0.403.0" });
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, origin, mirror);
-
-    const result = await fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} });
-
-    expect(result.manifest.train).toBe(5);
-    expect(result.sourceKind).toBe("mirror");
-    // Origin DID participate (it verified fine, it just lost the train
-    // comparison) — originUnreachable must stay false; it only reflects
-    // whether origin contributed a candidate, not whether it won.
-    expect(result.originUnreachable).toBe(false);
-  });
-
-  it("breaks an exact train-number tie in favor of the origin", async () => {
-    const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    const origin = buildSignedManifestBytes(keys, { train: 4, version: "0.402.0" });
-    const mirror = buildSignedManifestBytes(keys, { train: 4, version: "0.402.0" });
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, origin, mirror);
-
-    const result = await fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} });
-
-    expect(result.sourceKind).toBe("origin");
-  });
-
-  it("sets originUnreachable and resolves from the mirror alone when the origin fetch fails outright", async () => {
-    const root = makeTempDir("hana-ota-dual-source-");
-    const keys = makeKeys();
-    const homeDir = path.join(root, "home");
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    const mirror = buildSignedManifestBytes(keys, { train: 9, version: "0.409.0" });
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, "error", mirror);
-
-    const result = await checkOnce({
-      homeDir,
-      keyset: keys.keyset,
-      currentShellVersion: SHELL_VERSION,
-      platformArch: PLATFORM_ARCH,
-      channel: "stable",
-      fetchOnce,
-      log: () => {},
-    });
-
-    expect(result.outcome).toBe("available");
-    expect(result.train).toBe(9);
-
-    // State persisted and readable back through both surfaces the settings
-    // page consumes.
-    const state = (await readOtaState(homeDir)).stable;
-    expect(state.manifestSource).toBe("mirror");
-    expect(state.originUnreachable).toBe(true);
-    expect(state.manifestReleasedAt).toBe("2026-07-11T00:00:00.000Z");
-
-    const status = await readStagedTrainStatus(homeDir, { channel: "stable" });
-    expect(status.manifestSource).toBe("mirror");
-    expect(status.originUnreachable).toBe(true);
-    expect(status.manifestReleasedAt).toBe("2026-07-11T00:00:00.000Z");
-  });
-
-  it("excludes a candidate whose signature fails verification without poisoning the other side's valid candidate", async () => {
-    const keys = makeKeys();
-    const otherKeys = makeKeys("some-other-key-not-in-keyset");
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    // Origin is signed with a key that ISN'T in the keyset passed to
-    // fetchChannelManifest below — verification must fail for it, exactly
-    // like a tampered signature or a compromised source would.
-    const origin = buildSignedManifestBytes(otherKeys, { train: 10, version: "0.410.0" });
-    const mirror = buildSignedManifestBytes(keys, { train: 6, version: "0.406.0" });
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, origin, mirror);
-
-    const result = await fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} });
-
-    // The mirror's valid, lower-train candidate must still win — the
-    // origin's invalid signature excludes it entirely rather than being
-    // preferred by the tie/train-number logic or blocking the round.
-    expect(result.manifest.train).toBe(6);
-    expect(result.sourceKind).toBe("mirror");
-    expect(result.originUnreachable).toBe(true);
-  });
-
-  it("errors when both sources fail (neither fetch succeeds nor answers 304)", async () => {
-    const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, "error", "error");
-
-    await expect(
-      fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} }),
-    ).rejects.toThrow(/all channel manifest sources failed/i);
-  });
-
-  it("reports not-modified when both sources answer 304", async () => {
-    const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, "not-modified", "not-modified");
-
-    const result = await fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} });
-
-    expect(result.notModified).toBe(true);
-  });
-
-  // ── total-race-failure fallback: the origin's short race budget only
-  //    makes sense while the mirror leg is answering. When neither side
-  //    produced a candidate, the origin gets ONE more attempt with the full
-  //    per-hop budget, since it's the only source guaranteed fresh.
-  it("retries the origin with the full budget after a total race failure and resolves from the retry", async () => {
-    const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    const origin = buildSignedManifestBytes(keys, { train: 7, version: "0.407.0" });
-    let originManifestCalls = 0;
+    const calls: string[] = [];
     const fetchOnce = async (url: string) => {
-      if (url === mirrorUrl || url === `${mirrorUrl}.sig`) throw new Error("mirror unreachable");
-      if (url === originUrl) {
-        originManifestCalls += 1;
-        // First attempt = the raced leg (short budget) failing; the second
-        // is the post-race retry that gets the full budget.
-        if (originManifestCalls === 1) throw new Error("origin exceeded its race budget");
-        return fakeStreamResponse(200, { etag: 'W/"retry-etag"' }, [origin.manifestBytes]);
-      }
+      calls.push(url);
+      if (url === originUrl) return fakeStreamResponse(200, { etag: 'W/"github-etag"' }, [origin.manifestBytes]);
       if (url === `${originUrl}.sig`) return fakeStreamResponse(200, {}, [origin.sigBytes]);
       throw new Error(`unexpected url ${url}`);
     };
 
     const result = await fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} });
 
-    expect(result.manifest.train).toBe(7);
+    expect(result.manifest.train).toBe(4);
     expect(result.sourceKind).toBe("origin");
-    // The origin DID end up contributing this round, so the "(via backup
-    // source)" annotation must not fire.
     expect(result.originUnreachable).toBe(false);
-    expect(originManifestCalls).toBe(2); // raced leg + exactly one retry
-    expect(result.sourceEtagUpdate.origin).toBe('W/"retry-etag"');
-    expect(result.etag).toBe('W/"retry-etag"');
+    expect(result.sourceEtagUpdate).toEqual({ origin: 'W/"github-etag"' });
+    expect(calls).toEqual([originUrl, `${originUrl}.sig`]);
   });
 
-  it("includes the origin retry outcome when the final retry also fails", async () => {
+  it("performs no hidden retry when the GitHub request fails", async () => {
     const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    const fetchOnce = installTwoSourceFetch(originUrl, mirrorUrl, "error", "error");
+    let calls = 0;
+    const fetchOnce = async () => {
+      calls += 1;
+      throw new Error("network down");
+    };
 
     await expect(
       fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} }),
-    ).rejects.toThrow(/origin retry/);
-    await expect(
-      fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} }),
-    ).rejects.toThrow(/all channel manifest sources failed/i);
+    ).rejects.toThrow(/GitHub.*network down/i);
+    expect(calls).toBe(1);
   });
 
-  it("treats a 304 on the origin retry as a not-modified round", async () => {
+  it("uses the GitHub ETag and treats 304 as not modified", async () => {
     const keys = makeKeys();
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
-    let originManifestCalls = 0;
-    const fetchOnce = async (url: string) => {
-      if (url === mirrorUrl || url === `${mirrorUrl}.sig`) throw new Error("mirror unreachable");
-      if (url === originUrl) {
-        originManifestCalls += 1;
-        if (originManifestCalls === 1) throw new Error("origin exceeded its race budget");
-        // The retry reuses the same cached ETag for its conditional GET.
-        return fakeStreamResponse(304, {});
-      }
-      throw new Error(`unexpected url ${url}`);
+    const seenHeaders: Array<Record<string, string>> = [];
+    const fetchOnce = async (_url: string, options: { headers: Record<string, string> }) => {
+      seenHeaders.push(options.headers);
+      return fakeStreamResponse(304, {});
     };
 
     const result = await fetchChannelManifest({
@@ -631,28 +473,23 @@ describe("artifact-ota: fetchChannelManifest (dual-source parallel race)", () =>
     });
 
     expect(result.notModified).toBe(true);
+    expect(seenHeaders).toEqual([{ "If-None-Match": 'W/"cached"' }]);
   });
 
-  it("excludes an origin retry whose signature fails verification and throws", async () => {
+  it("rejects a manifest whose signature is not trusted", async () => {
     const keys = makeKeys();
     const otherKeys = makeKeys("some-other-key-not-in-keyset");
-    const [originUrl, mirrorUrl] = channelManifestUrls("stable");
+    const [originUrl] = channelManifestUrls("stable");
     const forged = buildSignedManifestBytes(otherKeys, { train: 11, version: "0.411.0" });
-    let originManifestCalls = 0;
     const fetchOnce = async (url: string) => {
-      if (url === mirrorUrl || url === `${mirrorUrl}.sig`) throw new Error("mirror unreachable");
-      if (url === originUrl) {
-        originManifestCalls += 1;
-        if (originManifestCalls === 1) throw new Error("origin exceeded its race budget");
-        return fakeStreamResponse(200, {}, [forged.manifestBytes]);
-      }
+      if (url === originUrl) return fakeStreamResponse(200, {}, [forged.manifestBytes]);
       if (url === `${originUrl}.sig`) return fakeStreamResponse(200, {}, [forged.sigBytes]);
       throw new Error(`unexpected url ${url}`);
     };
 
     await expect(
       fetchChannelManifest({ channel: "stable", keyset: keys.keyset, fetchOnce, log: () => {} }),
-    ).rejects.toThrow(/origin retry: manifest failed verification/i);
+    ).rejects.toThrow(/signature or schema verification/i);
   });
 });
 
@@ -1210,14 +1047,18 @@ describe("artifact-ota: checkOnce (ETag / not-modified semantics, mutation-check
       recordedAt: "2026-01-01T00:00:00.000Z",
     };
     await writeOtaChannelState(homeDir, SEED_CHANNEL, {
-      etag: '"etag-1"',
+      manifestEtags: { origin: '"github-etag"', mirror: '"legacy-backup-etag"' },
       lastManifestUrl: urls[0],
       lastError: "previous failure",
       available: seededAvailable,
       minShellBlocked: false,
     });
 
-    const fetchOnce = async () => fakeStreamResponse(304, {});
+    const seenHeaders: Array<Record<string, string>> = [];
+    const fetchOnce = async (_url: string, options: { headers: Record<string, string> }) => {
+      seenHeaders.push(options.headers);
+      return fakeStreamResponse(304, {});
+    };
     const result = await checkOnce({
       homeDir,
       keyset: keys.keyset,
@@ -1235,6 +1076,8 @@ describe("artifact-ota: checkOnce (ETag / not-modified semantics, mutation-check
     // check must survive a 304 byte-for-byte.
     expect(state.available).toEqual(seededAvailable);
     expect(state.lastError).toBe("previous failure");
+    expect(state.manifestEtags).toEqual({ origin: '"github-etag"' });
+    expect(seenHeaders).toEqual([{ "If-None-Match": '"github-etag"' }]);
   });
 
   it("keeps lastError from a failed check through a later 304 (a quiet poll doesn't mean the earlier failure resolved)", async () => {
