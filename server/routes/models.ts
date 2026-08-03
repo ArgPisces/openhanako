@@ -48,6 +48,9 @@ function parseHealthModelRef(body) {
 
 function classifyModelSwitchError(err) {
   const message = err?.message || String(err || "");
+  if (err?.code === "MODEL_CONTEXT_TOO_LARGE") {
+    return { status: 409, code: "MODEL_CONTEXT_TOO_LARGE", message };
+  }
   const lower = message.toLowerCase();
   if (lower.includes("model not found") || (lower.includes("模型") && lower.includes("不存在"))) {
     return { status: 404, code: "MODEL_NOT_FOUND", message };

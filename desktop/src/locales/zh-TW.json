@@ -3021,6 +3021,7 @@
     "platformTestUnsupported": "該平台暫不支援測試",
     "codexNoHealthCheck": "codex API 不支援健康檢測",
     "modelNotFound": "找不到模型: {id}",
+    "modelContextTooLarge": "新模型的上下文空間不足，無法容納目前會話。請先壓縮目前會話，再重新切換。",
     "noUtilityModel": "未設定 utility 模型，請在設定中新增",
     "noUtilityLargeModel": "未設定 utility_large 模型，請在設定中新增",
     "modelNoProvider": "{role} 模型 \"{model}\" 沒有 provider 歸屬",

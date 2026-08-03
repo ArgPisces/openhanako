@@ -3021,6 +3021,7 @@
     "platformTestUnsupported": "이 플랫폼은 테스트를 지원하지 않아요",
     "codexNoHealthCheck": "Codex API는 헬스 체크를 지원하지 않아요",
     "modelNotFound": "모델을 찾을 수 없어요: {id}",
+    "modelContextTooLarge": "새 모델의 컨텍스트 창이 이 대화를 담기에 너무 작습니다. 먼저 대화를 압축한 다음 모델을 다시 전환해 주세요.",
     "noUtilityModel": "utility 모델이 설정되지 않았어요. 설정에서 추가해 주세요",
     "noUtilityLargeModel": "utility_large 모델이 설정되지 않았어요. 설정에서 추가해 주세요",
     "modelNoProvider": "{role} 모델 \"{model}\"에 provider가 연결되지 않았어요",

@@ -3026,6 +3026,7 @@
     "platformTestUnsupported": "Testing not supported for this platform",
     "codexNoHealthCheck": "Codex API does not support health check",
     "modelNotFound": "Model not found: {id}",
+    "modelContextTooLarge": "The new model's context window is too small for this conversation. Compact the conversation first, then switch models again.",
     "noUtilityModel": "Utility model not configured, please add one in settings",
     "noUtilityLargeModel": "utility_large model not configured, please add one in settings",
     "modelNoProvider": "{role} model \"{model}\" has no provider association",

@@ -822,7 +822,11 @@ describe("model sync related routes", () => {
       switchSessionModel: vi.fn()
         .mockRejectedValueOnce(new Error("Model not found: minimax-token-plan/MiniMax-M2.7"))
         .mockRejectedValueOnce(new Error("No API key configured for provider minimax-token-plan"))
-        .mockRejectedValueOnce(new Error("cannot switch model during compaction")),
+        .mockRejectedValueOnce(new Error("cannot switch model during compaction"))
+        .mockRejectedValueOnce(Object.assign(
+          new Error("新模型的上下文空间不足，无法容纳当前会话。请先压缩当前会话，再重新切换。"),
+          { code: "MODEL_CONTEXT_TOO_LARGE" },
+        )),
       getSessionByPath: vi.fn(),
     };
     app.route("/api", createModelsRoute(engine));
@@ -856,6 +860,13 @@ describe("model sync related routes", () => {
     expect(await conflict.json()).toMatchObject({
       code: "MODEL_SWITCH_CONFLICT",
       error: expect.stringContaining("compaction"),
+    });
+
+    const contextTooLarge = await request();
+    expect(contextTooLarge.status).toBe(409);
+    expect(await contextTooLarge.json()).toMatchObject({
+      code: "MODEL_CONTEXT_TOO_LARGE",
+      error: expect.stringContaining("请先压缩"),
     });
   });
 

@@ -3021,6 +3021,7 @@
     "platformTestUnsupported": "このプラットフォームはテストに対応していません",
     "codexNoHealthCheck": "Codex API はヘルスチェックに対応していません",
     "modelNotFound": "モデルが見つかりません: {id}",
+    "modelContextTooLarge": "新しいモデルのコンテキスト枠では、この会話を収められません。先に会話を圧縮してから、もう一度モデルを切り替えてください。",
     "noUtilityModel": "utility モデルが設定されていません。設定で追加してください",
     "noUtilityLargeModel": "utility_large モデルが設定されていません。設定で追加してください",
     "modelNoProvider": "{role} モデル \"{model}\" にプロバイダーの関連付けがありません",

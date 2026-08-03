@@ -12,12 +12,10 @@ import { createAgentSession, SessionManager, estimateTokens, refreshSessionModel
 import { isSessionJsonlFilename } from "../lib/session-jsonl.ts";
 import { createDefaultSettings } from "./session-defaults.ts";
 import { isDefaultWorkspacePath, restoreDefaultWorkspaceIfMissing } from "../shared/default-workspace.ts";
-import { computeHardTruncation } from "./compaction-utils.ts";
 import {
   appendCompactionResultToSession,
   createColdUtilitySummaryResult,
   isDirectCompactionInProgress,
-  runCachePreservingCompactionForSession,
 } from "./session-compactor.ts";
 import {
   installDynamicCompactionReserve,
@@ -187,6 +185,18 @@ function modelEntryId(entry: any) {
 
 function sessionModelRef(provider: any, modelId: any) {
   return provider && modelId ? `${provider}/${modelId}` : "unknown";
+}
+
+const MODEL_CONTEXT_TOO_LARGE_CODE = "MODEL_CONTEXT_TOO_LARGE";
+
+function createModelContextTooLargeError(currentTokens: number, effectiveWindow: number) {
+  const error: any = new Error(t("error.modelContextTooLarge"));
+  error.name = "ModelContextTooLargeError";
+  error.code = MODEL_CONTEXT_TOO_LARGE_CODE;
+  error.status = 409;
+  error.currentTokens = currentTokens;
+  error.effectiveWindow = effectiveWindow;
+  return error;
 }
 
 function classifySessionModelAvailability(models: any, provider: string, modelId: string): SessionModelAvailability {
@@ -5228,7 +5238,7 @@ export class SessionCoordinator {
 
   /**
    * 在已有 session 上切换模型（不创建新 session）。
-   * 如果新模型的上下文窗口容不下当前对话，先压缩/截断。
+   * 如果新模型的上下文窗口容不下当前对话，拒绝切换并提示用户先手动压缩。
    *
    * @param {string} sessionPath
    * @param {object} newModel - Pi SDK Model 对象
@@ -5261,15 +5271,13 @@ export class SessionCoordinator {
 
     entry._switching = true;
     const adaptations = [];
-    const oldModel = session.model;
-    const compactionModel = entry.modelAvailability?.available === false ? newModel : oldModel;
 
     try {
       // 估算当前上下文 token 数
       const msgs = session.agent?.state?.messages || [];
       const usage = session.getContextUsage?.();
       let currentTokens = usage?.tokens;
-      if (currentTokens == null) {
+      if (!Number.isFinite(currentTokens) || currentTokens < 0) {
         // fallback: 逐消息估算
         currentTokens = msgs.reduce((sum, m) => sum + estimateTokens(m), 0);
       }
@@ -5277,39 +5285,7 @@ export class SessionCoordinator {
       const effectiveWindow = Math.floor(newModel.contextWindow * 0.9) - 4000;
 
       if (currentTokens > effectiveWindow) {
-        // 预检：最后一轮对话是否本身就超窗口（此时 compact/truncate 都救不了）
-        const lastUserIdx = msgs.findLastIndex(m => m.role === "user");
-        if (lastUserIdx >= 0) {
-          const lastTurnTokens = msgs.slice(lastUserIdx).reduce((s, m) => s + estimateTokens(m), 0);
-          if (lastTurnTokens > effectiveWindow) {
-            throw new Error("当前对话无法适配目标模型的上下文窗口");
-          }
-        }
-
-        // 尝试压缩
-        try {
-          const compactionResult = await this._compactWithModel(sessionPath, session, effectiveWindow, compactionModel);
-          const hardTruncated = compactionResult?.details?.reason === "cache-preserving-compaction-hard-truncate";
-          adaptations.push(hardTruncated ? "truncated" : "compacted");
-        } catch (compactErr) {
-          log.warn(`compactWithModel failed, falling back to hard truncate: ${compactErr.message}`);
-          // 压缩失败，尝试硬截断
-          try {
-            await this._hardTruncate(sessionPath, session, effectiveWindow);
-            adaptations.push("truncated");
-          } catch (truncErr) {
-            throw new Error(`Failed to fit context into new model window: ${truncErr.message}`);
-          }
-        }
-
-        // 终极检查：压缩/截断后仍然超窗口则拒绝
-        const postMsgs = session.agent.state.messages;
-        const postTokens = postMsgs.reduce((sum, m) => sum + estimateTokens(m), 0);
-        if (postTokens > effectiveWindow) {
-          throw new Error(
-            `Context still exceeds new model window after adaptation (${postTokens} > ${effectiveWindow})`
-          );
-        }
+        throw createModelContextTooLargeError(currentTokens, effectiveWindow);
       }
 
       // 执行模型切换
@@ -5336,41 +5312,6 @@ export class SessionCoordinator {
     } finally {
       entry._switching = false;
     }
-  }
-
-  /**
-   * 用主模型同前缀摘要来压缩对话历史（为 model switch 准备窗口）。
-   * @private
-   */
-  async _compactWithModel(sessionPath: any, session: any, effectiveWindow: any, model: any) {
-    if (!sessionPath) throw new Error("model-switch compaction requires an explicit session path");
-    const sessionId = this._sessionIdForPath(sessionPath);
-    return await runCachePreservingCompactionForSession(session, {
-      model,
-      settings: {
-        enabled: true,
-        reserveTokens: 4000,
-        keepRecentTokens: effectiveWindow,
-      },
-      emitLifecycle: true,
-      lifecycleReason: "model_switch",
-      usageLedger: this._d.getUsageLedger?.(),
-      usageContext: {
-        source: {
-          subsystem: "compaction",
-          operation: "compact",
-          surface: "desktop",
-          trigger: "overflow",
-        },
-        attribution: {
-          kind: "session",
-          agentId: this.resolveSessionOwnership(sessionPath).agentId || this._d.getActiveAgentId?.() || null,
-          ...(sessionId ? { sessionId } : {}),
-          sessionPath,
-        },
-      },
-      onCompacted: () => this._markSessionCompacted(sessionPath),
-    });
   }
 
   /**
@@ -5410,52 +5351,6 @@ export class SessionCoordinator {
       : 0;
     entry.reminderCompactionRevision = revision + 1;
     return true;
-  }
-
-  /**
-   * 硬截断对话历史（无 API 调用，用固定文本作为摘要）。
-   * @private
-   */
-  async _hardTruncate(sessionPath: any, session: any, effectiveWindow: any) {
-    if (!sessionPath) throw new Error("model-switch hard truncation requires an explicit session path");
-    const sm = session.sessionManager;
-    const pathEntries = sm.getBranch();
-    const reason = "model_switch";
-    session?._emit?.({ type: "compaction_start", reason });
-
-    try {
-      const result = computeHardTruncation(pathEntries, effectiveWindow, {
-        summary: "[由于模型切换，早期对话历史已被截断]",
-        reason: "model-switch-truncation",
-      });
-      if (!result) {
-        throw new Error("Cannot hard-truncate: not enough messages or cut at beginning");
-      }
-
-      const saved = await appendCompactionResultToSession(session, result, {
-        fromExtension: false,
-        onCompacted: () => this._markSessionCompacted(sessionPath),
-      });
-      session?._emit?.({
-        type: "compaction_end",
-        reason,
-        result: saved,
-        aborted: false,
-        willRetry: false,
-      });
-      return saved;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      session?._emit?.({
-        type: "compaction_end",
-        reason,
-        result: undefined,
-        aborted: false,
-        willRetry: false,
-        errorMessage: `Compaction failed: ${message}`,
-      });
-      throw error;
-    }
   }
 
   /** Get plan mode for the current (focused) session */
