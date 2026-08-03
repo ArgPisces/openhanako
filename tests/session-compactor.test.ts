@@ -38,6 +38,7 @@ import {
   estimateCachePreservingCompactionRequest,
   normalizeCompactionProviderPayload,
   isDirectCompactionInProgress,
+  projectMessagesToLatestCompactionUsageEpoch,
   runCachePreservingCompactionForSession,
   shouldHardTruncateCachePreservingCompaction,
 } from "../core/session-compactor.ts";
@@ -148,6 +149,76 @@ describe("session-compactor", () => {
       return Math.ceil(content.length / 4);
     });
     findCutPointMock.mockReturnValue({ firstKeptEntryIndex: 1, turnStartIndex: -1, isSplitTurn: false });
+  });
+
+  it("starts a fresh usage epoch at a live compaction summary", () => {
+    const staleUsage = {
+      input: 120_000,
+      output: 1_000,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 121_000,
+      cost: { total: 1 },
+    };
+    const retainedAssistant = {
+      ...piAssistant("retained suffix", 100),
+      usage: staleUsage,
+    };
+    const messages = [
+      { role: "compactionSummary", summary: "checkpoint", tokensBefore: 121_000, timestamp: 200 },
+      retainedAssistant,
+      piUser("continue", 201),
+    ];
+
+    const projected = projectMessagesToLatestCompactionUsageEpoch(messages);
+
+    expect(projected).not.toBe(messages);
+    expect(projected[1]).not.toBe(retainedAssistant);
+    expect(projected[1].usage).toMatchObject({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+    });
+    expect(retainedAssistant.usage).toBe(staleUsage);
+    expect(retainedAssistant.usage.totalTokens).toBe(121_000);
+  });
+
+  it("uses the latest summary for repeated compactions and preserves only proven newer usage", () => {
+    const oldEpochUsage = { input: 80_000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 80_100 };
+    const retainedUsage = { input: 60_000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 60_100 };
+    const currentEpochUsage = { input: 4_000, output: 500, cacheRead: 0, cacheWrite: 0, totalTokens: 4_500 };
+    const messages = [
+      { role: "compactionSummary", summary: "first", tokensBefore: 80_100, timestamp: 100 },
+      { ...piAssistant("first epoch", 250), usage: oldEpochUsage },
+      { role: "compactionSummary", summary: "second", tokensBefore: 60_100, timestamp: 300 },
+      { ...piAssistant("retained after second summary", 250), usage: retainedUsage },
+      { ...piAssistant("new answer", 350), usage: currentEpochUsage },
+      piUser("next", 360),
+    ];
+
+    const projected = projectMessagesToLatestCompactionUsageEpoch(messages);
+
+    expect(projected[1].usage.totalTokens).toBe(0);
+    expect(projected[3].usage.totalTokens).toBe(0);
+    expect(projected[4]).toBe(messages[4]);
+    expect(projected[4].usage).toBe(currentEpochUsage);
+  });
+
+  it("treats missing timestamps as stale but leaves non-compacted budgeting untouched", () => {
+    const usage = { input: 10_000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 10_100 };
+    const ordinaryMessages = [{ ...piAssistant("ordinary", 100), usage }];
+    expect(projectMessagesToLatestCompactionUsageEpoch(ordinaryMessages)).toBe(ordinaryMessages);
+
+    const legacyMessages = [
+      { role: "compactionSummary", summary: "checkpoint", tokensBefore: 10_100, timestamp: 200 },
+      { ...piAssistant("legacy retained", 0), timestamp: undefined, usage },
+    ];
+    const projected = projectMessagesToLatestCompactionUsageEpoch(legacyMessages);
+
+    expect(projected[1].usage.totalTokens).toBe(0);
+    expect(legacyMessages[1].usage).toBe(usage);
   });
 
   it("sends the full live prefix once, keeps the previous summary in place, and scopes the retained tail in one hidden instruction", async () => {

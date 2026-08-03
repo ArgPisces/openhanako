@@ -39,6 +39,7 @@ import {
   createCachePreservingCompactionResult,
   getCachePreservingCompactionMaxTokens,
   normalizeCompactionProviderPayload,
+  projectMessagesToLatestCompactionUsageEpoch,
   shouldHardTruncateCachePreservingCompaction,
   stripInlineMediaFromCompactionPreparation,
 } from "../../core/session-compactor.ts";
@@ -193,6 +194,15 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
   }
 
   return function (pi) {
+    // A live compactionSummary starts a new usage epoch. Retained assistant
+    // messages are ordered after that summary but still carry usage from the
+    // old, much larger prompt. Pi AI's output clamp reads that usage before it
+    // builds the provider payload, so clear it only in this context projection.
+    pi.on("context", (event) => {
+      const messages = projectMessagesToLatestCompactionUsageEpoch(event.messages);
+      return messages === event.messages ? undefined : { messages };
+    });
+
     // ── L1: tool_result 单条硬限 ──
     pi.on("tool_result", (event) => {
       try {

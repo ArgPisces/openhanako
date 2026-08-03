@@ -50,6 +50,80 @@ export const COMPACTION_OUTPUT_POLICIES = Object.freeze({
   BOUNDED: "bounded",
 });
 
+function messageTimestamp(value: any): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function usageConstrainsContext(usage: any): boolean {
+  if (!usage || typeof usage !== "object") return false;
+  return [
+    usage.totalTokens,
+    usage.input,
+    usage.output,
+    usage.cacheRead,
+    usage.cacheWrite,
+  ].some((value) => Number.isFinite(Number(value)) && Number(value) > 0);
+}
+
+function clearContextUsage(usage: any) {
+  return {
+    ...usage,
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+  };
+}
+
+/**
+ * Project live messages into the usage epoch opened by the latest compaction.
+ *
+ * Pi's provider-side output clamp uses the most recent assistant usage it can
+ * find. A retained assistant appears after the compaction summary in message
+ * order, but its timestamp and usage still belong to the larger, pre-summary
+ * prompt. Keeping that usage can make the next answer look as if only one or
+ * two tokens remain. Clear only the projected usage for assistants that cannot
+ * be proven newer than the latest summary; the persisted messages are never
+ * mutated. Without a compaction summary, return the original array unchanged.
+ */
+export function projectMessagesToLatestCompactionUsageEpoch(messages: any[]) {
+  if (!Array.isArray(messages)) return messages;
+
+  let summaryIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "compactionSummary") {
+      summaryIndex = index;
+      break;
+    }
+  }
+  if (summaryIndex < 0) return messages;
+
+  const summaryTimestamp = messageTimestamp(messages[summaryIndex]?.timestamp);
+  let changed = false;
+  const projected = messages.map((message, index) => {
+    if (message?.role !== "assistant" || !usageConstrainsContext(message.usage)) return message;
+
+    const assistantTimestamp = messageTimestamp(message.timestamp);
+    const isProvenCurrentEpoch = index > summaryIndex
+      && summaryTimestamp !== null
+      && assistantTimestamp !== null
+      && assistantTimestamp > summaryTimestamp;
+    if (isProvenCurrentEpoch) return message;
+
+    changed = true;
+    return {
+      ...message,
+      usage: clearContextUsage(message.usage),
+    };
+  });
+
+  return changed ? projected : messages;
+}
+
 export const CACHE_PRESERVING_COMPACTION_PREFIX_CONTRACT_ERROR =
   "CACHE_PRESERVING_COMPACTION_PREFIX_CONTRACT";
 

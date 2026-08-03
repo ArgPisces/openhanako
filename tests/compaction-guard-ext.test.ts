@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { clampMaxTokensToContext } from "@earendil-works/pi-ai/api/simple-options";
 
 // Mock compaction-utils 以便精准控制 L3 判断和硬截断结果
 vi.mock("../core/compaction-utils.js", () => ({
@@ -15,7 +16,7 @@ import {
   computeHardTruncation,
   truncateTextHeadTail,
 } from "../core/compaction-utils.ts";
-import { Type } from "../lib/pi-sdk/index.ts";
+import { convertAgentMessagesToLlm, Type } from "../lib/pi-sdk/index.ts";
 
 const VALID_COMPACTION_SUMMARY = `## Goal
 Keep the session useful.
@@ -162,11 +163,59 @@ describe("CompactionGuardExtension", () => {
     })(pi);
   });
 
-  it("registers only tool_result and session_before_compact handlers", () => {
+  it("registers context usage epochs, tool_result, and session_before_compact handlers", () => {
+    expect(pi.on).toHaveBeenCalledWith("context", expect.any(Function));
     expect(pi.on).toHaveBeenCalledWith("tool_result", expect.any(Function));
     expect(pi.on).toHaveBeenCalledWith("session_before_compact", expect.any(Function));
-    expect(pi.on).not.toHaveBeenCalledWith("context", expect.any(Function));
     expect(pi.on).not.toHaveBeenCalledWith("message_end", expect.any(Function));
+  });
+
+  describe("live compaction usage epoch", () => {
+    it("prevents retained pre-summary usage from collapsing the first answer budget", async () => {
+      const model = { contextWindow: 128_000 };
+      const retainedAssistant = {
+        ...assistantMessage([{ type: "text", text: "retained suffix" }]),
+        timestamp: 100,
+        usage: {
+          ...usage,
+          input: 127_000,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 127_000,
+        },
+      };
+      const messages = [
+        { role: "compactionSummary", summary: "checkpoint", tokensBefore: 127_000, timestamp: 200 },
+        retainedAssistant,
+        { role: "user", content: [{ type: "text", text: "continue" }], timestamp: 201 },
+      ];
+      const providerContextBefore = {
+        systemPrompt: "",
+        tools: [],
+        messages: await convertAgentMessagesToLlm(messages),
+      };
+      expect(clampMaxTokensToContext(model, providerContextBefore, 32_000)).toBe(1);
+
+      const result = await pi.trigger("context", { messages });
+      const providerContextAfter = {
+        systemPrompt: "",
+        tools: [],
+        messages: await convertAgentMessagesToLlm(result.messages),
+      };
+
+      expect(result.messages[1].usage.totalTokens).toBe(0);
+      expect(retainedAssistant.usage.totalTokens).toBe(127_000);
+      expect(clampMaxTokensToContext(model, providerContextAfter, 32_000)).toBe(32_000);
+    });
+
+    it("does not project ordinary non-compacted conversations", async () => {
+      const messages = [assistantMessage([{ type: "text", text: "ordinary answer" }])];
+
+      const result = await pi.trigger("context", { messages });
+
+      expect(result).toBeUndefined();
+    });
   });
 
   describe("L1: tool_result truncation", () => {
