@@ -5,12 +5,12 @@
 
 ## 核心纪律
 
-1. **唯一对外入口**：所有出站 payload 兼容必须经过 [`core/provider-compat.js`](../provider-compat.js) 的 `normalizeProviderPayload(payload, model, options)`。chat 路径（`engine.js` 注册的 `before_provider_request` 钩子）和 utility 路径（`llm-client.js` 的 `callText`）共享这一个入口。需要在 provider serializer 之前处理的 replay/history 规则，以及只影响模型可见副本的通用 content projection，走同文件的 `normalizeProviderContextMessages(messages, model, options)`。
-2. **通用补丁留主入口**：与 provider 无关的处理（空 tools 数组剥离、按 `compat.thinkingFormat` 剥离不兼容的 `thinking` 字段、移除 SDK 注入的隐式 output cap、孤儿 toolResult 配对兜底、reasoning replay 契约、按 `compat.audioTransport` 执行音频 transport pre-pass）写在 `provider-compat.js` 主入口或同目录通用 helper。孤儿 toolResult 兜底逻辑在 [`tool-pairing.js`](tool-pairing.js)；reasoning replay 执行逻辑在 [`reasoning-content-replay.ts`](reasoning-content-replay.ts)。两者都是 provider-agnostic helper，不参与 first-match-wins 分发。
-3. **Provider-specific 补丁拆子文件**：每个 provider 一个 `core/provider-compat/<name>.js`，互不串扰。
+1. **唯一对外入口**：所有出站 payload 兼容必须经过 [`core/provider-compat.ts`](../provider-compat.ts) 的 `normalizeProviderPayload(payload, model, options)`。chat 路径（`engine.ts` 注册的 `before_provider_request` 钩子）和 utility 路径（`llm-client.ts` 的 `callText`）共享这一个入口。需要在 provider serializer 之前处理的 replay/history 规则，以及只影响模型可见副本的通用 content projection，走同文件的 `normalizeProviderContextMessages(messages, model, options)`。
+2. **通用补丁留主入口**：与 provider 无关的处理（空 tools 数组剥离、按 `compat.thinkingFormat` 剥离不兼容的 `thinking` 字段、移除 SDK 注入的隐式 output cap、孤儿 toolResult 配对兜底、reasoning replay 契约、按 `compat.audioTransport` 执行音频 transport pre-pass）写在 `provider-compat.ts` 主入口或同目录通用 helper。孤儿 toolResult 兜底逻辑在 [`tool-pairing.ts`](tool-pairing.ts)；reasoning replay 执行逻辑在 [`reasoning-content-replay.ts`](reasoning-content-replay.ts)。两者都是 provider-agnostic helper，不参与 first-match-wins 分发。
+3. **Provider-specific 补丁拆子文件**：每个 provider 一个 `core/provider-compat/<name>.ts`，互不串扰。
 4. **接口契约**：每个子文件 export `matches(model) → boolean`（必须容忍 `model = null/undefined`，不抛错）和 `apply(payload, model, options) → payload`（不可 mutate 输入 payload）。如果该 provider 有 serializer 前的 replay/history 约束，可以额外 export `normalizeContextMessages(messages, model, options) → messages`。
 5. **dispatch 单调性**：dispatcher 按数组顺序遍历，第一个 `matches` 返回 true 的子模块负责处理（first-match-wins）。一个 model 只匹配一个子模块。新 provider 默认加在数组末尾；只有当模块的 `matches` 是另一模块的子集（更具体的规则）时才前置，避免被通用规则吞掉。
-6. **禁止散落**：调用点（`callText`、`engine.js` 钩子、route handler 等）禁止内联 provider-specific 补丁。一旦发现，迁移到本目录。
+6. **禁止散落**：调用点（`callText`、`engine.ts` 钩子、route handler 等）禁止内联 provider-specific 补丁。一旦发现，迁移到本目录。
 
 ## Pi SDK 与 Hana 双层边界
 
@@ -42,14 +42,14 @@ Hana 的 provider 出站链路有两层兼容逻辑，排查时必须同时看�
 
 ## 新增 provider 补丁的步骤
 
-1. 在 `core/provider-compat/` 下新建 `<provider>.js`
+1. 在 `core/provider-compat/` 下新建 `<provider>.ts`
 2. 文件顶部 JSDoc 注释必须写明：
    - 处理的 provider（`provider` 字段值或 baseUrl 模式）
    - 解决的具体协议问题（链接到官方文档）
    - **删除条件**（即什么情况下整个文件可整块删掉）
 3. export `matches(model)` 和 `apply(payload, model, options)`，签名见下文
-4. 在 `core/provider-compat.js` 的 `PROVIDER_MODULES` 数组末尾加入 import
-5. 在 `tests/provider-compat/<provider>.test.js` 加测试：
+4. 在 `core/provider-compat.ts` 的 `PROVIDER_MODULES` 数组末尾加入 import
+5. 在 `tests/provider-compat/<provider>.test.ts` 加测试：
    - `matches` 真值表（正例 / 反例 / `model=null`）
    - `apply` 在 `mode: "chat"` 和 `mode: "utility"` 两种上下文的行为
    - 不可变性断言（apply 不 mutate 输入 payload）
@@ -58,8 +58,8 @@ Hana 的 provider 出站链路有两层兼容逻辑，排查时必须同时看�
 
 升级 `@mariozechner/pi-coding-agent` 或 `@mariozechner/pi-ai` 后必须执行：
 
-1. 跑 `npm test` 全套，重点关注 `tests/provider-compat.test.js` 和 `tests/provider-compat/*.test.js`
-2. 检查每个 `provider-compat/*.js` 顶部的"删除条件"，对照 SDK 升级 changelog 看是否还需要保留
+1. 跑 `npm test` 全套，重点关注 `tests/provider-compat.test.ts` 和 `tests/provider-compat/*.test.ts`
+2. 检查每个 `provider-compat/*.ts` 顶部的"删除条件"，对照 SDK 升级 changelog 看是否还需要保留
 3. 如果某个 provider 子模块的删除条件已满足（SDK 升级后官方一等公民化），删除该文件并从 `PROVIDER_MODULES` 移除 import
 4. 检查 SDK 是否仍完整保存 canonical `AssistantMessage`，并在 serializer 中原样回放 signed thinking block、reasoning item、`reasoning_details` 与 `thoughtSignature`。禁止把普通 `message.content` 当成 reasoning fallback。
 
@@ -133,8 +133,8 @@ export function apply(payload, model, options) { ... }
 
 Pi Session JSONL 持久化完整 canonical assistant message，包括 thinking block、签名、tool call 与 provider/model 身份。Hana 不另建 reasoning sidecar。跨同一 `reasoning_content` 供应商族切换模型时，只改模型可见副本的身份以阻止 SDK 把 signed thinking 降级；持久化原文不改。跨供应商族、缺失签名或普通 text fallback 一律 fail closed。
 
-`core/model-sync.js` 会在投影 `models.json` 时把已知模型能力补成显式
-`compat.thinkingFormat` / `compat.reasoningProfile`。`shared/model-capabilities.js`
+`core/model-sync.ts` 会在投影 `models.json` 时把已知模型能力补成显式
+`compat.thinkingFormat` / `compat.reasoningProfile`。`shared/model-capabilities.ts`
 保留旧 `models.json` 的读时兼容，避免升级后必须重新保存 provider 才恢复思考。
 
 ## 新增 FRC / Thinking 模型的维护规则
@@ -144,8 +144,8 @@ Pi Session JSONL 持久化完整 canonical assistant message，包括 thinking b
 1. 先确认模型是否具备 `reasoning` 能力。`reasoning: true` 只打开 UI / 偏好层的思考控制，不决定请求字段。
 2. 再确认请求体大类，优先复用已有 `compat.thinkingFormat`：`anthropic`、`qwen`、`deepseek` 等。
 3. 如果新模型和现有 format 使用同一种 wire format，但参数名、强度枚举、tool call 历史或 replay 规则不同，新增 `compat.reasoningProfile`。
-4. profile 推导优先使用显式 `model.compat.reasoningProfile`；读时兼容可以在 `shared/model-capabilities.js` 基于 provider / baseUrl / api / known model family 推导。
-5. provider 的请求控制写在 `core/provider-compat/<provider>.js`；跨 provider 通用的 replay 语义写在 `compat.reasoningReplay` 与中心 helper。只有无法由 carrier/policy 表达的供应商规则才留在子模块。
+4. profile 推导优先使用显式 `model.compat.reasoningProfile`；读时兼容可以在 `shared/model-capabilities.ts` 基于 provider / baseUrl / api / known model family 推导。
+5. provider 的请求控制写在 `core/provider-compat/<provider>.ts`；跨 provider 通用的 replay 语义写在 `compat.reasoningReplay` 与中心 helper。只有无法由 carrier/policy 表达的供应商规则才留在子模块。
 6. 每个 profile 都要有测试覆盖：model-sync 投影、profile 推导、chat payload、utility payload、历史回放规则；SDK 原生 carrier 至少要有契约矩阵或 conformance 测试。
 
 判断标准：如果换一个同 format 的 provider 之后规则还成立，放进 `thinkingFormat`；如果只对某个 provider 或某个模型族成立，放进 `reasoningProfile`。
@@ -157,7 +157,7 @@ Pi SDK 的 `streamSimple` 会在调用方未传 `maxTokens` 时，把 `min(model
 对 OpenAI-compatible / Gemini / Mistral 这类 output cap 可省略的 provider，这会把 Hana 的模型能力 metadata
 误变成本次请求策略，改变供应商默认行为，也可能与 thinking budget 冲突。
 
-通用层通过 `provider-compat/output-budget.js` 处理这件事。该文件内部维护
+通用层通过 `provider-compat/output-budget.ts` 处理这件事。该文件内部维护
 `OUTPUT_CAP_CAPABILITIES`，集中声明 output cap 是否必填、是否需要保留 SDK
 默认值，并通过 `resolveOutputBudgetPolicy()` 把请求来源、provider 能力和
 是否可移除隐式 SDK 默认值收敛成一个可测试的策略对象，避免把 provider 规则散落在调用点。
@@ -165,7 +165,7 @@ Pi SDK 的 `streamSimple` 会在调用方未传 `maxTokens` 时，把 `min(model
 1. chat 请求中，如果 payload 的 output cap 等于 Pi SDK 从 `model.maxTokens` 推导出的隐式默认值，则移除该字段，让供应商默认生效。
 2. utility 请求由具体消费任务决定预算。`callText` 不从 `model.maxTokens` 合成默认 output cap；标题、健康检查、记忆摘要等任务需要限制长度时必须显式传 `maxTokens`。
 3. Anthropic / Bedrock / `anthropic-messages` 这类协议必填 output cap 的 provider 不移除调用方显式传入的 cap；如果调用方未声明预算，通用层不替它推导。
-4. 官方 DeepSeek endpoint 不移除显式 cap，继续交给 `deepseek.js` 统一转换字段并确保 thinking 输出预算合法。
+4. 官方 DeepSeek endpoint 不移除显式 cap，继续交给 `deepseek.ts` 统一转换字段并确保 thinking 输出预算合法。
 5. 真正的用户级或系统级单次输出上限，调用方必须通过 `options.outputBudgetSource = "user" | "system"` 或等价显式 source 传入，通用层不得静默移除显式意图。
 6. chat hook 拿不到 Pi SDK `maxTokens` 的来源，保持 source 为 `unspecified`；兼容层只在字段值等于 Pi SDK 隐式默认时移除，避免误删未来真实的非默认上限。
 
@@ -175,8 +175,8 @@ Hana 内部用 `{ type: "audio", data, mimeType }` 表示当前轮音频。UI、
 
 出站请求分两步：
 
-1. `core/provider-media-serializer.js` 在 utility 路径把当前轮 audio block 直接序列化成 Chat Completions 官方 `{ type: "input_audio", input_audio: { data, format } }`，其中 `format` 只允许 `wav` / `mp3`。
-2. chat 路径仍经过 Pi SDK，它会把非 text block 统一输出成 `image_url` data URL。`normalizeProviderPayload()` 在 first-match-wins provider 子模块之前，根据 `shared/model-capabilities.js` 的 `resolveModelAudioInputTransport(model)` 执行 audio transport pre-pass。当前 `mimo-input-audio` 与 `openai-input-audio` 都复用 [`input-audio.js`](input-audio.js)，把 Pi SDK 产出的 `data:audio/...` 或旧 canonical audio block 转成同一个 `input_audio` 结构；不支持的音频格式必须显式报错，不允许继续伪装成 `image_url`。
+1. `core/provider-media-serializer.ts` 在 utility 路径把当前轮 audio block 直接序列化成 Chat Completions 官方 `{ type: "input_audio", input_audio: { data, format } }`，其中 `format` 只允许 `wav` / `mp3`。
+2. chat 路径仍经过 Pi SDK，它会把非 text block 统一输出成 `image_url` data URL。`normalizeProviderPayload()` 在 first-match-wins provider 子模块之前，根据 `shared/model-capabilities.ts` 的 `resolveModelAudioInputTransport(model)` 执行 audio transport pre-pass。当前 `mimo-input-audio` 与 `openai-input-audio` 都复用 [`input-audio.ts`](input-audio.ts)，把 Pi SDK 产出的 `data:audio/...` 或旧 canonical audio block 转成同一个 `input_audio` 结构；不支持的音频格式必须显式报错，不允许继续伪装成 `image_url`。
 
 接入未来 DeepSeek 音频时，优先在 known model / provider sync 投影里声明：
 
@@ -193,16 +193,37 @@ Hana 内部用 `{ type: "audio", data, mimeType }` 表示当前轮音频。UI、
 
 ## 已知子模块
 
+下表按 `core/provider-compat.ts` 的 `PROVIDER_MODULES` 数组顺序排列，也就是
+first-match-wins 的实际匹配次序。改数组顺序时同步改这张表。
+
 | 文件 | 处理 provider | 删除条件 |
 |---|---|---|
-| [`deepseek.js`](deepseek.js) | DeepSeek 思考开关、effort、预算与 Anthropic profile 特例；reasoning_content 通用回放由中心 helper 负责 | DeepSeek 请求控制被 pi-ai 原生覆盖，且 Anthropic profile 不再需要额外规则 |
-| [`mimo.js`](mimo.js) | MiMo OpenAI-compatible 思考开关（chat_template_kwargs），覆盖官网与 Xiaomi Token Plan `/v1` endpoint | MiMo 不再通过 chat_template_kwargs 控制 thinking |
-| [`qwen.js`](qwen.js) | Qwen-style 思考模型 `enable_thinking` quirk；DashScope 视频输入复用 `openai-video-url` 转换 | quirks 系统重构 / Qwen-style 协议改成 reasoning_effort；DashScope 和 Pi SDK 原生支持 video_url |
-| [`zhipu.js`](zhipu.js) | Zhipu / GLM OpenAI-compatible 思考模式协议（thinking.type、clear_thinking）与 OpenAI-only 字段清理；reasoning_content 校验由中心 helper 负责 | pi-ai 原生处理 GLM thinking 控制和 Zhipu 不支持的 OpenAI-only 字段 |
+| [`deepseek-responses.ts`](deepseek-responses.ts) | DeepSeek 官方 endpoint 的 Responses 协议：effort 枚举翻译、`max_output_tokens` 字段名、清理 ChatCompletions 残留字段、显式 `effort:"none"` 关思考。**必须排在 `deepseek` 之前**（更具体的子集） | pi-ai 原生按 DeepSeek Responses 词汇表发送 effort 与输出预算 |
+| [`deepseek.ts`](deepseek.ts) | DeepSeek 思考开关、effort、预算与 Anthropic profile 特例；reasoning_content 通用回放由中心 helper 负责 | DeepSeek 请求控制被 pi-ai 原生覆盖，且 Anthropic profile 不再需要额外规则 |
+| [`kimi.ts`](kimi.ts) | Kimi Code / Moonshot 思考控制（`thinking: { type, keep }` + `reasoning_effort`），避免 Kimi-only 字段外溢到通用 OpenAI-compatible 路径 | pi-ai 原生处理 Kimi thinking 控制与 reasoning_content 回放 |
+| [`mimo.ts`](mimo.ts) | MiMo OpenAI-compatible 思考开关（chat_template_kwargs），覆盖官网与 Xiaomi Token Plan `/v1` endpoint | MiMo 不再通过 chat_template_kwargs 控制 thinking |
+| [`qwen.ts`](qwen.ts) | Qwen-style 思考模型 `enable_thinking` quirk；DashScope 视频输入复用 `openai-video-url` 转换 | quirks 系统重构 / Qwen-style 协议改成 reasoning_effort；DashScope 和 Pi SDK 原生支持 video_url |
+| [`zhipu.ts`](zhipu.ts) | Zhipu / GLM OpenAI-compatible 思考模式协议（thinking.type、clear_thinking）与 OpenAI-only 字段清理；reasoning_content 校验由中心 helper 负责 | pi-ai 原生处理 GLM thinking 控制和 Zhipu 不支持的 OpenAI-only 字段 |
 | [`volcengine.ts`](volcengine.ts) | Volcengine Ark OpenAI-compatible 思考模式协议（thinking.type、reasoning_effort 映射、utility/off 清理） | pi-ai 原生处理 Volcengine thinking 控制、effort 枚举和 utility/off 历史清理 |
-| [`input-audio.js`](input-audio.js) | 通用 OpenAI-compatible 音频 transport helper，由主入口按 `audioTransport` 调用，不参与 first-match-wins | Pi SDK / provider serializer 原生按模型 transport 输出正确音频块 |
-| [`openai-video-url.js`](openai-video-url.js) | OpenAI-compatible 视频输入 `image_url data:video` → `video_url`，当前用于 Moonshot Kimi 与 DashScope Qwen | Pi SDK 原生按 video MIME 输出 `video_url`；或相关 provider 接受 `image_url data:video` |
+| [`longcat.ts`](longcat.ts) | LongCat 的 `thinking` 对象式 reasoning 控制；utility 调用显式关思考并在回放前清掉过期 reasoning 历史 | pi-ai 原生处理 LongCat thinking 控制与 utility 历史清理 |
+| [`agnes.ts`](agnes.ts) | Agnes AI：官方文档未定义结构化 reasoning carrier，阻止把它当 Hana reasoning 模型而把私有推理挤进正文 | Agnes 发布稳定的结构化 reasoning 流/回放协议，且 Hana 通过 `compat.thinkingFormat` 映射 |
+| [`openai-input-audio.ts`](openai-input-audio.ts) | OpenAI Chat Completions 音频模型的 `input_audio` 分发入口（转换本身复用 `input-audio.ts`） | Pi SDK 把本地音频附件直接序列化成 OpenAI 的 `input_audio` part |
+| [`openai-video-url.ts`](openai-video-url.ts) | OpenAI-compatible 视频输入 `image_url data:video` → `video_url`，当前用于 Moonshot Kimi 与 DashScope Qwen | Pi SDK 原生按 video MIME 输出 `video_url`；或相关 provider 接受 `image_url data:video` |
+| [`openrouter.ts`](openrouter.ts) | OpenRouter 托管的 Claude adaptive-only 模型：effort 走 OpenRouter 的 `verbosity` 字段，发 Anthropic 原生 `thinking` 或通用 `reasoning.effort` 会打错线 | pi-ai 原生产出该请求形状；或 OpenRouter 改为接受标准 reasoning effort 字段且语义一致 |
+| [`anthropic.ts`](anthropic.ts) | Anthropic Messages prompt-cache marker：chat 路径由 Pi SDK 注入 `cache_control`，utility 是直接 HTTP，本模块补齐同一份契约 | utility 路径也经由 Pi SDK 注入 cache_control |
 | [`codex-responses.ts`](codex-responses.ts) | ChatGPT Codex Responses OAuth endpoint 不支持的 output cap / temperature 字段清理 | Codex Responses 接受这些字段且语义与 OpenAI public Responses 一致；或 pi-ai 原生 Codex serializer 已省略 |
+
+### Provider-agnostic helper（不参与 first-match-wins）
+
+这些文件不在 `PROVIDER_MODULES` 里，由主入口按能力声明直接调用：
+
+| 文件 | 职责 | 删除条件 |
+|---|---|---|
+| [`input-audio.ts`](input-audio.ts) | 通用 OpenAI-compatible 音频 transport 转换，由主入口按 `compat.audioTransport` 调用 | Pi SDK / provider serializer 原生按模型 transport 输出正确音频块 |
+| [`tool-pairing.ts`](tool-pairing.ts) | 孤儿 toolResult 配对兜底（issue #1285）：重放时补齐被丢弃的 assistant tool_calls | Pi SDK 重放不再丢弃 `stopReason=error/aborted` 轮次的 tool call |
+| [`reasoning-content-replay.ts`](reasoning-content-replay.ts) | `reasoning_content` carrier 的历史回放执行与 fail-closed 校验 | 所有相关 provider 的 replay 由 Pi SDK 原生保存回放 |
+| [`output-budget.ts`](output-budget.ts) | 通用输出预算策略：`OUTPUT_CAP_CAPABILITIES` + `resolveOutputBudgetPolicy()` | Pi SDK 不再注入隐式 output cap，或按 provider 能力自行省略 |
+| [`deepseek-thinking-budget.ts`](deepseek-thinking-budget.ts) | 仅在 DeepSeek 请求完全没带预算时补一个值；**不覆盖** Pi SDK `clampMaxTokensToContext` 算好的既有预算 | DeepSeek 请求缺预算时服务端有明确默认，或 SDK 始终携带预算 |
 
 子模块的对外 API 仅有 `matches` 和 `apply` 两个 export。其它 export（如 replay helper 的 `extractReasoningFromContent`、`ensureReasoningContentForToolCalls`）属于实现细节、仅供同文件和单元测试访问，**不构成对外契约**。升级 SDK 想删 helper 时不需顾虑外部依赖。
 
