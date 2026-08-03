@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { SessionCollabDraftStore } from "../lib/session-collab/draft-store.ts";
+import {
+  SessionCollabDraftStore,
+  SessionCollabPartialSuccessError,
+} from "../lib/session-collab/draft-store.ts";
 
 function makeEntry(overrides: any = {}) {
   return {
@@ -46,6 +49,30 @@ describe("SessionCollabDraftStore", () => {
     await expect(store.apply(suggestionId, {})).rejects.toThrow("session_busy");
     const retry = await store.apply(suggestionId, {});
     expect(retry.ok).toBe(true);
+  });
+
+  it("创建部分成功会把原草稿切换成仅重试首条消息", async () => {
+    const store = new SessionCollabDraftStore();
+    const retry = vi.fn().mockResolvedValue({ sessionId: "sid-new" });
+    const error = new SessionCollabPartialSuccessError(
+      "sid-new",
+      new Error("preflight rejected"),
+      "retry me",
+      retry,
+    );
+    const { suggestionId } = store.create(makeEntry({
+      kind: "create",
+      apply: vi.fn().mockRejectedValue(error),
+    }));
+
+    await expect(store.apply(suggestionId, {})).rejects.toBe(error);
+    expect(store.get(suggestionId)).toMatchObject({
+      partialResult: { sessionId: "sid-new", retryable: true },
+    });
+    await expect(store.apply(suggestionId, { firstMessage: "edited retry" }))
+      .resolves.toMatchObject({ ok: true, result: { sessionId: "sid-new" } });
+    expect(retry).toHaveBeenCalledWith({ firstMessage: "edited retry" });
+    expect(store.get(suggestionId)).toBeNull();
   });
 
   it("并发二次 apply 在首次未决期间被拒绝，闭包只执行一次", async () => {

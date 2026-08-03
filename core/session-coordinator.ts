@@ -380,18 +380,19 @@ function assertAudioInputSupported(model: any, audios: any) {
   }
 }
 
-function buildPromptMediaOptions(opts: any) {
+function buildPromptMediaOptions(opts: any, preflightResult?: (success: boolean) => void) {
   const media = [
     ...(opts?.images || []),
     ...(opts?.videos || []),
     ...(opts?.audios || []),
   ];
-  if (!media.length) return undefined;
+  if (!media.length && !preflightResult) return undefined;
   return {
-    images: media,
-    ...(opts.imageAttachmentPaths?.length ? { imageAttachmentPaths: opts.imageAttachmentPaths } : {}),
-    ...(opts.videoAttachmentPaths?.length ? { videoAttachmentPaths: opts.videoAttachmentPaths } : {}),
-    ...(opts.audioAttachmentPaths?.length ? { audioAttachmentPaths: opts.audioAttachmentPaths } : {}),
+    ...(media.length ? { images: media } : {}),
+    ...(opts?.imageAttachmentPaths?.length ? { imageAttachmentPaths: opts.imageAttachmentPaths } : {}),
+    ...(opts?.videoAttachmentPaths?.length ? { videoAttachmentPaths: opts.videoAttachmentPaths } : {}),
+    ...(opts?.audioAttachmentPaths?.length ? { audioAttachmentPaths: opts.audioAttachmentPaths } : {}),
+    ...(preflightResult ? { preflightResult } : {}),
   };
 }
 
@@ -5040,7 +5041,27 @@ export class SessionCoordinator {
     abortController.signal.throwIfAborted();
     assertVideoInputSupported(entry.session.model, opts?.videos);
     assertAudioInputSupported(entry.session.model, opts?.audios);
-    const promptOpts = buildPromptMediaOptions(opts);
+    let promptPreflightReported = false;
+    const needsPromptReceipt = typeof submitOptions?.afterCachePreflight === "function"
+      || typeof submitOptions?.afterInputAccepted === "function";
+    const notifyPromptPreflight = needsPromptReceipt ? (success: boolean) => {
+      if (promptPreflightReported) return;
+      promptPreflightReported = true;
+      if (!success) return;
+      if (typeof submitOptions?.afterCachePreflight === "function") {
+        const hookResult = submitOptions.afterCachePreflight();
+        if (hookResult && typeof hookResult.then === "function") {
+          throw new TypeError("promptSession afterCachePreflight must be synchronous");
+        }
+      }
+      if (typeof submitOptions?.afterInputAccepted === "function") {
+        const hookResult = submitOptions.afterInputAccepted();
+        if (hookResult && typeof hookResult.then === "function") {
+          throw new TypeError("promptSession afterInputAccepted must be synchronous");
+        }
+      }
+    } : undefined;
+    const promptOpts = buildPromptMediaOptions(opts, notifyPromptPreflight);
     const nativeMediaTurn = engine?.beginCurrentTurnNativeMedia?.(sessionPath, opts);
     if (turnContext) this._setRuntimeValueForPath(this._turnContextBySession, sessionPath, turnContext);
     try {
@@ -5049,12 +5070,6 @@ export class SessionCoordinator {
       // be committed onto a now-streaming Session.
       if (entry.session.isStreaming) throw new Error("session_busy");
       this.preflightSessionInput(sessionPath);
-      if (typeof submitOptions?.afterCachePreflight === "function") {
-        const hookResult = submitOptions.afterCachePreflight();
-        if (hookResult && typeof hookResult.then === "function") {
-          throw new TypeError("promptSession afterCachePreflight must be synchronous");
-        }
-      }
       await entry.session.prompt(text, promptOpts);
     } finally {
       if (turnContext) this._deleteRuntimeValueForPath(this._turnContextBySession, sessionPath);

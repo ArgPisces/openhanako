@@ -24,6 +24,7 @@
  * @param {boolean} [opts.preservePromptEnvelope] - prompt text already contains its persisted media/SessionFile/reminder envelope
  * @param {boolean} [opts.projectUserMessage] - persist/emit a visible user projection for this model input
  * @param {() => void} [opts.beforeInputSideEffects] - synchronous commit hook after cache/model preflight, before UI or prompt persistence
+ * @param {() => void} [opts.onInputAccepted] - synchronous receipt after full prompt preflight and input side effects
  * @returns {Promise<{ text: string | null, toolMedia: string[] }>}
  */
 import path from "path";
@@ -190,6 +191,7 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
   preservePromptEnvelope?: boolean;
   projectUserMessage?: boolean;
   beforeInputSideEffects?: () => unknown;
+  onInputAccepted?: () => unknown;
 } = {}) {
   const {
     sessionId: requestedSessionId,
@@ -211,6 +213,7 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
     preservePromptEnvelope = false,
     projectUserMessage = true,
     beforeInputSideEffects,
+    onInputAccepted,
   } = opts;
 
   if (!engine || typeof engine.ensureSessionLoaded !== "function" || typeof engine.promptSession !== "function") {
@@ -392,7 +395,10 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
         context,
       });
       if (typeof engine.preflightSessionInput === "function") {
-        await engine.promptSession(sessionPath, promptText, promptOpts, { afterCachePreflight });
+        await engine.promptSession(sessionPath, promptText, promptOpts, {
+          afterCachePreflight,
+          afterInputAccepted: onInputAccepted,
+        });
       } else {
         // Compatibility for older embedders. HanaEngine always takes the guarded path above.
         afterCachePreflight();
@@ -413,6 +419,50 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
   } finally {
     pendingDesktopSessionSubmissions.delete(submissionKey);
   }
+}
+
+/**
+ * Start a desktop turn and expose the point where the prompt has passed Pi's
+ * complete preflight, its visible input side effects are committed, and the
+ * agent run is starting. The full turn remains available separately.
+ */
+export function submitDesktopSessionMessageWithReceipt(
+  engine: any,
+  opts: Parameters<typeof submitDesktopSessionMessage>[1] = {},
+) {
+  let settled = false;
+  let resolveAccepted!: (value: { accepted: true; sessionId: string | null; sessionPath: string }) => void;
+  let rejectAccepted!: (reason: unknown) => void;
+  const accepted = new Promise<{ accepted: true; sessionId: string | null; sessionPath: string }>((resolve, reject) => {
+    resolveAccepted = resolve;
+    rejectAccepted = reject;
+  });
+  const previousAcceptedHook = opts.onInputAccepted;
+  const accept = () => {
+    const hookResult = previousAcceptedHook?.();
+    if (hookResult && typeof (hookResult as any).then === "function") {
+      throw new TypeError("desktop-session-submit: onInputAccepted must be synchronous");
+    }
+    if (settled) return;
+    settled = true;
+    const target = resolveDesktopSessionTarget(engine, opts.sessionId, opts.sessionPath);
+    resolveAccepted({ accepted: true, sessionId: target.sessionId, sessionPath: target.sessionPath });
+  };
+
+  const completion = submitDesktopSessionMessage(engine, { ...opts, onInputAccepted: accept });
+  completion.then(
+    () => {
+      // Older embedders cannot expose the guarded boundary. Completion is the
+      // earliest trustworthy receipt for those compatibility implementations.
+      accept();
+    },
+    (error) => {
+      if (settled) return;
+      settled = true;
+      rejectAccepted(error);
+    },
+  );
+  return { accepted, completion };
 }
 
 export async function submitDesktopSessionInterjection(engine: any, opts: {

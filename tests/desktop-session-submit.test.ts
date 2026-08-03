@@ -6,6 +6,7 @@ import {
   MESSAGE_PRESENTATION_RECORD_TYPE,
   submitDesktopSessionInterjection,
   submitDesktopSessionMessage,
+  submitDesktopSessionMessageWithReceipt,
 } from "../core/desktop-session-submit.ts";
 import fs from "fs";
 import os from "os";
@@ -1435,6 +1436,88 @@ describe("session reminder block injection", () => {
     expect(appendCustomEntry).not.toHaveBeenCalled();
     expect(engine.consumeRenderedSessionReminderBlock).not.toHaveBeenCalled();
     expect(beforeInputSideEffects).not.toHaveBeenCalled();
+  });
+
+  it("acceptance receipt rejects for an immediate preflight failure", async () => {
+    const session = makeFakeSession();
+    const engine = {
+      preflightSessionInput: vi.fn(),
+      ensureSessionLoaded: vi.fn(async () => session),
+      promptSession: vi.fn(async () => { throw new Error("prompt preflight rejected"); }),
+      emitEvent: vi.fn(),
+      setUiContext: vi.fn(),
+    };
+
+    const submission = submitDesktopSessionMessageWithReceipt(engine, {
+      sessionPath: "/tmp/receipt-fast-reject.jsonl",
+      text: "hello",
+    });
+    await expect(submission.accepted).rejects.toThrow("prompt preflight rejected");
+    await expect(submission.completion).rejects.toThrow("prompt preflight rejected");
+    expect(engine.emitEvent).not.toHaveBeenCalled();
+  });
+
+  it("acceptance receipt stays pending through delayed preflight and rejects when it finally fails", async () => {
+    const session = makeFakeSession();
+    let finishPreflight!: () => void;
+    const preflightGate = new Promise<void>((resolve) => { finishPreflight = resolve; });
+    const engine = {
+      preflightSessionInput: vi.fn(),
+      ensureSessionLoaded: vi.fn(async () => session),
+      promptSession: vi.fn(async () => {
+        await preflightGate;
+        throw new Error("delayed prompt preflight rejected");
+      }),
+      emitEvent: vi.fn(),
+      setUiContext: vi.fn(),
+    };
+
+    const submission = submitDesktopSessionMessageWithReceipt(engine, {
+      sessionPath: "/tmp/receipt-delayed-reject.jsonl",
+      text: "hello",
+    });
+    let acceptedSettled = false;
+    void submission.accepted.finally(() => { acceptedSettled = true; }).catch(() => {});
+    await Promise.resolve();
+    expect(acceptedSettled).toBe(false);
+    finishPreflight();
+    await expect(submission.accepted).rejects.toThrow("delayed prompt preflight rejected");
+    await expect(submission.completion).rejects.toThrow("delayed prompt preflight rejected");
+    expect(engine.emitEvent).not.toHaveBeenCalled();
+  });
+
+  it("receipt resolves after accepted side effects without waiting for the model turn", async () => {
+    const session = makeFakeSession();
+    let finishTurn!: () => void;
+    const turnGate = new Promise<void>((resolve) => { finishTurn = resolve; });
+    const engine = {
+      preflightSessionInput: vi.fn(),
+      ensureSessionLoaded: vi.fn(async () => session),
+      promptSession: vi.fn(async (_sessionPath, _text, _opts, submitOptions) => {
+        submitOptions.afterCachePreflight();
+        submitOptions.afterInputAccepted();
+        await turnGate;
+        throw new Error("provider failed after acceptance");
+      }),
+      emitEvent: vi.fn(),
+      setUiContext: vi.fn(),
+    };
+
+    const submission = submitDesktopSessionMessageWithReceipt(engine, {
+      sessionPath: "/tmp/receipt-accepted.jsonl",
+      text: "hello",
+      displayMessage: { text: "hello" },
+    });
+    await expect(submission.accepted).resolves.toMatchObject({
+      accepted: true,
+      sessionPath: "/tmp/receipt-accepted.jsonl",
+    });
+    expect(engine.emitEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "session_user_message" }),
+      "/tmp/receipt-accepted.jsonl",
+    );
+    finishTurn();
+    await expect(submission.completion).rejects.toThrow("provider failed after acceptance");
   });
 
   it("closes streaming status but retains the receipt when Pi prompt fails after the hook", async () => {

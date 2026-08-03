@@ -1,5 +1,5 @@
 // 跨 session 协作草稿卡的 one-shot 存储。对齐 AutomationSuggestionStore 语义：
-// apply 成功才删除条目；闭包抛错条目保留，用户可直接重试（投递不幂等，靠即删防双发）。
+// 一般 apply 失败保留条目供重试；若创建已部分成功则把原草稿切换成仅重试首条消息。
 export type SessionCollabDraftKind = "send" | "create";
 
 export interface SessionCollabDraftInput {
@@ -8,6 +8,49 @@ export interface SessionCollabDraftInput {
   sourceSessionPath?: string | null;
   draft: Record<string, unknown>;
   apply: (editedDraft?: Record<string, unknown>) => unknown;
+}
+
+export class SessionCollabPartialSuccessError extends Error {
+  readonly code = "first_message_failed";
+  readonly partialSuccess = true;
+  readonly sessionId: string;
+  readonly result: {
+    sessionId: string;
+    sessionCreated: true;
+    firstMessageAccepted: false;
+    retryMessage: string;
+    retryable: boolean;
+  };
+  readonly retry?: (editedDraft?: Record<string, unknown>) => unknown;
+
+  constructor(
+    sessionId: string,
+    cause: unknown,
+    retryMessage: string,
+    retry?: (editedDraft?: Record<string, unknown>) => unknown,
+  ) {
+    const detail = (cause as any)?.message || String(cause);
+    super(`first_message_failed:${sessionId}:${detail}`);
+    this.name = "SessionCollabPartialSuccessError";
+    this.sessionId = sessionId;
+    this.result = {
+      sessionId,
+      sessionCreated: true,
+      firstMessageAccepted: false,
+      retryMessage,
+      retryable: typeof retry === "function",
+    };
+    this.retry = retry;
+    (this as any).cause = cause;
+  }
+}
+
+export function isSessionCollabPartialSuccessError(error: unknown): error is SessionCollabPartialSuccessError {
+  const candidate = error as any;
+  return candidate?.partialSuccess === true
+    && candidate?.code === "first_message_failed"
+    && typeof candidate?.sessionId === "string"
+    && !!candidate.sessionId;
 }
 
 function text(value: unknown): string | null {
@@ -157,10 +200,21 @@ export class SessionCollabDraftStore {
     if (entry._applying) return { ok: false as const, reason: "in-flight" as const };
     entry._applying = true;
     try {
-      // 闭包抛错时不删条目：让用户可重试（对齐 AutomationSuggestionStore）
       const result = await entry.apply(editedDraft);
       this._entries.delete(suggestionId);
       return { ok: true as const, result };
+    } catch (error) {
+      // 创建已发生但首条消息未被接受时，原创建闭包不能再重放，否则会再建
+      // 一个空 session。只替换当前草稿的闭包，fork 出去的其它条目不会共享状态。
+      if (isSessionCollabPartialSuccessError(error)) {
+        if (typeof error.retry === "function") {
+          entry.apply = error.retry;
+          entry.partialResult = error.result;
+        } else {
+          this._entries.delete(suggestionId);
+        }
+      }
+      throw error;
     } finally {
       // 失败路径清标记让用户可重试；成功路径条目已删，清标记无副作用
       entry._applying = false;

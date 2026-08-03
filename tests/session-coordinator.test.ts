@@ -3127,7 +3127,10 @@ describe("SessionCoordinator", () => {
       steer: vi.fn(),
       model,
       getContextUsage: () => ({ tokens: 0 }),
-      prompt: vi.fn(async () => "ok"),
+      prompt: vi.fn(async (_text, opts) => {
+        opts?.preflightResult?.(true);
+        return "ok";
+      }),
       setActiveToolsByName: vi.fn((names) => {
         session.agent.state.tools = names.map((name) => activeTools.get(name)).filter(Boolean);
       }),
@@ -3190,7 +3193,8 @@ describe("SessionCoordinator", () => {
     const renewSpy = vi.spyOn(coordinator as any, "_renewCachePrefixContract");
     const requestCountBeforePreflight = entry.cachePrefixContractRequestCount;
     const promptOrder: string[] = [];
-    session.prompt.mockImplementationOnce(async () => {
+    session.prompt.mockImplementationOnce(async (_text, opts) => {
+      opts?.preflightResult?.(true);
       promptOrder.push("pi-prompt");
       return "ok";
     });
@@ -3198,8 +3202,11 @@ describe("SessionCoordinator", () => {
       afterCachePreflight: () => {
         promptOrder.push("post-preflight-hook");
       },
+      afterInputAccepted: () => {
+        promptOrder.push("input-accepted");
+      },
     });
-    expect(promptOrder).toEqual(["post-preflight-hook", "pi-prompt"]);
+    expect(promptOrder).toEqual(["post-preflight-hook", "input-accepted", "pi-prompt"]);
     expect(entry.cachePrefixContractRequestCount).toBe(requestCountBeforePreflight);
     expect(renewSpy).not.toHaveBeenCalled();
 
@@ -3246,7 +3253,7 @@ describe("SessionCoordinator", () => {
     await expect(coordinator.promptSession(sessionFile, "async hook", undefined, {
       afterCachePreflight: () => Promise.resolve(),
     })).rejects.toThrow(/must be synchronous/);
-    expect(session.prompt).toHaveBeenCalledTimes(3);
+    expect(session.prompt).toHaveBeenCalledTimes(4);
 
     await expect((session.agent.streamFn as any)(model, {
       systemPrompt: "FINAL CACHE PREFIX",
@@ -3305,7 +3312,47 @@ describe("SessionCoordinator", () => {
       afterCachePreflight: vi.fn(),
     });
     expect(renewSpy).toHaveBeenCalledWith(sessionFile, entry, "late_init", expect.anything());
-    expect(session.prompt).toHaveBeenCalledTimes(4);
+    expect(session.prompt).toHaveBeenCalledTimes(5);
+
+    let finishAcceptedTurn!: () => void;
+    const acceptedTurnGate = new Promise<void>((resolve) => { finishAcceptedTurn = resolve; });
+    const acceptedHook = vi.fn();
+    session.prompt.mockImplementationOnce(async (_text, opts) => {
+      opts?.preflightResult?.(true);
+      await acceptedTurnGate;
+      return "ok";
+    });
+    const acceptedTurn = coordinator.promptSession(sessionFile, "accepted before completion", undefined, {
+      afterCachePreflight: vi.fn(),
+      afterInputAccepted: acceptedHook,
+    });
+    await vi.waitFor(() => expect(acceptedHook).toHaveBeenCalledTimes(1));
+    let turnCompleted = false;
+    void acceptedTurn.finally(() => { turnCompleted = true; });
+    expect(turnCompleted).toBe(false);
+    finishAcceptedTurn();
+    await acceptedTurn;
+
+    let finishRejectedPreflight!: () => void;
+    const rejectedPreflightGate = new Promise<void>((resolve) => { finishRejectedPreflight = resolve; });
+    const rejectedSideEffects = vi.fn();
+    const rejectedAcceptedHook = vi.fn();
+    session.prompt.mockImplementationOnce(async (_text, opts) => {
+      await rejectedPreflightGate;
+      opts?.preflightResult?.(false);
+      throw new Error("Pi preflight rejected");
+    });
+    const rejectedTurn = coordinator.promptSession(sessionFile, "reject after delay", undefined, {
+      afterCachePreflight: rejectedSideEffects,
+      afterInputAccepted: rejectedAcceptedHook,
+    });
+    await Promise.resolve();
+    expect(rejectedSideEffects).not.toHaveBeenCalled();
+    expect(rejectedAcceptedHook).not.toHaveBeenCalled();
+    finishRejectedPreflight();
+    await expect(rejectedTurn).rejects.toThrow("Pi preflight rejected");
+    expect(rejectedSideEffects).not.toHaveBeenCalled();
+    expect(rejectedAcceptedHook).not.toHaveBeenCalled();
   });
 
   it("renews the cache prefix contract for an explicit model switch", async () => {
