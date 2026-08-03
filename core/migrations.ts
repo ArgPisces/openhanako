@@ -1338,7 +1338,7 @@ function migrateMiniMaxTokenPlanAnthropicEndpoint(ctx) {
     quotingType: "\"",
     forceQuotes: false,
   });
-  atomicWriteSync(ymlPath, yamlStr);
+  writeSecretFileSync(ymlPath, yamlStr);
 
   if (ctx.providerRegistry) {
     ctx.providerRegistry._addedModelsCache = null;
@@ -2362,7 +2362,7 @@ function migrateStableDingTalkCredentialsToLegacyAuthMode(ctx) {
     }
 
     try {
-      atomicWriteSync(
+      writeSecretFileSync(
         configPath,
         YAML.dump(config, {
           indent: 2,
@@ -2446,7 +2446,7 @@ function preserveStableCompatibleWorkspaceSkillDiscovery(ctx) {
       discover_compatible_project_skills: true,
     };
     try {
-      atomicWriteSync(
+      writeSecretFileSync(
         configPath,
         YAML.dump(config, {
           indent: 2,

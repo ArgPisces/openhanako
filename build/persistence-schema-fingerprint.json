@@ -668,7 +668,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:44a6af00b29a57961cd7ce457c1e0c2864190583690847b8681a608b8a4261bb",
+  "payloadFingerprint": "sha256:a8a11303d9f8d7f6e1df56fd09991b108bf69e4259d927d75e234158276c51b8",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3034,8 +3034,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "The security key directory is now named in one module that every service and the startup custody pass import, and that pass walks the tree; stored bytes, serialized structure, and schema are unchanged.",
-    "payloadFingerprint": "sha256:44a6af00b29a57961cd7ce457c1e0c2864190583690847b8681a608b8a4261bb"
+    "compatibilityReason": "Three migration write sites moved from the generic atomic writer to the owner-only credential writer; file contents and schemas are unchanged, only the write primitive kind recorded for those sites differs.",
+    "payloadFingerprint": "sha256:a8a11303d9f8d7f6e1df56fd09991b108bf69e4259d927d75e234158276c51b8"
   },
   "schemas": [
     {
@@ -4604,7 +4604,7 @@
     },
     {
       "exemptionId": "cross-store-legacy-migrations",
-      "kind": "atomic-write",
+      "kind": "secret-write",
       "line": 1341,
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "sourceFile": "core/migrations.ts",
@@ -4700,7 +4700,7 @@
     },
     {
       "exemptionId": "cross-store-legacy-migrations",
-      "kind": "atomic-write",
+      "kind": "secret-write",
       "line": 2365,
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "sourceFile": "core/migrations.ts",
@@ -4708,7 +4708,7 @@
     },
     {
       "exemptionId": "cross-store-legacy-migrations",
-      "kind": "atomic-write",
+      "kind": "secret-write",
       "line": 2449,
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "sourceFile": "core/migrations.ts",

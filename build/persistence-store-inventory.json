@@ -3546,8 +3546,8 @@
     {
       "sourceFile": "core/migrations.ts",
       "line": 1341,
-      "kind": "atomic-write",
-      "excerpt": "atomicWriteSync(ymlPath, yamlStr)",
+      "kind": "secret-write",
+      "excerpt": "writeSecretFileSync(ymlPath, yamlStr)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "storeId": null,
       "exemptionId": "cross-store-legacy-migrations"
@@ -3654,8 +3654,8 @@
     {
       "sourceFile": "core/migrations.ts",
       "line": 2365,
-      "kind": "atomic-write",
-      "excerpt": "atomicWriteSync( configPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", }), )",
+      "kind": "secret-write",
+      "excerpt": "writeSecretFileSync( configPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", }), )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "storeId": null,
       "exemptionId": "cross-store-legacy-migrations"
@@ -3663,8 +3663,8 @@
     {
       "sourceFile": "core/migrations.ts",
       "line": 2449,
-      "kind": "atomic-write",
-      "excerpt": "atomicWriteSync( configPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", }), )",
+      "kind": "secret-write",
+      "excerpt": "writeSecretFileSync( configPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: \"\\\"\", }), )",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
       "storeId": null,
       "exemptionId": "cross-store-legacy-migrations"
