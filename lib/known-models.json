@@ -3142,6 +3142,10 @@
     "doubao-seedream-5-0-lite-260128": {
       "name": "Seedream 5.0 Lite",
       "type": "image"
+    },
+    "doubao-seedream-5-0-260128": {
+      "name": "Seedream 5.0",
+      "type": "image"
     }
   },
   "minimax": {

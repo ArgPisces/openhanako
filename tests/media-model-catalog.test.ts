@@ -41,7 +41,7 @@ describe("resolveModelId", () => {
 
   it("resolves short aliases to full IDs", () => {
     expect(resolveModelId("volcengine", "5.0"))
-      .toBe("doubao-seedream-5-0-lite-260128");
+      .toBe("doubao-seedream-5-0-260128");
     expect(resolveModelId("volcengine", "3.0"))
       .toBe("doubao-seedream-3-0-t2i");
     expect(resolveModelId("volcengine", "4.5"))
@@ -71,9 +71,9 @@ describe("resolveModelId", () => {
       .toBe("gpt-image-1.5");
   });
 
-  it("falls back to the provider default model for unrecognized strings", () => {
-    expect(resolveModelId("volcengine", "nonexistent-model"))
-      .toBe("doubao-seedream-5-0-lite-260128");
+  it("rejects an explicit unknown model instead of silently using the default", () => {
+    expect(() => resolveModelId("volcengine", "nonexistent-model"))
+      .toThrow(/Unknown image model.*nonexistent-model.*volcengine/i);
   });
 
   it("returns empty string for unknown providers with no raw value", () => {
@@ -86,6 +86,13 @@ describe("resolveModelId", () => {
 });
 
 describe("getKnownModels", () => {
+  it("includes both official Seedream 5.0 variants", () => {
+    expect(getKnownModels("volcengine")).toEqual(expect.arrayContaining([
+      { id: "doubao-seedream-5-0-lite-260128", name: "Seedream 5.0 Lite" },
+      { id: "doubao-seedream-5-0-260128", name: "Seedream 5.0" },
+    ]));
+  });
+
   it("returns [{id, name}] without aliases", () => {
     const models = getKnownModels("volcengine");
     expect(models.length).toBeGreaterThan(0);

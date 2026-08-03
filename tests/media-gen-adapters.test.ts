@@ -92,11 +92,12 @@ describe("volcengine adapter", () => {
     const ctx = makeBusCtx("test-key", "https://ark.cn-beijing.volces.com/api/v3");
     await volcengineImageAdapter.submit({
       prompt: "a cat",
-      model: "doubao-seedream-5-0-lite-260128",
+      model: "doubao-seedream-5-0-260128",
       format: "png",
     }, ctx);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.model).toBe("doubao-seedream-5-0-260128");
     expect(body.output_format).toBe("png");
   });
 
@@ -187,7 +188,7 @@ describe("volcengine adapter", () => {
 
     const ctx = makeBusCtx("bad", "https://test.com");
     await expect(volcengineImageAdapter.submit({
-      prompt: "a cat", model: "test",
+      prompt: "a cat", model: "doubao-seedream-5-0-lite-260128",
     }, ctx)).rejects.toThrow(/401/);
   });
 
@@ -201,8 +202,21 @@ describe("volcengine adapter", () => {
 
     const ctx = makeBusCtx("key", "https://test.com");
     await expect(volcengineImageAdapter.submit({
-      prompt: "test", model: "test",
+      prompt: "test", model: "doubao-seedream-5-0-lite-260128",
     }, ctx)).rejects.toThrow();
+  });
+
+  it("rejects an explicit unknown model before credentials or network calls", async () => {
+    const { volcengineImageAdapter } = await import("../core/media-adapters/volcengine.ts");
+
+    const ctx = makeBusCtx("key", "https://test.com");
+    await expect(volcengineImageAdapter.submit({
+      prompt: "test",
+      model: "doubao-seedream-5-0-pro-unverified",
+    }, ctx)).rejects.toThrow(/Unknown image model.*doubao-seedream-5-0-pro-unverified/i);
+
+    expect(ctx.bus.request).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("accepts Volcengine Coding Plan credentials in the same auth path used by submit", async () => {
@@ -398,7 +412,7 @@ describe("openai adapter", () => {
 
     const ctx = makeBusCtx("key", "https://test.com", "openai");
     await expect(openaiImageAdapter.submit({
-      prompt: "test", model: "test",
+      prompt: "test", model: "gpt-image-1.5",
     }, ctx)).rejects.toThrow(/429/);
   });
 });

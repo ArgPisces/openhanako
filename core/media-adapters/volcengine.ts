@@ -139,17 +139,18 @@ export const volcengineImageAdapter = {
   },
 
   async submit(params, ctx) {
-    // 1. Fetch credentials — try volcengine first, fall back to volcengine-coding
+    // 1. Resolve model before any external work. A missing model uses the catalog
+    //    default; an explicit unknown model must fail instead of silently using Lite.
+    const rawModel = params.modelId || params.model || ctx.config?.get?.("defaultImageModel")?.id;
+    const modelId = resolveModelId("volcengine", rawModel);
+
+    // 2. Fetch credentials — try volcengine first, fall back to volcengine-coding
     const creds = await resolveVolcengineCredentials(ctx, params.credentialProviderId || params.providerId);
     if (creds.error || !creds.apiKey) {
       throw new Error(t("plugin.imageGen.providerNoApiKey", { providerId: "volcengine" }));
     }
 
     const { apiKey, baseUrl } = creds;
-
-    // 2. Resolve model — short names ("5.0") resolved via shared catalog
-    const rawModel = params.modelId || params.model || ctx.config?.get?.("defaultImageModel")?.id;
-    const modelId = resolveModelId("volcengine", rawModel);
 
     // 3. Get provider defaults
     const allDefaults = ctx.config?.get?.("providerDefaults") || {};

@@ -59,6 +59,10 @@ describe("ProviderRegistry media capabilities", () => {
     ]));
     expect(byId.get("gemini")?.models.map((model) => model.id)).not.toContain("gemini-3.1-flash-image-preview");
     expect(byId.get("gemini")?.models.map((model) => model.id)).not.toContain("gemini-3-pro-image-preview");
+    expect(byId.get("volcengine")?.models).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "doubao-seedream-5-0-lite-260128", displayName: "Seedream 5.0 Lite" }),
+      expect.objectContaining({ id: "doubao-seedream-5-0-260128", displayName: "Seedream 5.0" }),
+    ]));
     expect(registry.resolveMediaModel({
       providerId: "gemini",
       modelId: "gemini-3.1-flash-image-preview",
@@ -212,6 +216,10 @@ describe("ProviderRegistry media capabilities", () => {
       default: "4K",
     });
     expect(defaults("volcengine", "doubao-seedream-5-0-lite-260128")).toMatchObject({ ratio: "3:2", resolution: "4K" });
+    expect(prop("volcengine", "doubao-seedream-5-0-260128", "text2image", "resolution")).toMatchObject({
+      enum: ["1K", "2K", "4K"],
+      default: "4K",
+    });
 
     expect(prop("minimax", "image-01", "text2image", "ratio")).toMatchObject({ default: "3:2" });
     expect(prop("minimax", "image-01", "text2image", "resolution")).toBeUndefined();

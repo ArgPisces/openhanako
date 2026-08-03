@@ -1662,6 +1662,10 @@
     "name": "Seedream 5.0 Lite",
     "type": "image"
   },
+  "doubao-seedream-5-0-260128": {
+    "name": "Seedream 5.0",
+    "type": "image"
+  },
   "doubao-vision-lite-32k": {
     "name": "Doubao Vision Lite 32K",
     "context": 32768,
