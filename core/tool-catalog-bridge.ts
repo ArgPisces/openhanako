@@ -240,7 +240,10 @@ export function createBridgeTools({
     parameters: Type.Object({
       server: Type.String({ description: "Server id that owns the tool." }),
       tool: Type.String({ description: "Tool name to invoke." }),
-      arguments: Type.Optional(Type.Any({ description: "Arguments object matching the tool's schema." })),
+      arguments: Type.Optional(Type.Object({}, {
+        description: "Arguments object matching the tool's schema.",
+        additionalProperties: true,
+      })),
     }),
     sessionPermission: {
       /**

@@ -150,6 +150,16 @@ describe("mcp_describe_tool", () => {
 });
 
 describe("mcp_call argument validation", () => {
+  it("advertises arguments as an open JSON object instead of an unconstrained value", () => {
+    const { byName } = makeBridge();
+    const schema = (byName.mcp_call as any).parameters.properties.arguments;
+
+    expect(schema).toMatchObject({
+      type: "object",
+      additionalProperties: true,
+    });
+  });
+
   it("refuses to call remotely when a required argument is missing", async () => {
     const { byName, mcpCall } = makeBridge();
     const text = await run(byName.mcp_call, {
