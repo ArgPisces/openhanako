@@ -384,6 +384,7 @@ export function createSubagentTool(deps) {
           mergeExecutorMetadata({
             type: "subagent",
             interlude: true,
+            deliveryIntent: "trigger_parent_turn",
             threadId,
             threadKind,
             label,
@@ -732,6 +733,7 @@ export function createSubagentReplyTool(deps) {
       store.defer(taskId, parentSessionInputForPath(deps, parentSessionPath), mergeExecutorMetadata({
         type: "subagent",
         interlude: true,
+        deliveryIntent: "trigger_parent_turn",
         threadId,
         threadKind,
         label: initialThread.label || null,

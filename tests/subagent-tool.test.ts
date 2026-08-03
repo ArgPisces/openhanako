@@ -108,7 +108,11 @@ describe("subagent-tool (executeIsolated 原子模式)", () => {
     expect(mockStore.defer).toHaveBeenCalledWith(
       expect.stringMatching(/^subagent-/),
       "/test/session.jsonl",
-      expect.objectContaining({ type: "subagent", summary: "任务：查一下项目状态" }),
+      expect.objectContaining({
+        type: "subagent",
+        deliveryIntent: "trigger_parent_turn",
+        summary: "任务：查一下项目状态",
+      }),
     );
   });
 
@@ -391,6 +395,58 @@ describe("subagent-tool (executeIsolated 原子模式)", () => {
         );
       });
       expect(realStore.query(taskId)).toMatchObject({ delivered: true });
+    } finally {
+      coordinator.dispose();
+      realStore.dispose();
+    }
+  });
+
+  it("routes subagent failure through deferred delivery and resumes the parent LLM turn", async () => {
+    const realStore = new (DeferredResultStore as any)();
+    const sessionCoordinator = {
+      deliverCustomMessage: vi.fn(async () => ({ ok: true, mode: "triggerTurn" })),
+      recordCustomEntry: vi.fn(),
+    };
+    const coordinator = new DeferredResultCoordinator({
+      store: realStore,
+      sessionCoordinator,
+      retryIntervalMs: 0,
+      log: { warn: vi.fn(), error: vi.fn(), log: vi.fn() } as any,
+    });
+    coordinator.start();
+    const tool = createSubagentTool(makeDeps({
+      getDeferredStore: () => realStore,
+      executeIsolated: makeExecuteIsolated({
+        replyText: null,
+        error: "subagent failed before producing a result",
+        sessionPath: "/test/child.jsonl",
+        stopReason: "error",
+      } as any),
+    }));
+
+    try {
+      const result = await tool.execute("call_1", { task: "失败也要通知主 agent" }, null, null, mockCtx());
+      const { taskId } = result.details as any;
+
+      await vi.waitFor(() => {
+        expect(sessionCoordinator.deliverCustomMessage).toHaveBeenCalledWith(
+          "/test/session.jsonl",
+          expect.objectContaining({
+            customType: "hana-background-result",
+            display: false,
+            content: expect.stringContaining('status="failed"'),
+          }),
+          expect.objectContaining({
+            triggerTurn: true,
+            shouldDeliver: expect.any(Function),
+          }),
+        );
+      });
+      expect(realStore.query(taskId)).toMatchObject({
+        status: "failed",
+        delivered: true,
+        meta: { deliveryIntent: "trigger_parent_turn" },
+      });
     } finally {
       coordinator.dispose();
       realStore.dispose();
@@ -1156,6 +1212,11 @@ describe("subagent-tool direct instance lifecycle", () => {
     expect((res.details as any).threadId).toBe("subagent-thread-1");
     expect((res.details as any).threadKind).toBe("direct");
     expect((res.details as any).label).toBe("探索一");
+    expect(mockStore.defer).toHaveBeenCalledWith(
+      expect.stringMatching(/^subagent-/),
+      "/test/session.jsonl",
+      expect.objectContaining({ deliveryIntent: "trigger_parent_turn" }),
+    );
 
     await vi.waitFor(() => expect(capture).toHaveBeenCalledTimes(1));
     const opts = capture.mock.calls[0][1];
