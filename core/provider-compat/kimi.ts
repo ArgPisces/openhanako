@@ -18,6 +18,7 @@ const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 const MFJS_PARENT_ANNOTATION_KEYS = new Set(["description", "default"]);
 const ROOT_ANY_OF_ARGUMENT_GUIDANCE_PREFIX = "Arguments must satisfy one of these required field sets:";
 const KIMI_FOR_CODING_UTILITY_TEMPERATURE = 0.6;
+const KIMI_MODELS_WITHOUT_TEMPERATURE = new Set(["k3", "k3-256k"]);
 
 export function matches(model) {
   if (!model || typeof model !== "object") return false;
@@ -37,6 +38,10 @@ function usesFixedKimiCodingUtilityTemperature(model, options) {
   return options?.mode === "utility"
     && lower(model?.provider) === "kimi-coding"
     && lower(model?.id) === "kimi-for-coding";
+}
+
+function omitsTemperature(model) {
+  return KIMI_MODELS_WITHOUT_TEMPERATURE.has(lower(model?.id));
 }
 
 function reasoningEffortForLevel(level, model = null) {
@@ -254,7 +259,9 @@ export function apply(payload, model, options: Record<string, unknown> = {}) {
     editable().tools = normalizedTools;
   }
 
-  if (usesFixedKimiCodingUtilityTemperature(model, options)) {
+  if (omitsTemperature(model) && hasOwn(next, "temperature")) {
+    delete editable().temperature;
+  } else if (usesFixedKimiCodingUtilityTemperature(model, options)) {
     editable().temperature = KIMI_FOR_CODING_UTILITY_TEMPERATURE;
   }
 
