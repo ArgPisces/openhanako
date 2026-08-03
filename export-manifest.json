@@ -82,6 +82,7 @@
     "core/message-sanitizer.ts",
     "core/message-utils.ts",
     "core/migrate-providers.ts",
+    "core/migration-backups.ts",
     "core/migrations.ts",
     "core/model-execution-config.ts",
     "core/model-image-preprocess.ts",
