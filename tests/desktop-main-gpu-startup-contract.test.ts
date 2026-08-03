@@ -108,4 +108,29 @@ describe("desktop main GPU startup contract", () => {
     expect(source).not.toContain("disable-gpu-sandbox");
     expect(source).not.toContain("no-sandbox");
   });
+
+  it("runs the install ACL heal before resolving the GPU startup policy", () => {
+    const source = fs.readFileSync(MAIN_PATH, "utf-8");
+    const requireIndex = source.indexOf('require("./src/shared/win32-install-acl-heal.cjs")');
+    const healIndex = source.indexOf("maybeHealWin32InstallAcl({");
+    const resolveIndex = source.indexOf("const gpuStartupPolicy = resolveGpuStartupPolicy({");
+
+    expect(requireIndex).toBeGreaterThan(-1);
+    expect(healIndex).toBeGreaterThan(-1);
+    expect(resolveIndex).toBeGreaterThan(-1);
+    expect(healIndex).toBeLessThan(resolveIndex);
+
+    const healCall = source.slice(healIndex, source.indexOf("});", healIndex) + 3);
+    expect(healCall).toContain("installDir: path.dirname(process.execPath)");
+    expect(healCall).toContain("isPackaged: app.isPackaged");
+  });
+
+  it("appends install ACL heal diagnostics next to the GPU startup diagnostics", () => {
+    const source = fs.readFileSync(MAIN_PATH, "utf-8");
+    const gpuDiagIndex = source.indexOf("items.push(buildGpuStartupDiagnostics({ hanakoHome, policy: gpuStartupPolicy, app }));");
+    const healDiagIndex = source.indexOf("items.push(buildInstallAclHealDiagnostics({ hanakoHome }));");
+
+    expect(gpuDiagIndex).toBeGreaterThan(-1);
+    expect(healDiagIndex).toBeGreaterThan(gpuDiagIndex);
+  });
 });

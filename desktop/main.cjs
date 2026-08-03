@@ -80,6 +80,10 @@ const {
   settleLegacyGpuPreferenceMigration,
 } = require("./src/shared/gpu-startup-policy.cjs");
 const {
+  buildInstallAclHealDiagnostics,
+  maybeHealWin32InstallAcl,
+} = require("./src/shared/win32-install-acl-heal.cjs");
+const {
   buildWin32ServerEnv,
 } = require("./src/shared/server-process-env.cjs");
 const {
@@ -277,6 +281,37 @@ configureClientSingleInstance(app, {
 
 if (process.platform === "win32") {
   app.setAppUserModelId(APP_USER_MODEL_ID);
+}
+
+// 必须先于 resolveGpuStartupPolicy：ACL 自愈成功时会清掉 autoGpuMode / 陈旧
+// pending 标记，本次启动就能直接回到 hardware，而不是等下一次启动。
+if (process.platform === "win32") {
+  try {
+    // appVersion 取壳版本：这里是"安装面身份"（哪个安装目录里的哪个壳），与
+    // 展示层禁止消费 app.getVersion() 的产品版本规则不冲突（同 desktopLaunchDiagnostics）。
+    const healResult = maybeHealWin32InstallAcl({
+      hanakoHome,
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      installDir: path.dirname(process.execPath),
+      appVersion: app.getVersion(),
+      env: process.env,
+    });
+    if (healResult.status === "healed") {
+      console.log(
+        `[desktop] install-dir sandbox ACE granted${healResult.probed ? `; GPU recovery probe cleared mode ${healResult.clearedMode ?? "(none)"}` : ""}`,
+      );
+    } else if (healResult.status === "ineffective") {
+      console.warn(
+        "[desktop] GPU crashes continued after the sandbox ACE grant; restored the previous compatibility mode. See startup diagnostics for the manual icacls command.",
+      );
+    } else if (healResult.status === "grant-failed") {
+      console.warn(`[desktop] install-dir sandbox ACE grant failed (attempt ${healResult.failureCount}); the installer-side grant remains the fallback`);
+    }
+  } catch (err) {
+    // 自愈是启动增强，绝不能反过来挡启动；失败原因完整落日志与诊断。
+    console.warn("[desktop] install ACL heal skipped due to an unexpected error:", err.message);
+  }
 }
 
 const gpuStartupPolicy = resolveGpuStartupPolicy({
@@ -2061,6 +2096,7 @@ function buildServerCrashDiagnostics() {
   }
 
   items.push(buildGpuStartupDiagnostics({ hanakoHome, policy: gpuStartupPolicy, app }));
+  items.push(buildInstallAclHealDiagnostics({ hanakoHome }));
 
   return items.join("\n");
 }
