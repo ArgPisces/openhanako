@@ -1068,7 +1068,7 @@ describe("createFeishuAdapter", () => {
     expect(mockCardSettings).toHaveBeenNthCalledWith(1, {
       path: { card_id: "card_stream_001" },
       data: {
-        settings: JSON.stringify({ streaming_mode: true }),
+        settings: '{"config":{"streaming_mode":true}}',
         sequence: 2,
       },
     });
@@ -1089,7 +1089,7 @@ describe("createFeishuAdapter", () => {
     expect(mockCardSettings).toHaveBeenNthCalledWith(2, {
       path: { card_id: "card_stream_001" },
       data: {
-        settings: JSON.stringify({ streaming_mode: false }),
+        settings: '{"config":{"streaming_mode":false}}',
         sequence: 5,
       },
     });
