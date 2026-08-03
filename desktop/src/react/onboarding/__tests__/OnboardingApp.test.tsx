@@ -97,10 +97,21 @@ describe('OnboardingApp locale switching', () => {
     vi.stubGlobal('platform', {
       getFileUrl: vi.fn((path: string) => `file://${path}`),
     });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === 'http://127.0.0.1:62950/api/agents?fresh=1') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ agents: [{ id: 'hana-primary', isPrimary: true, isCurrent: true }] }),
+        } as Response;
+      }
+      throw new Error(`unexpected URL ${url}`);
+    }));
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -123,6 +134,13 @@ describe('OnboardingApp locale switching', () => {
 
   it('lets first-run users connect to an existing LAN server from the welcome page', async () => {
     const fetchMock = vi.fn(async (url: string) => {
+      if (url === 'http://127.0.0.1:62950/api/agents?fresh=1') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ agents: [{ id: 'hana-primary', isPrimary: true, isCurrent: true }] }),
+        } as Response;
+      }
       if (url === 'http://192.168.31.75:14500/api/web-auth/login') {
         return { ok: true, json: async () => ({ ok: true }) } as Response;
       }
@@ -164,6 +182,21 @@ describe('OnboardingApp locale switching', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://192.168.31.75:14500/api/web-auth/login', expect.objectContaining({
       credentials: 'include',
     }));
+  });
+
+  it('shows an ambiguous agent error without hiding the LAN connection escape hatch', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ agents: [{ id: 'agent-a' }, { id: 'agent-b' }] }),
+    } as Response)));
+
+    render(<OnboardingApp preview={false} skipToTutorial={false} />);
+
+    expect(await screen.findByRole('heading', { name: '欢迎' })).toBeInTheDocument();
+    expect(screen.getByText('Onboarding target agent is ambiguous')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '已有服务器？使用局域网连接' })).toBeInTheDocument();
   });
 
   it('uses a six-step flow and moves directly from model selection to workspace selection', async () => {

@@ -7,7 +7,6 @@ import type { ProviderPreset } from '../utils/provider-presets';
 
 export type { ProviderPreset } from '../utils/provider-presets';
 
-export const AGENT_ID = 'hanako';
 export const TOTAL_STEPS = 6;
 
 export const LOCALES = [

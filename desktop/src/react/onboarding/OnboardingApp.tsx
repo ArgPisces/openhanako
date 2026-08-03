@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { TOTAL_STEPS } from './constants';
+import { createOnboardingVerificationPlan, resolveOnboardingAgentId } from './onboarding-actions';
 import type { HanaFetch } from './onboarding-actions';
 import { LocaleStep } from './steps/LocaleStep';
 import { NameStep } from './steps/NameStep';
@@ -21,6 +22,8 @@ import {
 interface OnboardingAppProps { preview: boolean; skipToTutorial: boolean }
 export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
   const [serverConnection, setServerConnection] = useState<ServerConnection | null>(null);
+  const [agentId, setAgentId] = useState('');
+  const [initError, setInitError] = useState('');
   const [step, setStep] = useState(skipToTutorial ? 5 : 0);
   const [stepKey, setStepKey] = useState(0);
   const [agentName, setAgentName] = useState('Hanako');
@@ -37,6 +40,7 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
   const [toastMsg, setToastMsg] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localeLoadSeq = useRef(0);
+  const verificationPlan = useRef(createOnboardingVerificationPlan()).current;
 
   const hanaFetch: HanaFetch = useCallback((path, opts = {}) => {
     if (!serverConnection) {
@@ -92,48 +96,66 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
 
   useEffect(() => {
     (async () => {
+      let localeLoaded = false;
       try {
         const port = await window.hana.getServerPort();
         const token = await window.hana.getServerToken();
-        setServerConnection(createLocalServerConnection({ serverPort: port, serverToken: token }));
+        const connection = createLocalServerConnection({ serverPort: port, serverToken: token });
+        if (!connection) throw new Error('Local server connection is unavailable');
+        setServerConnection(connection);
         const splashInfo = await window.hana.getSplashInfo?.();
         const loc = splashInfo?.locale || 'zh-CN';
         const name = splashInfo?.agentName || 'Hanako';
         setLocale(loc);
         setAgentName(name);
         await i18n.load(loc);
+        localeLoaded = true;
         i18n.defaultName = name;
-        setI18nReady(true);
         try {
           const localPath = await window.hana.getAvatarPath?.('agent');
           if (localPath) setAvatarSrc(window.platform?.getFileUrl?.(localPath) ?? '');
         } catch { /* ignore */ }
+        if (!preview) {
+          const connectionFetch: HanaFetch = (path, opts = {}) => {
+            const headers = appendConnectionAuth(connection, opts.headers);
+            return fetch(buildConnectionUrl(connection, path), { ...opts, headers });
+          };
+          setAgentId(await resolveOnboardingAgentId(connectionFetch));
+        }
+        setI18nReady(true);
       } catch (err) {
         console.error('[onboarding] init failed:', err);
+        if (!localeLoaded) {
+          try { await i18n.load('zh-CN'); } catch { /* keep the visible fallback below */ }
+        }
+        setInitError(err instanceof Error ? err.message : String(err));
+        setI18nReady(true);
       }
     })();
-  }, []);
+  }, [preview]);
 
   if (!i18nReady) return null;
+  const activeStep = initError ? 0 : step;
+  const visibleError = toastMsg || initError;
 
   return (
     <div className="onboarding">
       <div className="onboarding-progress">
         {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <div key={`dot-${i}`} className={`onboarding-dot${i === step ? ' active' : ''}${i < step ? ' done' : ''}`} />
+          <div key={`dot-${i}`} className={`onboarding-dot${i === activeStep ? ' active' : ''}${i < activeStep ? ' done' : ''}`} />
         ))}
       </div>
 
-      {step === 0 && <LocaleStep key={`step-0-${stepKey}`} preview={preview} hanaFetch={hanaFetch} avatarSrc={avatarSrc} initialLocale={locale} goToStep={goToStep} showError={showError} onLocaleChange={onLocaleChange} onConnectLanServer={connectLanServer} />}
-      {step === 1 && <NameStep key={`step-1-${stepKey}`} preview={preview} hanaFetch={hanaFetch} goToStep={goToStep} showError={showError} />}
-      {step === 2 && <ProviderStep key={`step-2-${stepKey}`} preview={preview} hanaFetch={hanaFetch} goToStep={goToStep} showError={showError} onProviderReady={onProviderReady} />}
-      {step === 3 && <ModelStep key={`step-3-${stepKey}`} preview={preview} hanaFetch={hanaFetch} providerName={providerName} providerUrl={providerUrl} providerApi={providerApi} apiKey={apiKey} goToStep={goToStep} showError={showError} />}
-      {step === 4 && <WorkspaceStep key={`step-4-${stepKey}`} preview={preview} hanaFetch={hanaFetch} goToStep={goToStep} showError={showError} />}
-      {step === 5 && <TutorialStep key={`step-5-${stepKey}`} preview={preview} showError={showError} />}
+      {activeStep === 0 && <LocaleStep key={`step-0-${stepKey}`} preview={preview} hanaFetch={hanaFetch} agentId={agentId} verificationPlan={verificationPlan} avatarSrc={avatarSrc} initialLocale={locale} goToStep={goToStep} showError={showError} onLocaleChange={onLocaleChange} onConnectLanServer={connectLanServer} />}
+      {activeStep === 1 && <NameStep key={`step-1-${stepKey}`} preview={preview} hanaFetch={hanaFetch} agentId={agentId} verificationPlan={verificationPlan} goToStep={goToStep} showError={showError} />}
+      {activeStep === 2 && <ProviderStep key={`step-2-${stepKey}`} preview={preview} hanaFetch={hanaFetch} agentId={agentId} verificationPlan={verificationPlan} goToStep={goToStep} showError={showError} onProviderReady={onProviderReady} />}
+      {activeStep === 3 && <ModelStep key={`step-3-${stepKey}`} preview={preview} hanaFetch={hanaFetch} agentId={agentId} verificationPlan={verificationPlan} providerName={providerName} providerUrl={providerUrl} providerApi={providerApi} apiKey={apiKey} goToStep={goToStep} showError={showError} />}
+      {activeStep === 4 && <WorkspaceStep key={`step-4-${stepKey}`} preview={preview} hanaFetch={hanaFetch} agentId={agentId} verificationPlan={verificationPlan} goToStep={goToStep} showError={showError} />}
+      {activeStep === 5 && <TutorialStep key={`step-5-${stepKey}`} preview={preview} hanaFetch={hanaFetch} agentId={agentId} verificationPlan={verificationPlan} showError={showError} />}
 
-      {toastMsg && (
+      {visibleError && (
         <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: 'var(--coral, #c66)', color: '#fff', padding: '8px 20px', borderRadius: 8, fontSize: '0.82rem', zIndex: 999 }}>
-          {toastMsg}
+          {visibleError}
         </div>
       )}
     </div>
