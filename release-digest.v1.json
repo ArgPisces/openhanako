@@ -1,309 +1,242 @@
 {
   "schemaVersion": 1,
-  "tag": "v0.441.3",
-  "version": "0.441.3",
-  "previousTag": "v0.433.1",
-  "generatedAt": "2026-08-02T18:56:09.000Z",
+  "tag": "v0.441.32",
+  "version": "0.441.32",
+  "previousTag": "v0.441.3",
+  "generatedAt": "2026-08-03T15:27:41.000Z",
   "noUserFacingChanges": false,
   "summary": {
-    "zh": "这一版最大的新东西是 /loop：给它一个任务，助手会在当前会话里反复推进，自己决定下一次什么时候醒来，直到宣布完成或者撞上轮数上限，桌面端和聊天平台都能用，重启也接得回来。DeepSeek 新增 Responses 协议通道，同时修掉两处一直在悄悄改写你选择的行为：思考档位 low 和 medium 都被折成 high，以及思考模式下输出预算被强行抬到 65536 或 131072，而且专挑上下文快满的时候抬。中日韩界面下操作失败终于说人话了，以前会直接甩一句英文加一串机器码，原文移到可展开的详情里方便报 bug。Unix 上的凭证文件和数据目录改成只有你自己能读写，启动时检查一次并纠正存量。拖文件夹进来不再复制一份，改成引用原地址，文件夹里有多少文件、有没有 symlink 都不再影响能否附上。另外有一条你应该知道的放宽：git push 的强推、推 tag、推全部分支这些变体不再被无条件硬拦，改成跟其它命令一样走会话权限模式，其中自动模式是直接放行。",
-    "en": "The headline of this release is /loop: hand it a task and the assistant keeps working on it in the current session, deciding for itself when to wake up next, until it declares the goal met or hits the turn ceiling. It works from the desktop and from chat platforms, and survives a restart. DeepSeek gains a Responses protocol channel, and two behaviours that had been quietly rewriting your choices are fixed: low and medium thinking tiers were both folded into high, and in thinking mode the output budget was forced up to 65536 or 131072 precisely when the context window was nearly full. Chinese, Japanese and Korean interfaces now report failures in your own language instead of an English sentence and a machine code; the original English moves into an expandable detail area for bug reports. On Unix, credential files and the data directory become owner-only, with existing files checked and corrected once per launch. Dropped folders are referenced in place rather than copied, so neither the number of files inside nor the presence of symlinks affects whether a folder can be attached. One relaxation you should know about: the force-push, push-tags and push-all-branches variants of git push are no longer hard-blocked and now follow the session permission mode, which in auto mode means they are allowed outright."
+    "zh": "这一版没有新功能，全是修复。最显眼的是桌面端进程区的工具行：以前有一批工具只显示一句通用的「正在忙碌中」，插件工具的文案从写下那天起就没匹配过任何一次调用，失败的工具还会显示成功文案配一个失败图标，这三处都补齐了，完成和失败两档也改写成脱离上下文能独立读懂。Windows 上另一件事更实际：安装目录从父目录继承的孤立 AppContainer SID 会让 Chromium 的 GPU 沙箱起不来，反复崩溃后应用自动降到兼容模式就再也回不去，现在安装器和应用启动时都会修复这个权限并给一次恢复探测的机会，仍然崩溃的机器会被还原回原来的兼容模式。分叉出来的会话里，分叉之前的文件和资源链接重新能打开；同一个文件换一种大小写拼法登记不再多出一条记录。安全面上，插件配置文件、几处迁移产物和签名密钥目录都纳入了只属主可读写的范围，启动时会巡检并纠正存量。",
+    "en": "This release has no new features; it is all fixes. The most visible one is the tool lines in the desktop activity area: a batch of tools only ever showed a generic \"working on it\", the labels written for plugin tools had never once matched a real call, and a failed tool showed the success wording next to a failure icon. All three are fixed, and the done and failed wordings are rewritten to read on their own out of context. On Windows something more practical: an orphaned AppContainer SID inherited from a parent directory keeps Chromium's GPU sandbox from starting, and once repeated crashes push the app into compatibility mode it never comes back. The installer and the app startup now both repair that permission and grant one recovery probe; machines that still crash are restored to the compatibility mode they had. In forked sessions, files and resource links captured before the fork open again, and registering the same file under a different spelling of its case no longer creates a second entry. On the security side, plugin configuration files, several migration outputs and the signing key directory come under owner-only permissions, with existing files checked and corrected at startup."
   },
   "counts": {
-    "feature": 4,
-    "fix": 3,
+    "feature": 0,
+    "fix": 4,
     "improvement": 2,
-    "migration": 1
+    "migration": 0
   },
   "source": {
     "owner": "liliMozi",
     "repo": "openhanako",
-    "commitRange": "v0.433.1..v0.441.3",
-    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.441.3",
+    "commitRange": "v0.441.3..v0.441.32",
+    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.441.32",
     "releaseNotes": ""
   },
   "items": [
     {
-      "id": "loop-self-paced-task",
-      "kind": "feature",
-      "importance": "high",
-      "title": {
-        "zh": "/loop：交一个任务，让它自己推进到做完",
-        "en": "/loop: hand over a task and let it run itself to completion"
-      },
-      "summary": {
-        "zh": "`/loop <任务>` 会在当前会话里开一条循环：每轮结束后助手自己决定下一次什么时候醒来，带上留给自己的上下文，醒来继续推进，直到它宣布任务完成，或者用完轮数预算自动暂停。`/loop status` 看进度，`/loop pause` 和 `/loop resume` 暂停恢复，`/loop stop` 终止。桌面端斜杠菜单里有入口，Telegram 这类聊天平台上同样能用，那边到点会主动给你发消息。",
-        "en": "`/loop <task>` opens a loop in the current session: after each turn the assistant decides when to wake up next and what context to carry forward, then resumes, until it declares the goal met or pauses itself on running out of turn budget. `/loop status` shows progress, `/loop pause` and `/loop resume` suspend and continue, `/loop stop` ends it. There is an entry in the desktop slash menu, and it works from chat platforms such as Telegram, where the loop reaches out to you when the alarm fires."
-      },
-      "details": [
-        {
-          "zh": "轮数有预算，状态里一直显示「第几轮 / 预算多少」。用完不是终止而是自动暂停，`/loop resume` 会把计数清零再给一份新预算，所以要跑多久由你说了算，循环不会自己无声无息地跑下去。连续几轮出错、或者唤醒一直投递不出去，同样会自动暂停。",
-          "en": "Turns are budgeted and the status line always shows turns used against that budget. Running out pauses the loop rather than ending it, and `/loop resume` clears the count and grants a fresh budget, so how long it runs stays your call and it never quietly runs on by itself. Several failed turns in a row, or a wakeup that cannot be delivered, also pause it."
-        },
-        {
-          "zh": "循环状态原子写盘，应用重启后会接着恢复，不需要你重新起一遍。",
-          "en": "Loop state is persisted atomically and recovered on boot, so a restart does not lose the loop or require you to start it again."
-        },
-        {
-          "zh": "循环绑定的是会话身份而不是当前焦点。会话被重置或换代时循环会终止，在新会话里重开即可。聊天平台上这类终止和暂停会主动发一条消息说明原因；桌面端这一版还没有对应的提示，用 `/loop status` 查当前状态。",
-          "en": "A loop is bound to session identity rather than to whatever is currently focused. Resetting or replacing the session terminates the loop, and you restart it in the new session. On chat platforms a termination or pause sends you a message explaining why; the desktop has no such prompt in this release, so use `/loop status` to see where a loop stands."
-        },
-        {
-          "zh": "子代理调用这个工具会被拒绝：约闹钟和宣布完成只有主会话能做，避免一个子任务替整条循环做主。",
-          "en": "A subagent calling this tool is refused: scheduling a wakeup and declaring completion are reserved for the main session, so a subtask cannot decide the fate of the whole loop."
-        }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "4be3a2472", "title": "feat(loop): /loop slash command for desktop and bridge sessions" },
-        { "type": "commit", "ref": "5646b69e0", "title": "feat(loop): loop_control tool with execute-layer gating, categories, subagent block, agent wiring" },
-        { "type": "commit", "ref": "e499a12cc", "title": "feat(loop): sessionId-keyed loop controller with turn accounting, guardrails, liveness invariant, reset termination" },
-        { "type": "commit", "ref": "8dd6b7c39", "title": "feat(loop): single-slot alarm service with guarded scheduling, busy deferral, fail-closed delivery" },
-        { "type": "commit", "ref": "ba1037b3e", "title": "feat(bridge): proactive loop turn, loop notice delivery, session ensure/resolve by sessionKey" },
-        { "type": "commit", "ref": "c85412ece", "title": "feat(loop): wire loop services into engine/server with bus-driven turn observation, bridge hooks, boot recovery" },
-        { "type": "commit", "ref": "6754d8f62", "title": "feat(loop): sessionId-keyed loop state store with atomic persistence" },
-        { "type": "commit", "ref": "e7851882a", "title": "feat(loop): desktop slash menu entry and locales for /loop" }
-      ]
-    },
-    {
-      "id": "deepseek-responses-channel",
-      "kind": "feature",
-      "importance": "high",
-      "title": {
-        "zh": "DeepSeek 新增 Responses 协议通道",
-        "en": "DeepSeek gains a Responses protocol channel"
-      },
-      "summary": {
-        "zh": "DeepSeek 的 V4-Flash 开始原生支持 OpenAI Responses 协议。在此之前，就算你把模型配成 Responses，请求仍然走 ChatCompletions 的兼容路径，发出去的思考级别和输出预算都是对方不认识的字段，而 Responses 端点对不认识的参数是静默忽略，所以两项设置都无声无息地丢了。现在有了独立的 deepseek-responses 供应商，字段按 Responses 的写法翻译。",
-        "en": "DeepSeek's V4-Flash release added native OpenAI Responses support. Until now a model configured for Responses still went through the ChatCompletions compatibility path, sending a thinking level and an output budget under field names that endpoint does not recognise, and the Responses endpoint silently ignores unknown parameters, so both settings were dropped without a word. There is now a dedicated deepseek-responses provider that translates the fields properly."
-      },
-      "details": [
-        {
-          "zh": "它需要单独填一份 API key。复用别的供应商那条凭证会把对方的地址和协议一起带过来，等于又被拽回 ChatCompletions。",
-          "en": "It needs its own API key entry. Reusing another provider's credential would drag that entry's base URL and protocol along, forcing the request back onto ChatCompletions."
-        },
-        {
-          "zh": "V4-Flash 和 V4-Pro 都列在这个供应商下面，但官方文档上 Pro 的 Responses 尚未开放，选中它发请求会被服务端拒绝。想现在就用，选 Flash。",
-          "en": "Both V4-Flash and V4-Pro are listed under this provider, but the official docs still have Responses closed for Pro, so selecting it means the server rejects the request. Pick Flash if you want to use this today."
-        }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "c19accbc1", "title": "feat(provider): add DeepSeek Responses channel and stop it falling back to ChatCompletions" }
-      ]
-    },
-    {
-      "id": "deepseek-thinking-and-budget",
+      "id": "tool-line-labels",
       "kind": "fix",
       "importance": "high",
       "title": {
-        "zh": "接入 DeepSeek 时不再擅自改写你选的思考档位和输出长度",
-        "en": "The DeepSeek integration stops rewriting the thinking tier and output length you chose"
+        "zh": "进程区的工具行说清楚每个工具在做什么",
+        "en": "Tool lines in the activity area now say what each tool is doing"
       },
       "summary": {
-        "zh": "对照 DeepSeek 官方文档逐条核过之后，发现本项目的兼容层有两处行为跟文档不符，而且都是往「悄悄换掉你的选择」的方向错。出错的是我们这边的翻译层，不是 DeepSeek 的服务。现在思考档位原样传给对方，输出预算也不再被抬高。",
-        "en": "Checked line by line against DeepSeek's own reference, this project's compatibility layer disagreed with the documentation in two places, and both erred toward quietly replacing your choice. The fault was in our translation layer, not in DeepSeek's service. The thinking tier now reaches the server as selected, and the output budget is no longer raised."
+        "zh": "进程区每条工具调用的文案只有一个取值点，对不上就静默落到通用兜底「正在忙碌中」。此前有三处漏洞：一方工具漏配 9 个（文件、会话、subagent 回复与关闭、循环控制、素材落盘、频道读取上下文与回复转交）；插件工具注册时会被加上插件 id 前缀，而语言包里的键没带前缀，6 组插件文案从写下那天起就没匹配过任何一次调用；取文案时只传进行中和已完成两个相位，失败相位从未被渲染，失败的工具会显示成功文案配一个失败图标。三处都补齐了。",
+        "en": "Every tool line in the activity area resolves its wording through a single lookup, and anything that misses falls silently back to a generic \"working on it\". Three holes had opened up: nine first-party tools had no wording at all (file, session, subagent reply and close, loop control, materialize, channel read-context, reply and pass); plugin tools are registered under a plugin-id prefix while the language packs held unprefixed keys, so six sets of plugin wordings had never matched a single call since the day they were written; and the lookup only ever passed the running and done phases, so the failed phase was never rendered and a failed tool showed the success wording next to a failure icon. All three are closed."
       },
       "details": [
         {
-          "zh": "思考档位 low 之前被折进 high。官方认可的档位就是 low / high / max，low 是有效的一档，折掉等于你少了一个选项，还被推到更慢更贵的那档上。现在 low 原样传过去。medium 仍然按 high 发出，因为 DeepSeek 服务端本来就把 medium 归到 high，这一档的结果不受影响。",
-          "en": "A low thinking tier used to be folded into high. The documented vocabulary is exactly low / high / max, so folding away a valid tier removed a step you were entitled to and pushed you onto a slower, more expensive one. Low now passes through as selected. Medium is still sent as high, because DeepSeek's own server maps medium to high anyway, so that tier's outcome is unaffected."
+          "zh": "插件工具改成先查带前缀的键，未命中落到插件兜底，不走「剥掉前缀再查一次」那条捷径：第三方插件里叫 read 或 write 的工具会直接撞上内置工具的文案。",
+          "en": "Plugin tools now look up the prefixed key first and fall back to a plugin-generic wording, rather than taking the shortcut of stripping the prefix and looking again: a third-party plugin's own read or write tool would collide head-on with the built-in wording."
         },
         {
-          "zh": "思考模式下输出预算之前会被抬到 65536 或 131072，触发条件是传入预算不超过 32768。而预算小恰恰说明上下文窗口快满了，这时候抬高等于把请求推过窗口边界。现在兼容层不再覆盖你已经定好的预算。",
-          "en": "In thinking mode the output budget was raised to 65536 or 131072 whenever the incoming budget was at or below 32768. A small budget means the context window is nearly full, which is exactly when raising it pushes the request past the edge. The layer no longer overrides a budget you have already set."
+          "zh": "已完成和失败两档改成脱离上下文也能独立读懂。这两档会长期留在会话记录里，而单工具调用的行永不折叠，旁边没有任何东西能补出主语和宾语。",
+          "en": "The done and failed wordings are rewritten to read on their own out of context. Those two stay in the transcript indefinitely, and a single tool call's line never collapses, so nothing beside it supplies the missing subject and object."
         },
         {
-          "zh": "请求完全没带输出预算时仍然会补一个默认值，因为 DeepSeek 那边不带预算会退到 4K 输出，思考链一占就没给答案留下空间。官方没有公布这个默认值，只建议显式声明，所以这个数字不值得赌。",
-          "en": "A request carrying no output budget at all still gets a default supplied, because DeepSeek falls back to 4K output and a reasoning chain would leave nothing for the answer. The docs do not publish that default and recommend stating it explicitly, so the value is not worth guessing."
+          "zh": "措辞上区分两类词：用户接触过的（loop、workflow、PDF）保留原名，内部实现命名（capabilities、materialize、read_context）换成用户感知得到的说法。",
+          "en": "The wording separates two kinds of term: names you have actually met (loop, workflow, PDF) keep their own spelling, while internal implementation names (capabilities, materialize, read_context) are replaced by what you would perceive them as."
+        },
+        {
+          "zh": "subagent 在中文里此前有「子会话」「子代理」两种叫法指同一个东西，统一为 subagent；日韩沿用各自既有的音译；繁体中文里三条漏转的简体一并转繁。",
+          "en": "Chinese had been calling the same thing by two different names for subagent; they are unified. Japanese and Korean keep their established transliterations, and three untranslated strings in Traditional Chinese are converted."
         }
       ],
       "sources": [
-        { "type": "commit", "ref": "c325722f7", "title": "fix(provider): align DeepSeek reasoning effort and thinking toggle with the documented API" },
-        { "type": "commit", "ref": "8c0740bec", "title": "fix(provider): stop the DeepSeek compat layer from overriding the output budget" }
+        {
+          "type": "commit",
+          "ref": "dfb7ba4e4",
+          "title": "fix(chat): tool line wordings now say what each tool is doing"
+        }
       ]
     },
     {
-      "id": "localized-failure-messages",
+      "id": "windows-gpu-sandbox-ace",
+      "kind": "fix",
+      "importance": "high",
+      "title": {
+        "zh": "Windows 上因 GPU 沙箱起不来而降级的机器恢复硬件加速",
+        "en": "Windows machines downgraded by a failing GPU sandbox recover hardware acceleration"
+      },
+      "summary": {
+        "zh": "根因是安装目录从父目录继承了孤立的 AppContainer SID（electron/electron#51761），Chromium 的 GPU 沙箱因此起不来。反复崩溃后应用会自动降到兼容模式，然后一直留在那里，因为没有任何东西会去解除降级。现在安装器在每次安装和更新时给安装目录授予受限应用包的读取执行权限，应用启动时也做同一处修复，随后清掉自动降级状态，给一次恢复探测的机会；修复后仍然崩溃的机器会被还原回原来的兼容模式，不会陷入反复崩溃。",
+        "en": "The root cause is an orphaned AppContainer SID inherited from a parent directory (electron/electron#51761), which keeps Chromium's GPU sandbox from starting. Repeated crashes push the app into an automatic compatibility mode, and it stays there, because nothing ever lifts the downgrade. The installer now grants restricted-app-packages read and execute on the install directory on every install and update, the app applies the same grant at startup, and the automatic downgrade state is then cleared for one recovery probe. A machine that still crashes afterwards is restored to the compatibility mode it had, so it never falls into a crash loop."
+      },
+      "details": [
+        {
+          "zh": "安装器侧的授权是幂等的，失败不阻断安装；应用侧的修复按安装身份只做一次。",
+          "en": "The installer-side grant is idempotent and non-fatal on failure; the app-side repair runs once per install identity."
+        },
+        {
+          "zh": "修复排在 GPU 启动策略解析之前，所以同一次启动就能吃到效果，不需要先白启动一次。",
+          "en": "The repair runs before the GPU startup policy is resolved, so it takes effect on the same launch rather than needing a throwaway one first."
+        }
+      ],
+      "sources": [
+        {
+          "type": "issue",
+          "ref": "2317",
+          "title": "GPU acceleration stuck in compatibility mode on Windows"
+        },
+        {
+          "type": "commit",
+          "ref": "c89d7ab49",
+          "title": "fix(gpu): heal the Windows install-dir sandbox ACE and probe GPU recovery"
+        },
+        {
+          "type": "commit",
+          "ref": "6abf63585",
+          "title": "fix(desktop): run the install ACL heal before resolving the GPU startup policy"
+        },
+        {
+          "type": "commit",
+          "ref": "25e3170bf",
+          "title": "fix(installer): grant the restricted-app-packages ACE on the install directory"
+        },
+        {
+          "type": "commit",
+          "ref": "b8bda8665",
+          "title": "fix(gpu): add recovery primitives to the GPU startup state store"
+        }
+      ]
+    },
+    {
+      "id": "forked-session-file-links",
+      "kind": "fix",
+      "importance": "medium",
+      "title": {
+        "zh": "分叉会话里，分叉之前的文件和资源链接重新能打开",
+        "en": "In forked sessions, files and resource links from before the fork open again"
+      },
+      "summary": {
+        "zh": "分叉出来的会话会把父会话的文件 id 记成旧别名，但有几处查找只认当前 id：打开媒体查看器、文件引用去重、插件解析会话文件引用，以及转写里在分叉前捕获的资源链接。这些地方现在都会连同旧别名一起匹配（有记录路径时也一并比对），按 id 的兜底查找也收窄到所属会话内，让它的旧别名解析真正生效。",
+        "en": "A forked session records its parent's file ids as legacy aliases, but several lookups matched only the current id: opening the media viewer, deduplicating file references, a plugin resolving a session-file reference, and resource links captured in the transcript before the fork. All of them now match the aliases too (and recorded paths where available), and the by-id fallback is scoped to the owning session so its legacy resolution actually applies."
+      },
+      "details": [],
+      "sources": [
+        {
+          "type": "commit",
+          "ref": "faa34a63b",
+          "title": "fix(desktop): match session files through legacy ids in renderer lookups"
+        },
+        {
+          "type": "commit",
+          "ref": "d5f2a452c",
+          "title": "fix(resources): resolve resource links through legacy session file ids"
+        }
+      ]
+    },
+    {
+      "id": "path-identity-canonicalization",
+      "kind": "fix",
+      "importance": "medium",
+      "title": {
+        "zh": "同一个文件换一种大小写拼法不再登记成两份",
+        "en": "The same file under a different spelling of its case no longer registers twice"
+      },
+      "summary": {
+        "zh": "会话文件去重比较的是保留调用方大小写的路径字符串，所以同一个文件换一种拼法再登记就会多出一条记录，带自己的 id 和读取授权。现在统一走共享的文件身份键：原生规范化，并在忽略大小写的平台上折叠大小写。已有条目保留原 id——去重能在任何拼法下找到并复用它们，磁盘上不改写任何东西。",
+        "en": "Session file deduplication compared realpath strings that preserve the caller's casing, so registering the same file under a different spelling created a second entry with its own id and read grant. Comparison now goes through the shared filesystem identity key: native canonicalization, case-folded where the platform ignores case. Existing entries keep their ids, since deduplication finds and reuses them under any spelling and nothing on disk is rewritten."
+      },
+      "details": [
+        {
+          "zh": "同一套规范化也收敛到了路径授权与包含关系的比较上，此前几个模块各带一份互有出入的私有实现。Windows 上短名（8.3）变体因此同样被视作同一个路径；POSIX 上的比较不变。",
+          "en": "The same canonicalization is converged onto grant and containment comparisons, which several modules had been carrying slightly divergent private copies of. On Windows a short-name (8.3) variant is therefore treated as the same path; POSIX comparisons are unchanged."
+        }
+      ],
+      "sources": [
+        {
+          "type": "commit",
+          "ref": "54d709f76",
+          "title": "fix(session-files): compare file identity case-insensitively where the filesystem does"
+        },
+        {
+          "type": "commit",
+          "ref": "b9ed6e94d",
+          "title": "refactor(fs): converge path canonicalization on the shared link-aware primitives"
+        }
+      ]
+    },
+    {
+      "id": "owner-only-credential-coverage",
       "kind": "improvement",
-      "importance": "high",
-      "title": {
-        "zh": "操作失败时说你的语言",
-        "en": "Failures now speak your language"
-      },
-      "summary": {
-        "zh": "后端的错误一直是英文句子加一个机器码，前端原样贴到界面上，于是中文、日文、韩文界面下一次被拦住的分叉会告诉你「active task cannot be shared by a session fork: subagent-1785...（session_fork_active_task）」。现在二十来个真正会撞上的业务错误都有了各语言的说法，英文原文移到错误条的详情区，可以展开、可以选中复制去报 bug。",
-        "en": "Backend errors carry an English sentence plus a machine code, and the renderer piped that straight to the surface, so a Chinese, Japanese or Korean interface answered a blocked fork with \"active task cannot be shared by a session fork: subagent-1785... (session_fork_active_task)\". The couple of dozen business errors people actually hit now have copy in every language, and the original English moves into the error bar's detail area, expandable and selectable for a bug report."
-      },
-      "details": [
-        {
-          "zh": "会话分叉、会话新建与切换、能力刷新、WebSocket 错误帧以前各写各的英文句子，完全绕开了本地化。现在都走同一个出口。",
-          "en": "Session fork, session create and switch, capability refresh and the WebSocket error frame each formatted their own English string and bypassed localization entirely. They now share one route."
-        },
-        {
-          "zh": "某个语言确实没有这条文案时，会退回一句本地化的通用说明或英文原句，而不是把 error.code.sessionBusy 这种键名摆给你看。完全没有错误码的失败（比如服务端进程连原生模块都加载不了）会给一句通用说明加完整原文。",
-          "en": "When a language genuinely lacks a phrase, it falls back to a localized general sentence or to the English original, rather than showing you a key like error.code.sessionBusy. A failure carrying no code at all, such as a server process that cannot load its native addon, gets a general sentence plus the full original text."
-        },
-        {
-          "zh": "同一条错误连续出现两次时，先出现那条的定时器不会再把后出现那条提前清掉。",
-          "en": "When the same error fires twice, the first entry's timer no longer clears the second one early."
-        }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "a54cdca61", "title": "feat(i18n): speak the user's language when an operation fails" }
-      ]
-    },
-    {
-      "id": "folder-attachments-by-reference",
-      "kind": "feature",
       "importance": "medium",
       "title": {
-        "zh": "拖文件夹进来不再复制一份",
-        "en": "Dropped folders are referenced, not copied"
+        "zh": "插件配置、迁移产物和签名密钥目录纳入只属主可读写",
+        "en": "Plugin configs, migration outputs and the signing key directory come under owner-only permissions"
       },
       "summary": {
-        "zh": "以前拖一个文件夹进来会把里面的文件整个复制进会话缓存，还会挨个清点：内部文件数会吃掉附件额度，里面有 symlink 就直接被拒。现在文件夹登记为原地址的引用，不搬字节也不递归清点，文件夹本身占 1 个附件额度，里面装多少东西都不影响（文件夹本身是 symlink、或指向敏感路径，仍然会被挡）。",
-        "en": "Dropping a folder used to copy its contents into the session cache and count them one by one: the number of files inside ate into the attachment allowance, and a symlink anywhere within meant outright rejection. A folder is now registered as a reference to its original location, with no bytes moved and no recursive counting, so it takes a single attachment slot no matter what it holds. A folder that is itself a symlink, or that sits on a sensitive path, is still blocked."
+        "zh": "上一版把凭证文件改成只有你自己能读写，这一版补齐覆盖面。插件配置文件可能存着连接器和第三方服务的密钥，现在与其它凭证走同一个只属主的写入方式。几处数据迁移在改写 agent 配置和模型文件时会先落一个默认权限的临时文件，崩溃在改名之前就会永久留下一份可读副本，这些写入也改走同一条路。签名密钥和授权记录所在的安全目录写下时本就是只属主，但之后没有任何东西纠正过它——备份恢复或复制数据目录带回来的宽松权限会一直留着，现在启动时的权限巡检会走一遍这棵树。",
+        "en": "The previous release made credential files readable only by you; this one fills in the coverage. Plugin configuration files can hold connector and third-party service credentials, and are now written with the same owner-only primitive as the other credential stores. Several data migrations rewrote agent configurations and provider model files through a plain temporary file with default permissions, where a crash before the rename would leave a readable copy behind indefinitely; those writes take the same route now. The security directory holding signing keys and grant records was already written owner-only, but nothing ever corrected it afterwards, so loose permissions reintroduced by a backup restore or a copied data directory stayed forever. The startup permission pass now walks that tree."
       },
       "details": [
         {
-          "zh": "代价是这个附件不再是快照：把原文件夹删了或移走，历史记录里那个附件会显示为缺失，而不是留着一份当时的副本。",
-          "en": "The trade-off is that the attachment is no longer a snapshot: delete or move the original and the attachment shows as missing in history, rather than keeping a copy of how it looked at the time."
+          "zh": "启动巡检还覆盖了按 agent 的配置备份（包括迁移检查点里的那些），以及 agent 配置旁边残留的临时副本。",
+          "en": "The startup pass also covers the per-agent configuration backups, including those inside migration checkpoints, and any leftover temporary copy sitting next to an agent configuration."
         },
         {
-          "zh": "助手对会话附件的 ls / grep / find 现在都能直接按 fileId 指定目标；对一个文件夹类附件执行「读取」会返回该怎么做的说明，而不是抛一个 EISDIR。",
-          "en": "The assistant's ls, grep and find now accept a session attachment by id, and asking it to read a folder attachment returns guidance on what to do instead of failing with EISDIR."
+          "zh": "插件那边只碰配置文件本身，插件数据目录的其余部分归别的所有者，保持原有权限。",
+          "en": "On the plugin side only the configuration file itself is touched; the rest of a plugin's data directory belongs to other owners and keeps whatever modes it has."
         }
       ],
       "sources": [
-        { "type": "commit", "ref": "42d8a5170", "title": "feat(attachments): directory attachments become path references; session-file agent access goes through ResourceIO" }
-      ]
-    },
-    {
-      "id": "credential-files-owner-only",
-      "kind": "migration",
-      "importance": "high",
-      "title": {
-        "zh": "本机凭证文件收紧为只有你自己能读写",
-        "en": "Local credential files become owner-only"
-      },
-      "summary": {
-        "zh": "供应商目录与模型缓存、跨助手的全局模型配置、OAuth 令牌、每个助手的配置（里面有供应商和通道凭证）、设备与本地用户记录、网页会话、本地定义的供应商插件（各自带着自己的 key），以及这些文件的迁移备份和迁移检查点，在 Unix 上现在都以「仅所有者可读写」创建，数据目录本身也是。已经存在的文件每次启动检查一次，跟预期不符就纠正，每次纠正都会记一条日志。",
-        "en": "The provider catalog and model cache, the cross-assistant global model config, OAuth tokens, each assistant's config (which holds provider and channel credentials), device and local-user records, web sessions, locally defined provider plugins (each carrying its own key), and the migration backups and checkpoints of all these are now created owner-only on Unix, as is the data directory itself. Existing files are checked once per launch and corrected when they differ, with every correction logged."
-      },
-      "details": [
         {
-          "zh": "供应商目录能正常读出且有内容之后，超过 90 天的迁移备份会被清理掉。",
-          "en": "Migration backups older than 90 days are removed once the live provider catalog reads back cleanly and is populated."
+          "type": "commit",
+          "ref": "6ab02956a",
+          "title": "fix(plugins): write plugin configuration files through the owner-only store"
         },
         {
-          "zh": "Windows 不受影响：这个平台没有实现这套权限位，它的文件接口也表达不了。",
-          "en": "Windows is unchanged: the platform does not implement these permission bits and its file API cannot express them."
+          "type": "commit",
+          "ref": "0600d2746",
+          "title": "fix(storage): bring the security key directory under the custody pass"
         },
         {
-          "zh": "权限调整是尽力而为。碰上不支持 POSIX 权限的文件系统，改不动就改不动，绝不会因此中断一次保存或一次启动，失败只写进日志。",
-          "en": "The permission work is best-effort. On a filesystem without POSIX permissions the change simply does not stick, and it never interrupts a save or a launch; failures only go to the log."
+          "type": "commit",
+          "ref": "8098690c4",
+          "title": "fix(storage): write credential-bearing migration outputs owner-only"
+        },
+        {
+          "type": "commit",
+          "ref": "22a78a9ce",
+          "title": "fix(storage): write the remaining credential migrations owner-only"
+        },
+        {
+          "type": "commit",
+          "ref": "4d251edfc",
+          "title": "fix(storage): broaden the startup custody pass and the persistence scan"
         }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "489238e87", "title": "chore(storage): write local credential files owner-only and verify at startup" },
-        { "type": "commit", "ref": "01aee9a8e", "title": "fix(storage): heal the local provider plugin tree the store actually writes to" }
       ]
     },
     {
-      "id": "invite-gated-test-channel",
-      "kind": "feature",
-      "importance": "medium",
-      "title": {
-        "zh": "邀请码开通测试更新通道",
-        "en": "An invite code opens a test update channel"
-      },
-      "summary": {
-        "zh": "邀请码解锁的是一条独立的更新地址，而不是给应用本身加门禁。核销在主进程里完成，请求只带上邀请码和一个本地生成的设备标识的哈希，不上送版本、平台或任何机器指纹，设备标识原文也不出本机。",
-        "en": "An invite code unlocks a separate update address rather than gating the app itself. Redemption happens in the main process, and the request carries only the code and a hash of a locally generated device identifier. No version, platform or machine fingerprint is sent, and the identifier itself never leaves your machine."
-      },
-      "details": [
-        {
-          "zh": "真正切换通道之前会先让你确认一件事：测试版装上之后无法回退到当前的稳定版。你接受了才切。",
-          "en": "Before the channel actually switches you must accept that a test build cannot be rolled back to the current stable release. Only then does it switch."
-        },
-        {
-          "zh": "测试通道不会在出问题时偷偷回落到公开发布源。那边失败就如实报告，不会把你不声不响地拉回稳定版。",
-          "en": "The test channel never quietly falls back to the public release source. A failure there is reported honestly instead of pulling you back to stable behind your back."
-        },
-        {
-          "zh": "没有配置核销地址的构建，设置页根本不显示邀请入口。",
-          "en": "A build with no redemption endpoint configured renders no invite entry at all."
-        }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "7777dec47", "title": "feat(updater): invite-gated test update channel" },
-        { "type": "commit", "ref": "5f7c9836a", "title": "feat(invite): add the invite-redemption worker behind the alpha update channel" }
-      ]
-    },
-    {
-      "id": "git-push-permission-mode",
-      "kind": "fix",
-      "importance": "medium",
-      "title": {
-        "zh": "git push 的危险变体改走会话权限模式",
-        "en": "Dangerous git push variants now follow the session permission mode"
-      },
-      "summary": {
-        "zh": "强推（`--force`、`-f`、`--force-with-lease`、以及 `+分支` 这种 refspec 写法）、推 tag（`--tags`、`--follow-tags`）、`--all` 和 `--mirror`，原先在任何模式下都被产品层无条件拦死。现在这些变体跟其它命令一样交给会话权限模式处理：询问模式会问你，自动模式**直接放行**，完整权限模式放行，只读模式拒绝。",
-        "en": "Force pushes (`--force`, `-f`, `--force-with-lease`, and the `+branch` refspec form), tag pushes (`--tags`, `--follow-tags`), `--all` and `--mirror` used to be blocked unconditionally at the product level in every mode. They now go through the session permission mode like any other command: the ask mode prompts you, the auto mode **allows them outright**, full access allows them, and read-only refuses."
-      },
-      "details": [
-        {
-          "zh": "这是一次放宽，覆盖面比字面上那几个长选项更广，请按需要调整你的会话权限模式。硬安全网现在只剩下工作区文件投递这一条边界。",
-          "en": "This is a relaxation, and it covers more spellings than the long options alone, so set your session permission mode accordingly. The hard safety gate now enforces only the workspace file-delivery boundary."
-        }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "6aa701bdd", "title": "fix(permission): route dangerous git push variants through normal permission flow" }
-      ]
-    },
-    {
-      "id": "mcp-defer-two-tier",
+      "id": "plugin-docs-parity",
       "kind": "improvement",
       "importance": "low",
       "title": {
-        "zh": "延迟加载多了一级内置工具开关，位置也挪到了该在的地方",
-        "en": "A second defer switch for built-in tools, moved somewhere it belongs"
+        "zh": "英文插件指南补齐三节，provider 兼容层参考重写",
+        "en": "Three sections added to the English plugin guide, provider-compat reference rewritten"
       },
       "summary": {
-        "zh": "主开关延迟加载连接器工具；新增的二级开关把延迟扩展到内置工具，默认关闭，而且只有主开关开着时才能用。这组开关本来对所有连接器都生效，却藏在每个连接器详情页里，现在挪到了 MCP 设置页顶层，跟主开关放在一起。",
-        "en": "The master switch defers connector tools; a new second switch extends deferral to built-in tools, off by default and usable only while the master is on. These controls apply to every connector yet lived inside each connector's detail page, and now sit at the top level of the MCP settings page next to the master switch."
+        "zh": "英文插件指南缺了中文指南已有的三节：Agent 辅助开发流程、开发场景、诊断面板。翻译前先对着当前代码核验了它们描述的 API，现在两份指南都是同样的 13 个顶层章节。provider 兼容层的参考文档还在把这一层描述成 JavaScript，12 个相对链接全部指向不存在的文件，模块表只列了目录里 19 个文件中的 8 个——Kimi、LongCat、OpenRouter、Anthropic 这些看起来像是压根没有兼容层。链接全部修正，模块按分发实际遍历的顺序列全，并把与 provider 无关的辅助函数拆成单独一张表。",
+        "en": "The English plugin guide was missing three sections the Chinese one already had: the agent-assisted development loop, development scenarios, and the diagnostics panel. The APIs they document were verified against the current code before translating, and both guides now carry the same 13 top-level sections. The provider-compat reference still described that layer as JavaScript, so all twelve of its relative links resolved to nothing, and its module table listed only 8 of the 19 files in the directory, making providers such as Kimi, LongCat, OpenRouter and Anthropic look like they had no compat layer at all. The links are corrected, every module is listed in the order dispatch actually walks them, and the provider-agnostic helpers are split into a table of their own."
       },
-      "details": [
-        {
-          "zh": "连接器详情页的权限区块现在只保留该连接器自己的复审策略。",
-          "en": "The permission section of a connector's detail page now keeps only that connector's own review policy."
-        }
-      ],
+      "details": [],
       "sources": [
-        { "type": "commit", "ref": "688c6437b", "title": "feat(mcp): two-tier defer switches with the built-in tier gated by the master" },
-        { "type": "commit", "ref": "b4d025974", "title": "fix(settings): move the global defer controls to the connector tab's top level" }
-      ]
-    },
-    {
-      "id": "duplicate-attachment-spelling",
-      "kind": "fix",
-      "importance": "low",
-      "title": {
-        "zh": "同一个文件不会再因为路径写法不同被重复上传",
-        "en": "One file no longer uploads twice over a difference in spelling"
-      },
-      "summary": {
-        "zh": "重复上传同一个文件本来会复用上一次的副本，判断依据是一个从路径算出来的去重键。但上传路径解析路径的方式和其它入口不一致，同一个文件换一种写法（Windows 上的 8.3 短名，macOS 上的大小写）就会算出不同的键，于是被当成两个文件，各复制一份进会话缓存。现在上传路径的写法跟其它入口统一了。",
-        "en": "Uploading the same file again is supposed to reuse the previous copy, decided by a dedupe key derived from its path. But the upload route resolved paths differently from every other entry point, so the same file spelled another way (an 8.3 short name on Windows, different letter case on macOS) produced a different key, counted as two files, and was copied into the session cache twice. The upload path now spells paths the same way every other entry point does."
-      },
-      "details": [
         {
-          "zh": "这不是某个平台独有的毛病：macOS 上用与磁盘不同的大小写拼一个已存在的路径，同样会分叉。",
-          "en": "This was not specific to one platform: on macOS, spelling an existing path with different letter case than the disk has produces the same split."
+          "type": "commit",
+          "ref": "6e6447b59",
+          "title": "docs: refresh provider-compat reference and sync English plugin guide"
         }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "913188b50", "title": "fix(upload): align the upload route's realpath with the session-file registry" }
       ]
     }
   ]
