@@ -668,7 +668,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:0bae7b5ecf5c5e3084248975d1d34bc95810dd92fd0e5c02c32cc58c37254774",
+  "payloadFingerprint": "sha256:610b389b43eb34452979c0b3dc79527fe5352bec39e6861fcee82df690011c4c",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -1412,6 +1412,52 @@
         "contract": "update channel record version, device identifier, activation flag, update feed address, activation time, and held invite codes",
         "kind": "runtime-contract",
         "module": "desktop/auto-updater.cjs"
+      }
+    },
+    {
+      "affectedByEpochMigration": false,
+      "bootstrapSafety": {
+        "compatibility": "epoch-independent",
+        "reason": "Install-directory ACL repair runs before the server exists and is interpreted entirely by the versioned desktop module.",
+        "unstampedHomeSafePaths": [
+          {
+            "kind": "file",
+            "relativePath": "user/win32-install-acl-heal.json"
+          }
+        ]
+      },
+      "checkpointPolicy": "Exclude or preserve independently as launch-recovery metadata; never use it as an epoch checkpoint.",
+      "epochPolicy": "compatible",
+      "exemption": null,
+      "firstPossibleOpenPhase": "desktop_bootstrap",
+      "firstPossibleWritePhase": "desktop_bootstrap",
+      "format": "json",
+      "id": "desktop-win32-install-acl-heal-state",
+      "identityContract": "One heal record belongs to one desktop installation data home and is keyed inside the record by install directory and shell version.",
+      "migrationEntry": [],
+      "openEntry": [
+        "maybeHealWin32InstallAcl",
+        "desktop install ACL heal bookkeeping"
+      ],
+      "ownerModule": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "pathExclusions": [],
+      "pathKind": "file",
+      "pathPattern": "user/win32-install-acl-heal.json",
+      "pathPatterns": [
+        "user/win32-install-acl-heal.json"
+      ],
+      "preCoordinatorReadProjection": null,
+      "protocolModules": [],
+      "restorePolicy": "Load only through the install ACL heal reader; an unreadable record is treated as absent and the idempotent grant simply runs again.",
+      "schemaContract": {
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs.",
+        "kind": "runtime-source",
+        "source": "desktop/src/shared/win32-install-acl-heal.cjs"
+      },
+      "schemaSource": {
+        "contract": "install ACL heal state version, per install-identity grant bookkeeping, recovery probe result, and ineffective probe count",
+        "kind": "runtime-contract",
+        "module": "desktop/src/shared/win32-install-acl-heal.cjs"
       }
     },
     {
@@ -3034,8 +3080,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Path canonicalization refactor shifted recorded write sites; no stored schema or payload changed.",
-    "payloadFingerprint": "sha256:0bae7b5ecf5c5e3084248975d1d34bc95810dd92fd0e5c02c32cc58c37254774"
+    "compatibilityReason": "Registers the new desktop install ACL heal state store (user/win32-install-acl-heal.json) and refreshes shifted desktop/main.cjs write-site line numbers; no existing stored schema or payload changed.",
+    "payloadFingerprint": "sha256:610b389b43eb34452979c0b3dc79527fe5352bec39e6861fcee82df690011c4c"
   },
   "schemas": [
     {
@@ -3211,7 +3257,7 @@
       "contract": "GPU startup state version, crash evidence, recovery mode, and legacy migration markers",
       "kind": "runtime-contract",
       "module": "desktop/src/shared/gpu-startup-policy.cjs",
-      "sourceHash": "sha256:36e7b402215442172257835a6899002ec7d711fc9e2d8eeadc1e378d9bdc07ba",
+      "sourceHash": "sha256:874f5d91f399529964a3300ea6c3944203e35c9e5322f45f900432629e3e825c",
       "storeId": "desktop-gpu-startup-state"
     },
     {
@@ -3222,10 +3268,17 @@
       "storeId": "desktop-update-channel"
     },
     {
+      "contract": "install ACL heal state version, per install-identity grant bookkeeping, recovery probe result, and ineffective probe count",
+      "kind": "runtime-contract",
+      "module": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "sourceHash": "sha256:02dec6b4754db3c4cb556197a6505df50db68408d8195f9843b65122716c264b",
+      "storeId": "desktop-win32-install-acl-heal-state"
+    },
+    {
       "contract": "desktop window bounds, release announcement bookmark, and update cache version marker readers",
       "kind": "directory-contract",
       "module": "desktop/main.cjs",
-      "sourceHash": "sha256:a57267e6d791b560bdbc33566e537219ad984432d31791a9f17535cdb7bc25bc",
+      "sourceHash": "sha256:aa75dfe3bbe38457ab00e5c0cebbe5711c7c3c91dbf400504cfdcede548fea05",
       "storeId": "desktop-window-version-state"
     },
     {
@@ -6021,7 +6074,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1223,
+      "line": 1258,
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "server-runtime-info"
@@ -6029,7 +6082,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1227,
+      "line": 1262,
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "server-runtime-info"
@@ -6037,7 +6090,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 1742,
+      "line": 1777,
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "server-runtime-info"
@@ -6045,7 +6098,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2235,
+      "line": 2271,
       "reason": "Writes desktop crash or browser-command diagnostics.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-diagnostics"
@@ -6053,7 +6106,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 2236,
+      "line": 2272,
       "reason": "Writes desktop crash or browser-command diagnostics.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-diagnostics"
@@ -6061,7 +6114,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2297,
+      "line": 2333,
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-window-version-state"
@@ -6069,7 +6122,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 2298,
+      "line": 2334,
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-window-version-state"
@@ -6077,7 +6130,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 2366,
+      "line": 2402,
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-window-version-state"
@@ -6085,7 +6138,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 2465,
+      "line": 2501,
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-window-version-state"
@@ -6093,7 +6146,7 @@
     {
       "exemptionId": null,
       "kind": "write-file",
-      "line": 2466,
+      "line": 2502,
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-window-version-state"
@@ -6101,7 +6154,7 @@
     {
       "exemptionId": null,
       "kind": "append-file",
-      "line": 4287,
+      "line": 4323,
       "reason": "Writes desktop crash or browser-command diagnostics.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "desktop-diagnostics"
@@ -6109,7 +6162,7 @@
     {
       "exemptionId": "desktop-screenshot-html-temp",
       "kind": "write-file",
-      "line": 4855,
+      "line": 4891,
       "reason": "Writes and removes one request-scoped screenshot HTML file under the operating-system temporary directory.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6117,7 +6170,7 @@
     {
       "exemptionId": "desktop-screenshot-html-temp",
       "kind": "remove-path",
-      "line": 4909,
+      "line": 4945,
       "reason": "Writes and removes one request-scoped screenshot HTML file under the operating-system temporary directory.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6125,7 +6178,7 @@
     {
       "exemptionId": "desktop-skill-preview-temp",
       "kind": "mkdir",
-      "line": 5502,
+      "line": 5538,
       "reason": "Creates a request-scoped skill preview directory under Electron's operating-system temp path.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6133,7 +6186,7 @@
     {
       "exemptionId": "desktop-caller-selected-output",
       "kind": "write-file",
-      "line": 5648,
+      "line": 5684,
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6141,7 +6194,7 @@
     {
       "exemptionId": "desktop-caller-selected-output",
       "kind": "mkdir",
-      "line": 5670,
+      "line": 5706,
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6149,7 +6202,7 @@
     {
       "exemptionId": "desktop-caller-selected-output",
       "kind": "write-file",
-      "line": 5671,
+      "line": 5707,
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6157,7 +6210,7 @@
     {
       "exemptionId": "desktop-caller-selected-output",
       "kind": "mkdir",
-      "line": 5682,
+      "line": 5718,
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6165,7 +6218,7 @@
     {
       "exemptionId": "desktop-caller-selected-output",
       "kind": "copy-file",
-      "line": 5683,
+      "line": 5719,
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6173,7 +6226,7 @@
     {
       "exemptionId": "desktop-caller-selected-output",
       "kind": "mkdir",
-      "line": 5716,
+      "line": 5752,
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6181,7 +6234,7 @@
     {
       "exemptionId": "desktop-caller-selected-output",
       "kind": "write-file",
-      "line": 5717,
+      "line": 5753,
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
       "sourceFile": "desktop/main.cjs",
       "storeId": null
@@ -6189,7 +6242,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 6241,
+      "line": 6277,
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
       "sourceFile": "desktop/main.cjs",
       "storeId": "server-runtime-info"
@@ -6321,6 +6374,30 @@
       "reason": "Writes epoch-independent desktop launch diagnostics.",
       "sourceFile": "desktop/src/shared/launch-integrity.cjs",
       "storeId": "desktop-diagnostics"
+    },
+    {
+      "exemptionId": null,
+      "kind": "mkdir",
+      "line": 46,
+      "reason": "Writes the desktop install ACL heal record through its temporary file and rename.",
+      "sourceFile": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "storeId": "desktop-win32-install-acl-heal-state"
+    },
+    {
+      "exemptionId": null,
+      "kind": "write-file",
+      "line": 48,
+      "reason": "Writes the desktop install ACL heal record through its temporary file and rename.",
+      "sourceFile": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "storeId": "desktop-win32-install-acl-heal-state"
+    },
+    {
+      "exemptionId": null,
+      "kind": "rename",
+      "line": 49,
+      "reason": "Writes the desktop install ACL heal record through its temporary file and rename.",
+      "sourceFile": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "storeId": "desktop-win32-install-acl-heal-state"
     },
     {
       "exemptionId": null,

@@ -1067,6 +1067,37 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     siteRules: rules(["desktop/src/shared/gpu-startup-policy.cjs"], "Atomically writes desktop GPU startup state.", ["atomic-write"], "writeJson\\(getGpuStartupStatePath"),
   }),
   defineStore({
+    id: "desktop-win32-install-acl-heal-state",
+    ownerModule: "desktop/src/shared/win32-install-acl-heal.cjs",
+    pathPatterns: ["user/win32-install-acl-heal.json"],
+    format: "json",
+    schemaSource: runtimeSource(
+      "desktop/src/shared/win32-install-acl-heal.cjs",
+      "install ACL heal state version, per install-identity grant bookkeeping, recovery probe result, and ineffective probe count",
+    ),
+    openEntry: ["maybeHealWin32InstallAcl", "desktop install ACL heal bookkeeping"],
+    firstPossibleOpenPhase: "desktop_bootstrap",
+    firstPossibleWritePhase: "desktop_bootstrap",
+    epochPolicy: "compatible",
+    checkpointPolicy: "Exclude or preserve independently as launch-recovery metadata; never use it as an epoch checkpoint.",
+    restorePolicy: "Load only through the install ACL heal reader; an unreadable record is treated as absent and the idempotent grant simply runs again.",
+    affectedByEpochMigration: false,
+    bootstrapSafety: {
+      compatibility: "epoch-independent",
+      reason: "Install-directory ACL repair runs before the server exists and is interpreted entirely by the versioned desktop module.",
+      unstampedHomeSafePaths: [
+        { relativePath: "user/win32-install-acl-heal.json", kind: "file" },
+      ],
+    },
+    identityContract: "One heal record belongs to one desktop installation data home and is keyed inside the record by install directory and shell version.",
+    siteRules: rules(
+      ["desktop/src/shared/win32-install-acl-heal.cjs"],
+      "Writes the desktop install ACL heal record through its temporary file and rename.",
+      ["mkdir", "write-file", "rename"],
+      "(?:filePath|tmpPath)",
+    ),
+  }),
+  defineStore({
     id: "desktop-window-version-state",
     ownerModule: "desktop/main.cjs",
     pathPatterns: [

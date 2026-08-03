@@ -791,6 +791,52 @@
       "exemption": null
     },
     {
+      "id": "desktop-win32-install-acl-heal-state",
+      "ownerModule": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "pathPattern": "user/win32-install-acl-heal.json",
+      "pathPatterns": [
+        "user/win32-install-acl-heal.json"
+      ],
+      "pathExclusions": [],
+      "pathKind": "file",
+      "format": "json",
+      "schemaSource": {
+        "kind": "runtime-contract",
+        "module": "desktop/src/shared/win32-install-acl-heal.cjs",
+        "contract": "install ACL heal state version, per install-identity grant bookkeeping, recovery probe result, and ineffective probe count"
+      },
+      "schemaContract": {
+        "kind": "runtime-source",
+        "source": "desktop/src/shared/win32-install-acl-heal.cjs",
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs."
+      },
+      "openEntry": [
+        "maybeHealWin32InstallAcl",
+        "desktop install ACL heal bookkeeping"
+      ],
+      "migrationEntry": [],
+      "protocolModules": [],
+      "firstPossibleOpenPhase": "desktop_bootstrap",
+      "firstPossibleWritePhase": "desktop_bootstrap",
+      "epochPolicy": "compatible",
+      "checkpointPolicy": "Exclude or preserve independently as launch-recovery metadata; never use it as an epoch checkpoint.",
+      "restorePolicy": "Load only through the install ACL heal reader; an unreadable record is treated as absent and the idempotent grant simply runs again.",
+      "affectedByEpochMigration": false,
+      "bootstrapSafety": {
+        "compatibility": "epoch-independent",
+        "reason": "Install-directory ACL repair runs before the server exists and is interpreted entirely by the versioned desktop module.",
+        "unstampedHomeSafePaths": [
+          {
+            "relativePath": "user/win32-install-acl-heal.json",
+            "kind": "file"
+          }
+        ]
+      },
+      "preCoordinatorReadProjection": null,
+      "identityContract": "One heal record belongs to one desktop installation data home and is keyed inside the record by install directory and shell version.",
+      "exemption": null
+    },
+    {
       "id": "desktop-window-version-state",
       "ownerModule": "desktop/main.cjs",
       "pathPattern": "user/window-state.json",
@@ -5138,7 +5184,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 1223,
+      "line": 1258,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(serverInfoPath)",
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
@@ -5147,7 +5193,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 1227,
+      "line": 1262,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(serverInfoPath)",
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
@@ -5156,7 +5202,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 1742,
+      "line": 1777,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(serverInfoPath)",
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
@@ -5165,7 +5211,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 2235,
+      "line": 2271,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(hanakoHome, { recursive: true, mode: 0o700 })",
       "reason": "Writes desktop crash or browser-command diagnostics.",
@@ -5174,7 +5220,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 2236,
+      "line": 2272,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(crashLogPath, content, \"utf-8\")",
       "reason": "Writes desktop crash or browser-command diagnostics.",
@@ -5183,7 +5229,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 2297,
+      "line": 2333,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(lastSeenVersionPath), { recursive: true })",
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
@@ -5192,7 +5238,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 2298,
+      "line": 2334,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(lastSeenVersionPath, JSON.stringify({ version }))",
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
@@ -5201,7 +5247,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 2366,
+      "line": 2402,
       "kind": "write-file",
       "excerpt": "fs.promises.writeFile(windowStatePath, JSON.stringify(state, null, 2) + \"\\n\")",
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
@@ -5210,7 +5256,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 2465,
+      "line": 2501,
       "kind": "mkdir",
       "excerpt": "fs.promises.mkdir(path.dirname(quickChatWindowStatePath), { recursive: true })",
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
@@ -5219,7 +5265,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 2466,
+      "line": 2502,
       "kind": "write-file",
       "excerpt": "fs.promises.writeFile(quickChatWindowStatePath, JSON.stringify(state, null, 2) + \"\\n\")",
       "reason": "Writes desktop window bounds or the release-announcement version bookmark.",
@@ -5228,7 +5274,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 4287,
+      "line": 4323,
       "kind": "append-file",
       "excerpt": "require(\"fs\").appendFileSync(require(\"path\").join(hanakoHome, \"browser-cmd.log\"), `${new Date().toISOString()} ${redactMainLogText(line)}\\n`)",
       "reason": "Writes desktop crash or browser-command diagnostics.",
@@ -5237,7 +5283,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 4855,
+      "line": 4891,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmpHtml, htmlContent, \"utf-8\")",
       "reason": "Writes and removes one request-scoped screenshot HTML file under the operating-system temporary directory.",
@@ -5246,7 +5292,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 4909,
+      "line": 4945,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(tmpHtml)",
       "reason": "Writes and removes one request-scoped screenshot HTML file under the operating-system temporary directory.",
@@ -5255,7 +5301,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5502,
+      "line": 5538,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(tmpDir, { recursive: true })",
       "reason": "Creates a request-scoped skill preview directory under Electron's operating-system temp path.",
@@ -5264,7 +5310,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5648,
+      "line": 5684,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(filePath, content, \"utf-8\")",
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
@@ -5273,7 +5319,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5670,
+      "line": 5706,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(resolved), { recursive: true })",
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
@@ -5282,7 +5328,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5671,
+      "line": 5707,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(resolved, Buffer.from(base64Data, \"base64\"))",
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
@@ -5291,7 +5337,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5682,
+      "line": 5718,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(destinationPath), { recursive: true })",
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
@@ -5300,7 +5346,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5683,
+      "line": 5719,
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(sourcePath, destinationPath)",
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
@@ -5309,7 +5355,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5716,
+      "line": 5752,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(dir, { recursive: true })",
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
@@ -5318,7 +5364,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 5717,
+      "line": 5753,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(filePath, pngBuffer)",
       "reason": "Writes an absolute path selected by the renderer or a screenshot directory selected by the user; no HANA_HOME store is implied.",
@@ -5327,7 +5373,7 @@
     },
     {
       "sourceFile": "desktop/main.cjs",
-      "line": 6241,
+      "line": 6277,
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(path.join(hanakoHome, \"server-info.json\"))",
       "reason": "Deletes stale desktop server discovery state before or after a server lifecycle.",
@@ -5476,6 +5522,33 @@
       "excerpt": "fs.appendFileSync(filePath, JSON.stringify({ event, time: now instanceof Date ? now.toISOString() : String(now), payload, }) + \"\\n\", \"utf-8\")",
       "reason": "Writes epoch-independent desktop launch diagnostics.",
       "storeId": "desktop-diagnostics",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "line": 46,
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
+      "reason": "Writes the desktop install ACL heal record through its temporary file and rename.",
+      "storeId": "desktop-win32-install-acl-heal-state",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "line": 48,
+      "kind": "write-file",
+      "excerpt": "fs.writeFileSync(tmpPath, JSON.stringify({ ...state, version: STATE_VERSION }, null, 2) + \"\\n\", \"utf-8\")",
+      "reason": "Writes the desktop install ACL heal record through its temporary file and rename.",
+      "storeId": "desktop-win32-install-acl-heal-state",
+      "exemptionId": null
+    },
+    {
+      "sourceFile": "desktop/src/shared/win32-install-acl-heal.cjs",
+      "line": 49,
+      "kind": "rename",
+      "excerpt": "fs.renameSync(tmpPath, filePath)",
+      "reason": "Writes the desktop install ACL heal record through its temporary file and rename.",
+      "storeId": "desktop-win32-install-acl-heal-state",
       "exemptionId": null
     },
     {

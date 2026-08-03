@@ -227,6 +227,25 @@
       "breakingMigrationRequiresAccessMove": false
     },
     {
+      "id": "desktop-win32-install-acl-heal-state",
+      "firstPossibleOpenPhase": "desktop_bootstrap",
+      "firstPossibleWritePhase": "desktop_bootstrap",
+      "opensBeforeFutureCoordinator": true,
+      "writesBeforeFutureCoordinator": true,
+      "bootstrapSafety": {
+        "compatibility": "epoch-independent",
+        "reason": "Install-directory ACL repair runs before the server exists and is interpreted entirely by the versioned desktop module.",
+        "unstampedHomeSafePaths": [
+          {
+            "relativePath": "user/win32-install-acl-heal.json",
+            "kind": "file"
+          }
+        ]
+      },
+      "preCoordinatorReadProjection": null,
+      "breakingMigrationRequiresAccessMove": false
+    },
+    {
       "id": "desktop-window-version-state",
       "firstPossibleOpenPhase": "runtime_ready",
       "firstPossibleWritePhase": "runtime_ready",
