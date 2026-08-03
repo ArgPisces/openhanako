@@ -302,7 +302,6 @@ function clearSessionRuntimeCaches(path: string): void {
     const todosBySession = deleteSessionScopedStateValue(s, s.todosBySession || {}, path);
     const todosLiveVersionBySession = deleteSessionScopedStateValue(s, s.todosLiveVersionBySession || {}, path);
     const sessionAuthorizedFoldersByPath = deleteSessionScopedStateValue(s, s.sessionAuthorizedFoldersByPath || {}, path);
-    const capabilityDriftBySession = deleteSessionScopedStateValue(s, s.capabilityDriftBySession || {}, path);
     let inlineErrors = s.inlineErrors;
     if (inlineErrors) {
       inlineErrors = deleteSessionScopedStateValue(s, inlineErrors || {}, path);
@@ -324,7 +323,6 @@ function clearSessionRuntimeCaches(path: string): void {
       todosBySession,
       todosLiveVersionBySession,
       sessionAuthorizedFoldersByPath,
-      capabilityDriftBySession,
       capabilityRefreshingSessions: filterSessionScopedStateList(s, s.capabilityRefreshingSessions || [], path),
       inlineErrors,
     };
@@ -934,9 +932,6 @@ export async function switchSession(path: string): Promise<void> {
           : null,
       });
     }
-
-    // #1624：服务端在 restore 时算好的工具能力漂移提示（无漂移 / 已 dismiss → null）
-    useStore.getState().setSessionCapabilityDrift(path, data.capabilityDrift || null);
 
     await requestActiveSessionStreamResume(path, isStreaming);
     if (myVersion !== _switchVersion) return;
@@ -1548,33 +1543,8 @@ export async function reorderPinnedSessions(orderedSessionIds: string[]): Promis
 }
 
 // ══════════════════════════════════════════════════════
-// #1624 工具能力漂移：dismiss / 显式刷新（fresh compact）
+// 显式更新会话能力（fresh compact）
 // ══════════════════════════════════════════════════════
-
-/** 关闭当前 fingerprint 的提示；服务端持久化在 session-meta，指纹再变才重新提示 */
-export async function dismissSessionCapabilityDrift(path: string, fingerprint: string): Promise<boolean> {
-  // 乐观隐藏：dismiss 是低风险操作，失败时恢复提示
-  const prevDrift = sessionScopedValue(
-    useStore.getState() as Record<string, any>,
-    useStore.getState().capabilityDriftBySession,
-    path,
-  ) || null;
-  useStore.getState().setSessionCapabilityDrift(path, null);
-  try {
-    const res = await hanaFetch('/api/sessions/capability-drift/dismiss', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, fingerprint }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || res.statusText);
-    return true;
-  } catch (err) {
-    console.warn('[session] capability drift dismiss failed:', err);
-    useStore.getState().setSessionCapabilityDrift(path, prevDrift);
-    return false;
-  }
-}
 
 /**
  * 显式刷新 Agent 工具：fresh compact——旧对话压缩成摘要 checkpoint，
@@ -1598,13 +1568,12 @@ export async function refreshSessionCapabilities(path: string): Promise<boolean>
     if (!res.ok || data.error) {
       throw errorWithCode(String(data.error || res.statusText), errorCodeFromResponseBody(data));
     }
-    useStore.getState().setSessionCapabilityDrift(path, data.capabilityDrift || null);
     await loadMessages(path);
     return true;
   } catch (err) {
     console.error('[session] capability refresh failed:', err);
     const state = useStore.getState();
-    state.setInlineError?.(path, presentErrorWithLabel(tr('session.capabilityDrift.refreshFailed'), err), 6000);
+    state.setInlineError?.(path, presentErrorWithLabel(tr('input.refreshAndCompactFailed'), err), 6000);
     return false;
   } finally {
     useStore.getState().setSessionCapabilityRefreshing(path, false);

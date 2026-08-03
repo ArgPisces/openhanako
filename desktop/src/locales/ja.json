@@ -245,20 +245,6 @@
       "deleteFailed": "削除に失敗しました",
       "daysAgo": "{days} 日前にアーカイブ"
     },
-    "capabilityDrift": {
-      "title": "ツール構成が更新されています",
-      "addedTools": "新しいツール {count} 件",
-      "removedTools": "{count} 件のツールが利用不可",
-      "promptUpdated": "プロンプト更新",
-      "separator": "、",
-      "refreshButton": "エージェントのツールを更新",
-      "dismissButton": "閉じる",
-      "confirmText": "更新すると古い会話は要約に圧縮され、詳細が失われる可能性があります。続行しますか？",
-      "confirmButton": "更新する",
-      "cancelButton": "キャンセル",
-      "refreshing": "会話を圧縮してツールを更新中…",
-      "refreshFailed": "更新に失敗しました"
-    },
     "rcTakingOver": "{platform} 接続中",
     "subagentRunStateUnrecoverable": "過去のサブセッションの実行状態は復元できません",
     "subagentLinkUnrecoverable": "過去のサブセッションへのリンクは復元できません"
@@ -441,6 +427,8 @@
     "contextActions": "コンテキスト操作",
     "refreshAndCompact": "更新して圧縮",
     "refreshAndCompactTooltip": "最新の記憶とツールセットに更新",
+    "refreshAndCompactBusy": "会話を更新して圧縮中…",
+    "refreshAndCompactFailed": "更新と圧縮に失敗しました",
     "compact": "圧縮",
     "noAskThisConversation": "この会話では今後確認しない",
     "confirmMoreOptions": "その他の確認オプション",
@@ -1051,6 +1039,7 @@
     "save": "保存",
     "saved": "保存しました ✿",
     "saveFailed": "保存に失敗しました",
+    "refreshFailed": "更新に失敗しました",
     "fileChangedOnDisk": "ファイルが外部で変更されたため、古い保存をスキップしました",
     "noChanges": "変更はありません",
     "autoSaved": "自動保存しました ✿",

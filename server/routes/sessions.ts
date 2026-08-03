@@ -2370,8 +2370,6 @@ export function createSessionsRoute(engine, hub = null) {
         currentModelUnavailableReason: modelAvailability?.available === false
           ? (modelAvailability.reason || "temporarily_unavailable")
           : null,
-        // #1624：restore 时算好的工具/prompt 漂移提示（无漂移或已 dismiss → null）
-        capabilityDrift: engine.getSessionCapabilityDriftNotice?.(sessionPath) || null,
       });
     } catch (err) {
       const errDetail = `${err.message}\n${err.stack || ""}`;
@@ -2381,28 +2379,7 @@ export function createSessionsRoute(engine, hub = null) {
     }
   });
 
-  // #1624：关闭当前 fingerprint 的"工具能力有更新"提示（跟 session 走，指纹再变才重新提示）
-  route.post("/sessions/capability-drift/dismiss", async (c) => {
-    try {
-      const body = await safeJson(c);
-      const { path: sessionPath, fingerprint } = body || {};
-      if (!sessionPath) {
-        return c.json({ error: t("error.missingParam", { param: "path" }) }, 400);
-      }
-      if (typeof fingerprint !== "string" || !fingerprint) {
-        return c.json({ error: t("error.missingParam", { param: "fingerprint" }) }, 400);
-      }
-      if (!isActiveDesktopSessionPath(sessionPath, engine.agentsDir)) {
-        return c.json({ error: "Invalid session path" }, 403);
-      }
-      await engine.dismissSessionCapabilityDrift(sessionPath, fingerprint);
-      return c.json({ ok: true });
-    } catch (err) {
-      return c.json({ error: err.message }, 500);
-    }
-  });
-
-  // #1624：显式刷新 Agent 工具——fresh compact：压缩旧对话 + 用当前配置重建 prompt/工具快照
+  // 显式更新 Agent 能力：fresh compact 压缩旧对话，再用当前配置重建 prompt/工具快照。
   route.post("/sessions/fresh-compact", async (c) => {
     try {
       const body = await safeJson(c);
@@ -2420,7 +2397,6 @@ export function createSessionsRoute(engine, hub = null) {
       return c.json({
         ok: true,
         ...result,
-        capabilityDrift: engine.getSessionCapabilityDriftNotice?.(sessionPath) || null,
       });
     } catch (err) {
       lifecycleLog.error(`fresh-compact failed: ${err.message}`);

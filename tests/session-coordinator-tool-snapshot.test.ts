@@ -1254,20 +1254,14 @@ describe("session-coordinator tool snapshot (createSession)", () => {
     const { sessionPath } = await coord.createSession(null, tmpDir, true, null, { restore: true });
 
     expect(activeToolsSpy.mock.calls[0][0]).not.toContain("mcp_github_search");
-    expect(coord._sessions.get(sessionPath).toolNames).toContain("mcp_github_search");
-    expect(coord.getSessionCapabilityDriftNotice(sessionPath)?.invalidToolNames)
-      .toEqual(["mcp_github_search"]);
+    const entry = coord._sessions.get(sessionPath);
+    expect(entry.toolNames).toContain("mcp_github_search");
+    expect(entry.unavailableToolNames).toEqual(["mcp_github_search"]);
+    expect(coord.renderSessionReminderBlock(sessionPath)?.block).toContain("mcp_github_search");
     let meta = JSON.parse(await fsp.readFile(path.join(sessionDir, "session-meta.json"), "utf-8"));
     expect(meta[path.basename(fakeSessionPath)].toolNames).toContain("mcp_github_search");
 
     pluginAvailable = true;
-    const staleResult = coord.markCapabilitySnapshotsStale({ reason: "plugin.lifecycle.changed" });
-    expect(staleResult).toMatchObject({ ok: true, marked: 1 });
-    expect(coord.getSessionCapabilityDriftNotice(sessionPath)).toMatchObject({
-      addedToolNames: expect.arrayContaining(["mcp_github_search"]),
-      invalidToolNames: [],
-      reason: "plugin.lifecycle.changed",
-    });
     await coord.reloadSessionRuntime(sessionPath);
 
     const restoredTools = activeToolsSpy.mock.calls.at(-1)[0];
@@ -1531,9 +1525,9 @@ describe("session-coordinator tool snapshot (createSession)", () => {
     expect(coord.getAccessMode()).toBe("read_only");
   });
 
-  // ── #1624: dormant capability drift template ─────────────
+  // ── Frozen capability snapshots ──
 
-  describe("capability drift (#1624)", () => {
+  describe("frozen capability snapshots", () => {
     function promptSnapshotEntry(systemPrompt, appendSystemPrompt = []) {
       return {
         version: 1,
@@ -1544,7 +1538,7 @@ describe("session-coordinator tool snapshot (createSession)", () => {
       };
     }
 
-    it("restore keeps the frozen snapshot but no longer computes or wakes capability drift", async () => {
+    it("restore keeps the frozen prompt and tool snapshots", async () => {
       sessionManagerCreateMock.mockReturnValue({
         getCwd: () => tmpDir,
         getSessionFile: () => fakeSessionPath,
@@ -1567,90 +1561,20 @@ describe("session-coordinator tool snapshot (createSession)", () => {
       );
 
       buildSystemPromptSpy.mockClear();
-      const { sessionPath } = await coord.createSession(null, tmpDir, true, null, { restore: true });
+      await coord.createSession(null, tmpDir, true, null, { restore: true });
 
-      // 默认行为零变化：active 工具仍是冻结快照；但不再额外构造 live prompt / drift 提示。
+      // active 工具仍是冻结快照，restore 不额外构造 live prompt。
       expect(activeToolsSpy.mock.calls[0][0]).not.toContain("office");
-      expect(coord.getSessionCapabilityDriftNotice(sessionPath)).toBeNull();
       expect(buildSystemPromptSpy).not.toHaveBeenCalled();
       const resourceLoader = createAgentSessionMock.mock.calls.at(-1)[0].resourceLoader;
       expect(resourceLoader.getAppendSystemPrompt()).toEqual(["legacy frozen workspace scope"]);
     });
 
-    it("manual drift entries still use the existing notice and dismiss chain", async () => {
-      currentAgentConfig = { tools: { disabled: [] } };
-      await fsp.writeFile(
-        path.join(sessionDir, "session-meta.json"),
-        JSON.stringify({
-          [path.basename(fakeSessionPath)]: {
-            toolNames: restoredSnapshot(allNames()),
-            promptSnapshot: promptSnapshotEntry("mock-prompt"),
-          },
-        }, null, 2),
-      );
-
-      const { sessionPath } = await coord.createSession(null, tmpDir, true, null, { restore: true });
-      const entry = coord._sessions.get(sessionPath);
-      entry.capabilityDrift = {
-        version: 1,
-        hasDrift: true,
-        fingerprint: "fp-live",
-        frozenFingerprint: "fp-frozen",
-        addedToolNames: ["office"],
-        removedToolNames: [],
-        invalidToolNames: [],
-        promptChanged: false,
-      };
-      const notice = coord.getSessionCapabilityDriftNotice(sessionPath);
-      expect(notice).not.toBeNull();
-      expect(notice.addedToolNames).toEqual(["office"]);
-
-      await coord.dismissSessionCapabilityDrift(sessionPath, notice.fingerprint);
-
-      // 当前 fingerprint 已被 dismiss → 不再提示
-      expect(coord.getSessionCapabilityDriftNotice(sessionPath)).toBeNull();
-      // dismiss 状态持久化在 session-meta（跟 session 走）
-      const meta = JSON.parse(await fsp.readFile(path.join(sessionDir, "session-meta.json"), "utf-8"));
-      expect(meta[path.basename(fakeSessionPath)].capabilityDriftDismissedFingerprint).toBe(notice.fingerprint);
-    });
-
-    it("marks cached sessions stale when current agent tools gain MCP tools", async () => {
-      currentAgentConfig = { tools: { disabled: [] } };
-      await fsp.writeFile(
-        path.join(sessionDir, "session-meta.json"),
-        JSON.stringify({
-          [path.basename(fakeSessionPath)]: {
-            toolNames: restoredSnapshot(allNames()),
-            promptSnapshot: promptSnapshotEntry("mock-prompt"),
-          },
-        }, null, 2),
-      );
-
-      const { sessionPath } = await coord.createSession(null, tmpDir, true, null, { restore: true });
-      expect(coord.getSessionCapabilityDriftNotice(sessionPath)).toBeNull();
-
-      const mcpTool = { ...makeTool("mcp_github_search"), _pluginId: "mcp" };
-      coord._d.buildTools = () => ({
-        tools: SDK_BUILTIN_OBJS,
-        customTools: [...HANAKO_CUSTOM_OBJS, mcpTool],
-      });
-
-      const result = coord.markCapabilitySnapshotsStale({
-        agentId: "test",
-        reason: "mcp.agent.tool.enable",
-      });
-
-      expect(result).toMatchObject({ ok: true, marked: 1 });
-      const notice = coord.getSessionCapabilityDriftNotice(sessionPath);
-      expect(notice).not.toBeNull();
-      expect(notice.addedToolNames).toEqual(["mcp_github_search"]);
-      expect(notice.promptChanged).toBe(false);
-    });
   });
 
-  // ── #1624: explicit refresh (fresh compact rebuilds both snapshots) ──
+  // ── Explicit refresh (fresh compact rebuilds both snapshots) ──
 
-  describe("refreshCapabilitySnapshots (#1624)", () => {
+  describe("refreshCapabilitySnapshots", () => {
     it("rebuilds the tool snapshot with Case C semantics (plugin tools included) and persists it", async () => {
       const pluginTool = { ...makeTool("office"), _pluginId: "office" };
       coord._d.buildTools = () => ({
@@ -1670,7 +1594,6 @@ describe("session-coordinator tool snapshot (createSession)", () => {
               skillsResult: { skills: [], diagnostics: [] },
               agentsFilesResult: { agentsFiles: [] },
             },
-            capabilityDriftDismissedFingerprint: "previously-dismissed",
           },
         }, null, 2),
       );
@@ -1685,7 +1608,7 @@ describe("session-coordinator tool snapshot (createSession)", () => {
       expect(appliedList).toContain("office");
       expect(appliedList).toContain("browser");
 
-      // session-meta 同步更新：toolNames + promptSnapshot 重建，dismiss 状态清空
+      // session-meta 同步更新：toolNames + promptSnapshot 重建
       // promptSnapshot 一律外置为 sidecar 引用，需经 hydrate 才能看到实际内容
       const metaPath = path.join(sessionDir, "session-meta.json");
       const meta = JSON.parse(await fsp.readFile(metaPath, "utf-8"));
@@ -1695,13 +1618,8 @@ describe("session-coordinator tool snapshot (createSession)", () => {
         kind: "session-meta-payload",
         field: "promptSnapshot",
       });
-      expect(entry.capabilityDriftDismissedFingerprint).toBeNull();
-
       const hydrated = await coord._readMetaCached(metaPath);
       expect(hydrated[path.basename(fakeSessionPath)].promptSnapshot.systemPrompt).toBe("mock-prompt");
-
-      // 刷新后无漂移
-      expect(coord.getSessionCapabilityDriftNotice(sessionPath)).toBeNull();
     });
 
     it("reloadSessionRuntime passes the refresh flag through", async () => {

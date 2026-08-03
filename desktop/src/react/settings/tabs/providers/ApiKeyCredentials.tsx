@@ -142,7 +142,7 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig: _provid
       return true;
     } catch (err: unknown) {
       if (shouldReportFailure()) {
-        showToast(t('session.capabilityDrift.refreshFailed') + ': ' + errorMessage(err), 'error');
+        showToast(t('settings.refreshFailed') + ': ' + errorMessage(err), 'error');
       }
       return false;
     }

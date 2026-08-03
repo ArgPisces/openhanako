@@ -245,20 +245,6 @@
       "deleteFailed": "刪除失敗",
       "daysAgo": "封存於 {days} 天前"
     },
-    "capabilityDrift": {
-      "title": "工具能力有更新",
-      "addedTools": "新增 {count} 個工具",
-      "removedTools": "{count} 個工具已失效",
-      "promptUpdated": "提示詞有更新",
-      "separator": "、",
-      "refreshButton": "重新整理 Agent 工具",
-      "dismissButton": "忽略",
-      "confirmText": "重新整理會把舊對話壓縮成摘要，細節可能遺失。要繼續嗎？",
-      "confirmButton": "確認重新整理",
-      "cancelButton": "取消",
-      "refreshing": "正在壓縮對話並重新整理工具…",
-      "refreshFailed": "重新整理失敗"
-    },
     "rcTakingOver": "{platform} 接管中",
     "subagentRunStateUnrecoverable": "歷史 subagent 執行狀態不可恢復",
     "subagentLinkUnrecoverable": "歷史 subagent 連結不可恢復"
@@ -441,6 +427,8 @@
     "contextActions": "上下文操作",
     "refreshAndCompact": "更新並壓縮",
     "refreshAndCompactTooltip": "更新到最新的記憶和工具集",
+    "refreshAndCompactBusy": "正在更新並壓縮對話…",
+    "refreshAndCompactFailed": "更新並壓縮失敗",
     "compact": "壓縮",
     "noAskThisConversation": "本对话不再询问",
     "confirmMoreOptions": "更多确认选项",
@@ -1051,6 +1039,7 @@
     "save": "儲存",
     "saved": "儲存成功 ✿",
     "saveFailed": "儲存失敗",
+    "refreshFailed": "重新整理失敗",
     "fileChangedOnDisk": "檔案已被外部修改，已略過舊版本儲存",
     "noChanges": "沒有需要儲存的變更",
     "autoSaved": "已自動儲存 ✿",

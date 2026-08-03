@@ -514,7 +514,7 @@ describe('ApiKeyCredentials', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Anthropic Messages' }));
 
     await waitFor(() => expect(useSettingsStore.getState().toastMessage).toBe(
-      'session.capabilityDrift.refreshFailed: provider summary is unavailable',
+      'settings.refreshFailed: provider summary is unavailable',
     ));
     expect(screen.getByRole('button', { name: 'Anthropic Messages' })).toBeInTheDocument();
   });

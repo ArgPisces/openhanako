@@ -306,10 +306,9 @@ describe('InputArea status stack', () => {
 
     const statusBars = screen.getAllByTestId('input-status-bars');
     expect(statusBars).toHaveLength(1);
-    expect(statusBars[0].textContent).toContain('session.capabilityDrift.refreshing');
+    expect(statusBars[0].textContent).toContain('input.refreshAndCompactBusy');
     expect(statusBars[0].textContent).not.toContain('chat.compacting');
-    expect(screen.getAllByText('session.capabilityDrift.refreshing')).toHaveLength(1);
-    expect(screen.queryByTestId('capability-drift-notice')).toBeNull();
+    expect(screen.getAllByText('input.refreshAndCompactBusy')).toHaveLength(1);
   });
 
   it('reveals screenshot notice directories in the workspace tree without replacing the desk root', async () => {

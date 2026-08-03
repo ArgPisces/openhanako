@@ -245,20 +245,6 @@
       "deleteFailed": "삭제 실패",
       "daysAgo": "{days}일 전 보관됨"
     },
-    "capabilityDrift": {
-      "title": "도구 구성이 업데이트되었습니다",
-      "addedTools": "새 도구 {count}개",
-      "removedTools": "도구 {count}개 사용 불가",
-      "promptUpdated": "프롬프트 업데이트됨",
-      "separator": ", ",
-      "refreshButton": "에이전트 도구 새로고침",
-      "dismissButton": "닫기",
-      "confirmText": "새로고침하면 이전 대화가 요약으로 압축되며 세부 내용이 손실될 수 있습니다. 계속할까요?",
-      "confirmButton": "새로고침",
-      "cancelButton": "취소",
-      "refreshing": "대화를 압축하고 도구를 새로고침하는 중…",
-      "refreshFailed": "새로고침 실패"
-    },
     "rcTakingOver": "{platform} 연결 중",
     "subagentRunStateUnrecoverable": "과거 하위 세션 실행 상태를 복구할 수 없어요",
     "subagentLinkUnrecoverable": "과거 하위 세션 링크를 복구할 수 없어요"
@@ -441,6 +427,8 @@
     "contextActions": "컨텍스트 작업",
     "refreshAndCompact": "업데이트 후 압축",
     "refreshAndCompactTooltip": "최신 메모리와 도구 세트로 업데이트",
+    "refreshAndCompactBusy": "대화를 업데이트하고 압축하는 중…",
+    "refreshAndCompactFailed": "업데이트 및 압축 실패",
     "compact": "압축",
     "noAskThisConversation": "이 대화에서는 다시 묻지 않기",
     "confirmMoreOptions": "추가 확인 옵션",
@@ -1051,6 +1039,7 @@
     "save": "저장",
     "saved": "저장됨 ✿",
     "saveFailed": "저장 실패",
+    "refreshFailed": "새로고침 실패",
     "fileChangedOnDisk": "파일이 외부에서 변경되어 오래된 저장을 건너뛰었습니다",
     "noChanges": "저장할 내용이 없어요",
     "autoSaved": "자동 저장됨 ✿",

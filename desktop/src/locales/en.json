@@ -247,21 +247,7 @@
     },
     "rcTakingOver": "{platform} active",
     "subagentRunStateUnrecoverable": "Historical sub-session run state is unrecoverable",
-    "subagentLinkUnrecoverable": "Historical sub-session link is unrecoverable",
-    "capabilityDrift": {
-      "title": "Tool capabilities have changed",
-      "addedTools": "{count} new tools",
-      "removedTools": "{count} tools no longer available",
-      "promptUpdated": "prompt updated",
-      "separator": ", ",
-      "refreshButton": "Refresh agent tools",
-      "dismissButton": "Dismiss",
-      "confirmText": "Refreshing compacts the old conversation into a summary; details may be lost. Continue?",
-      "confirmButton": "Refresh now",
-      "cancelButton": "Cancel",
-      "refreshing": "Compacting conversation and refreshing tools…",
-      "refreshFailed": "Refresh failed"
-    }
+    "subagentLinkUnrecoverable": "Historical sub-session link is unrecoverable"
   },
   "common": {
     "on": "On",
@@ -446,6 +432,8 @@
     "contextActions": "Context actions",
     "refreshAndCompact": "Update and compact",
     "refreshAndCompactTooltip": "Update to the latest memory and tool set",
+    "refreshAndCompactBusy": "Updating and compacting conversation…",
+    "refreshAndCompactFailed": "Update and compact failed",
     "compact": "Compact",
     "mention": {
       "title": "Mention",
@@ -1051,6 +1039,7 @@
     "save": "Save",
     "saved": "Saved ✿",
     "saveFailed": "Failed to save",
+    "refreshFailed": "Refresh failed",
     "fileChangedOnDisk": "The file changed on disk, so the stale save was skipped",
     "noChanges": "Nothing to save",
     "autoSaved": "Auto-saved ✿",

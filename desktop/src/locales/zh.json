@@ -247,20 +247,6 @@
     },
     "subagentRunStateUnrecoverable": "历史 subagent 运行状态不可恢复",
     "subagentLinkUnrecoverable": "历史 subagent 链接不可恢复",
-    "capabilityDrift": {
-      "title": "工具能力有更新",
-      "addedTools": "新增 {count} 个工具",
-      "removedTools": "{count} 个工具已失效",
-      "promptUpdated": "提示词有更新",
-      "separator": "、",
-      "refreshButton": "刷新 Agent 工具",
-      "dismissButton": "忽略",
-      "confirmText": "刷新会把旧对话压缩成摘要，细节可能丢失。继续吗？",
-      "confirmButton": "确认刷新",
-      "cancelButton": "取消",
-      "refreshing": "正在压缩对话并刷新工具…",
-      "refreshFailed": "刷新失败"
-    },
     "rcTakingOver": "{platform} 接管中"
   },
   "common": {
@@ -441,6 +427,8 @@
     "contextActions": "上下文操作",
     "refreshAndCompact": "更新并压缩",
     "refreshAndCompactTooltip": "更新到最新的记忆和工具集",
+    "refreshAndCompactBusy": "正在更新并压缩对话…",
+    "refreshAndCompactFailed": "更新并压缩失败",
     "compact": "压缩",
     "noAskThisConversation": "本对话不再询问",
     "confirmMoreOptions": "更多确认选项",
@@ -1051,6 +1039,7 @@
     "save": "保存",
     "saved": "保存成功 ✿",
     "saveFailed": "保存失败",
+    "refreshFailed": "刷新失败",
     "fileChangedOnDisk": "文件已被外部修改，已跳过旧版本保存",
     "noChanges": "没有需要保存的更改",
     "autoSaved": "已自动保存 ✿",

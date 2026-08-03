@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:12461611adbd187cee4c2d77f7dfaccb438caa26b2346df6425a6f5ebaa0fe6b",
+  "payloadFingerprint": "sha256:ad371a90d84780d8943117deb0f9929873313862966957042bd58c36c2bf847d",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3080,8 +3080,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "The MCP normalizer retains raw-name and legacy-key read compatibility, session prompt receipts add no JSONL fields, public update source selection preserves the versioned update-channel record shape, and existing desktop state readers are unchanged; no stored value requires migration.",
-    "payloadFingerprint": "sha256:12461611adbd187cee4c2d77f7dfaccb438caa26b2346df6425a6f5ebaa0fe6b"
+    "compatibilityReason": "Session capability-drift notices and their future dismissed-fingerprint writes were removed. Existing capabilityDriftDismissedFingerprint data remains readable through the manifest store and legacy migration paths, is preserved when copying sessions, and is ignored safely; no persisted field, table, type, or DATA_EPOCH changed.",
+    "payloadFingerprint": "sha256:ad371a90d84780d8943117deb0f9929873313862966957042bd58c36c2bf847d"
   },
   "schemas": [
     {
@@ -3341,7 +3341,7 @@
       "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:fe4e19635fe814011dd1a2e8b45129fe8ca3c84f8534dd77f057a598de3994c7",
+      "sourceHash": "sha256:067c1cc1dc29ed5a3009f5b02f4d5bb6505a62b51a18d969f106855cacdb9c0c",
       "storeId": "mcp-config"
     },
     {
@@ -3460,7 +3460,7 @@
         {
           "contract": "core/session-coordinator.ts Hana metadata extensions",
           "module": "core/session-coordinator.ts",
-          "sourceHash": "sha256:5d73c0f7eada05c8e35a69fd2c8d1df8b633400dafceecb231e1776ff0edd23b"
+          "sourceHash": "sha256:9291ba90a08340f0b4071d0935e4d4abf55103bf9257296f7acedd32ae14b83e"
         },
         {
           "contract": "core/session-jsonl-file.ts repair contract",

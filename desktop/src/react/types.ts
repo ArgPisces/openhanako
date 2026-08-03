@@ -192,22 +192,6 @@ export interface DesktopNotificationOptions {
 export type SessionPermissionMode = 'auto' | 'operate' | 'ask' | 'read_only';
 
 /**
- * #1624：服务端在 session restore 时算好的"工具能力有更新"提示数据
- * （冻结快照 vs 当前 agent 配置）。前端只消费，不自行计算。
- */
-export interface SessionCapabilityDrift {
-  version: number;
-  /** 当前 live 配置的能力 fingerprint（dismiss 时回传） */
-  fingerprint: string;
-  frozenFingerprint: string;
-  addedToolNames: string[];
-  removedToolNames: string[];
-  invalidToolNames: string[];
-  promptChanged: boolean;
-  hasDrift: boolean;
-}
-
-/**
  * session 元数据待恢复状态——/api/health 的 sessionStore 附块如实转发到前端。
  * degraded=false 且 reasons 为空数组是唯一的"健康"态；非空 reasons 只用来
  * 驱动侧边栏提示条文案，具体 kind 值前端不做分支展示（一条提示覆盖所有原因）。

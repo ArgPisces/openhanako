@@ -19,7 +19,6 @@ function fakeMcp(overrides: any = {}) {
     getState: vi.fn(() => ({ enabled: true, connectors: [], servers: [] })),
     getAgentConfig: vi.fn(async () => ({})),
     setEnabled: vi.fn(async () => ({ enabled: true, connectors: [] })),
-    _markCapabilitySnapshotsStale: vi.fn(async () => null),
     completeOAuth: vi.fn(async () => ({ status: "done" })),
     getOAuthStatus: vi.fn(() => ({ status: "pending" })),
     autoStartAfterAdd: vi.fn(async () => {}),
@@ -63,7 +62,6 @@ describe("MCP first-class routes", () => {
 
     expect(res.status).toBe(200);
     expect(mcp.setEnabled).toHaveBeenCalledWith(true);
-    expect(mcp._markCapabilitySnapshotsStale).toHaveBeenCalledWith({ reason: "mcp.global.enabled" });
   });
 
   it("accepts the OAuth callback on both the first-class and legacy paths", async () => {

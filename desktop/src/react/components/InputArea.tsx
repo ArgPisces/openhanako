@@ -37,7 +37,6 @@ import { InputContextRow } from './input/InputContextRow';
 import { InputControlBar } from './input/InputControlBar';
 import type { PermissionMode } from './input/PlanModeButton';
 import { SessionConfirmationPrompt } from './input/SessionConfirmationPrompt';
-import { CapabilityDriftNotice } from './input/CapabilityDriftNotice';
 import { serializeEditor } from '../utils/editor-serializer';
 import {
   buildFileMentionItems,
@@ -476,12 +475,10 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
   const modelUnavailableMessage = modelSelectionRequired
     ? t(modelUnavailableMessageKey(sessionModel?.unavailableReason))
     : null;
-  // #1624：当前 session 的工具能力漂移提示（服务端 restore 时算好，前端只消费）
-  const capabilityDrift = useStore(s => s.currentSessionPath ? (sessionScopedValue(s, s.capabilityDriftBySession, s.currentSessionPath) ?? null) : null);
   const capabilityRefreshing = useStore(s => sessionScopedListIncludes(s, s.capabilityRefreshingSessions, s.currentSessionPath));
   const compactingStatus = capabilityRefreshing || compacting;
   const compactingStatusLabel = capabilityRefreshing
-    ? t('session.capabilityDrift.refreshing')
+    ? t('input.refreshAndCompactBusy')
     : t('chat.compacting');
   const currentModelInfo = sessionModelInfo || globalModelInfo;
   const availableThinkingLevels = useMemo(
@@ -2216,12 +2213,6 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
         )}
       </div>
       <div className={styles['input-stack']}>
-        {capabilityDrift && !capabilityRefreshing && !visibleSessionConfirmation && !deletedAgentReadOnly && currentSessionPath && (
-          <CapabilityDriftNotice
-            sessionPath={currentSessionPath}
-            drift={capabilityDrift}
-          />
-        )}
         {visibleSessionConfirmation && (
           <SessionConfirmationPrompt
             block={visibleSessionConfirmation}

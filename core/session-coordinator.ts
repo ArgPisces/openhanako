@@ -105,7 +105,6 @@ import {
 } from "../lib/llm/cache-prefix-contract.ts";
 import { buildSessionCacheSnapshot as buildSessionCacheSnapshotValue } from "./session-cache-snapshot.ts";
 import { repairRestoredToolSnapshotDetailed, sameToolNames } from "./tool-snapshot-repair.ts";
-import { buildSessionCapabilityDrift } from "./session-capability-drift.ts";
 import {
   SESSION_PROMPT_SNAPSHOT_VERSION,
   freezeAgentsFilesResult,
@@ -2316,8 +2315,6 @@ export class SessionCoordinator {
     let runtimeToolNames = null;
     let unavailableToolNames: string[] = [];
     let shouldPersistRestoredToolNames = false;
-    // #1624：dismissed fingerprint 仍从 session-meta 读出，保留未来手动提示链路。
-    let restoredDriftDismissedFingerprint: string | null = null;
     const restoredCapabilityToolNames = Array.isArray(restoredCapabilitySnapshot?.toolNames)
       ? uniqueToolNames(restoredCapabilitySnapshot.toolNames)
       : null;
@@ -2334,22 +2331,14 @@ export class SessionCoordinator {
             log.warn(`session-meta read for tool-snapshot restore failed, recomputing from current agent config: ${err.message}`);
           }
         }
-        restoredDriftDismissedFingerprint =
-          typeof restoredCapabilitySnapshot?.capabilityDriftDismissedFingerprint === "string"
-            ? restoredCapabilitySnapshot.capabilityDriftDismissedFingerprint
-            : typeof metaEntry?.capabilityDriftDismissedFingerprint === "string"
-            ? metaEntry.capabilityDriftDismissedFingerprint
-            : null;
         if (refreshCapabilitySnapshots) {
-          // #1624 显式刷新：Case C 语义重算（含插件工具），强制持久化，
-          // 并清空 dismissed 状态（旧 fingerprint 对新快照没有意义）。
+          // 显式更新：Case C 语义重算（含插件工具）并强制持久化。
           const disabled = agent.config?.tools?.disabled ?? DEFAULT_DISABLED_TOOL_NAMES;
           snapshotToolNames = computeToolSnapshot(allToolNames, disabled, {
             extraDisabled: extraDisabledToolNames,
           });
           runtimeToolNames = snapshotToolNames;
           shouldPersistRestoredToolNames = true;
-          restoredDriftDismissedFingerprint = null;
         } else if (restoredCapabilityToolNames) {
           const runtimeAvailableToolNames = computeToolSnapshot(allToolNames, [], {
             extraDisabled: extraDisabledToolNames,
@@ -2398,20 +2387,6 @@ export class SessionCoordinator {
       });
       runtimeToolNames = snapshotToolNames;
     }
-
-    // A missing runtime handler is availability state, not permission to
-    // rewrite the frozen contract. Surface the outage while keeping restore
-    // otherwise free of live prompt-diff work.
-    const unavailableDrift = unavailableToolNames.length > 0
-      ? buildSessionCapabilityDrift({
-          frozenToolNames: runtimeToolNames || [],
-          liveToolNames: runtimeToolNames || [],
-          invalidToolNames: unavailableToolNames,
-          frozenSystemPrompt: "",
-          liveSystemPrompt: "",
-        })
-      : null;
-    let capabilityDrift = unavailableDrift?.hasDrift ? unavailableDrift : null;
 
     const reminderBaselineSeq = this._envChangeLedger?.maxSeq?.() ?? 0;
     const hasPreviousReminderState = reminderState && typeof reminderState === "object";
@@ -2483,9 +2458,6 @@ export class SessionCoordinator {
       sessionKind: pluginSessionMeta?.kind || null,
       sessionVisibility: pluginSessionMeta?.visibility || "public",
       memoryReflectionSnapshot,
-      // #1624：session 级提示数据，归属 sessionEntry（this._sessions 由 _sessionRuntimeKeyForPath 以 sessionId 优先键控，sessionPath 仅为兼容退化键），不挂 agent/engine
-      capabilityDrift,
-      capabilityDriftDismissedFingerprint: restoredDriftDismissedFingerprint,
       // Invocation capabilities the user granted for this session only. Runtime
       // state by design: it reaches neither writeSessionMeta nor the manifest
       // snapshot, so it dies with the runtime and the user is asked again after
@@ -2622,10 +2594,6 @@ export class SessionCoordinator {
       }
       if (shouldPersistRestoredToolNames && snapshotToolNames !== null) {
         metaPatch.toolNames = snapshotToolNames;
-      }
-      if (refreshCapabilitySnapshots) {
-        // #1624 显式刷新：dismissed 状态随旧快照一并失效
-        metaPatch.capabilityDriftDismissedFingerprint = null;
       }
       if (Object.keys(metaPatch).length > 0) {
         await this.writeSessionMeta(sessionPath, metaPatch);
@@ -6194,24 +6162,6 @@ export class SessionCoordinator {
     }
   }
 
-  /**
-   * #1624：返回当前应展示的"工具能力有更新"提示数据；无漂移或已被 dismiss
-   * （dismissed fingerprint === 当前 live fingerprint）时返回 null。
-   * 数据在 restore 完成时算好挂在 sessionEntry 上，这里只做读取与 dismiss 过滤。
-   */
-  getSessionCapabilityDriftNotice(sessionPath: any) {
-    const entry = this._getSessionEntryByPath(sessionPath);
-    const drift = entry?.capabilityDrift;
-    if (!drift?.hasDrift) return null;
-    if (entry.capabilityDriftDismissedFingerprint === drift.fingerprint) return null;
-    return {
-      ...drift,
-      addedToolNames: [...drift.addedToolNames],
-      removedToolNames: [...drift.removedToolNames],
-      invalidToolNames: [...drift.invalidToolNames],
-    };
-  }
-
   _buildLiveToolAvailabilityInputForEntry(
     entry: any,
     sessionPath: any,
@@ -6277,26 +6227,6 @@ export class SessionCoordinator {
     };
   }
 
-  _computeLiveToolSnapshotForEntry(entry: any, sessionPath: any) {
-    const input = this._buildLiveToolAvailabilityInputForEntry(entry, sessionPath);
-    if (!input) return null;
-    const { agent, allToolObjects, context } = input;
-    const allToolNames = toolNamesFromObjects(allToolObjects);
-    const extraDisabledToolNames = [
-      ...getStableFeatureDisabledToolNames(context),
-      ...computeRuntimeDisabledToolNames(
-        allToolObjects,
-        agent.config,
-        context,
-        { warn: (msg) => log.warn(msg) },
-      ),
-    ];
-    const disabled = agent.config?.tools?.disabled ?? DEFAULT_DISABLED_TOOL_NAMES;
-    return computeToolSnapshot(allToolNames, disabled, {
-      extraDisabled: extraDisabledToolNames,
-    });
-  }
-
   _computeReminderUnavailableToolNamesForEntry(entry: any, sessionPath: any) {
     const frozenToolNames = uniqueToolNames(Array.isArray(entry?.toolNames) ? entry.toolNames : []);
     if (frozenToolNames.length === 0) return [];
@@ -6329,57 +6259,6 @@ export class SessionCoordinator {
     return frozenToolNames
       .filter((name) => !liveToolNames.has(name))
       .sort((left, right) => left.localeCompare(right));
-  }
-
-  markCapabilitySnapshotsStale({ agentId = null, reason = "capability_changed" }: any = {}) {
-    const targetAgentId = typeof agentId === "string" && agentId ? agentId : null;
-    let scanned = 0;
-    let marked = 0;
-    for (const entry of this._sessions.values()) {
-      if (!entry?.sessionPath || !entry?.session) continue;
-      if (targetAgentId && entry.agentId !== targetAgentId) continue;
-      scanned += 1;
-      const frozenToolNames = Array.isArray(entry.runtimeToolNames)
-        ? entry.runtimeToolNames
-        : (entry.activeToolDefinitions || []).map((tool) => tool?.name).filter(Boolean);
-      const liveToolNames = this._computeLiveToolSnapshotForEntry(entry, entry.sessionPath);
-      if (!liveToolNames) continue;
-      const liveToolNameSet = new Set(liveToolNames);
-      const drift = buildSessionCapabilityDrift({
-        frozenToolNames,
-        liveToolNames,
-        invalidToolNames: Array.isArray(entry.unavailableToolNames)
-          ? entry.unavailableToolNames.filter((name) => !liveToolNameSet.has(name))
-          : [],
-        frozenSystemPrompt: "",
-        liveSystemPrompt: "",
-      });
-      entry.capabilityDrift = drift.hasDrift ? { ...drift, reason } : null;
-      if (drift.hasDrift) {
-        marked += 1;
-        this._emitSessionMetadataUpdated(entry.sessionPath, {
-          capabilityDrift: this.getSessionCapabilityDriftNotice(entry.sessionPath),
-        });
-      } else {
-        this._emitSessionMetadataUpdated(entry.sessionPath, { capabilityDrift: null });
-      }
-    }
-    return { ok: true, scanned, marked };
-  }
-
-  /**
-   * #1624：记录"用户关闭了当前 fingerprint 的提示"。持久化在 session-meta
-   * （跟 session 走，跨重启生效）；指纹再次变化时才重新提示。
-   */
-  async dismissSessionCapabilityDrift(sessionPath: any, fingerprint: any) {
-    this._assertActiveDesktopSessionPath(sessionPath, "dismissSessionCapabilityDrift");
-    if (typeof fingerprint !== "string" || !fingerprint) {
-      throw new Error("dismissSessionCapabilityDrift: fingerprint required");
-    }
-    const entry = this._getSessionEntryByPath(sessionPath);
-    if (entry) entry.capabilityDriftDismissedFingerprint = fingerprint;
-    await this.writeSessionMeta(sessionPath, { capabilityDriftDismissedFingerprint: fingerprint });
-    return { ok: true };
   }
 
   async reloadSessionRuntime(sessionPath: any, { refreshCapabilitySnapshots = false }: any = {}) {

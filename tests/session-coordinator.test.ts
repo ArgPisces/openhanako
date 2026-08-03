@@ -2287,7 +2287,6 @@ describe("SessionCoordinator", () => {
     // context ring refresh keeps restore cheap: old sessions keep frozen prompt snapshots,
     // while explicit refresh/fresh compact is responsible for rebuilding capability snapshots.
     expect(agent.buildSystemPrompt).toHaveBeenCalledTimes(1);
-    expect(coordinator.getSessionCapabilityDriftNotice(sessionFile)).toBeNull();
   });
 
   it("restores a prompt-snapshotted session with xhigh before the SDK model is available", async () => {

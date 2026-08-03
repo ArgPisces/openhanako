@@ -1647,14 +1647,9 @@ export class HanaEngine {
   /** 确保桌面 session 已加载进 cache 但不改 UI 焦点（Phase 2-C：/rc 接管态用） */
   async ensureSessionLoaded(p) { return this._sessionCoord.ensureSessionLoaded(p); }
   async reloadSessionRuntime(p, opts = {}) { return this._sessionCoord.reloadSessionRuntime(p, opts); }
-  /** #1624：当前应展示的"工具能力有更新"提示（无漂移 / 已 dismiss → null） */
-  getSessionCapabilityDriftNotice(p) { return this._sessionCoord.getSessionCapabilityDriftNotice(p); }
   getSessionModelAvailability(p = this.currentSessionPath) {
     return this._sessionCoord.getSessionModelAvailability(p);
   }
-  markCapabilitySnapshotsStale(opts = {}) { return this._sessionCoord.markCapabilitySnapshotsStale(opts); }
-  /** #1624：记录当前 fingerprint 已被用户关闭，持久化到 session-meta */
-  async dismissSessionCapabilityDrift(p, fingerprint) { return this._sessionCoord.dismissSessionCapabilityDrift(p, fingerprint); }
   isSessionStreaming(p) { return this._sessionCoord.isSessionStreaming(p); }
   isSessionSwitching(p) { return this._sessionCoord.isSessionSwitching(p); }
   async abortSessionByPath(p, options) { return this._sessionCoord.abortSessionByPath(p, options); }
@@ -2794,7 +2789,6 @@ export class HanaEngine {
   async syncPluginExtensions() {
     this._syncExtensionFactories();
     await this._reloadResourceLoaderForExtensionFactories();
-    this._sessionCoord?.markCapabilitySnapshotsStale?.({ reason: "plugin.lifecycle.changed" });
   }
 
   // ════════════════════════════
