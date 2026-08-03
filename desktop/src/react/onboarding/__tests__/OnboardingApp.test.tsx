@@ -165,4 +165,42 @@ describe('OnboardingApp locale switching', () => {
       credentials: 'include',
     }));
   });
+
+  it('uses a six-step flow and moves directly from model selection to workspace selection', async () => {
+    const { container } = render(<OnboardingApp preview skipToTutorial={false} />);
+
+    expect(await screen.findByRole('heading', { name: '欢迎' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.onboarding-dot')).toHaveLength(6);
+
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+    expect(await screen.findByRole('heading', { name: 'onboarding.name.title' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.name.next' }));
+    expect(await screen.findByRole('heading', { name: 'onboarding.provider.title' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.provider.next' }));
+    expect(await screen.findByRole('heading', { name: 'onboarding.model.title' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.model.next' }));
+    expect(await screen.findByRole('heading', { name: 'onboarding.workspace.title' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'onboarding.theme.title' })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('.onboarding-dot')[4]).toHaveClass('active');
+
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.workspace.back' }));
+    expect(await screen.findByRole('heading', { name: 'onboarding.model.title' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.model.next' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'onboarding.workspace.next' }));
+    expect(await screen.findByRole('heading', { name: 'onboarding.tutorial.title' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.onboarding-dot')[5]).toHaveClass('active');
+  });
+
+  it('opens the tutorial as the sixth step when tutorial preview is requested', async () => {
+    const { container } = render(<OnboardingApp preview skipToTutorial />);
+
+    expect(await screen.findByRole('heading', { name: 'onboarding.tutorial.title' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.onboarding-dot')).toHaveLength(6);
+    expect(container.querySelectorAll('.onboarding-dot')[5]).toHaveClass('active');
+    expect(screen.queryByRole('heading', { name: 'onboarding.theme.title' })).not.toBeInTheDocument();
+  });
 });

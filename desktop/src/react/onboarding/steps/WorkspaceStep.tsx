@@ -1,5 +1,5 @@
 /**
- * WorkspaceStep.tsx — Step 5: Default workspace selection
+ * WorkspaceStep.tsx — Step 4: Default workspace selection
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -60,12 +60,12 @@ export function WorkspaceStep({ preview, hanaFetch, goToStep, showError }: Works
   }, []);
 
   const onNext = useCallback(async () => {
-    if (preview) { goToStep(6); return; }
+    if (preview) { goToStep(5); return; }
     if (!defaultPath || !visiblePath) return;
     setSaving(true);
     try {
       await saveWorkspace({ hanaFetch, workspacePath: visiblePath, defaultPath });
-      goToStep(6);
+      goToStep(5);
     } catch (err) {
       console.error('[onboarding] save workspace failed:', err);
       showError(t('onboarding.error'));
@@ -103,7 +103,7 @@ export function WorkspaceStep({ preview, hanaFetch, goToStep, showError }: Works
       </div>
 
       <div className="onboarding-actions">
-        <button className="ob-btn ob-btn-secondary" onClick={() => goToStep(4)}>
+        <button className="ob-btn ob-btn-secondary" onClick={() => goToStep(3)}>
           {t('onboarding.workspace.back')}
         </button>
         <button

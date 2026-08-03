@@ -7,7 +7,6 @@ import { LocaleStep } from './steps/LocaleStep';
 import { NameStep } from './steps/NameStep';
 import { ProviderStep } from './steps/ProviderStep';
 import { ModelStep } from './steps/ModelStep';
-import { ThemeStep } from './steps/ThemeStep';
 import { WorkspaceStep } from './steps/WorkspaceStep';
 import { TutorialStep } from './steps/TutorialStep';
 import {
@@ -22,7 +21,7 @@ import {
 interface OnboardingAppProps { preview: boolean; skipToTutorial: boolean }
 export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
   const [serverConnection, setServerConnection] = useState<ServerConnection | null>(null);
-  const [step, setStep] = useState(skipToTutorial ? 6 : 0);
+  const [step, setStep] = useState(skipToTutorial ? 5 : 0);
   const [stepKey, setStepKey] = useState(0);
   const [agentName, setAgentName] = useState('Hanako');
   const [avatarSrc, setAvatarSrc] = useState('assets/Hanako.png');
@@ -129,9 +128,8 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
       {step === 1 && <NameStep key={`step-1-${stepKey}`} preview={preview} hanaFetch={hanaFetch} goToStep={goToStep} showError={showError} />}
       {step === 2 && <ProviderStep key={`step-2-${stepKey}`} preview={preview} hanaFetch={hanaFetch} goToStep={goToStep} showError={showError} onProviderReady={onProviderReady} />}
       {step === 3 && <ModelStep key={`step-3-${stepKey}`} preview={preview} hanaFetch={hanaFetch} providerName={providerName} providerUrl={providerUrl} providerApi={providerApi} apiKey={apiKey} goToStep={goToStep} showError={showError} />}
-      {step === 4 && <ThemeStep key={`step-4-${stepKey}`} goToStep={goToStep} />}
-      {step === 5 && <WorkspaceStep key={`step-5-${stepKey}`} preview={preview} hanaFetch={hanaFetch} goToStep={goToStep} showError={showError} />}
-      {step === 6 && <TutorialStep key={`step-6-${stepKey}`} preview={preview} showError={showError} />}
+      {step === 4 && <WorkspaceStep key={`step-4-${stepKey}`} preview={preview} hanaFetch={hanaFetch} goToStep={goToStep} showError={showError} />}
+      {step === 5 && <TutorialStep key={`step-5-${stepKey}`} preview={preview} showError={showError} />}
 
       {toastMsg && (
         <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: 'var(--coral, #c66)', color: '#fff', padding: '8px 20px', borderRadius: 8, fontSize: '0.82rem', zIndex: 999 }}>
