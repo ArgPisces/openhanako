@@ -9170,7 +9170,7 @@
     },
     {
       "sourceFile": "shared/migrate-config-scope.ts",
-      "line": 150,
+      "line": 157,
       "kind": "secret-write",
       "excerpt": "writeSecretFileSync(backupPath, ac.content)",
       "reason": "Compatibility helper mutates a caller-supplied config file; concrete agent config ownership is registered at callers.",
@@ -9179,7 +9179,7 @@
     },
     {
       "sourceFile": "shared/migrate-config-scope.ts",
-      "line": 153,
+      "line": 160,
       "kind": "secret-write",
       "excerpt": "writeSecretFileSync(ac.path, YAML.dump(ac.config, { lineWidth: -1 }))",
       "reason": "Compatibility helper mutates a caller-supplied config file; concrete agent config ownership is registered at callers.",
@@ -9278,34 +9278,7 @@
     },
     {
       "sourceFile": "shared/secret-fs.ts",
-      "line": 99,
-      "kind": "write-file",
-      "excerpt": "fs.writeFileSync(tmp, content, \"utf-8\")",
-      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
-      "storeId": null,
-      "exemptionId": "generic-secret-fs-primitives"
-    },
-    {
-      "sourceFile": "shared/secret-fs.ts",
-      "line": 100,
-      "kind": "rename",
-      "excerpt": "fs.renameSync(tmp, filePath)",
-      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
-      "storeId": null,
-      "exemptionId": "generic-secret-fs-primitives"
-    },
-    {
-      "sourceFile": "shared/secret-fs.ts",
-      "line": 105,
-      "kind": "write-file",
-      "excerpt": "fs.writeFileSync(tmp, content, { encoding: \"utf-8\", mode: SECRET_FILE_MODE })",
-      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
-      "storeId": null,
-      "exemptionId": "generic-secret-fs-primitives"
-    },
-    {
-      "sourceFile": "shared/secret-fs.ts",
-      "line": 107,
+      "line": 106,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(tmp, { force: true })",
       "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
@@ -9314,7 +9287,25 @@
     },
     {
       "sourceFile": "shared/secret-fs.ts",
-      "line": 122,
+      "line": 110,
+      "kind": "write-file",
+      "excerpt": "fs.writeFileSync(tmp, content, \"utf-8\")",
+      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
+      "storeId": null,
+      "exemptionId": "generic-secret-fs-primitives"
+    },
+    {
+      "sourceFile": "shared/secret-fs.ts",
+      "line": 112,
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(tmp, { force: true })",
+      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
+      "storeId": null,
+      "exemptionId": "generic-secret-fs-primitives"
+    },
+    {
+      "sourceFile": "shared/secret-fs.ts",
+      "line": 116,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmp, filePath)",
       "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
@@ -9323,7 +9314,43 @@
     },
     {
       "sourceFile": "shared/secret-fs.ts",
-      "line": 124,
+      "line": 118,
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(tmp, { force: true })",
+      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
+      "storeId": null,
+      "exemptionId": "generic-secret-fs-primitives"
+    },
+    {
+      "sourceFile": "shared/secret-fs.ts",
+      "line": 125,
+      "kind": "write-file",
+      "excerpt": "fs.writeFileSync(tmp, content, { encoding: \"utf-8\", mode: SECRET_FILE_MODE })",
+      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
+      "storeId": null,
+      "exemptionId": "generic-secret-fs-primitives"
+    },
+    {
+      "sourceFile": "shared/secret-fs.ts",
+      "line": 127,
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(tmp, { force: true })",
+      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
+      "storeId": null,
+      "exemptionId": "generic-secret-fs-primitives"
+    },
+    {
+      "sourceFile": "shared/secret-fs.ts",
+      "line": 142,
+      "kind": "rename",
+      "excerpt": "fs.renameSync(tmp, filePath)",
+      "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",
+      "storeId": null,
+      "exemptionId": "generic-secret-fs-primitives"
+    },
+    {
+      "sourceFile": "shared/secret-fs.ts",
+      "line": 144,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(tmp, { force: true })",
       "reason": "Shared owner-only write primitives have no store ownership; callers are scanned and assigned to concrete descriptors.",

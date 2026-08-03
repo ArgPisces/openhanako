@@ -5,6 +5,14 @@
  * Without this, a new call site added later would silently fall back to the
  * generic writer, and a newly registered credential path would never be healed
  * on machines that already have the file.
+ *
+ * What this guard does and does not cover, stated plainly so nobody reads more
+ * into a green run than it earns: it pins the write shape of the files listed
+ * below, and it pins the healer's coverage of the paths those stores own. It
+ * does not decide which files belong on those lists. A credential written from
+ * a file nobody added here passes this guard; what catches that one is the
+ * persistence census, which forces every production write to be claimed by a
+ * store descriptor.
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";

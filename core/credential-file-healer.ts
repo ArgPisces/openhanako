@@ -22,6 +22,7 @@ import path from "path";
 
 import { AppError } from "../shared/errors.ts";
 import { errorBus } from "../shared/error-bus.ts";
+import { CONFIG_SCOPE_BACKUP_SUFFIX } from "../shared/migrate-config-scope.ts";
 import { ensureSecretDirModeSync, ensureSecretFileModeSync } from "../shared/secret-fs.ts";
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "./local-provider-plugin-store.ts";
 
@@ -52,6 +53,13 @@ export const TOP_LEVEL_SECRET_FILES = [
 export const SECRET_TREES = ["migration-backups", LOCAL_PROVIDER_PLUGINS_DIR];
 
 const AGENT_CONFIG_FILE = "config.yaml";
+/**
+ * The scope migration keeps a one-time copy of each agent configuration, taken
+ * before it strips the global fields out. That copy holds the same credentials
+ * as the original and is written once and never rewritten, so nothing else
+ * would ever bring an older one up to the current contract.
+ */
+const AGENT_CONFIG_BACKUP_FILE = `${AGENT_CONFIG_FILE}${CONFIG_SCOPE_BACKUP_SUFFIX}`;
 const MAX_TREE_DEPTH = 6;
 
 interface HealOptions {
@@ -109,6 +117,7 @@ export function healCredentialFileModes({ hanakoHome, log = () => {} }: HealOpti
 
   for (const agentDir of subdirectories(path.join(hanakoHome, "agents"))) {
     healFile(path.join(agentDir, AGENT_CONFIG_FILE));
+    healFile(path.join(agentDir, AGENT_CONFIG_BACKUP_FILE));
   }
 
   for (const tree of SECRET_TREES) {
@@ -121,6 +130,7 @@ export function healCredentialFileModes({ hanakoHome, log = () => {} }: HealOpti
   for (const checkpoint of subdirectories(checkpointRoot)) {
     for (const agentDir of subdirectories(path.join(checkpoint, "agents"))) {
       healFile(path.join(agentDir, AGENT_CONFIG_FILE));
+      healFile(path.join(agentDir, AGENT_CONFIG_BACKUP_FILE));
     }
   }
 

@@ -7,6 +7,13 @@ import { CONFIG_SCHEMA } from './config-schema.ts';
 import { writeSecretFileSync } from "./secret-fs.ts";
 
 /**
+ * Suffix of the one-time backup this migration keeps beside each agent config.
+ * Exported so the startup custody pass locates the same files this writes;
+ * spelling it out in both places is how the two would drift apart.
+ */
+export const CONFIG_SCOPE_BACKUP_SUFFIX = ".pre-scope-migration";
+
+/**
  * 一次性迁移：将 agent config.yaml 中的 global scope 字段
  * 向上迁移到 preferences.json，然后从 config.yaml 中删除。
  *
@@ -144,7 +151,7 @@ export function migrateConfigScope({ agentsDir, prefs, primaryAgentId, log = () 
 
     if (changed) {
       // 备份
-      const backupPath = ac.path + ".pre-scope-migration";
+      const backupPath = ac.path + CONFIG_SCOPE_BACKUP_SUFFIX;
       if (!fs.existsSync(backupPath)) {
         // 备份的是 agent 配置原文，带凭证，权限与源文件一致
         writeSecretFileSync(backupPath, ac.content);

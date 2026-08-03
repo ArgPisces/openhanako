@@ -8,10 +8,13 @@
  * argument at all. Callers cannot get it wrong, and a static scan can tell
  * credential writes apart from ordinary ones by the function name alone.
  *
- * The generic writer also swallows a failed permission change, which is the
- * right call for a cache file and the wrong call for an API key. This module
- * throws instead: a credential that silently landed readable is worth an error,
- * not a shrug.
+ * The two kinds of entry point here treat a failed permission change
+ * differently, on purpose. Writing records the failure and carries on, because
+ * storing the user's data is the job and some filesystems cannot express these
+ * permissions at all; refusing to save there would trade a working feature for
+ * protection that filesystem cannot deliver anyway. The healing functions throw,
+ * because the permission is their only job, so a failure means they did nothing
+ * and their caller needs to know.
  *
  * Scope: this only controls who may open the file, which keeps credentials out
  * of reach of other accounts on the machine, of backup snapshots, and of a
@@ -89,15 +92,32 @@ function tightenBestEffort(target: string): void {
 /**
  * Atomically write a credential file so that only its owner can read it.
  *
- * The temporary file is tightened before the rename, so the secret is never
- * visible through a readable temporary copy, not even briefly.
+ * Any leftover temporary file is cleared first: creating a file with a mode has
+ * no effect when that file already exists, so a temporary file left behind by a
+ * crashed earlier write would hand its own mode to the next secret written
+ * through it. Clearing it means the new one carries the intended mode from the
+ * moment it exists, and the tightening below is a second line rather than the
+ * only one.
  */
 export function writeSecretFileSync(filePath: string, content: string): void {
   const tmp = `${filePath}.tmp`;
+  // Best-effort: if this cannot be removed the write below still overwrites it
+  // and the tightening step still applies.
+  try { fs.rmSync(tmp, { force: true }); } catch { /* overwritten below */ }
 
   if (!SUPPORTS_POSIX_MODE) {
-    fs.writeFileSync(tmp, content, "utf-8");
-    fs.renameSync(tmp, filePath);
+    try {
+      fs.writeFileSync(tmp, content, "utf-8");
+    } catch (err) {
+      try { fs.rmSync(tmp, { force: true }); } catch { /* the write already failed */ }
+      throw err;
+    }
+    try {
+      fs.renameSync(tmp, filePath);
+    } catch (err) {
+      try { fs.rmSync(tmp, { force: true }); } catch { /* leave the target untouched */ }
+      throw err;
+    }
     return;
   }
 

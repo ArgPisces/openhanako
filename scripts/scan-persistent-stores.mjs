@@ -41,6 +41,13 @@ const FS_METHOD_KINDS = new Map([
   ["writeFile", "write-file"],
   ["writeFileSync", "write-file"],
   ["createWriteStream", "write-file"],
+  // Descriptor writes. Only the synchronous names are listed: the callback
+  // forms are named `write`/`writev`, which are far too common as method names
+  // on unrelated objects to match on. A writable descriptor has to come from an
+  // open call with a writing flag, and those are recognized below, so the
+  // descriptor's origin is visible to the scan either way.
+  ["writeSync", "write-file"],
+  ["writevSync", "write-file"],
   ["appendFile", "append-file"],
   ["appendFileSync", "append-file"],
   ["rename", "rename"],
@@ -225,7 +232,7 @@ function callKind(node, bindings) {
       return FS_METHOD_KINDS.get(method);
     }
   }
-  if (method === "open") {
+  if (method === "open" || method === "openSync") {
     const root = expressionRootName(callee.expression);
     const flag = node.arguments[1];
     if (root && bindings.fsNamespaces.has(root) && flag && ts.isStringLiteralLike(flag) && /[wax+]/.test(flag.text)) {

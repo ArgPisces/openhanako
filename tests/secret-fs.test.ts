@@ -83,6 +83,28 @@ describe("writeSecretFileSync", () => {
     expect(observed).toEqual([0o600]);
   });
 
+  it.skipIf(!POSIX)("clears a leftover temporary file so the new one is owner-only from creation", () => {
+    // A crash during an older write can leave a temporary file behind. Creating
+    // a file with a mode has no effect when the file already exists, so the
+    // secret would land in whatever mode that leftover carried.
+    const root = makeTmpDir();
+    const target = path.join(root, "credential.json");
+    const tmp = `${target}.tmp`;
+    fs.writeFileSync(tmp, "stale\n");
+    fs.chmodSync(tmp, 0o644);
+    let leftoverPresentAtWrite = true;
+    const realWrite = fs.writeFileSync;
+    vi.spyOn(fs, "writeFileSync").mockImplementation((p: any, data: any, opts?: any) => {
+      if (String(p) === tmp) leftoverPresentAtWrite = fs.existsSync(tmp);
+      return realWrite(p, data, opts);
+    });
+
+    writeSecretFileSync(target, "{}\n");
+
+    expect(leftoverPresentAtWrite).toBe(false);
+    expect(modeOf(target)).toBe(0o600);
+  });
+
   it.skipIf(!POSIX)("still saves the file when the filesystem refuses the mode change", () => {
     // Removable media and some network mounts reject chmod outright. Saving the
     // user's data must not depend on protection that filesystem cannot provide.
