@@ -3,10 +3,11 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorForm } from '../ConnectorForm';
 import type { McpConnector } from '../types';
+import { WindowSurfaceProvider, type WindowSurface } from '../../../../ui/window-surface';
 
 vi.mock('../../../helpers', () => ({
   t: (key: string) => key,
@@ -23,7 +24,10 @@ function remoteConnector(): McpConnector {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  document.body.innerHTML = '';
+});
 
 describe('ConnectorForm URL validation', () => {
   it('names the problem in the field instead of waiting for the server to refuse', () => {
@@ -74,22 +78,37 @@ describe('ConnectorForm URL validation', () => {
 
 describe('ConnectorForm connection type switch', () => {
   it('asks before rewriting how an existing connector connects', () => {
-    render(<ConnectorForm editingConnector={remoteConnector()} onAdd={vi.fn()} onUpdate={vi.fn()} />);
+    const overlayRoot = document.createElement('div');
+    document.body.append(overlayRoot);
+    const surface: WindowSurface = {
+      id: 'settings-modal:mcp-form-test',
+      window,
+      document,
+      overlayRoot,
+    };
+    render(
+      <WindowSurfaceProvider surface={surface}>
+        <ConnectorForm editingConnector={remoteConnector()} onAdd={vi.fn()} onUpdate={vi.fn()} />
+      </WindowSurfaceProvider>,
+    );
 
     fireEvent.click(screen.getByText('settings.mcp.modeRemote'));
     fireEvent.click(screen.getByText('settings.mcp.modeLocal'));
 
     // Switching drops the other mode's fields and tears down the live client,
     // so it is a decision, not a toggle.
-    expect(screen.getByText('settings.mcp.modeSwitchBody')).toBeTruthy();
+    expect(within(overlayRoot).getByRole('dialog', { name: 'settings.mcp.modeSwitchTitle' })).toBeTruthy();
+    expect(within(overlayRoot).getByText('settings.mcp.modeSwitchBody')).toBeTruthy();
     expect(screen.getByPlaceholderText('https://mcp.example.com/mcp')).toBeTruthy();
   });
 
-  it('applies the switch once confirmed', () => {
+  it('keeps the standalone settings confirmation on the document root and applies it', () => {
     render(<ConnectorForm editingConnector={remoteConnector()} onAdd={vi.fn()} onUpdate={vi.fn()} />);
 
     fireEvent.click(screen.getByText('settings.mcp.modeRemote'));
     fireEvent.click(screen.getByText('settings.mcp.modeLocal'));
+    const dialog = screen.getByRole('dialog', { name: 'settings.mcp.modeSwitchTitle' });
+    expect(dialog.parentElement?.parentElement).toBe(document.body);
     fireEvent.click(screen.getByText('common.confirm'));
 
     expect(screen.getByPlaceholderText('npx')).toBeTruthy();
