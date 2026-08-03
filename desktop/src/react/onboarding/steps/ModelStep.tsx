@@ -346,7 +346,7 @@ export function ModelStep({
               </label>
               <label className="ob-model-edit-field">
                 <span>{t('onboarding.model.maxOutput')}</span>
-                <input aria-label={t('onboarding.model.maxOutput')} className="ob-input" value={editMaxOutput} inputMode="numeric" placeholder="16384" onChange={e => setEditMaxOutput(e.target.value)} />
+                <input aria-label={t('onboarding.model.maxOutput')} className="ob-input" value={editMaxOutput} inputMode="numeric" placeholder="65536" onChange={e => setEditMaxOutput(e.target.value)} />
               </label>
             </div>
             <div className="ob-model-edit-checks">

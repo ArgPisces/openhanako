@@ -216,7 +216,7 @@ describe("provider-compat/deepseek-responses — effort 翻译", () => {
 });
 
 describe("provider-compat/deepseek-responses — 字段搬运", () => {
-  it("剥掉 ChatCompletions 专属字段，输出预算落到 max_output_tokens", () => {
+  it("剥掉 ChatCompletions 专属字段，64K 默认预算落到 max_output_tokens", () => {
     const payload = responsesPayload({
       thinking: { type: "enabled" },
       reasoning_effort: "max",
@@ -233,10 +233,10 @@ describe("provider-compat/deepseek-responses — 字段搬运", () => {
     expect(result).not.toHaveProperty("reasoning_effort");
     expect(result).not.toHaveProperty("max_tokens");
     expect(result).not.toHaveProperty("max_completion_tokens");
-    expect(result.max_output_tokens).toBe(131_072);
+    expect(result.max_output_tokens).toBe(65_536);
   });
 
-  it("不覆盖 SDK 已按剩余窗口算好的输出预算", () => {
+  it("默认预算限制到 64K，但不抬高 SDK 已按剩余窗口收紧的值", () => {
     // SDK 的 clampMaxTokensToContext 已经取过 min(模型上限, 剩余窗口 - 安全余量)。
     // 兼容层拿不到真实 token 数，放大只会把请求推过 1M 总窗口的边界。
     for (const cap of [50_000, 120_000, 384_000]) {
@@ -245,7 +245,7 @@ describe("provider-compat/deepseek-responses — 字段搬运", () => {
         FLASH_RESPONSES_MODEL,
         { mode: "chat", reasoningLevel: "xhigh" },
       );
-      expect(result.max_output_tokens).toBe(cap);
+      expect(result.max_output_tokens).toBe(Math.min(cap, 65_536));
       expect(result.reasoning).toMatchObject({ effort: "xhigh" });
     }
   });
@@ -278,7 +278,7 @@ describe("provider-compat/deepseek-responses — 字段搬运", () => {
       FLASH_RESPONSES_MODEL,
       { mode: "chat", reasoningLevel: "high" },
     );
-    expect(result.max_output_tokens).toBe(200_000);
+    expect(result.max_output_tokens).toBe(65_536);
     expect(result).not.toHaveProperty("max_tokens");
   });
 

@@ -337,7 +337,7 @@ describe("resolveOutputCapCapability", () => {
 });
 
 describe("resolveOutputBudgetPolicy", () => {
-  it("treats SDK-default chat caps on optional providers as removable request noise", () => {
+  it("bounds SDK-default chat caps to Hana's 64K target", () => {
     const policy = resolveOutputBudgetPolicy({
       id: "deepseek-v4-flash",
       provider: "dashscope",
@@ -349,7 +349,9 @@ describe("resolveOutputBudgetPolicy", () => {
       mode: "chat",
       source: "sdk-default",
       preserveForSource: false,
-      removeImplicitSdkDefault: true,
+      applyChatDefault: true,
+      defaultMaxTokens: 65536,
+      modelLimit: 384000,
       capability: {
         id: "default-optional",
         required: false,
@@ -369,7 +371,8 @@ describe("resolveOutputBudgetPolicy", () => {
     expect(policy).toMatchObject({
       source: "system",
       preserveForSource: true,
-      removeImplicitSdkDefault: false,
+      applyChatDefault: false,
+      modelLimit: 384000,
     });
   });
 
@@ -384,7 +387,8 @@ describe("resolveOutputBudgetPolicy", () => {
     expect(policy).toMatchObject({
       source: "sdk-default",
       preserveForSource: false,
-      removeImplicitSdkDefault: false,
+      applyChatDefault: true,
+      defaultMaxTokens: 65536,
       capability: {
         id: "anthropic-messages",
         required: true,
@@ -487,12 +491,12 @@ describe("normalizeProviderPayload — 通用层", () => {
     expect(result.thinking).toEqual({ type: "enabled" });
   });
 
-  it("移除 OpenAI-compatible provider 上由 SDK 注入的隐式输出上限", () => {
+  it("把 SDK 从模型能力投影出的 chat 输出上限收紧到 64K", () => {
     const payload = {
       model: "deepseek-v4-flash",
       messages: [{ role: "user", content: "hi" }],
       reasoning_effort: "high",
-      max_completion_tokens: 32000,
+      max_completion_tokens: 384000,
     };
     const result = normalizeProviderPayload(payload, {
       id: "deepseek-v4-flash",
@@ -503,13 +507,13 @@ describe("normalizeProviderPayload — 通用层", () => {
       maxTokens: 384000,
     }, { mode: "chat", reasoningLevel: "high" });
     expect(result).not.toBe(payload);
-    expect(result).not.toHaveProperty("max_completion_tokens");
+    expect(result.max_completion_tokens).toBe(65536);
     expect(result).not.toHaveProperty("max_tokens");
     expect(result.reasoning_effort).toBe("high");
-    expect(payload.max_completion_tokens).toBe(32000);
+    expect(payload.max_completion_tokens).toBe(384000);
   });
 
-  it("模型能力低于 32000 时也移除 SDK 从 maxTokens 投影出的隐式上限", () => {
+  it("模型能力低于 64K 时保留更小的真实能力上限", () => {
     const payload = {
       model: "custom-small-output",
       messages: [{ role: "user", content: "hi" }],
@@ -521,8 +525,52 @@ describe("normalizeProviderPayload — 通用层", () => {
       api: "openai-completions",
       maxTokens: 8192,
     }, { mode: "chat" });
-    expect(result).not.toHaveProperty("max_completion_tokens");
+    expect(result.max_completion_tokens).toBe(8192);
     expect(payload.max_completion_tokens).toBe(8192);
+  });
+
+  it("chat serializer 没有给 output cap 时也补上 64K 默认值", () => {
+    const payload = {
+      model: "custom-large-output",
+      messages: [{ role: "user", content: "hi" }],
+    };
+    const result = normalizeProviderPayload(payload, {
+      id: "custom-large-output",
+      provider: "openai-compatible",
+      api: "openai-completions",
+      maxTokens: 262144,
+    }, { mode: "chat" });
+    expect(result.max_tokens).toBe(65536);
+    expect(payload).not.toHaveProperty("max_tokens");
+  });
+
+  it("Responses serializer 只有 input 时也补上 64K 默认值", () => {
+    const result = normalizeProviderPayload({
+      model: "custom-responses-model",
+      input: [{ role: "user", content: "hi" }],
+    }, {
+      id: "custom-responses-model",
+      provider: "openai-compatible",
+      api: "openai-responses",
+      maxTokens: 262144,
+    }, { mode: "chat" });
+
+    expect(result.max_output_tokens).toBe(65536);
+  });
+
+  it("保留 SDK 按剩余上下文收紧后的更小输出预算，不反向抬高", () => {
+    const payload = {
+      model: "custom-large-output",
+      messages: [{ role: "user", content: "hi" }],
+      max_completion_tokens: 20000,
+    };
+    const result = normalizeProviderPayload(payload, {
+      id: "custom-large-output",
+      provider: "openai-compatible",
+      api: "openai-completions",
+      maxTokens: 262144,
+    }, { mode: "chat", outputBudgetSource: "sdk-default" });
+    expect(result.max_completion_tokens).toBe(20000);
   });
 
   it("保留用户或调用方显式给出的非 SDK 默认输出上限", () => {
@@ -573,11 +621,11 @@ describe("normalizeProviderPayload — 通用层", () => {
     expect(result.max_completion_tokens).toBe(32000);
   });
 
-  it("显式标记为 SDK 默认来源时仍移除可省略 provider 的隐式输出上限", () => {
+  it("显式标记为 SDK 默认来源时把模型能力值收紧到 64K", () => {
     const payload = {
       model: "custom-model",
       messages: [{ role: "user", content: "hi" }],
-      max_completion_tokens: 32000,
+      max_completion_tokens: 384000,
     };
     const result = normalizeProviderPayload(payload, {
       id: "custom-model",
@@ -585,14 +633,14 @@ describe("normalizeProviderPayload — 通用层", () => {
       api: "openai-completions",
       maxTokens: 384000,
     }, { mode: "chat", outputBudgetSource: "sdk-default" });
-    expect(result).not.toHaveProperty("max_completion_tokens");
+    expect(result.max_completion_tokens).toBe(65536);
   });
 
-  it("保留协议必填 provider 上看起来像 SDK 默认的输出上限", () => {
+  it("协议必填 provider 也使用 64K chat 默认值", () => {
     const payload = {
       model: "claude-opus-4-7",
       messages: [{ role: "user", content: "hi" }],
-      max_tokens: 32000,
+      max_tokens: 128000,
     };
     const result = normalizeProviderPayload(payload, {
       id: "claude-opus-4-7",
@@ -600,15 +648,15 @@ describe("normalizeProviderPayload — 通用层", () => {
       api: "anthropic-messages",
       maxTokens: 128000,
     }, { mode: "chat" });
-    expect(result.max_tokens).toBe(32000);
-    expect(payload.max_tokens).toBe(32000);
+    expect(result.max_tokens).toBe(65536);
+    expect(payload.max_tokens).toBe(128000);
   });
 
-  it("保留自定义 Anthropic-compatible provider 的协议必填输出上限", () => {
+  it("自定义 Anthropic-compatible provider 也使用 64K chat 默认值", () => {
     const payload = {
       model: "claude-compatible",
       messages: [{ role: "user", content: "hi" }],
-      max_tokens: 32000,
+      max_tokens: 128000,
     };
     const result = normalizeProviderPayload(payload, {
       id: "claude-compatible",
@@ -617,8 +665,24 @@ describe("normalizeProviderPayload — 通用层", () => {
       maxTokens: 128000,
       compat: { thinkingFormat: "anthropic" },
     }, { mode: "chat" });
-    expect(result.max_tokens).toBe(32000);
-    expect(payload.max_tokens).toBe(32000);
+    expect(result.max_tokens).toBe(65536);
+    expect(payload.max_tokens).toBe(128000);
+  });
+
+  it("用户显式选择可以高于 64K，但不会超过模型声明的真实上限", () => {
+    const payload = {
+      model: "custom-model",
+      messages: [{ role: "user", content: "hi" }],
+      max_completion_tokens: 262144,
+    };
+    const result = normalizeProviderPayload(payload, {
+      id: "custom-model",
+      provider: "openai-compatible",
+      api: "openai-completions",
+      maxTokens: 131072,
+    }, { mode: "chat", outputBudgetSource: "user" });
+    expect(result.max_completion_tokens).toBe(131072);
+    expect(payload.max_completion_tokens).toBe(262144);
   });
 
   it("协议必填输出上限缺失时从 resolved model maxTokens 补齐", () => {
@@ -682,7 +746,7 @@ describe("normalizeProviderPayload — 通用层", () => {
         model: model.id,
         messages: [{ role: "user", content: "hi" }],
         reasoning: { effort: "high" },
-        max_completion_tokens: Math.min(model.maxTokens, 32000),
+        max_completion_tokens: model.maxTokens,
       };
       const result = normalizeProviderPayload(payload, model, {
         mode: "chat",
@@ -694,7 +758,7 @@ describe("normalizeProviderPayload — 通用层", () => {
       expect(result).not.toHaveProperty("thinking");
       expect(result).not.toHaveProperty("reasoning_effort");
       expect(result).not.toHaveProperty("chat_template_kwargs");
-      expect(result).not.toHaveProperty("max_completion_tokens");
+      expect(result.max_completion_tokens).toBe(Math.min(model.maxTokens, 65536));
 
       const offPayload = {
         model: model.id,
@@ -720,7 +784,7 @@ describe("normalizeProviderPayload — 通用层", () => {
       messages: [{ role: "user", content: "hi" }],
       reasoning: { effort: "medium" },
       thinking: { type: "enabled", budget_tokens: 8192 },
-      max_completion_tokens: 32000,
+      max_completion_tokens: 128000,
     };
     const model = {
       id: modelId,
@@ -747,7 +811,7 @@ describe("normalizeProviderPayload — 通用层", () => {
     expect(result.reasoning).toEqual({ enabled: true });
     expect(result).not.toHaveProperty("thinking");
     expect(result).not.toHaveProperty("reasoning_effort");
-    expect(result).not.toHaveProperty("max_completion_tokens");
+    expect(result.max_completion_tokens).toBe(65536);
     expect(payload.reasoning).toEqual({ effort: "medium" });
   });
 
@@ -1100,7 +1164,8 @@ describe("normalizeProviderPayload — DeepSeek Anthropic 模式", () => {
       reasoning: true,
       compat: { thinkingFormat: "anthropic" },
     }, { mode: "chat", reasoningLevel: "xhigh" });
-    expect(result).toBe(payload);
+    expect(result).not.toBe(payload);
+    expect(result.max_tokens).toBe(65536);
     expect(result).not.toHaveProperty("output_config");
   });
 });
@@ -1357,7 +1422,7 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
     expect(result.reasoning_effort).toBe("low");
   });
 
-  it("DeepSeek V4 不覆盖 SDK 按剩余窗口算好的输出预算", () => {
+  it("DeepSeek V4 把默认预算限制到 64K，但不抬高 SDK 已按剩余窗口收紧的值", () => {
     // SDK 的 clampMaxTokensToContext 已经取过 min(模型上限, 剩余窗口 - 安全余量)，
     // 兼容层拿不到真实 token 数。放大只会把请求推过 1M 总窗口的边界，而且恰好
     // 发生在剩余窗口最紧张的时候。思考档位与能输出多长是两个正交的维度。
@@ -1371,7 +1436,7 @@ describe("normalizeProviderPayload — DeepSeek chat 模式", () => {
         expect(result).toMatchObject({
           thinking: { type: "enabled" },
           reasoning_effort: effort,
-          max_tokens: cap,
+          max_tokens: Math.min(cap, 65536),
         });
       }
     }

@@ -114,6 +114,118 @@ describe("chat route model switch guard", () => {
     expect(payloads.find((payload) => payload.type === "error")).toBeUndefined();
   });
 
+  it("does not count a length-limited thinking-only reply as a normal success", async () => {
+    let createHandlers;
+    let subscriber;
+    const upgradeWebSocket = vi.fn((factory) => {
+      createHandlers = factory;
+      return () => new Response(null);
+    });
+    const sessionPath = "/tmp/thinking-only-length.jsonl";
+    const hub = {
+      subscribe: vi.fn((fn) => { subscriber = fn; }),
+      send: vi.fn(async () => {}),
+      eventBus: { emit: vi.fn() },
+    };
+    const deliverNotification = vi.fn(async () => ({ ok: true }));
+    const engine = {
+      agentName: "Hana",
+      abortAllStreaming: vi.fn(async () => {}),
+      getNotificationPreferences: vi.fn(() => ({ chatCompletion: "always" })),
+      getSessionIdForPath: vi.fn(() => "session-thinking-only"),
+      getSessionManifest: vi.fn(() => ({
+        sessionId: "session-thinking-only",
+        ownerAgentId: "agent-1",
+        domain: "desktop",
+        kind: "chat",
+      })),
+      deliverNotification,
+      getSessionByPath: vi.fn(() => ({ entries: [] })),
+      isSessionStreaming: vi.fn(() => false),
+      isSessionSwitching: vi.fn(() => false),
+      steerSession: vi.fn(() => false),
+      slashDispatcher: null,
+    };
+
+    createChatRoute(engine, hub, { upgradeWebSocket });
+    const handlers = createHandlers({});
+    const ws = { readyState: 1, send: vi.fn() };
+    handlers.onOpen({}, ws);
+
+    subscriber?.({ type: "session_status", isStreaming: true }, sessionPath);
+    subscriber?.({ type: "turn_start" }, sessionPath);
+    subscriber?.({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "thinking_delta", delta: "still reasoning" },
+    }, sessionPath);
+    subscriber?.({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "thinking", thinking: "still reasoning" }], stopReason: "length" },
+    }, sessionPath);
+    subscriber?.({ type: "turn_end" }, sessionPath);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const payloads = ws.send.mock.calls.map(([raw]) => JSON.parse(raw));
+    expect(payloads.some((payload) => payload.type === "error")).toBe(true);
+    expect(payloads.find((payload) => payload.type === "turn_end")).toMatchObject({
+      truncated: true,
+      stopReason: "length",
+    });
+    expect(deliverNotification).not.toHaveBeenCalled();
+    handlers.onClose({}, ws);
+  });
+
+  it("marks a visible partial reply as truncated without adding a generic error", () => {
+    let createHandlers;
+    let subscriber;
+    const upgradeWebSocket = vi.fn((factory) => {
+      createHandlers = factory;
+      return () => new Response(null);
+    });
+    const sessionPath = "/tmp/partial-length.jsonl";
+    const hub = {
+      subscribe: vi.fn((fn) => { subscriber = fn; }),
+      send: vi.fn(async () => {}),
+      eventBus: { emit: vi.fn() },
+    };
+    const engine = {
+      agentName: "Hana",
+      abortAllStreaming: vi.fn(async () => {}),
+      getSessionByPath: vi.fn(() => ({ entries: [] })),
+      isSessionStreaming: vi.fn(() => false),
+      isSessionSwitching: vi.fn(() => false),
+      steerSession: vi.fn(() => false),
+      slashDispatcher: null,
+    };
+
+    createChatRoute(engine, hub, { upgradeWebSocket });
+    const handlers = createHandlers({});
+    const ws = { readyState: 1, send: vi.fn() };
+    handlers.onOpen({}, ws);
+
+    subscriber?.({ type: "session_status", isStreaming: true }, sessionPath);
+    subscriber?.({ type: "turn_start" }, sessionPath);
+    subscriber?.({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_delta", delta: "visible partial reply" },
+    }, sessionPath);
+    subscriber?.({
+      type: "message_end",
+      message: { role: "assistant", content: "visible partial reply", stopReason: "length" },
+    }, sessionPath);
+    subscriber?.({ type: "turn_end" }, sessionPath);
+
+    const payloads = ws.send.mock.calls.map(([raw]) => JSON.parse(raw));
+    expect(payloads.some((payload) => payload.type === "error")).toBe(false);
+    expect(payloads.find((payload) => payload.type === "turn_end")).toMatchObject({
+      truncated: true,
+      stopReason: "length",
+    });
+    handlers.onClose({}, ws);
+  });
+
   it("does not re-log a previous turn's usage on an aborted turn_end", () => {
     let createHandlers;
     let subscriber;

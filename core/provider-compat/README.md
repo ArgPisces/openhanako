@@ -153,21 +153,21 @@ Pi Session JSONL 持久化完整 canonical assistant message，包括 thinking b
 ## 输出预算策略
 
 `maxOutput` / `model.maxTokens` 在 Hana 数据层表示模型能力上限，不表示每次请求的默认输出长度。
-Pi SDK 的 `streamSimple` 会在调用方未传 `maxTokens` 时，把 `min(model.maxTokens, 32000)` 注入请求体。
-对 OpenAI-compatible / Gemini / Mistral 这类 output cap 可省略的 provider，这会把 Hana 的模型能力 metadata
-误变成本次请求策略，改变供应商默认行为，也可能与 thinking budget 冲突。
+当前 Pi SDK 在调用方未传 `maxTokens` 时，会先用 `model.maxTokens`，再按本轮剩余上下文收紧，最后把结果写进请求体。
+Hana 在最终请求发出前把这个默认值进一步限制到 65,536。这样模型的普通回答默认最多使用 64K 输出空间，
+同时不会把 SDK 因上下文不足而已经压到 20K、8K 等更小的安全值反向抬高。
 
 通用层通过 `provider-compat/output-budget.ts` 处理这件事。该文件内部维护
 `OUTPUT_CAP_CAPABILITIES`，集中声明 output cap 是否必填、是否需要保留 SDK
 默认值，并通过 `resolveOutputBudgetPolicy()` 把请求来源、provider 能力和
-是否可移除隐式 SDK 默认值收敛成一个可测试的策略对象，避免把 provider 规则散落在调用点。
+最终上限收敛成一个可测试的策略对象，避免把 provider 规则散落在调用点。
 
-1. chat 请求中，如果 payload 的 output cap 等于 Pi SDK 从 `model.maxTokens` 推导出的隐式默认值，则移除该字段，让供应商默认生效。
+1. chat 请求未声明用户或系统级预算时，最终 output cap 为 `min(SDK 已收紧的值, 65,536, model.maxTokens)`。模型能力小于 64K 时按真实能力走，剩余上下文更小时继续保留更小值。
 2. utility 请求由具体消费任务决定预算。`callText` 不从 `model.maxTokens` 合成默认 output cap；标题、健康检查、记忆摘要等任务需要限制长度时必须显式传 `maxTokens`。
-3. Anthropic / Bedrock / `anthropic-messages` 这类协议必填 output cap 的 provider 不移除调用方显式传入的 cap；如果调用方未声明预算，通用层不替它推导。
-4. 官方 DeepSeek endpoint 不移除显式 cap，继续交给 `deepseek.ts` 统一转换字段并确保 thinking 输出预算合法。
-5. 真正的用户级或系统级单次输出上限，调用方必须通过 `options.outputBudgetSource = "user" | "system"` 或等价显式 source 传入，通用层不得静默移除显式意图。
-6. chat hook 拿不到 Pi SDK `maxTokens` 的来源，保持 source 为 `unspecified`；兼容层只在字段值等于 Pi SDK 隐式默认时移除，避免误删未来真实的非默认上限。
+3. Anthropic / Bedrock / `anthropic-messages` 这类协议必填 output cap 的 provider 在字段缺失时补齐预算；chat 使用 64K 默认目标，utility 继续遵守任务自己的显式预算或模型能力边界。
+4. 官方 DeepSeek endpoint 继续交给 `deepseek.ts` 统一转换字段并确保 thinking 输出预算合法，进入该模块前已经完成 64K 默认限制。
+5. 真正的用户级或系统级单次输出上限，调用方必须通过 `options.outputBudgetSource = "user" | "system"` 或等价显式 source 传入。显式值可以高于 64K，但一定会被 `model.maxTokens` 截住，不能超过模型声明的真实能力。
+6. chat hook 只能看到 SDK 已按剩余上下文处理过的最终值，拿不到更细的来源。source 为 `unspecified` 时，兼容层只做向下限制，不会把任何较小值抬高；调用方若要表达 128K / 256K 等显式意图，必须携带 source，不能靠数值猜测。
 
 ## 音频输入 transport
 
@@ -222,7 +222,7 @@ first-match-wins 的实际匹配次序。改数组顺序时同步改这张表。
 | [`input-audio.ts`](input-audio.ts) | 通用 OpenAI-compatible 音频 transport 转换，由主入口按 `compat.audioTransport` 调用 | Pi SDK / provider serializer 原生按模型 transport 输出正确音频块 |
 | [`tool-pairing.ts`](tool-pairing.ts) | 孤儿 toolResult 配对兜底（issue #1285）：重放时补齐被丢弃的 assistant tool_calls | Pi SDK 重放不再丢弃 `stopReason=error/aborted` 轮次的 tool call |
 | [`reasoning-content-replay.ts`](reasoning-content-replay.ts) | `reasoning_content` carrier 的历史回放执行与 fail-closed 校验 | 所有相关 provider 的 replay 由 Pi SDK 原生保存回放 |
-| [`output-budget.ts`](output-budget.ts) | 通用输出预算策略：`OUTPUT_CAP_CAPABILITIES` + `resolveOutputBudgetPolicy()` | Pi SDK 不再注入隐式 output cap，或按 provider 能力自行省略 |
+| [`output-budget.ts`](output-budget.ts) | 通用输出预算策略：`OUTPUT_CAP_CAPABILITIES` + `resolveOutputBudgetPolicy()` | Pi SDK 原生支持 Hana 的默认预算与显式预算来源 |
 | [`deepseek-thinking-budget.ts`](deepseek-thinking-budget.ts) | 仅在 DeepSeek 请求完全没带预算时补一个值；**不覆盖** Pi SDK `clampMaxTokensToContext` 算好的既有预算 | DeepSeek 请求缺预算时服务端有明确默认，或 SDK 始终携带预算 |
 
 子模块的对外 API 仅有 `matches` 和 `apply` 两个 export。其它 export（如 replay helper 的 `extractReasoningFromContent`、`ensureReasoningContentForToolCalls`）属于实现细节、仅供同文件和单元测试访问，**不构成对外契约**。升级 SDK 想删 helper 时不需顾虑外部依赖。
