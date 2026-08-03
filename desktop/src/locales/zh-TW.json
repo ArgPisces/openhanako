@@ -260,8 +260,8 @@
       "refreshFailed": "重新整理失敗"
     },
     "rcTakingOver": "{platform} 接管中",
-    "subagentRunStateUnrecoverable": "历史子会话运行状态不可恢复",
-    "subagentLinkUnrecoverable": "历史子会话链接不可恢复"
+    "subagentRunStateUnrecoverable": "歷史 subagent 執行狀態不可恢復",
+    "subagentLinkUnrecoverable": "歷史 subagent 連結不可恢復"
   },
   "common": {
     "on": "開",
@@ -332,7 +332,7 @@
       "retryLabel": "重新生成{kind}"
     },
     "subagentPreview": {
-      "historyUnrecoverable": "历史子会话链接不可恢复",
+      "historyUnrecoverable": "歷史 subagent 連結不可恢復",
       "noSession": "暂无可打开的 subagent session",
       "connecting": "正在连接 subagent session...",
       "loadingSession": "正在加载会话...",
@@ -726,16 +726,6 @@
       "done": "✏️ {name} 改好了",
       "failed": "✏️ {name} 越改越亂了"
     },
-    "edit-diff": {
-      "running": "✏️ {name} 提筆改字中",
-      "done": "✏️ {name} 改好了",
-      "failed": "✏️ {name} 越改越亂了"
-    },
-    "glob": {
-      "running": "🔍 {name} 正在找檔案",
-      "done": "🔍 {name} 找到了",
-      "failed": "🔍 {name} 翻遍了也沒找到"
-    },
     "grep": {
       "running": "🔍 {name} 正在檔案裡翻找",
       "done": "🔍 {name} 翻到了",
@@ -751,15 +741,10 @@
       "done": "📂 {name} 看完了",
       "failed": "📂 {name} 打不開這個資料夾"
     },
-    "truncate": {
-      "running": "✂️ {name} 正在整理檔案",
-      "done": "✂️ {name} 整理好了",
-      "failed": "✂️ {name} 整理不動了"
-    },
     "stage_files": {
-      "running": "📎 {name} 正在整理檔案",
-      "done": "📎 在這！",
-      "failed": "📎 檔案沒放好"
+      "running": "📎 正在準備檔案",
+      "done": "📎 檔案準備好了",
+      "failed": "📎 檔案沒準備好"
     },
     "browser": {
       "running": "🌐 {name} 正在操作瀏覽器",
@@ -767,147 +752,112 @@
       "failed": "🌐 {name} 瀏覽器不聽使喚"
     },
     "subagent": {
-      "running": "🧭 {name} 分身查探中",
-      "done": "🧭 分身出發了",
-      "failed": "🧭 分身出了岔子"
+      "running": "🧭 subagent 正在做事",
+      "done": "🧭 subagent 做完了",
+      "failed": "🧭 subagent 沒做成"
     },
     "check_pending_tasks": {
-      "running": "📋 {name} 正在找找沒做完的事兒",
-      "done": "📋 {name} 找完了",
-      "failed": "📋 找不著"
-    },
-    "cron": {
-      "running": "⏰ {name} 正在設定時任務",
-      "done": "⏰ 設好了",
-      "failed": "⏰ 沒設成"
+      "running": "📋 正在看背景任務好了沒",
+      "done": "📋 背景任務的進展看完了",
+      "failed": "📋 沒看到背景任務的進展"
     },
     "notify": {
       "running": "🔔 {name} 正在發通知",
-      "done": "🔔 通知發了",
+      "done": "🔔 {name} 把通知發出去了",
       "failed": "🔔 通知沒發出去"
     },
     "create_artifact": {
-      "running": "🖼️ {name} 正在寫寫畫畫",
-      "done": "🖼️ 畫好了",
-      "failed": "🖼️ 畫崩了"
+      "running": "🖼️ {name} 正在做圖",
+      "done": "🖼️ {name} 把圖做好了",
+      "failed": "🖼️ 圖沒做成"
     },
     "dm": {
-      "running": "✉️ {name} 打開了手機",
-      "done": "✉️ 發出去了",
-      "failed": "✉️ 沒發出去"
+      "running": "✉️ {name} 正在發私訊",
+      "done": "✉️ {name} 把私訊發出去了",
+      "failed": "✉️ 私訊沒發出去"
     },
     "channel": {
-      "running": "📢 {name} 正在頻道發言",
-      "done": "📢 發完了",
-      "failed": "📢 發不出去",
+      "running": "📢 {name} 正在往頻道發訊息",
+      "done": "📢 {name} 在頻道發了訊息",
+      "failed": "📢 訊息沒發到頻道",
       "heading": "# 频道",
       "ambiguousName": "频道名 \"{name}\" 不唯一，请改用频道 ID：{choices}"
     },
     "install_skill": {
       "running": "📥 {name} 正在裝技能",
-      "done": "📥 裝好了",
-      "failed": "📥 沒裝上"
+      "done": "📥 {name} 把技能裝上了",
+      "failed": "📥 技能沒裝上"
     },
     "update_settings": {
       "running": "⚙️ {name} 正在改設定",
-      "done": "⚙️ 改好了",
-      "failed": "⚙️ 沒改成"
+      "done": "⚙️ {name} 改好設定了",
+      "failed": "⚙️ 設定沒改成"
     },
     "automation": {
-      "running": "🤖 {name} 正在調度快捷指令",
-      "done": "🤖 指令跑完了",
-      "failed": "🤖 指令執行失敗"
+      "running": "🤖 {name} 正在安排自動化任務",
+      "done": "🤖 {name} 安排好自動化任務了",
+      "failed": "🤖 自動化任務沒安排上"
     },
     "computer": {
-      "running": "🖥️ {name} 正在操控你的螢幕",
-      "done": "🖥️ 操控完了",
-      "failed": "🖥️ 操控失敗"
+      "running": "🖥️ {name} 正在操控電腦",
+      "done": "🖥️ {name} 操控完電腦了",
+      "failed": "🖥️ 電腦沒操控成"
     },
     "terminal": {
-      "running": "💻 {name} 正在敲命令",
-      "done": "💻 敲完了",
-      "failed": "💻 命令執行失敗"
+      "running": "💻 {name} 正在敲指令",
+      "done": "💻 {name} 敲完指令了",
+      "failed": "💻 指令沒跑成"
     },
     "current_status": {
-      "running": "🕐 {name} 正在看看現在什麼情況",
-      "done": "🕐 掌握資訊了",
-      "failed": "🕐 取得資訊失敗"
+      "running": "🕐 正在看看現在什麼情況",
+      "done": "🕐 現在的情況摸清了",
+      "failed": "🕐 沒摸清現在的情況"
     },
     "pin_memory": {
-      "running": "📌 {name} 正在把這件事釘起來",
-      "done": "📌 釘好了",
-      "failed": "📌 置頂失敗"
+      "running": "📌 {name} 正在記牢這件事",
+      "done": "📌 {name} 把這件事記牢了",
+      "failed": "📌 {name} 沒記牢"
     },
     "unpin_memory": {
-      "running": "📌 {name} 正在把釘子拔下來",
-      "done": "📌 拔掉了",
-      "failed": "📌 取消置頂失敗"
+      "running": "📌 {name} 正在取消置頂",
+      "done": "📌 {name} 不再特意記著這件事了",
+      "failed": "📌 {name} 沒取消掉"
     },
     "recall_experience": {
-      "running": "🧠 {name} 正在翻經驗本",
-      "done": "🧠 翻到了",
-      "failed": "🧠 沒找到相關經驗"
+      "running": "🧠 正在翻經驗本",
+      "done": "🧠 翻到相關的經驗了",
+      "failed": "🧠 沒翻到相關的經驗"
     },
     "record_experience": {
-      "running": "🧠 {name} 正在把經驗記下來",
-      "done": "🧠 記好了",
-      "failed": "🧠 記錄失敗"
+      "running": "🧠 {name} 正在記下這次的經驗",
+      "done": "🧠 {name} 記下這次的經驗了",
+      "failed": "🧠 經驗沒記下來"
     },
     "session_folders": {
-      "running": "📁 {name} 正在調整資料夾權限",
-      "done": "📁 調好了",
-      "failed": "📁 調整失敗"
+      "running": "📁 {name} 正在調資料夾權限",
+      "done": "📁 {name} 調好資料夾權限了",
+      "failed": "📁 資料夾權限沒調成"
     },
     "stop_task": {
       "running": "🛑 {name} 正在叫停背景任務",
-      "done": "🛑 停下來了",
-      "failed": "🛑 停止失敗"
+      "done": "🛑 {name} 把背景任務停了",
+      "failed": "🛑 背景任務沒停下來"
     },
     "todo_write": {
       "running": "📝 {name} 正在寫清單",
-      "done": "📝 寫好了",
-      "failed": "📝 清單寫入失敗"
+      "done": "📝 清單寫好了",
+      "failed": "📝 清單沒寫上"
     },
     "workflow": {
-      "running": "🔄 {name} 正在編排工作流",
-      "done": "🔄 編排完了",
-      "failed": "🔄 工作流執行失敗",
+      "running": "🔄 {name} 正在編排 workflow",
+      "done": "🔄 {name} 編排完 workflow 了",
+      "failed": "🔄 workflow 沒跑成",
       "scriptInvalid": "workflow 脚本非法: {message}",
       "dispatched": "workflow \"{summary}\" 已派出后台执行（任务 {taskId}），完成后结果会自动回到对话。",
       "syncComplete": "workflow \"{name}\" 完成，派出 {count} 个 agent。\n\n结果:\n{result}",
       "executionFailed": "workflow 执行失败: {message}",
       "resumeFromRunIdDesc": "前次 workflow 的 runId（taskId），用于断点续跑：已完成且 prompt+opts 未变的 agent 节点瞬间返回缓存结果，首个变化位置起重新执行。",
       "journalResuming": "从 {count} 条缓存恢复"
-    },
-    "generate-image": {
-      "running": "🎨 {name} 正在作圖",
-      "done": "🎨 畫好了",
-      "failed": "🎨 作圖失敗"
-    },
-    "generate-video": {
-      "running": "🎬 {name} 正在生成影片",
-      "done": "🎬 影片好了",
-      "failed": "🎬 影片生成失敗"
-    },
-    "create-cover": {
-      "running": "🎨 {name} 正在設計封面",
-      "done": "🎨 封面好了",
-      "failed": "🎨 封面生成失敗"
-    },
-    "apply-cover-candidate": {
-      "running": "🖼️ {name} 正在換封面",
-      "done": "🖼️ 換好了",
-      "failed": "🖼️ 封面套用失敗"
-    },
-    "get-cover-style-guide": {
-      "running": "📖 {name} 正在翻風格手冊",
-      "done": "📖 翻到了",
-      "failed": "📖 取得風格指南失敗"
-    },
-    "list-capabilities": {
-      "running": "📋 {name} 正在清點能力",
-      "done": "📋 點完了",
-      "failed": "📋 能力清點失敗"
     },
     "_fallback": {
       "running": "🔧 {name} 正在忙碌中…",
@@ -930,6 +880,126 @@
     },
     "installSkill": {
       "safetyBlocked": "[安全策略] 技能安全审查未通过，已阻止安装。\n原因：{reason}\n\n请告知用户此技能未通过安全审查，说明具体原因。用户可以在設定中关闭安全审查（不推荐）。"
+    },
+    "file": {
+      "running": "📄 正在操作檔案",
+      "done": "📄 檔案弄好了",
+      "failed": "📄 檔案沒弄好"
+    },
+    "session": {
+      "running": "🔗 {name} 正在聯絡另一個會話",
+      "done": "🔗 {name} 跟另一個會話聯絡上了",
+      "failed": "🔗 {name} 沒聯絡上那個會話"
+    },
+    "subagent_reply": {
+      "running": "🧭 {name} 正在給 subagent 派新任務",
+      "done": "🧭 {name} 給 subagent 派了新任務",
+      "failed": "🧭 任務沒派給 subagent"
+    },
+    "subagent_close": {
+      "running": "🧭 {name} 正在讓 subagent 收工",
+      "done": "🧭 {name} 讓 subagent 收工了",
+      "failed": "🧭 subagent 沒關掉"
+    },
+    "loop_control": {
+      "running": "⏱️ {name} 正在給 loop 上鬧鐘",
+      "done": "⏱️ loop 的鬧鐘定好了",
+      "failed": "⏱️ loop 的鬧鐘沒定上"
+    },
+    "materialize": {
+      "running": "🧲 正在把檔案取到本機",
+      "done": "🧲 檔案取到本機了",
+      "failed": "🧲 檔案沒取下來"
+    },
+    "channel_read_context": {
+      "running": "💬 正在看頻道裡的訊息",
+      "done": "💬 頻道訊息看完了",
+      "failed": "💬 頻道訊息沒讀到"
+    },
+    "channel_reply": {
+      "running": "💬 {name} 正在往頻道裡發訊息",
+      "done": "💬 {name} 在頻道發了訊息",
+      "failed": "💬 訊息沒發到頻道"
+    },
+    "channel_pass": {
+      "running": "⏭️ {name} 這輪打算不說話",
+      "done": "⏭️ {name} 看過了，這輪沒在頻道說話",
+      "failed": "⏭️ 沒記上這次跳過"
+    },
+    "hana_card_guide": {
+      "running": "🎴 正在翻卡片的做法",
+      "done": "🎴 卡片的做法弄明白了",
+      "failed": "🎴 卡片的做法沒查到"
+    },
+    "show_card": {
+      "running": "🎴 {name} 正在把卡片擺出來",
+      "done": "🎴 {name} 把卡片擺出來了",
+      "failed": "🎴 卡片沒擺出來"
+    },
+    "media_generate-image": {
+      "running": "🎨 {name} 正在作圖",
+      "done": "🎨 {name} 把圖畫好了",
+      "failed": "🎨 圖沒畫成"
+    },
+    "media_generate-video": {
+      "running": "🎬 {name} 正在生成影片",
+      "done": "🎬 {name} 把影片做好了",
+      "failed": "🎬 影片沒做成"
+    },
+    "media_describe-options": {
+      "running": "🎨 正在看出圖有哪些選項",
+      "done": "🎨 出圖的選項看完了",
+      "failed": "🎨 出圖選項沒看到"
+    },
+    "media_get-guide": {
+      "running": "🎨 正在翻畫圖的說明",
+      "done": "🎨 畫圖的說明翻完了",
+      "failed": "🎨 畫圖的說明沒翻到"
+    },
+    "beautify_create-cover": {
+      "running": "🖼️ {name} 正在給文章配封面",
+      "done": "🖼️ {name} 給文章配好封面了",
+      "failed": "🖼️ 封面沒配上"
+    },
+    "beautify_apply-cover-candidate": {
+      "running": "🖼️ {name} 正在換封面",
+      "done": "🖼️ {name} 換好封面了",
+      "failed": "🖼️ 封面沒換成"
+    },
+    "beautify_get-cover-style-guide": {
+      "running": "🖼️ 正在翻封面該怎麼配",
+      "done": "🖼️ 封面的配法弄明白了",
+      "failed": "🖼️ 封面的配法沒查到"
+    },
+    "beautify_get-html-style-guide": {
+      "running": "🖼️ 正在翻排版該怎麼弄",
+      "done": "🖼️ 排版的做法弄明白了",
+      "failed": "🖼️ 排版的做法沒查到"
+    },
+    "beautify_list-capabilities": {
+      "running": "🖼️ 正在看能怎麼美化",
+      "done": "🖼️ 看明白能怎麼美化了",
+      "failed": "🖼️ 沒查到能怎麼美化"
+    },
+    "office_read-document": {
+      "running": "📑 正在讀這份文件",
+      "done": "📑 這份文件讀完了",
+      "failed": "📑 這份文件沒讀出來"
+    },
+    "office_html-to-pdf": {
+      "running": "📑 {name} 正在匯出 PDF",
+      "done": "📑 {name} 匯好 PDF 了",
+      "failed": "📑 PDF 沒匯出來"
+    },
+    "office_list-capabilities": {
+      "running": "📑 正在看能處理哪些文件",
+      "done": "📑 看明白能處理哪些文件了",
+      "failed": "📑 沒查到能處理哪些文件"
+    },
+    "_plugin": {
+      "running": "🧩 {name} 正在用外掛做事",
+      "done": "🧩 {name} 用外掛做完了",
+      "failed": "🧩 外掛沒幫上忙"
     }
   },
   "file_output": {
@@ -2906,7 +2976,7 @@
     "settingsTimeout": "「{label}」修改確認逾時，設定未變更",
     "subagentMaxConcurrent": "目前已有 {max} 個子 agent 在執行，請等待完成後再發起。",
     "subagentParentSessionRequired": "subagent 需要活躍父會話和背景任務儲存，無法在目前上下文建立可繼續實例。",
-    "subagentWriteAccessDenied": "無法授予寫入權限：父會話處於唯讀模式，子代理權限不能超過父會話。請把會話切換到可操作模式後重試，或改用 access:\"read\" 重新派單。",
+    "subagentWriteAccessDenied": "無法授予寫入權限：父會話處於唯讀模式，subagent 權限不能超過父會話。請把會話切換到可操作模式後重試，或改用 access:\"read\" 重新派單。",
     "subagentFailed": "子 agent 執行失敗: {msg}",
     "subagentTimeout": "子 agent 執行逾時（{minutes} 分鐘）",
     "subagentAborted": "子 agent 已被終止",
@@ -3020,9 +3090,9 @@
       "unexpected": "操作沒能完成",
       "sessionForkActiveTask": "這段對話裡還有任務在執行，等它結束再建立分支，或者從更早的位置分支",
       "sessionForkUnavailable": "目前版本不支援建立分支工作階段",
-      "subagentSessionForkCycle": "不能把子代理工作階段分支回它自己的上游",
-      "subagentRunBusy": "子代理還在執行，等它結束再試",
-      "subagentThreadBusy": "子代理執行緒正忙，稍候再試",
+      "subagentSessionForkCycle": "不能把 subagent 會話分支回它自己的上游",
+      "subagentRunBusy": "subagent 還在執行，等它結束再試",
+      "subagentThreadBusy": "subagent 執行緒正忙，稍候再試",
       "workflowRunBusy": "工作流程還在執行，等它結束再試",
       "workflowNodeBusy": "工作流程節點正忙，稍候再試",
       "sessionBusy": "這個工作階段正忙，等目前的操作結束再試",

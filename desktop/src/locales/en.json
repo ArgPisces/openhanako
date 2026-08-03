@@ -726,16 +726,6 @@
       "done": "✏️ {name} all fixed up",
       "failed": "✏️ {name} made a bit of a mess"
     },
-    "edit-diff": {
-      "running": "✏️ {name} is making edits",
-      "done": "✏️ {name} all fixed up",
-      "failed": "✏️ {name} made a bit of a mess"
-    },
-    "glob": {
-      "running": "🔍 {name} is looking for files",
-      "done": "🔍 {name} found them",
-      "failed": "🔍 {name} searched high and low, nothing"
-    },
     "grep": {
       "running": "🔍 {name} is rummaging through files",
       "done": "🔍 {name} found something",
@@ -751,15 +741,10 @@
       "done": "📂 {name} all seen",
       "failed": "📂 {name} couldn't open this folder"
     },
-    "truncate": {
-      "running": "✂️ {name} is tidying up a file",
-      "done": "✂️ {name} all tidied up",
-      "failed": "✂️ {name} couldn't tidy up"
-    },
     "stage_files": {
-      "running": "📎 {name} is preparing the file",
-      "done": "📎 Here it is!",
-      "failed": "📎 Couldn't hand it over"
+      "running": "📎 Getting the file ready",
+      "done": "📎 File is ready",
+      "failed": "📎 The file wasn't ready"
     },
     "browser": {
       "running": "🌐 {name} is browsing the web",
@@ -767,136 +752,101 @@
       "failed": "🌐 {name}'s browser wouldn't cooperate"
     },
     "subagent": {
-      "running": "🧭 {name} is investigating",
-      "done": "🧭 Clone dispatched",
-      "failed": "🧭 Clone ran into trouble"
+      "running": "🧭 The subagent is working",
+      "done": "🧭 The subagent finished",
+      "failed": "🧭 The subagent didn't finish"
     },
     "check_pending_tasks": {
-      "running": "📋 {name} is checking unfinished business",
-      "done": "📋 {name} all caught up",
-      "failed": "📋 Couldn't check"
-    },
-    "cron": {
-      "running": "⏰ {name} is setting a scheduled task",
-      "done": "⏰ All set",
-      "failed": "⏰ Couldn't set it up"
+      "running": "📋 Checking on the background tasks",
+      "done": "📋 Caught up on the background tasks",
+      "failed": "📋 The background tasks wouldn't report"
     },
     "notify": {
       "running": "🔔 {name} is sending a notification",
-      "done": "🔔 Notification sent",
-      "failed": "🔔 Notification didn't go through"
+      "done": "🔔 {name} sent the notification",
+      "failed": "🔔 The notification didn't go through"
     },
     "create_artifact": {
-      "running": "🖼️ {name} is doodling away",
-      "done": "🖼️ Masterpiece ready",
-      "failed": "🖼️ Canvas fell apart"
+      "running": "🖼️ {name} is making an image",
+      "done": "🖼️ {name} finished the image",
+      "failed": "🖼️ The image didn't come out"
     },
     "dm": {
-      "running": "✉️ {name} picked up the phone",
-      "done": "✉️ Message sent",
-      "failed": "✉️ Message didn't go through"
+      "running": "✉️ {name} is sending a DM",
+      "done": "✉️ {name} sent the DM",
+      "failed": "✉️ The DM didn't go through"
     },
     "channel": {
-      "running": "📢 {name} is posting in a channel",
-      "done": "📢 Posted",
-      "failed": "📢 Couldn't post",
+      "running": "📢 {name} is posting to the channel",
+      "done": "📢 {name} posted to the channel",
+      "failed": "📢 The message didn't reach the channel",
       "heading": "# Channels",
       "ambiguousName": "Channel name \"{name}\" is not unique. Please use a channel ID instead: {choices}"
     },
     "install_skill": {
       "running": "📥 {name} is installing a skill",
-      "done": "📥 Installed",
-      "failed": "📥 Installation failed"
+      "done": "📥 {name} installed the skill",
+      "failed": "📥 The skill didn't install"
     },
     "update_settings": {
-      "running": "⚙️ {name} is updating settings",
-      "done": "⚙️ Settings updated",
-      "failed": "⚙️ Couldn't update"
+      "running": "⚙️ {name} is changing settings",
+      "done": "⚙️ {name} changed the settings",
+      "failed": "⚙️ The settings didn't change"
     },
     "automation": {
-      "running": "🤖 {name} is dispatching a shortcut",
-      "done": "🤖 Shortcut completed",
-      "failed": "🤖 Shortcut execution failed"
+      "running": "🤖 {name} is setting up an automation",
+      "done": "🤖 {name} set up the automation",
+      "failed": "🤖 The automation didn't get set up"
     },
     "computer": {
-      "running": "🖥️ {name} is controlling your screen",
-      "done": "🖥️ Screen control done",
-      "failed": "🖥️ Screen control failed"
+      "running": "🖥️ {name} is driving the computer",
+      "done": "🖥️ {name} finished on the computer",
+      "failed": "🖥️ The computer wouldn't cooperate"
     },
     "terminal": {
-      "running": "💻 {name} is running a command",
-      "done": "💻 Command done",
-      "failed": "💻 Command execution failed"
+      "running": "💻 {name} is typing commands",
+      "done": "💻 {name} finished typing commands",
+      "failed": "💻 The command didn't run"
     },
     "current_status": {
-      "running": "🕐 {name} is checking what's going on",
-      "done": "🕐 Got it",
-      "failed": "🕐 Couldn't get the info"
+      "running": "🕐 Checking what's going on",
+      "done": "🕐 Got the lay of the land",
+      "failed": "🕐 Couldn't tell what's going on"
     },
     "pin_memory": {
-      "running": "📌 {name} is pinning this down",
-      "done": "📌 Pinned",
-      "failed": "📌 Pinning failed"
+      "running": "📌 {name} is committing this to memory",
+      "done": "📌 {name} committed this to memory",
+      "failed": "📌 {name} couldn't hold on to it"
     },
     "unpin_memory": {
-      "running": "📌 {name} is unpinning this",
-      "done": "📌 Unpinned",
-      "failed": "📌 Unpinning failed"
+      "running": "📌 {name} is letting this go",
+      "done": "📌 {name} is no longer holding on to this",
+      "failed": "📌 {name} couldn't let it go"
     },
     "recall_experience": {
-      "running": "🧠 {name} is flipping through the experience notes",
-      "done": "🧠 Found something",
+      "running": "🧠 Flipping through past notes",
+      "done": "🧠 Found something in the notes",
       "failed": "🧠 Nothing relevant in the notes"
     },
     "record_experience": {
-      "running": "🧠 {name} is jotting this down",
-      "done": "🧠 Noted",
-      "failed": "🧠 Couldn't save the note"
+      "running": "🧠 {name} is writing this one down",
+      "done": "🧠 {name} wrote this one down",
+      "failed": "🧠 The note didn't get saved"
     },
     "session_folders": {
-      "running": "📁 {name} is adjusting folder permissions",
-      "done": "📁 Adjusted",
-      "failed": "📁 Adjustment failed"
+      "running": "📁 {name} is adjusting folder access",
+      "done": "📁 {name} adjusted folder access",
+      "failed": "📁 Folder access didn't change"
     },
     "stop_task": {
-      "running": "🛑 {name} is stopping a background task",
-      "done": "🛑 Stopped",
-      "failed": "🛑 Couldn't stop"
+      "running": "🛑 {name} is calling off a background task",
+      "done": "🛑 {name} called off the background task",
+      "failed": "🛑 The background task wouldn't stop"
     },
     "todo_write": {
       "running": "📝 {name} is writing a checklist",
-      "done": "📝 Checklist ready",
-      "failed": "📝 Checklist write failed"
-    },
-    "generate-image": {
-      "running": "🎨 {name} is creating an image",
-      "done": "🎨 Image ready",
-      "failed": "🎨 Image generation failed"
-    },
-    "generate-video": {
-      "running": "🎬 {name} is generating a video",
-      "done": "🎬 Video ready",
-      "failed": "🎬 Video generation failed"
-    },
-    "create-cover": {
-      "running": "🎨 {name} is designing a cover",
-      "done": "🎨 Cover ready",
-      "failed": "🎨 Cover generation failed"
-    },
-    "apply-cover-candidate": {
-      "running": "🖼️ {name} is applying the cover",
-      "done": "🖼️ Cover applied",
-      "failed": "🖼️ Couldn't apply the cover"
-    },
-    "get-cover-style-guide": {
-      "running": "📖 {name} is looking up the style guide",
-      "done": "📖 Found it",
-      "failed": "📖 Couldn't find the style guide"
-    },
-    "list-capabilities": {
-      "running": "📋 {name} is listing capabilities",
-      "done": "📋 All listed",
-      "failed": "📋 Listing failed"
+      "done": "📝 Checklist is ready",
+      "failed": "📝 The checklist didn't save"
     },
     "_fallback": {
       "running": "🔧 {name} is busy working…",
@@ -919,8 +869,8 @@
     },
     "workflow": {
       "running": "🔄 {name} is orchestrating a workflow",
-      "done": "🔄 Workflow complete",
-      "failed": "🔄 Workflow execution failed",
+      "done": "🔄 {name} finished orchestrating the workflow",
+      "failed": "🔄 The workflow didn't finish",
       "scriptInvalid": "Workflow script invalid: {message}",
       "dispatched": "Workflow \"{summary}\" has been dispatched for background execution (task {taskId}). Results will automatically return to the conversation when complete.",
       "syncComplete": "Workflow \"{name}\" complete, dispatched {count} agents.\n\nResult:\n{result}",
@@ -930,6 +880,126 @@
     },
     "installSkill": {
       "safetyBlocked": "[Security Policy] Skill safety review failed. Installation blocked.\nReason: {reason}\n\nPlease inform the user that this skill did not pass the safety review and explain the specific reason. The user can disable safety review in settings (not recommended)."
+    },
+    "file": {
+      "running": "📄 Working with a file",
+      "done": "📄 File sorted out",
+      "failed": "📄 Couldn't sort out the file"
+    },
+    "session": {
+      "running": "🔗 {name} is reaching another session",
+      "done": "🔗 {name} got through to the other session",
+      "failed": "🔗 {name} couldn't reach that session"
+    },
+    "subagent_reply": {
+      "running": "🧭 {name} is handing the subagent a new task",
+      "done": "🧭 {name} handed the subagent a new task",
+      "failed": "🧭 The task didn't reach the subagent"
+    },
+    "subagent_close": {
+      "running": "🧭 {name} is wrapping up the subagent",
+      "done": "🧭 {name} wrapped up the subagent",
+      "failed": "🧭 The subagent wouldn't close"
+    },
+    "loop_control": {
+      "running": "⏱️ {name} is setting the loop's alarm",
+      "done": "⏱️ The loop's alarm is set",
+      "failed": "⏱️ The loop's alarm didn't get set"
+    },
+    "materialize": {
+      "running": "🧲 Pulling the file down locally",
+      "done": "🧲 File is here locally",
+      "failed": "🧲 The file didn't come down"
+    },
+    "channel_read_context": {
+      "running": "💬 Reading the channel",
+      "done": "💬 Caught up on the channel",
+      "failed": "💬 The channel messages wouldn't load"
+    },
+    "channel_reply": {
+      "running": "💬 {name} is posting to the channel",
+      "done": "💬 {name} posted to the channel",
+      "failed": "💬 The message didn't reach the channel"
+    },
+    "channel_pass": {
+      "running": "⏭️ {name} is sitting this one out",
+      "done": "⏭️ {name} read them and stayed quiet this turn",
+      "failed": "⏭️ The pass didn't get recorded"
+    },
+    "hana_card_guide": {
+      "running": "🎴 Looking up how cards are made",
+      "done": "🎴 Got how cards are made",
+      "failed": "🎴 Couldn't find the card guide"
+    },
+    "show_card": {
+      "running": "🎴 {name} is laying out a card",
+      "done": "🎴 {name} laid out the card",
+      "failed": "🎴 The card wouldn't show"
+    },
+    "media_generate-image": {
+      "running": "🎨 {name} is drawing",
+      "done": "🎨 {name} finished the image",
+      "failed": "🎨 The image didn't come out"
+    },
+    "media_generate-video": {
+      "running": "🎬 {name} is making a video",
+      "done": "🎬 {name} finished the video",
+      "failed": "🎬 The video didn't come out"
+    },
+    "media_describe-options": {
+      "running": "🎨 Checking the image options",
+      "done": "🎨 Got the image options",
+      "failed": "🎨 The image options wouldn't load"
+    },
+    "media_get-guide": {
+      "running": "🎨 Reading up on image prompts",
+      "done": "🎨 Read up on image prompts",
+      "failed": "🎨 Couldn't find the prompt notes"
+    },
+    "beautify_create-cover": {
+      "running": "🖼️ {name} is putting a cover on the piece",
+      "done": "🖼️ {name} gave the piece a cover",
+      "failed": "🖼️ The cover wouldn't go on"
+    },
+    "beautify_apply-cover-candidate": {
+      "running": "🖼️ {name} is swapping the cover",
+      "done": "🖼️ {name} swapped the cover",
+      "failed": "🖼️ The cover wouldn't swap"
+    },
+    "beautify_get-cover-style-guide": {
+      "running": "🖼️ Looking up how covers should look",
+      "done": "🖼️ Got how covers should look",
+      "failed": "🖼️ Couldn't find the cover notes"
+    },
+    "beautify_get-html-style-guide": {
+      "running": "🖼️ Looking up how the layout should look",
+      "done": "🖼️ Got how the layout should look",
+      "failed": "🖼️ Couldn't find the layout notes"
+    },
+    "beautify_list-capabilities": {
+      "running": "🖼️ Checking what can be polished",
+      "done": "🖼️ Got what can be polished",
+      "failed": "🖼️ Couldn't find what can be polished"
+    },
+    "office_read-document": {
+      "running": "📑 Reading the document",
+      "done": "📑 Finished the document",
+      "failed": "📑 The document wouldn't open"
+    },
+    "office_html-to-pdf": {
+      "running": "📑 {name} is exporting a PDF",
+      "done": "📑 {name} got the PDF out",
+      "failed": "📑 The PDF didn't export"
+    },
+    "office_list-capabilities": {
+      "running": "📑 Checking which documents can be handled",
+      "done": "📑 Got which documents can be handled",
+      "failed": "📑 Couldn't find which documents can be handled"
+    },
+    "_plugin": {
+      "running": "🧩 {name} is working through a plugin",
+      "done": "🧩 {name} finished with the plugin",
+      "failed": "🧩 The plugin didn't help"
     }
   },
   "file_output": {

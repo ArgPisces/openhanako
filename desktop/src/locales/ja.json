@@ -726,16 +726,6 @@
       "done": "✏️ {name} 直った",
       "failed": "✏️ {name} 直そうとしたら余計に…"
     },
-    "edit-diff": {
-      "running": "✏️ {name} は手直ししている",
-      "done": "✏️ {name} 直った",
-      "failed": "✏️ {name} 直そうとしたら余計に…"
-    },
-    "glob": {
-      "running": "🔍 {name} はファイルを探している",
-      "done": "🔍 {name} 見つけた",
-      "failed": "🔍 {name} 隅々まで探したけど見つからない"
-    },
     "grep": {
       "running": "🔍 {name} はファイルの中を探し回っている",
       "done": "🔍 {name} 見つけた",
@@ -751,15 +741,10 @@
       "done": "📂 {name} 確認した",
       "failed": "📂 {name} このフォルダ開けない"
     },
-    "truncate": {
-      "running": "✂️ {name} はファイルを整理している",
-      "done": "✂️ {name} きれいになった",
-      "failed": "✂️ {name} 片付けられなかった"
-    },
     "stage_files": {
-      "running": "📎 {name} はファイルを準備している",
-      "done": "📎 はい、どうぞ！",
-      "failed": "📎 ファイルを渡せなかった"
+      "running": "📎 ファイルを用意中",
+      "done": "📎 ファイルが用意できた",
+      "failed": "📎 ファイルは用意できなかった"
     },
     "browser": {
       "running": "🌐 {name} はブラウザを操作している",
@@ -767,147 +752,112 @@
       "failed": "🌐 {name} ブラウザが言うことを聞かない"
     },
     "subagent": {
-      "running": "🧭 {name} 分身が調査中",
-      "done": "🧭 分身を送り出した",
-      "failed": "🧭 分身がトラブった"
+      "running": "🧭 サブエージェントが作業中",
+      "done": "🧭 サブエージェントが終わった",
+      "failed": "🧭 サブエージェントは終わらなかった"
     },
     "check_pending_tasks": {
-      "running": "📋 {name} はやり残しを探している",
-      "done": "📋 {name} 確認おわり",
-      "failed": "📋 確認できなかった"
-    },
-    "cron": {
-      "running": "⏰ {name} はタイマーをセット中",
-      "done": "⏰ セット完了",
-      "failed": "⏰ セットできなかった"
+      "running": "📋 バックグラウンドの進み具合を確認中",
+      "done": "📋 バックグラウンドの進み具合を確認した",
+      "failed": "📋 バックグラウンドの進み具合が分からなかった"
     },
     "notify": {
-      "running": "🔔 {name} は通知を送っている",
-      "done": "🔔 通知おくった",
-      "failed": "🔔 通知が送れなかった"
+      "running": "🔔 {name} は通知を送信中",
+      "done": "🔔 {name} は通知を送った",
+      "failed": "🔔 通知は届かなかった"
     },
     "create_artifact": {
-      "running": "🖼️ {name} はお絵描き中",
-      "done": "🖼️ できた",
-      "failed": "🖼️ 崩れちゃった"
+      "running": "🖼️ {name} は画像を作成中",
+      "done": "🖼️ {name} は画像を仕上げた",
+      "failed": "🖼️ 画像はできあがらなかった"
     },
     "dm": {
-      "running": "✉️ {name} はスマホを手に取った",
-      "done": "✉️ 送信した",
-      "failed": "✉️ 送れなかった"
+      "running": "✉️ {name} はダイレクトメッセージを送信中",
+      "done": "✉️ {name} はダイレクトメッセージを送った",
+      "failed": "✉️ ダイレクトメッセージは届かなかった"
     },
     "channel": {
       "running": "📢 {name} はチャンネルに投稿中",
-      "done": "📢 投稿した",
-      "failed": "📢 投稿できなかった",
+      "done": "📢 {name} はチャンネルに投稿した",
+      "failed": "📢 メッセージはチャンネルに届かなかった",
       "heading": "# チャンネル",
       "ambiguousName": "チャンネル名「{name}」が一意ではありません。チャンネル ID を使用してください: {choices}"
     },
     "install_skill": {
-      "running": "📥 {name} はスキルをインストール中",
-      "done": "📥 インストール完了",
-      "failed": "📥 インストールできなかった"
+      "running": "📥 {name} はスキルを導入中",
+      "done": "📥 {name} はスキルを導入した",
+      "failed": "📥 スキルは導入されなかった"
     },
     "update_settings": {
       "running": "⚙️ {name} は設定を変更中",
-      "done": "⚙️ 変更した",
-      "failed": "⚙️ 変更できなかった"
+      "done": "⚙️ {name} は設定を変えた",
+      "failed": "⚙️ 設定は変わらなかった"
     },
     "automation": {
-      "running": "🤖 {name} はショートカットを実行中",
-      "done": "🤖 ショートカット完了",
-      "failed": "🤖 ショートカットの実行に失敗"
+      "running": "🤖 {name} は自動化の段取り中",
+      "done": "🤖 {name} は自動化の段取りを済ませた",
+      "failed": "🤖 自動化の段取りができなかった"
     },
     "computer": {
-      "running": "🖥️ {name} は画面を操作中",
-      "done": "🖥️ 操作完了",
-      "failed": "🖥️ 画面操作に失敗"
+      "running": "🖥️ {name} はパソコンを操作中",
+      "done": "🖥️ {name} はパソコンの操作を終えた",
+      "failed": "🖥️ パソコンは言うことを聞かなかった"
     },
     "terminal": {
-      "running": "💻 {name} はコマンドを実行中",
-      "done": "💻 コマンド完了",
-      "failed": "💻 コマンドの実行に失敗"
+      "running": "💻 {name} はコマンドを打っている",
+      "done": "💻 {name} はコマンドを打ち終えた",
+      "failed": "💻 コマンドは動かなかった"
     },
     "current_status": {
-      "running": "🕐 {name} は今の状況を確認中",
-      "done": "🕐 把握した",
-      "failed": "🕐 情報を取得できなかった"
+      "running": "🕐 今の状況を確認中",
+      "done": "🕐 今の状況がつかめた",
+      "failed": "🕐 今の状況がつかめなかった"
     },
     "pin_memory": {
-      "running": "📌 {name} はこれをピン留め中",
-      "done": "📌 ピン留めした",
-      "failed": "📌 ピン留めに失敗"
+      "running": "📌 {name} はこれを覚え込んでいる",
+      "done": "📌 {name} はこれを覚え込んだ",
+      "failed": "📌 {name} は覚えきれなかった"
     },
     "unpin_memory": {
-      "running": "📌 {name} はピンを外し中",
-      "done": "📌 外した",
-      "failed": "📌 ピンを外せなかった"
+      "running": "📌 {name} はこれを手放している",
+      "done": "📌 {name} はもうこれを特別扱いしない",
+      "failed": "📌 {name} は手放せなかった"
     },
     "recall_experience": {
-      "running": "🧠 {name} は経験ノートをめくっている",
-      "done": "🧠 見つけた",
-      "failed": "🧠 関連する経験がなかった"
+      "running": "🧠 経験ノートをめくり中",
+      "done": "🧠 関係する経験が見つかった",
+      "failed": "🧠 関係する経験は見つからなかった"
     },
     "record_experience": {
-      "running": "🧠 {name} は経験を書き留めている",
-      "done": "🧠 メモした",
-      "failed": "🧠 記録できなかった"
+      "running": "🧠 {name} は今回の経験を書き留め中",
+      "done": "🧠 {name} は今回の経験を書き留めた",
+      "failed": "🧠 経験は書き留められなかった"
     },
     "session_folders": {
-      "running": "📁 {name} はフォルダ権限を調整中",
-      "done": "📁 調整した",
-      "failed": "📁 調整に失敗"
+      "running": "📁 {name} はフォルダの権限を調整中",
+      "done": "📁 {name} はフォルダの権限を整えた",
+      "failed": "📁 フォルダの権限は変わらなかった"
     },
     "stop_task": {
-      "running": "🛑 {name} はバックグラウンドタスクを停止中",
-      "done": "🛑 止めた",
-      "failed": "🛑 停止できなかった"
+      "running": "🛑 {name} はバックグラウンド処理を止めにいっている",
+      "done": "🛑 {name} はバックグラウンド処理を止めた",
+      "failed": "🛑 バックグラウンド処理は止まらなかった"
     },
     "todo_write": {
-      "running": "📝 {name} はチェックリストを書いている",
-      "done": "📝 書けた",
-      "failed": "📝 チェックリストの書き込みに失敗"
+      "running": "📝 {name} はリストを書いている",
+      "done": "📝 リストができた",
+      "failed": "📝 リストは保存されなかった"
     },
     "workflow": {
-      "running": "🔄 {name} はワークフローを編成中",
-      "done": "🔄 編成完了",
-      "failed": "🔄 ワークフローの実行に失敗",
+      "running": "🔄 {name} は workflow を組み立て中",
+      "done": "🔄 {name} は workflow を組み立てた",
+      "failed": "🔄 workflow は完走しなかった",
       "scriptInvalid": "ワークフロースクリプトが無効です: {message}",
       "dispatched": "ワークフロー「{summary}」をバックグラウンド実行にディスパッチしました（タスク {taskId}）。完了すると結果が自動的に会話に返されます。",
       "syncComplete": "ワークフロー「{name}」が完了しました。{count} 件の Agent をディスパッチしました。\n\n結果:\n{result}",
       "executionFailed": "ワークフローの実行に失敗しました: {message}",
       "resumeFromRunIdDesc": "以前のワークフローの runId（taskId）。チェックポイントからの再開に使用します: prompt+opts が変更されていない完了済み Agent ノードはキャッシュ結果を即座に返し、再実行は最初に変更された位置から始まります。",
       "journalResuming": "{count} 件のキャッシュエントリから再開中"
-    },
-    "generate-image": {
-      "running": "🎨 {name} は画像を作成中",
-      "done": "🎨 できた",
-      "failed": "🎨 画像生成に失敗"
-    },
-    "generate-video": {
-      "running": "🎬 {name} は動画を生成中",
-      "done": "🎬 動画できた",
-      "failed": "🎬 動画生成に失敗"
-    },
-    "create-cover": {
-      "running": "🎨 {name} はカバーをデザイン中",
-      "done": "🎨 カバーできた",
-      "failed": "🎨 カバー生成に失敗"
-    },
-    "apply-cover-candidate": {
-      "running": "🖼️ {name} はカバーを適用中",
-      "done": "🖼️ 適用した",
-      "failed": "🖼️ カバーの適用に失敗"
-    },
-    "get-cover-style-guide": {
-      "running": "📖 {name} はスタイルガイドを確認中",
-      "done": "📖 見つけた",
-      "failed": "📖 スタイルガイドが見つからなかった"
-    },
-    "list-capabilities": {
-      "running": "📋 {name} は機能を確認中",
-      "done": "📋 確認した",
-      "failed": "📋 機能の確認に失敗"
     },
     "_fallback": {
       "running": "🔧 {name} は作業中…",
@@ -930,6 +880,126 @@
     },
     "installSkill": {
       "safetyBlocked": "[セキュリティポリシー] Skill の安全審査に失敗しました。インストールはブロックされました。\n理由: {reason}\n\nこの Skill が安全審査を通過しなかったことをユーザーに伝え、具体的な理由を説明してください。設定で安全審査を無効にできます（非推奨）。"
+    },
+    "file": {
+      "running": "📄 ファイルを操作中",
+      "done": "📄 ファイルの用が済んだ",
+      "failed": "📄 ファイルの操作に失敗"
+    },
+    "session": {
+      "running": "🔗 {name} は別のセッションに連絡中",
+      "done": "🔗 {name} は別のセッションとつながった",
+      "failed": "🔗 {name} はそのセッションにつながらなかった"
+    },
+    "subagent_reply": {
+      "running": "🧭 {name} はサブエージェントに新しい仕事を渡している",
+      "done": "🧭 {name} はサブエージェントに新しい仕事を渡した",
+      "failed": "🧭 仕事はサブエージェントに渡らなかった"
+    },
+    "subagent_close": {
+      "running": "🧭 {name} はサブエージェントを切り上げている",
+      "done": "🧭 {name} はサブエージェントを切り上げた",
+      "failed": "🧭 サブエージェントを閉じられなかった"
+    },
+    "loop_control": {
+      "running": "⏱️ {name} は loop の目覚ましをセット中",
+      "done": "⏱️ loop の目覚ましをセットした",
+      "failed": "⏱️ loop の目覚ましをセットできなかった"
+    },
+    "materialize": {
+      "running": "🧲 ファイルを手元に取り寄せ中",
+      "done": "🧲 ファイルが手元に届いた",
+      "failed": "🧲 ファイルを取り寄せられなかった"
+    },
+    "channel_read_context": {
+      "running": "💬 チャンネルのメッセージを確認中",
+      "done": "💬 チャンネルのメッセージを読んだ",
+      "failed": "💬 チャンネルのメッセージを読めなかった"
+    },
+    "channel_reply": {
+      "running": "💬 {name} はチャンネルに投稿中",
+      "done": "💬 {name} はチャンネルに投稿した",
+      "failed": "💬 メッセージはチャンネルに届かなかった"
+    },
+    "channel_pass": {
+      "running": "⏭️ {name} は今回は黙っているつもり",
+      "done": "⏭️ {name} は目を通したが今回は投稿しなかった",
+      "failed": "⏭️ 見送りを記録できなかった"
+    },
+    "hana_card_guide": {
+      "running": "🎴 カードの作り方を確認中",
+      "done": "🎴 カードの作り方が分かった",
+      "failed": "🎴 カードの作り方が見つからなかった"
+    },
+    "show_card": {
+      "running": "🎴 {name} はカードを並べている",
+      "done": "🎴 {name} はカードを並べた",
+      "failed": "🎴 カードを出せなかった"
+    },
+    "media_generate-image": {
+      "running": "🎨 {name} は画像を作成中",
+      "done": "🎨 {name} は画像を仕上げた",
+      "failed": "🎨 画像はできあがらなかった"
+    },
+    "media_generate-video": {
+      "running": "🎬 {name} は動画を生成中",
+      "done": "🎬 {name} は動画を仕上げた",
+      "failed": "🎬 動画はできあがらなかった"
+    },
+    "media_describe-options": {
+      "running": "🎨 画像の選択肢を確認中",
+      "done": "🎨 画像の選択肢が分かった",
+      "failed": "🎨 画像の選択肢を確認できなかった"
+    },
+    "media_get-guide": {
+      "running": "🎨 画像づくりの手引きを確認中",
+      "done": "🎨 画像づくりの手引きを読んだ",
+      "failed": "🎨 画像づくりの手引きが見つからなかった"
+    },
+    "beautify_create-cover": {
+      "running": "🖼️ {name} は記事にカバーを付けている",
+      "done": "🖼️ {name} は記事にカバーを付けた",
+      "failed": "🖼️ カバーは付けられなかった"
+    },
+    "beautify_apply-cover-candidate": {
+      "running": "🖼️ {name} はカバーを差し替え中",
+      "done": "🖼️ {name} はカバーを差し替えた",
+      "failed": "🖼️ カバーは差し替えられなかった"
+    },
+    "beautify_get-cover-style-guide": {
+      "running": "🖼️ カバーの作法を確認中",
+      "done": "🖼️ カバーの作法が分かった",
+      "failed": "🖼️ カバーの作法が見つからなかった"
+    },
+    "beautify_get-html-style-guide": {
+      "running": "🖼️ 組版の作法を確認中",
+      "done": "🖼️ 組版の作法が分かった",
+      "failed": "🖼️ 組版の作法が見つからなかった"
+    },
+    "beautify_list-capabilities": {
+      "running": "🖼️ どう整えられるか確認中",
+      "done": "🖼️ どう整えられるか分かった",
+      "failed": "🖼️ どう整えられるか確認できなかった"
+    },
+    "office_read-document": {
+      "running": "📑 この書類を読んでいる",
+      "done": "📑 この書類を読み終えた",
+      "failed": "📑 この書類は読み取れなかった"
+    },
+    "office_html-to-pdf": {
+      "running": "📑 {name} は PDF を書き出し中",
+      "done": "📑 {name} は PDF を書き出した",
+      "failed": "📑 PDF は書き出せなかった"
+    },
+    "office_list-capabilities": {
+      "running": "📑 扱える書類を確認中",
+      "done": "📑 扱える書類が分かった",
+      "failed": "📑 扱える書類を確認できなかった"
+    },
+    "_plugin": {
+      "running": "🧩 {name} はプラグインで作業中",
+      "done": "🧩 {name} はプラグインでの作業を終えた",
+      "failed": "🧩 プラグインは役に立たなかった"
     }
   },
   "file_output": {

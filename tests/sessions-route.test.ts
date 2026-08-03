@@ -4121,7 +4121,7 @@ describe("sessions route", () => {
       type: "subagent",
       streamKey: "",
       streamStatus: "failed",
-      summary: "历史子会话链接不可恢复",
+      summary: "历史 subagent 链接不可恢复",
     });
     expect(msgUtils.loadLatestAssistantSummaryFromSessionFile).not.toHaveBeenCalled();
   });
@@ -4179,7 +4179,7 @@ describe("sessions route", () => {
       type: "subagent",
       streamKey: "/tmp/agents/hanako/subagent-sessions/child.jsonl",
       streamStatus: "failed",
-      summary: "历史子会话运行状态不可恢复",
+      summary: "历史 subagent 运行状态不可恢复",
     });
     expect(msgUtils.loadLatestAssistantSummaryFromSessionFile).not.toHaveBeenCalled();
   });
