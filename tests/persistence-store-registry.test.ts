@@ -11,6 +11,10 @@ import {
   validateRegistry,
 } from "../scripts/scan-persistent-stores.mjs";
 import {
+  LOCAL_PROVIDER_PLUGINS_DIR,
+  LocalProviderPluginStore,
+} from "../core/local-provider-plugin-store.ts";
+import {
   PERSISTENCE_EXEMPTIONS,
   PERSISTENT_STORES,
 } from "../shared/persistence/store-registry.ts";
@@ -155,6 +159,26 @@ describe("persistent store registry", () => {
       "plugin-data/office/jobs",
       "plugin-data/office/generated",
     ]);
+  });
+
+  // The plugin store owns both the directory name and the file shape. The
+  // declaration once spelled a directory the store had stopped using, with a
+  // file shape that never existed, so anything resolving these patterns looked
+  // for locally defined providers and their keys where they could not be. Take
+  // the spelling from the owning module and check it against real paths.
+  it("declares provider plugin paths the local plugin store actually writes", () => {
+    const providerState = PERSISTENT_STORES.find((store) => store.id === "provider-state")!;
+    const pluginPatterns = providerState.pathPatterns.filter((pattern) => (
+      pattern.startsWith(`${LOCAL_PROVIDER_PLUGINS_DIR}/`)
+    ));
+    expect(pluginPatterns.length).toBe(2);
+
+    const home = path.join(path.sep, "fake-home");
+    const store = new LocalProviderPluginStore(home);
+    const written = [store.manifestPath("acme"), store.providerPath("acme")]
+      .map((absolute) => path.relative(home, absolute).split(path.sep).join("/"));
+    const resolved = pluginPatterns.map((pattern) => pattern.replace(/\{storageId\}/g, "acme"));
+    expect(resolved).toEqual(written);
   });
 
   it("rejects duplicate IDs, overlapping paths, and Windows-only case collisions", () => {
