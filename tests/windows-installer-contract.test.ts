@@ -211,4 +211,14 @@ describe("Windows NSIS installer contract", () => {
     expect(removeTrees).toContain('hanakoInstallTimingMark "removeOwnedInstallTrees" "end"');
     expect(verify).toContain("hanakoPersistInstallTiming");
   });
+
+  it("grants the restricted-app-packages sandbox ACE on the install directory during install", () => {
+    const source = fs.readFileSync(path.join(root, "build", "installer.nsh"), "utf-8");
+    const macro = extractMacro(source, "hanakoGrantSandboxAce");
+    const install = extractMacro(source, "customInstall");
+
+    expect(macro).toContain('"$SYSDIR\\icacls.exe" "$INSTDIR" /grant *S-1-15-2-2:(OI)(CI)(RX)');
+    expect(macro).not.toContain("Quit");
+    expect(install).toContain("hanakoGrantSandboxAce");
+  });
 });

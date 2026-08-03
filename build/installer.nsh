@@ -134,6 +134,24 @@ CRCCheck off
   !insertmacro hanakoInstallTimingMark "installSurfaceSelfCheck" "end"
 !macroend
 
+; 根治 electron/electron#51761：安装目录 DACL 含 orphaned AppContainer SID 时
+; Chromium GPU 沙箱崩溃（0x80000003）。补 S-1-15-2-2（ALL RESTRICTED APPLICATION
+; PACKAGES）的继承 ACE 后沙箱无需降级；该 ACE 同时满足网络沙箱的要求。grant 幂等，
+; 每次安装/更新重发一次即可覆盖上层目录继承来的污染。失败不阻断安装：应用启动侧
+; 还有同一 grant 的运行时自愈兜底。
+!macro hanakoGrantSandboxAce
+  !insertmacro hanakoInstallTimingMark "grantSandboxAce" "start"
+  Push $0
+  DetailPrint "Granting the restricted-app-packages sandbox ACE on the install directory"
+  nsExec::ExecToLog `"$SYSDIR\icacls.exe" "$INSTDIR" /grant *S-1-15-2-2:(OI)(CI)(RX)`
+  Pop $0
+  ${If} $0 != 0
+    DetailPrint "Sandbox ACE grant failed (code $0); the app applies the same grant at startup."
+  ${EndIf}
+  Pop $0
+  !insertmacro hanakoInstallTimingMark "grantSandboxAce" "end"
+!macroend
+
 !macro hanakoWriteInstallDirProcessCleaner _SCRIPT
   Push $0
   FileOpen $0 "${_SCRIPT}" w
@@ -259,6 +277,7 @@ CRCCheck off
 
 !macro customInstall
   !insertmacro hanakoInstallTimingMark "customInstall" "start"
+  !insertmacro hanakoGrantSandboxAce
   !insertmacro hanakoVerifyInstallSurface
   !insertmacro hanakoInstallTimingMark "customInstall" "end"
   !insertmacro hanakoPersistInstallTiming
