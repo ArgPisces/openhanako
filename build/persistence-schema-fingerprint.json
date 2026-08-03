@@ -668,7 +668,7 @@
     ],
     "version": 2
   },
-  "payloadFingerprint": "sha256:a8a11303d9f8d7f6e1df56fd09991b108bf69e4259d927d75e234158276c51b8",
+  "payloadFingerprint": "sha256:2e699bb95cb67e70e1eb7a6cf1d4c5191cd6edf6d88b9ff887a310efd1725485",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3034,8 +3034,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Three migration write sites moved from the generic atomic writer to the owner-only credential writer; file contents and schemas are unchanged, only the write primitive kind recorded for those sites differs.",
-    "payloadFingerprint": "sha256:a8a11303d9f8d7f6e1df56fd09991b108bf69e4259d927d75e234158276c51b8"
+    "compatibilityReason": "Session file registration now canonicalizes paths through the shared filesystem helper, which shifted the line numbers of the registry's recorded write sites; no stored schema, payload, or write primitive changed.",
+    "payloadFingerprint": "sha256:2e699bb95cb67e70e1eb7a6cf1d4c5191cd6edf6d88b9ff887a310efd1725485"
   },
   "schemas": [
     {
@@ -3399,7 +3399,7 @@
       "contract": "SessionFile payload naming, v1 sidecar, ownership, and 72-hour cold-session cleanup protocol",
       "kind": "directory-contract",
       "module": "lib/session-files/session-file-registry.ts",
-      "sourceHash": "sha256:f9f6af474b8602dcf82ff57825c055d8f7e83c81fa4e4d5a8455e7b42a5be8d1",
+      "sourceHash": "sha256:a445b2f0cfeaef8b861dd3c5a52e6dec11693ed70cc846f609198aa22c326192",
       "storeId": "session-files"
     },
     {
@@ -7901,14 +7901,6 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 40,
-      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
-      "sourceFile": "lib/session-files/session-file-registry.ts",
-      "storeId": "session-files"
-    },
-    {
-      "exemptionId": null,
-      "kind": "rename",
       "line": 41,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
@@ -7916,8 +7908,16 @@
     },
     {
       "exemptionId": null,
+      "kind": "rename",
+      "line": 42,
+      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
+      "sourceFile": "lib/session-files/session-file-registry.ts",
+      "storeId": "session-files"
+    },
+    {
+      "exemptionId": null,
       "kind": "remove-path",
-      "line": 46,
+      "line": 47,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7925,7 +7925,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 313,
+      "line": 316,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7933,7 +7933,7 @@
     {
       "exemptionId": null,
       "kind": "copy-file",
-      "line": 326,
+      "line": 329,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7941,7 +7941,7 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 378,
+      "line": 381,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7949,7 +7949,7 @@
     {
       "exemptionId": null,
       "kind": "rename",
-      "line": 379,
+      "line": 382,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7957,15 +7957,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 398,
-      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
-      "sourceFile": "lib/session-files/session-file-registry.ts",
-      "storeId": "session-files"
-    },
-    {
-      "exemptionId": null,
-      "kind": "remove-path",
-      "line": 403,
+      "line": 401,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7981,7 +7973,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 449,
+      "line": 409,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7989,7 +7981,7 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 451,
+      "line": 452,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -7997,7 +7989,15 @@
     {
       "exemptionId": null,
       "kind": "remove-path",
-      "line": 536,
+      "line": 454,
+      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
+      "sourceFile": "lib/session-files/session-file-registry.ts",
+      "storeId": "session-files"
+    },
+    {
+      "exemptionId": null,
+      "kind": "remove-path",
+      "line": 539,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"
@@ -8005,22 +8005,6 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
-      "line": 673,
-      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
-      "sourceFile": "lib/session-files/session-file-registry.ts",
-      "storeId": "session-files"
-    },
-    {
-      "exemptionId": null,
-      "kind": "write-file",
-      "line": 676,
-      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
-      "sourceFile": "lib/session-files/session-file-registry.ts",
-      "storeId": "session-files"
-    },
-    {
-      "exemptionId": null,
-      "kind": "rename",
       "line": 677,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
@@ -8028,8 +8012,24 @@
     },
     {
       "exemptionId": null,
+      "kind": "write-file",
+      "line": 680,
+      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
+      "sourceFile": "lib/session-files/session-file-registry.ts",
+      "storeId": "session-files"
+    },
+    {
+      "exemptionId": null,
+      "kind": "rename",
+      "line": 681,
+      "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
+      "sourceFile": "lib/session-files/session-file-registry.ts",
+      "storeId": "session-files"
+    },
+    {
+      "exemptionId": null,
       "kind": "remove-path",
-      "line": 679,
+      "line": 683,
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
       "sourceFile": "lib/session-files/session-file-registry.ts",
       "storeId": "session-files"

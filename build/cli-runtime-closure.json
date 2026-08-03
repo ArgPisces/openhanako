@@ -111210,6 +111210,11 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "lib/session-files/session-file-registry.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/migrations.ts",
           "kind": "import-statement"
         },
@@ -111239,7 +111244,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); lib/desk/cron-store.ts (import-statement); lib/desk/automation-execution-context.ts (import-statement); +3 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/session-files/session-file-registry.ts (import-statement); core/migrations.ts (import-statement); lib/desk/cron-store.ts (import-statement); +4 more importer(s)."
     },
     {
       "path": "shared/log-redactor.ts",

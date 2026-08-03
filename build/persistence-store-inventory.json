@@ -7253,7 +7253,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 40,
+      "line": 41,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(dest), { recursive: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7262,7 +7262,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 41,
+      "line": 42,
       "kind": "rename",
       "excerpt": "fs.renameSync(src, dest)",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7271,7 +7271,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 46,
+      "line": 47,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(sessionFileSidecarPath(sessionPath), { force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7280,7 +7280,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 313,
+      "line": 316,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(stagedCacheDir, { recursive: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7289,7 +7289,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 326,
+      "line": 329,
       "kind": "copy-file",
       "excerpt": "fs.cpSync(sourceBytesPath, path.join(stagedCacheDir, managedName), { recursive: !!sourceFile.isDirectory, force: false, errorOnExist: true, })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7298,7 +7298,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 378,
+      "line": 381,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(targetCacheDir), { recursive: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7307,7 +7307,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 379,
+      "line": 382,
       "kind": "rename",
       "excerpt": "fs.renameSync(stagedCacheDir, targetCacheDir)",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7316,7 +7316,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 398,
+      "line": 401,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(targetSidecarPath, { force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7325,7 +7325,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 403,
+      "line": 406,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(stagedCacheDir, { recursive: true, force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7334,7 +7334,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 406,
+      "line": 409,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(targetCacheDir, { recursive: true, force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7343,7 +7343,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 449,
+      "line": 452,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(sidecarPath, { force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7352,7 +7352,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 451,
+      "line": 454,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(targetCacheDir, { recursive: true, force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7361,7 +7361,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 536,
+      "line": 539,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(target, { recursive: true, force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7370,7 +7370,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 673,
+      "line": 677,
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(sidecarPath), { recursive: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7379,7 +7379,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 676,
+      "line": 680,
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(tmpPath, `${JSON.stringify(sidecar, null, 2)}\\n`, \"utf-8\")",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7388,7 +7388,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 677,
+      "line": 681,
       "kind": "rename",
       "excerpt": "fs.renameSync(tmpPath, sidecarPath)",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
@@ -7397,7 +7397,7 @@
     },
     {
       "sourceFile": "lib/session-files/session-file-registry.ts",
-      "line": 679,
+      "line": 683,
       "kind": "remove-path",
       "excerpt": "fs.rmSync(tmpPath, { force: true })",
       "reason": "Stages payload bytes or updates SessionFile sidecars under the managed cache.",
