@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import ts from "typescript";
 
 import { scanPersistentStores } from "./scan-persistent-stores.mjs";
 
@@ -89,12 +90,109 @@ function readRepositorySource(rootDir, relativePath, sourceOverrides) {
   return fs.readFileSync(absolutePath);
 }
 
+const SCRIPT_KINDS = new Map([
+  [".ts", ts.ScriptKind.TS],
+  [".tsx", ts.ScriptKind.TSX],
+  [".mts", ts.ScriptKind.TS],
+  [".cts", ts.ScriptKind.TS],
+  [".js", ts.ScriptKind.JS],
+  [".jsx", ts.ScriptKind.JSX],
+  [".mjs", ts.ScriptKind.JS],
+  [".cjs", ts.ScriptKind.JS],
+]);
+
+/**
+ * A JSDoc block is still a comment. getChildren() serves JSDoc nodes alongside
+ * real syntax, so a digest that walks children naively hashes doc text — and
+ * file headers in this repository are JSDoc, so the very edits this guard was
+ * loudest about would keep demanding review. Everything in the JSDoc kind
+ * range is excluded from the digest wholesale.
+ */
+function isJsDocKind(kind) {
+  return kind >= ts.SyntaxKind.FirstJSDocNode && kind <= ts.SyntaxKind.LastJSDocNode;
+}
+
+/**
+ * Hash what executes, not what the file happens to say.
+ *
+ * This tripwire guards the shape of what reaches disk. A comment cannot change
+ * a persisted byte, yet hashing raw file bytes made every comment edit demand a
+ * schema review — which is what most reviews here ended up being, until the
+ * recorded reasoning became a sentence people copied forward. A guard answered
+ * by reflex has stopped guarding.
+ *
+ * So the digest is taken over the parse tree, not the raw bytes and not a flat
+ * token stream. A flat token stream is not enough: whitespace between tokens is
+ * semantic at JavaScript's restricted productions — `return {…}` and
+ * `return\n{…}` share one token sequence while automatic semicolon insertion
+ * gives them different meanings — so every non-leaf node contributes its kind
+ * name and explicit open/close markers, which makes those two parses digest
+ * differently. Leaf tokens are kept verbatim and length-prefixed, so whitespace
+ * *inside* a string or template literal — content that can reach disk — still
+ * counts, and one piece sequence cannot be re-cut into another that digests the
+ * same. (A NUL separator would do the same job, but writing a raw NUL into this
+ * file makes git treat it as binary and lose diffs.) A shebang line is
+ * interpreter-selecting and therefore executable; it is digested too, even
+ * though the parser files it under trivia.
+ *
+ * Comments never enter the digest: line and block comments are trivia the
+ * walk never sees, and JSDoc — which getChildren() does serve as nodes — is
+ * skipped explicitly. Doc edits in guarded modules require no schema review.
+ *
+ * The kind names come from the pinned TypeScript's SyntaxKind table, so a
+ * TypeScript upgrade may shift them and demand one honest repin; that failure
+ * is loud, never silent.
+ *
+ * Parse failures throw. Falling back to a raw byte hash would silently restore
+ * the old semantics on exactly the files least understood.
+ */
+function executableSourceHash(rootDir, relativePath, sourceOverrides) {
+  const sourcePath = normalizeRepositoryPath(relativePath);
+  const text = readRepositorySource(rootDir, sourcePath, sourceOverrides).toString("utf-8");
+  const scriptKind = SCRIPT_KINDS.get(path.extname(sourcePath).toLowerCase());
+  if (scriptKind === undefined) {
+    throw new Error(`persistence schema source has no known script kind: ${sourcePath}`);
+  }
+  const source = ts.createSourceFile(sourcePath, text, ts.ScriptTarget.Latest, true, scriptKind);
+  const diagnostics = source.parseDiagnostics;
+  if (!Array.isArray(diagnostics)) {
+    // parseDiagnostics is how the parser reports syntax errors here. If a
+    // TypeScript upgrade stops exposing it, hashing would continue with no
+    // syntax validation at all — refuse loudly instead of guarding less.
+    throw new Error(`persistence schema parser exposed no parseDiagnostics; cannot verify a clean parse: ${sourcePath}`);
+  }
+  if (diagnostics.length > 0) {
+    const detail = ts.flattenDiagnosticMessageText(diagnostics[0].messageText, " ");
+    throw new Error(`persistence schema source failed to parse: ${sourcePath}: ${detail}`);
+  }
+  const pieces = [];
+  const shebang = text.match(/^#![^\r\n]*/);
+  if (shebang) pieces.push(`#!${shebang[0].length}:${shebang[0]}`);
+  const walk = (node) => {
+    if (isJsDocKind(node.kind)) return;
+    const children = node.getChildren(source).filter((child) => !isJsDocKind(child.kind));
+    if (children.length === 0) {
+      const tokenText = node.getText(source);
+      if (tokenText) pieces.push(`${ts.SyntaxKind[node.kind]}#${tokenText.length}:${tokenText}`);
+      return;
+    }
+    pieces.push(`${ts.SyntaxKind[node.kind]}(`);
+    for (const child of children) walk(child);
+    pieces.push(")");
+  };
+  walk(source);
+  if (pieces.length === 0 && text.trim().length > 0) {
+    throw new Error(`persistence schema source yielded no tokens: ${sourcePath}`);
+  }
+  return sha256(pieces.join(""));
+}
+
 function sourceContract(rootDir, schemaSource, sourceOverrides) {
   const module = normalizeRepositoryPath(schemaSource.module);
   return {
     contract: schemaSource.contract,
     module,
-    sourceHash: sha256(readRepositorySource(rootDir, module, sourceOverrides)),
+    sourceHash: executableSourceHash(rootDir, module, sourceOverrides),
   };
 }
 
@@ -199,7 +297,7 @@ async function sqliteContract(rootDir, store, sourceOverrides) {
     kind: "sqlite-runtime",
     module: normalizeRepositoryPath(store.schemaSource.module),
     runtimeSchema,
-    sourceHash: sha256(readRepositorySource(rootDir, store.schemaSource.module, sourceOverrides)),
+    sourceHash: executableSourceHash(rootDir, store.schemaSource.module, sourceOverrides),
     storeId: store.id,
   };
 }
@@ -252,7 +350,7 @@ async function piSessionContract(rootDir, store, sourceOverrides) {
       return {
         contract: extension,
         module,
-        sourceHash: sha256(readRepositorySource(rootDir, module, sourceOverrides)),
+        sourceHash: executableSourceHash(rootDir, module, sourceOverrides),
       };
     })
     .sort((left, right) => left.module.localeCompare(right.module));
@@ -306,7 +404,7 @@ async function schemaEntry(rootDir, store, sourceOverrides) {
   const protocolModules = (store.protocolModules || [])
     .map((module) => ({
       module: normalizeRepositoryPath(module),
-      sourceHash: sha256(readRepositorySource(rootDir, module, sourceOverrides)),
+      sourceHash: executableSourceHash(rootDir, module, sourceOverrides),
     }))
     .sort((left, right) => left.module.localeCompare(right.module));
   return protocolModules.length > 0 ? { ...entry, protocolModules } : entry;

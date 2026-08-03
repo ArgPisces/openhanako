@@ -112,7 +112,7 @@ describe("persistence schema tripwire", () => {
     const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
     const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
     const module = "shared/data-epoch.cjs";
-    const mutatedSource = `${fs.readFileSync(path.join(ROOT, module), "utf-8")}\n// schema drift mutation\n`;
+    const mutatedSource = `${fs.readFileSync(path.join(ROOT, module), "utf-8")}\nexport const schemaDriftProbe = 1;\n`;
 
     await expect(assertCommittedPersistenceSchemaFingerprint({
       rootDir: ROOT,
@@ -122,7 +122,7 @@ describe("persistence schema tripwire", () => {
     })).rejects.toThrow(/persistence schema fingerprint mismatch[\s\S]*compatible addition[\s\S]*breaking change/);
 
     const coordinatorModule = "core/data-epoch-coordinator.ts";
-    const mutatedCoordinator = `${fs.readFileSync(path.join(ROOT, coordinatorModule), "utf-8")}\n// protocol drift mutation\n`;
+    const mutatedCoordinator = `${fs.readFileSync(path.join(ROOT, coordinatorModule), "utf-8")}\nexport const protocolDriftProbe = 1;\n`;
     await expect(assertCommittedPersistenceSchemaFingerprint({
       rootDir: ROOT,
       committedFingerprint: committed,
@@ -131,11 +131,98 @@ describe("persistence schema tripwire", () => {
     })).rejects.toThrow(/persistence schema fingerprint mismatch/);
   });
 
+  it("ignores comment-only drift in the sources it hashes", async () => {
+    // The tripwire exists to catch changes to what lands on disk, and a comment
+    // cannot change a persisted byte. Hashing whole files meant it fired on
+    // every comment edit anyway, which is most of what it ever fired on — so
+    // the reviews it demanded became a copied sentence, and a guard answered by
+    // reflex stops being a guard. Hash the parse tree instead: comments and
+    // whitespace between tokens drop out, everything executable stays.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+
+    for (const module of ["shared/data-epoch.cjs", "core/data-epoch-coordinator.ts", "server/index.ts"]) {
+      const original = fs.readFileSync(path.join(ROOT, module), "utf-8");
+      const commented = `// leading comment mutation\n${original}\n/* trailing block mutation */\n`;
+      await expect(assertCommittedPersistenceSchemaFingerprint({
+        rootDir: ROOT,
+        committedFingerprint: committed,
+        inventory,
+        sourceOverrides: new Map([[module, commented]]),
+      })).resolves.not.toThrow();
+    }
+  });
+
+  it("ignores JSDoc drift, including the file headers this guard once taxed", async () => {
+    // `/** … */` blocks are parsed as JSDoc nodes, which getChildren() serves
+    // alongside real syntax. A digest that walks children naively therefore
+    // hashes doc comments — and file headers in this repository are JSDoc, so
+    // the edits this guard was loudest about would still demand review. A
+    // JSDoc node is still a comment: it must stay out of the digest.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+
+    const markers: Array<[string, string]> = [
+      ["server/index.ts", "HanaAgent Server — HTTP + WebSocket API"],
+      ["shared/data-epoch.cjs", "Reads both the legacy v1 high-water stamp"],
+    ];
+    for (const [module, marker] of markers) {
+      const original = fs.readFileSync(path.join(ROOT, module), "utf-8");
+      expect(original).toContain(marker);
+      const mutated = `/** inserted JSDoc header probe */\n${original.replace(marker, `${marker} (doc drift probe)`)}`;
+      await expect(assertCommittedPersistenceSchemaFingerprint({
+        rootDir: ROOT,
+        committedFingerprint: committed,
+        inventory,
+        sourceOverrides: new Map([[module, mutated]]),
+      })).resolves.not.toThrow();
+    }
+  });
+
+  it("catches a statement-boundary rewrite that keeps the flat token stream intact", async () => {
+    // `return { … };` and `return\n{ … };` flatten to identical token
+    // sequences, but automatic semicolon insertion terminates the second
+    // `return` at the line break: the function starts returning undefined and
+    // the object literal decays into a dead labeled block. Whitespace between
+    // tokens is semantic at JavaScript's restricted productions, so the digest
+    // must encode the parse tree, not just its leaves.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+    const module = "shared/data-epoch.cjs";
+    const original = fs.readFileSync(path.join(ROOT, module), "utf-8");
+    const target = 'return { status: "corrupt", filePath, detail };';
+    expect(original).toContain(target);
+    const mutated = original.replace(target, 'return\n  { status: "corrupt", filePath, detail };');
+
+    await expect(assertCommittedPersistenceSchemaFingerprint({
+      rootDir: ROOT,
+      committedFingerprint: committed,
+      inventory,
+      sourceOverrides: new Map([[module, mutated]]),
+    })).rejects.toThrow(/persistence schema fingerprint mismatch/);
+  });
+
+  it("keeps string and template literal content inside the hash", async () => {
+    // Whitespace is only ignorable *between* tokens. Inside a template literal
+    // it is content that can reach disk, so it has to stay hashed.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+    const module = "core/data-epoch-coordinator.ts";
+    const original = fs.readFileSync(path.join(ROOT, module), "utf-8");
+
+    await expect(assertCommittedPersistenceSchemaFingerprint({
+      rootDir: ROOT,
+      committedFingerprint: committed,
+      inventory,
+      sourceOverrides: new Map([[module, `${original}\nexport const probe = \`a  b\`;\n`]]),
+    })).rejects.toThrow(/persistence schema fingerprint mismatch/);
+  });
+
   it("rejects a repinned payload until the committed review pins that exact payload", async () => {
     const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
     const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
     const module = "shared/data-epoch.cjs";
-    const mutatedSource = `${fs.readFileSync(path.join(ROOT, module), "utf-8")}\n// reviewed schema mutation\n`;
+    const mutatedSource = `${fs.readFileSync(path.join(ROOT, module), "utf-8")}\nexports.reviewedSchemaProbe = 1;\n`;
     const sourceOverrides = new Map([[module, mutatedSource]]);
     const reviewedMutation = await generatePersistenceSchemaFingerprint({
       rootDir: ROOT,

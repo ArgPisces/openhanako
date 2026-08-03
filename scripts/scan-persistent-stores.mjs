@@ -299,7 +299,10 @@ export function discoverSites(rootDir = REPOSITORY_ROOT, sourceOverrides = new M
     || a.kind.localeCompare(b.kind)
     || a.excerpt.localeCompare(b.excerpt)
   ))) {
-    const slot = `${site.sourceFile} ${site.kind} ${site.excerpt}`;
+    // JSON encoding keeps the slot key injective on the triple without smuggling
+    // unprintable separator bytes into this source file (a raw NUL here makes
+    // grep and ripgrep treat the whole file as binary).
+    const slot = JSON.stringify([site.sourceFile, site.kind, site.excerpt]);
     const next = ordinals.get(slot) ?? 0;
     site.ordinal = next;
     ordinals.set(slot, next + 1);
