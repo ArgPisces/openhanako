@@ -330,13 +330,15 @@ describe("reasoning replay execution", () => {
       }],
     };
 
-    expect(normalizeProviderPayload(payload, {
+    const result = normalizeProviderPayload(payload, {
       id: "private-reasoning-model",
       provider: "custom",
       api: "openai-completions",
       baseUrl: "https://example.test/v1",
       reasoning: true,
-    }, { mode: "chat", reasoningLevel: "high" })).toBe(payload);
+    }, { mode: "chat", reasoningLevel: "high" });
+    expect(result).toEqual({ ...payload, max_tokens: 65_536 });
+    expect(result.messages).toEqual(payload.messages);
     expect(payload.messages[0]).not.toHaveProperty("reasoning_content");
   });
 });

@@ -318,6 +318,7 @@ describe("provider-compat/kimi", () => {
       provider: "openai",
       api: "openai-completions",
     }, { mode: "chat" });
-    expect(nonKimiResult).toBe(payload);
+    expect(nonKimiResult).toEqual({ ...payload, max_tokens: 65_536 });
+    expect(nonKimiResult.tools).toEqual(payload.tools);
   });
 });
