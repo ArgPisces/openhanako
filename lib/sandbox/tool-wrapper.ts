@@ -10,6 +10,7 @@
 
 import fs from "fs";
 import path from "path";
+import { canonicalFilesystemPathSync, filesystemIdentityKeySync } from "../../shared/link-aware-fs.ts";
 import { t } from "../i18n.ts";
 import { normalizeWin32ShellPath } from "./win32-path.ts";
 
@@ -54,23 +55,20 @@ function toolPathParam(params) {
   return null;
 }
 
-function normalizeExistingOrResolvedPath(filePath) {
-  const resolved = path.resolve(filePath);
-  try { return fs.realpathSync(resolved); }
-  catch { return resolved; }
-}
-
+/** 两侧都必须是身份键。 */
 function isInsideRoot(filePath, root) {
   const rel = path.relative(root, filePath);
   return rel === "" || (!!rel && !rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
 function externalReadGrantCovers(targetPath, grantPath) {
-  const target = normalizeExistingOrResolvedPath(targetPath);
-  const grant = normalizeExistingOrResolvedPath(grantPath);
+  // 判定是比较，走身份键；statSync 要落到真实路径，所以另留一份 canonical。
+  const target = filesystemIdentityKeySync(targetPath);
+  const grantPathCanonical = canonicalFilesystemPathSync(grantPath);
+  const grant = filesystemIdentityKeySync(grantPathCanonical);
   if (target === grant) return true;
   try {
-    return fs.statSync(grant).isDirectory() && isInsideRoot(target, grant);
+    return fs.statSync(grantPathCanonical).isDirectory() && isInsideRoot(target, grant);
   } catch {
     return false;
   }

@@ -69,6 +69,9 @@ function deepClone(value) {
   return value == null ? value : structuredClone(value);
 }
 
+// 这里刻意只做纯字符串归一，不走文件系统归一原语：比较的是 session JSONL 的
+// 定位路径（可能已经不存在，甚至属于另一台机器上的备份），一旦引入 realpath 就
+// 会平白多出磁盘 I/O，还会让 fork 的来源/目标映射依赖当下磁盘状态。
 function samePath(left, right) {
   const normalizedLeft = text(left);
   const normalizedRight = text(right);

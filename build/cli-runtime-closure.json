@@ -111230,6 +111230,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/file-ref/resource-io.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/agent-manager.ts",
           "kind": "import-statement"
         },
@@ -111242,9 +111247,39 @@
           "root": "server-bootstrap",
           "from": "core/session-manifest/legacy-migration.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/sandbox/win32-policy.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/sandbox/tool-wrapper.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/resource-io/resource-access-policy.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/bridge/media-roots.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/bridge/media-utils.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/bridge/media-publisher.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/session-files/session-file-registry.ts (import-statement); core/migrations.ts (import-statement); lib/desk/cron-store.ts (import-statement); +4 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/session-files/session-file-registry.ts (import-statement); core/migrations.ts (import-statement); lib/desk/cron-store.ts (import-statement); +11 more importer(s)."
     },
     {
       "path": "shared/log-redactor.ts",

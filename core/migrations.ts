@@ -4295,21 +4295,13 @@ function normalizeLegacyStorageKind(ref, hanakoHome) {
   if (storageKind !== "managed_cache") return storageKind;
 
   const managedRoot = path.join(hanakoHome, "session-files");
-  const resolved = normalizeExistingOrResolvedPathForMigration(ref.filePath);
-  const root = normalizeExistingOrResolvedPathForMigration(managedRoot);
+  // 纯比较，两侧都走共享身份键。
+  const resolved = filesystemIdentityKeySync(ref.filePath);
+  const root = filesystemIdentityKeySync(managedRoot);
   const rel = path.relative(root, resolved);
   return rel === "" || (!!rel && !rel.startsWith("..") && !path.isAbsolute(rel))
     ? "managed_cache"
     : "external";
-}
-
-function normalizeExistingOrResolvedPathForMigration(filePath) {
-  const resolved = path.resolve(filePath);
-  try {
-    return fs.realpathSync(resolved);
-  } catch {
-    return resolved;
-  }
 }
 
 function legacyBrowserScreenshot(msg) {

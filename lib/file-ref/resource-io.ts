@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { canonicalFilesystemPathSync, filesystemIdentityKeySync } from "../../shared/link-aware-fs.ts";
 import { detectMime, extOfName, inferFileKind } from "../file-metadata.ts";
 
 const DEFAULT_CONFLICT_POLICY = "fail";
@@ -8,15 +9,11 @@ type PathFileRef = { type: "path"; path: string };
 type SessionFileRef = { type: "session_file"; fileId: string; sessionId?: string; sessionPath?: string };
 type FileRef = PathFileRef | SessionFileRef;
 
-function normalizeExistingOrResolvedPath(filePath) {
-  const resolved = path.resolve(filePath);
-  try { return fs.realpathSync(resolved); }
-  catch { return resolved; }
-}
-
+// 目标还不存在时（copy 的落点），把已存在的那一段祖先解析掉再把剩下的接回去。
+// 共享原语只认存在的路径，所以这个上溯逻辑留在本地，底层归一交给它。
 function normalizePossiblyMissingPath(filePath) {
   const resolved = path.resolve(filePath);
-  if (fs.existsSync(resolved)) return normalizeExistingOrResolvedPath(resolved);
+  if (fs.existsSync(resolved)) return canonicalFilesystemPathSync(resolved);
   const parts = [];
   let cursor = resolved;
   while (!fs.existsSync(cursor)) {
@@ -25,10 +22,11 @@ function normalizePossiblyMissingPath(filePath) {
     parts.unshift(path.basename(cursor));
     cursor = parent;
   }
-  const base = normalizeExistingOrResolvedPath(cursor);
+  const base = canonicalFilesystemPathSync(cursor);
   return parts.length ? path.join(base, ...parts) : base;
 }
 
+/** 两侧都必须是身份键。 */
 function isInsideRoot(filePath, root) {
   const rel = path.relative(root, filePath);
   return rel === "" || (!!rel && !rel.startsWith("..") && !path.isAbsolute(rel));
@@ -37,7 +35,7 @@ function isInsideRoot(filePath, root) {
 function normalizeRoot(root, cwd) {
   if (!root || typeof root !== "string") return null;
   const absolute = path.isAbsolute(root) ? root : path.resolve(cwd || process.cwd(), root);
-  return normalizeExistingOrResolvedPath(absolute);
+  return canonicalFilesystemPathSync(absolute);
 }
 
 function allowedRootsFor(allowedRoots, cwd) {
@@ -51,16 +49,16 @@ function allowedRootsFor(allowedRoots, cwd) {
 function assertParentInsideAllowedRoots(targetPath, allowedRoots, cwd) {
   const roots = allowedRootsFor(allowedRoots, cwd);
   if (!roots.length) throw new Error("copy target has no allowed roots");
-  const normalizedTarget = normalizePossiblyMissingPath(path.dirname(targetPath));
-  if (roots.some((root) => isInsideRoot(normalizedTarget, root))) return;
+  const targetKey = filesystemIdentityKeySync(normalizePossiblyMissingPath(path.dirname(targetPath)));
+  if (roots.some((root) => isInsideRoot(targetKey, filesystemIdentityKeySync(root)))) return;
   throw new Error(`copy target is outside allowed roots: ${targetPath}`);
 }
 
 function assertExistingPathInsideAllowedRoots(filePath, allowedRoots, cwd, label) {
   const roots = allowedRootsFor(allowedRoots, cwd);
   if (!roots.length) throw new Error(`${label} has no allowed roots`);
-  const normalizedPath = normalizeExistingOrResolvedPath(filePath);
-  if (roots.some((root) => isInsideRoot(normalizedPath, root))) return;
+  const pathKey = filesystemIdentityKeySync(filePath);
+  if (roots.some((root) => isInsideRoot(pathKey, filesystemIdentityKeySync(root)))) return;
   throw new Error(`${label} is outside allowed roots: ${filePath}`);
 }
 
