@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 import YAML from "js-yaml";
 import { safeCopyDir } from '../shared/safe-fs.ts';
+import { writeSecretFileSync } from '../shared/secret-fs.ts';
 import { AppError } from '../shared/errors.ts';
 import { errorBus } from '../shared/error-bus.ts';
 import {
@@ -195,7 +196,7 @@ function seedDefaultAgent(agentsDir, productDir, userDir) {
     ...(raw.memory || {}),
     enabled: true,
   };
-  fs.writeFileSync(cfgDest, YAML.dump(raw, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
+  writeSecretFileSync(cfgDest, YAML.dump(raw, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }));
 
 
   // 与 createAgent 同策略：按 yuan（= agentId）+ locale 优先，通用 example 兜底。

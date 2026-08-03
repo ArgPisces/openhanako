@@ -23,7 +23,7 @@ import path from "path";
 import { AppError } from "../shared/errors.ts";
 import { errorBus } from "../shared/error-bus.ts";
 import { CONFIG_SCOPE_BACKUP_SUFFIX } from "../shared/migrate-config-scope.ts";
-import { ensureSecretDirModeSync, ensureSecretFileModeSync } from "../shared/secret-fs.ts";
+import { ensureSecretDirModeSync, ensureSecretFileModeSync, SECRET_TMP_SUFFIX } from "../shared/secret-fs.ts";
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "./local-provider-plugin-store.ts";
 import { MIGRATION_BACKUPS_DIR } from "./migration-backups.ts";
 import { PLUGIN_CONFIG_FILENAME, PLUGIN_DATA_DIRNAME } from "./plugin-config.ts";
@@ -62,6 +62,14 @@ const AGENT_CONFIG_FILE = "config.yaml";
  * would ever bring an older one up to the current contract.
  */
 const AGENT_CONFIG_BACKUP_FILE = `${AGENT_CONFIG_FILE}${CONFIG_SCOPE_BACKUP_SUFFIX}`;
+/**
+ * Older versions rewrote agent configuration by writing a temporary copy with
+ * whatever permissions the system hands out by default and then renaming it
+ * over the original. A crash in between leaves that copy sitting there with the
+ * whole configuration in it, and nothing ever rewrites it, so it would keep
+ * those permissions for as long as the data directory exists.
+ */
+const AGENT_CONFIG_TMP_FILE = `${AGENT_CONFIG_FILE}${SECRET_TMP_SUFFIX}`;
 const MAX_TREE_DEPTH = 6;
 
 interface HealOptions {
@@ -120,6 +128,7 @@ export function healCredentialFileModes({ hanakoHome, log = () => {} }: HealOpti
   for (const agentDir of subdirectories(path.join(hanakoHome, "agents"))) {
     healFile(path.join(agentDir, AGENT_CONFIG_FILE));
     healFile(path.join(agentDir, AGENT_CONFIG_BACKUP_FILE));
+    healFile(path.join(agentDir, AGENT_CONFIG_TMP_FILE));
   }
 
   for (const tree of SECRET_TREES) {
@@ -142,6 +151,7 @@ export function healCredentialFileModes({ hanakoHome, log = () => {} }: HealOpti
     for (const agentDir of subdirectories(path.join(checkpoint, "agents"))) {
       healFile(path.join(agentDir, AGENT_CONFIG_FILE));
       healFile(path.join(agentDir, AGENT_CONFIG_BACKUP_FILE));
+      healFile(path.join(agentDir, AGENT_CONFIG_TMP_FILE));
     }
   }
 

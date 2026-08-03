@@ -1416,6 +1416,33 @@
       "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
     },
     {
+      "path": "core/migration-backups.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/provider-catalog.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/migrations.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/credential-file-healer.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/credential-backup-retention.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/provider-catalog.ts (import-statement); core/migrations.ts (import-statement); core/credential-file-healer.ts (import-statement); +1 more importer(s)."
+    },
+    {
       "path": "core/migrations.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112135,6 +112162,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/first-run.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/web-session-store.ts",
           "kind": "import-statement"
         },
@@ -112144,7 +112176,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by shared/migrate-config-scope.ts (import-statement); core/migrate-providers.ts (import-statement); core/provider-media-config.ts (import-statement); +11 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by shared/migrate-config-scope.ts (import-statement); core/migrate-providers.ts (import-statement); core/provider-media-config.ts (import-statement); +12 more importer(s)."
     },
     {
       "path": "shared/server-info-probe.cjs",
@@ -112520,9 +112552,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9627,
+    "totalFiles": 9628,
     "byInputType": {
-      "source-graph": 649,
+      "source-graph": 650,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

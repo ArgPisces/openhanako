@@ -49,6 +49,7 @@ const EXCLUSIVE_CREDENTIAL_WRITERS = [
 const MIXED_CREDENTIAL_WRITERS = [
   "core/provider-registry.ts",
   "core/migrations.ts",
+  "core/first-run.ts",
 ];
 
 /**

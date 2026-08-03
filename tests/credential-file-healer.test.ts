@@ -6,6 +6,7 @@ import path from "path";
 import { healCredentialFileModes } from "../core/credential-file-healer.ts";
 import { LOCAL_PROVIDER_PLUGINS_DIR } from "../core/local-provider-plugin-store.ts";
 import { PLUGIN_CONFIG_FILENAME, PLUGIN_DATA_DIRNAME } from "../core/plugin-config.ts";
+import { SECRET_TMP_SUFFIX } from "../shared/secret-fs.ts";
 
 const POSIX = process.platform !== "win32";
 
@@ -96,6 +97,27 @@ describe.skipIf(!POSIX)("healCredentialFileModes", () => {
     expect(modeOf(path.join(root, live))).toBe(0o600);
     expect(modeOf(path.join(root, inCheckpoint))).toBe(0o600);
     expect(result.healed).toContain(live);
+  });
+
+  // Older versions rewrote agent configuration through a temporary copy written
+  // with default permissions. A crash before the rename leaves that copy behind
+  // with the full configuration in it, and nothing ever rewrites it, so the
+  // credentials would stay readable forever.
+  it("tightens a leftover temporary copy of an agent configuration", () => {
+    const root = makeHome();
+    const live = path.join("agents", "hanako", `config.yaml${SECRET_TMP_SUFFIX}`);
+    const inCheckpoint = path.join(
+      "checkpoints", "session-manifest", "cp-1", "agents", "hanako", `config.yaml${SECRET_TMP_SUFFIX}`,
+    );
+    writeOpen(live, "api:\n  api_key: value\n");
+    writeOpen(inCheckpoint, "api:\n  api_key: value\n");
+
+    const result = healCredentialFileModes({ hanakoHome: root });
+
+    expect(modeOf(path.join(root, live))).toBe(0o600);
+    expect(modeOf(path.join(root, inCheckpoint))).toBe(0o600);
+    expect(result.healed).toContain(live);
+    expect(result.healed).toContain(inCheckpoint);
   });
 
   it("tightens migration backup directories and everything inside them", () => {

@@ -380,9 +380,7 @@ function cleanDanglingProviderRefs(ctx) {
     }
 
     if (changed) {
-      const tmp = cfgPath + ".tmp";
-      fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
-      fs.renameSync(tmp, cfgPath);
+      writeSecretFileSync(cfgPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }));
     }
   }
 
@@ -890,9 +888,7 @@ function migrateChannelsToGlobalDefaultOff(ctx) {
     }
 
     if (changed) {
-      const tmp = cfgPath + ".tmp";
-      fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
-      fs.renameSync(tmp, cfgPath);
+      writeSecretFileSync(cfgPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }));
     }
   }
 
@@ -952,9 +948,7 @@ function migrateBridgeReadOnlyToGlobal(ctx) {
     delete config.bridge.readOnly;
     if (Object.keys(config.bridge).length === 0) delete config.bridge;
 
-    const tmp = cfgPath + ".tmp";
-    fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
-    fs.renameSync(tmp, cfgPath);
+    writeSecretFileSync(cfgPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }));
     log(`[migrations] #9 ${dir.name}: 移除 agent-level bridge.readOnly`);
   }
 
@@ -1049,9 +1043,7 @@ function migrateUserNameToGlobalPreferences(ctx) {
     delete config.user.name;
     if (Object.keys(config.user).length === 0) delete config.user;
 
-    const tmp = cfgPath + ".tmp";
-    fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
-    fs.renameSync(tmp, cfgPath);
+    writeSecretFileSync(cfgPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }));
     log(`[migrations] #51 ${dir.name}: 移除与全局值重复的 user.name`);
   }
 }
@@ -1112,9 +1104,7 @@ function migrateClearUserNameOverrides(ctx) {
     delete config.user.name;
     if (Object.keys(config.user).length === 0) delete config.user;
 
-    const tmp = cfgPath + ".tmp";
-    fs.writeFileSync(tmp, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }), "utf-8");
-    fs.renameSync(tmp, cfgPath);
+    writeSecretFileSync(cfgPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }));
     log(`[migrations] #52 ${dir.name}: 移除失效的 user.name 覆盖`);
   }
 }
@@ -1405,9 +1395,7 @@ function migrateVisionToImage(ctx) {
         quotingType: "\"",
         forceQuotes: false,
       });
-      const tmp = ymlPath + ".tmp";
-      fs.writeFileSync(tmp, yamlStr, "utf-8");
-      fs.renameSync(tmp, ymlPath);
+      writeSecretFileSync(ymlPath, yamlStr);
     }
   }
 
@@ -1434,13 +1422,10 @@ function migrateVisionToImage(ctx) {
       overrideCount++;
     }
     if (changed) {
-      const tmp = cfgPath + ".tmp";
-      fs.writeFileSync(
-        tmp,
+      writeSecretFileSync(
+        cfgPath,
         YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: "\"" }),
-        "utf-8"
       );
-      fs.renameSync(tmp, cfgPath);
     }
   }
 
@@ -3243,13 +3228,10 @@ function cleanupSummarizerCompilerRemnants(ctx) {
     }
 
     if (changed) {
-      const tmp = cfgPath + ".tmp";
-      fs.writeFileSync(
-        tmp,
+      writeSecretFileSync(
+        cfgPath,
         YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: "\"" }),
-        "utf-8"
       );
-      fs.renameSync(tmp, cfgPath);
     }
   }
 }
@@ -3424,9 +3406,7 @@ function migrateGeminiOpenAICompatToNative(ctx) {
       quotingType: "\"",
       forceQuotes: false,
     });
-    const tmp = ymlPath + ".tmp";
-    fs.writeFileSync(tmp, yamlStr, "utf-8");
-    fs.renameSync(tmp, ymlPath);
+    writeSecretFileSync(ymlPath, yamlStr);
     if (ctx.providerRegistry) {
       ctx.providerRegistry._addedModelsCache = null;
       ctx.providerRegistry._addedModelsMtime = 0;
@@ -3638,9 +3618,7 @@ function repairModelsJsonPiInputSchema(ctx) {
   }
 
   if (patched > 0) {
-    const tmp = modelsJsonPath + ".tmp";
-    fs.writeFileSync(tmp, JSON.stringify(raw, null, 4) + "\n", "utf-8");
-    fs.renameSync(tmp, modelsJsonPath);
+    writeSecretFileSync(modelsJsonPath, JSON.stringify(raw, null, 4) + "\n");
   }
   return patched;
 }
@@ -3747,13 +3725,10 @@ function promoteAgentVideoOverrides(ctx) {
       if (Object.keys(cfg.models.overrides).length === 0) {
         delete cfg.models.overrides;
       }
-      const tmp = cfgPath + ".tmp";
-      fs.writeFileSync(
-        tmp,
+      writeSecretFileSync(
+        cfgPath,
         YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: "\"" }),
-        "utf-8",
       );
-      fs.renameSync(tmp, cfgPath);
     }
   }
 
@@ -3761,9 +3736,8 @@ function promoteAgentVideoOverrides(ctx) {
     const header =
       "# HanaAgent 供应商配置（全局，跨 agent 共享）\n" +
       "# 由设置页面管理\n\n";
-    const tmp = ymlPath + ".tmp";
-    fs.writeFileSync(
-      tmp,
+    writeSecretFileSync(
+      ymlPath,
       header + YAML.dump(raw, {
         indent: 2,
         lineWidth: -1,
@@ -3771,9 +3745,7 @@ function promoteAgentVideoOverrides(ctx) {
         quotingType: "\"",
         forceQuotes: false,
       }),
-      "utf-8",
     );
-    fs.renameSync(tmp, ymlPath);
   }
 
   return patched;
@@ -4095,9 +4067,8 @@ function repairLegacyDeepSeekProviderModelIds(ctx) {
     const header =
       "# HanaAgent 供应商配置（全局，跨 agent 共享）\n" +
       "# 由设置页面管理\n\n";
-    const tmp = ymlPath + ".tmp";
-    fs.writeFileSync(
-      tmp,
+    writeSecretFileSync(
+      ymlPath,
       header + YAML.dump(raw, {
         indent: 2,
         lineWidth: -1,
@@ -4105,9 +4076,7 @@ function repairLegacyDeepSeekProviderModelIds(ctx) {
         quotingType: "\"",
         forceQuotes: false,
       }),
-      "utf-8",
     );
-    fs.renameSync(tmp, ymlPath);
   }
 
   return patched;
@@ -4137,13 +4106,10 @@ function normalizeLegacyMemoryMasterDefaults(ctx) {
       ? { ...cfg.memory, enabled: true }
       : { enabled: true };
 
-    const tmp = cfgPath + ".tmp";
-    fs.writeFileSync(
-      tmp,
+    writeSecretFileSync(
+      cfgPath,
       YAML.dump(cfg, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: "\"" }),
-      "utf-8",
     );
-    fs.renameSync(tmp, cfgPath);
     patched++;
     log?.(`[migrations] #13 ${dir.name}: memory.enabled set to true for legacy implicit default`);
   }

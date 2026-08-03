@@ -42,6 +42,12 @@ import { errorBus } from "./error-bus.ts";
 export const SECRET_FILE_MODE = 0o600;
 /** Directories holding credentials: only the owner may enter or list them. */
 export const SECRET_DIR_MODE = 0o700;
+/**
+ * Suffix of the temporary file a credential write goes through before the
+ * rename. Named here so the startup pass that tightens leftovers looks for the
+ * same name this module writes, instead of spelling it a second time.
+ */
+export const SECRET_TMP_SUFFIX = ".tmp";
 
 const SUPPORTS_POSIX_MODE = process.platform !== "win32";
 
@@ -100,7 +106,7 @@ function tightenBestEffort(target: string): void {
  * only one.
  */
 export function writeSecretFileSync(filePath: string, content: string): void {
-  const tmp = `${filePath}.tmp`;
+  const tmp = `${filePath}${SECRET_TMP_SUFFIX}`;
   // Best-effort: if this cannot be removed the write below still overwrites it
   // and the tightening step still applies.
   try { fs.rmSync(tmp, { force: true }); } catch { /* overwritten below */ }
