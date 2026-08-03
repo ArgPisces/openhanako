@@ -7,6 +7,7 @@ import {
   buildWin32SandboxGrants,
   externalReadPathsFromSessionFiles,
 } from "../lib/sandbox/win32-policy.ts";
+import { canonicalFilesystemPathSync } from "../shared/link-aware-fs.ts";
 
 describe("Windows sandbox policy projection", () => {
   let tempRoot;
@@ -44,7 +45,9 @@ describe("Windows sandbox policy projection", () => {
     return { hanakoHome, agentDir, workspace, externalDir };
   }
 
-  const real = (p) => fs.realpathSync(p);
+  // 期望值必须与生产代码同一条规范化路径（native realpath 会展开 Windows 8.3
+  // 短名，JS 版 fs.realpathSync 不会；CI runner 的 TEMP 恰好是短名形式）。
+  const real = (p) => canonicalFilesystemPathSync(p);
 
   it("projects restricted-token write roots without external read grants", () => {
     const { hanakoHome, agentDir, workspace, externalDir } = makeTree();

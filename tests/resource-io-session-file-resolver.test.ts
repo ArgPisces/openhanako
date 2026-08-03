@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { SessionFileRegistry } from "../lib/session-files/session-file-registry.ts";
 import { SessionFileResolver } from "../lib/resource-io/session-file-resolver.ts";
 import { SessionFileResolverProvider } from "../lib/resource-io/providers/session-file-resolver.ts";
+// 期望值必须与生产代码同一条规范化路径（native realpath 会展开 Windows 8.3
+// 短名，JS 版 fs.realpathSync 不会；CI runner 的 TEMP 恰好是短名形式）。
+import { canonicalFilesystemPathSync } from "../shared/link-aware-fs.ts";
 
 const CAPABILITY_KEYS = [
   "stat",
@@ -70,7 +73,7 @@ describe("SessionFileResolverProvider", () => {
     expect(resolved).toMatchObject({
       ref: { kind: "session-file", fileId: entry.id },
       entry,
-      filePath: fs.realpathSync(filePath),
+      filePath: canonicalFilesystemPathSync(filePath),
       displayName: "note.md",
       storageKind: "external",
     });
@@ -87,7 +90,7 @@ describe("SessionFileResolverProvider", () => {
 
   it("resolves SessionFile stat, read, and materialize without exposing it as writable", async () => {
     const { entry, filePath, provider } = setup();
-    const realPath = fs.realpathSync(filePath);
+    const realPath = canonicalFilesystemPathSync(filePath);
     const ref = { kind: "session-file" as const, fileId: entry.id };
 
     expect(Object.keys(provider.capabilities()).sort()).toEqual(CAPABILITY_KEYS);
@@ -145,7 +148,7 @@ describe("SessionFileResolverProvider", () => {
 
     const materialized = await provider.materialize({ kind: "session-file", fileId: entry.id, sessionPath });
 
-    expect(materialized.filePath).toBe(fs.realpathSync(dirPath));
+    expect(materialized.filePath).toBe(canonicalFilesystemPathSync(dirPath));
     expect(materialized.isDirectory).toBe(true);
   });
 });

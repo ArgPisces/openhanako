@@ -3,6 +3,9 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import { SessionFileRegistry, sessionFilesCacheDir } from "../lib/session-files/session-file-registry.ts";
+// 期望值必须与生产代码同一条规范化路径（native realpath 会展开 Windows 8.3
+// 短名，JS 版 fs.realpathSync 不会；CI runner 的 TEMP 恰好是短名形式）。
+import { canonicalFilesystemPathSync } from "../shared/link-aware-fs.ts";
 
 const FILESYSTEM_IGNORES_CASE = (() => {
   const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-session-file-case-probe-"));
@@ -256,7 +259,7 @@ describe("SessionFileRegistry", () => {
     expect(first.sessionPath).toBe(sessionPath);
     expect(first.origin).toBe("stage_files");
     expect(first.filePath).toBe(filePath);
-    expect(first.realPath).toBe(fs.realpathSync(filePath));
+    expect(first.realPath).toBe(canonicalFilesystemPathSync(filePath));
     expect(first.displayName).toBe("Reading note");
     expect(first.filename).toBe("note.md");
     expect(first.ext).toBe("md");
@@ -322,8 +325,8 @@ describe("SessionFileRegistry", () => {
       origin: "stage_files",
     });
 
-    expect(entry.realPath).toBe(fs.realpathSync.native(filePath));
-    expect(readSidecar(sessionPath).files[entry.id].realPath).toBe(fs.realpathSync.native(filePath));
+    expect(entry.realPath).toBe(canonicalFilesystemPathSync(filePath));
+    expect(readSidecar(sessionPath).files[entry.id].realPath).toBe(canonicalFilesystemPathSync(filePath));
   });
 
   it("keeps one session file for the same truth source even when cache paths differ", () => {
@@ -356,7 +359,7 @@ describe("SessionFileRegistry", () => {
 
     expect(second.id).toBe(first.id);
     expect(second.filePath).toBe(firstCachePath);
-    expect(second.realPath).toBe(fs.realpathSync(firstCachePath));
+    expect(second.realPath).toBe(canonicalFilesystemPathSync(firstCachePath));
     expect(registry.list(sessionPath)).toHaveLength(1);
     expect(readSidecar(sessionPath).files[first.id]).toMatchObject({
       id: first.id,
@@ -749,7 +752,7 @@ describe("SessionFileRegistry", () => {
       legacyFilePaths: expect.arrayContaining([managed.filePath, managed.realPath]),
     });
     expect(childManaged.filePath).not.toBe(managed.filePath);
-    expect(fs.realpathSync(childManaged.filePath).startsWith(fs.realpathSync(sessionFilesCacheDir(hanakoHome, {
+    expect(canonicalFilesystemPathSync(childManaged.filePath).startsWith(canonicalFilesystemPathSync(sessionFilesCacheDir(hanakoHome, {
       sessionId: targetSessionId,
       sessionPath: targetSessionPath,
     })))).toBe(true);
