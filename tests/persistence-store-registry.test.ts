@@ -373,4 +373,42 @@ describe("persistent store registry", () => {
     expect(serialized).not.toMatch(/(?:\/Users\/|\/home\/|[A-Za-z]:\\)/);
     expect(committed.discoveredSites.every((site: { sourceFile: string }) => !site.sourceFile.includes("\\"))).toBe(true);
   });
+
+  it("anchors sites by ordinal so the receipt survives line shifts", () => {
+    // The absolute line number never took part in classification: ruleMatches
+    // keys on sourceFile, kind and the excerpt. Keeping it in the receipt only
+    // meant that inserting a comment anywhere above a write site rewrote the
+    // committed baseline and demanded a schema review that had nothing to
+    // review. The ordinal — the site's position among identical excerpts in
+    // the same file — carries the identity the baseline actually needs.
+    const { inventory } = scanPersistentStores({ rootDir: ROOT, today: TODAY });
+    for (const site of inventory.discoveredSites) {
+      expect(site).not.toHaveProperty("line");
+      expect(Number.isInteger(site.ordinal)).toBe(true);
+      expect(site.ordinal).toBeGreaterThanOrEqual(0);
+    }
+
+    const target = "server/index.ts";
+    const original = fs.readFileSync(path.join(ROOT, target), "utf-8");
+    expect(inventory.discoveredSites.some((site: { sourceFile: string }) => site.sourceFile === target)).toBe(true);
+
+    const shifted = scanPersistentStores({
+      rootDir: ROOT,
+      today: TODAY,
+      sourceOverrides: new Map([[target, `// line shift mutation\n${original}`]]),
+    });
+    expect(shifted.inventory.discoveredSites).toEqual(inventory.discoveredSites);
+  });
+
+  it("still reports a genuinely new write site after the ordinal change", () => {
+    // Desensitizing line numbers must not blunt the guard: adding a real write
+    // call to a scanned file has to stay unregistered-and-loud.
+    const target = "server/index.ts";
+    const original = fs.readFileSync(path.join(ROOT, target), "utf-8");
+    expect(() => scanPersistentStores({
+      rootDir: ROOT,
+      today: TODAY,
+      sourceOverrides: new Map([[target, `${original}\nfs.writeFileSync("/tmp/persistence-drift-probe.json", "{}");\n`]]),
+    })).toThrow(/unregistered persistence site/);
+  });
 });

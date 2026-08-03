@@ -253,11 +253,24 @@ function constructorKind(node, bindings) {
   return null;
 }
 
-export function discoverSites(rootDir = REPOSITORY_ROOT) {
+/**
+ * `line` is diagnostic only — it locates a site in an error message and never
+ * takes part in classification (see `ruleMatches`, which keys on sourceFile,
+ * kind and excerpt). Committing it made every comment edit above a write site
+ * rewrite the receipt, so the baseline carries `ordinal` instead: the site's
+ * position among identical excerpts of the same kind in the same file. Two
+ * sites only share an ordinal slot if they are textually indistinguishable,
+ * so appearing, disappearing and re-texting all stay visible while pure line
+ * drift does not. `sourceOverrides` maps a repository-relative path to
+ * replacement source, letting tests drive the scanner without touching disk.
+ */
+export function discoverSites(rootDir = REPOSITORY_ROOT, sourceOverrides = new Map()) {
   const sites = [];
   for (const sourceFile of listSourceFiles(rootDir)) {
     const absolutePath = path.join(rootDir, sourceFile);
-    const text = fs.readFileSync(absolutePath, "utf-8");
+    const text = sourceOverrides.has(sourceFile)
+      ? sourceOverrides.get(sourceFile)
+      : fs.readFileSync(absolutePath, "utf-8");
     const source = ts.createSourceFile(
       sourceFile,
       text,
@@ -279,11 +292,23 @@ export function discoverSites(rootDir = REPOSITORY_ROOT) {
     };
     visit(source);
   }
-  return sites.sort((a, b) => (
+  const ordinals = new Map();
+  for (const site of sites.sort((a, b) => (
     a.sourceFile.localeCompare(b.sourceFile)
     || a.line - b.line
     || a.kind.localeCompare(b.kind)
     || a.excerpt.localeCompare(b.excerpt)
+  ))) {
+    const slot = `${site.sourceFile} ${site.kind} ${site.excerpt}`;
+    const next = ordinals.get(slot) ?? 0;
+    site.ordinal = next;
+    ordinals.set(slot, next + 1);
+  }
+  return sites.sort((a, b) => (
+    a.sourceFile.localeCompare(b.sourceFile)
+    || a.kind.localeCompare(b.kind)
+    || a.excerpt.localeCompare(b.excerpt)
+    || a.ordinal - b.ordinal
   ));
 }
 
@@ -534,8 +559,11 @@ function classifySites(sites, stores, exemptions) {
       );
     }
     const match = matches[0];
+    // `line` stays out of the receipt on purpose; the errors above still quote
+    // the real one because they read from the in-memory site.
+    const { line: _line, ...receipt } = site;
     classified.push({
-      ...site,
+      ...receipt,
       reason: match.reason,
       storeId: match.type === "store" ? match.id : null,
       exemptionId: match.type === "exemption" ? match.id : null,
@@ -584,13 +612,15 @@ export function scanPersistentStores({
   stores = PERSISTENT_STORES,
   exemptions = PERSISTENCE_EXEMPTIONS,
   today = new Date().toISOString().slice(0, 10),
+  sourceOverrides = new Map(),
 } = {}) {
   validateRegistry({ stores, exemptions, today });
-  const discoveredSites = discoverSites(rootDir);
+  const discoveredSites = discoverSites(rootDir, sourceOverrides);
   validateRuleCoverage(discoveredSites, stores, exemptions);
   const sites = classifySites(discoveredSites, stores, exemptions);
   const inventory = {
-    version: 2,
+    // version 3 anchors sites by ordinal instead of absolute line number.
+    version: 3,
     generatedBy: "scripts/scan-persistent-stores.mjs",
     sourceRoots: [...PRODUCTION_ROOTS],
     sourceExclusions: SOURCE_EXCLUSIONS.map(({ id, reason }) => ({ id, reason })),

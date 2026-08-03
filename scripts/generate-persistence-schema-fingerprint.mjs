@@ -316,7 +316,7 @@ function siteMapping(site) {
   return {
     exemptionId: site.exemptionId,
     kind: site.kind,
-    line: site.line,
+    ordinal: site.ordinal,
     reason: site.reason,
     sourceFile: normalizeRepositoryPath(site.sourceFile),
     storeId: site.storeId,
@@ -372,9 +372,10 @@ async function generatePersistenceSchemaPayload({
     siteMappings: inventory.discoveredSites
       .map(siteMapping)
       .sort((left, right) => left.sourceFile.localeCompare(right.sourceFile)
-        || left.line - right.line
-        || left.kind.localeCompare(right.kind)),
-    version: 1,
+        || left.kind.localeCompare(right.kind)
+        || left.ordinal - right.ordinal),
+    // version 2 anchors site mappings by ordinal instead of absolute line.
+    version: 2,
   };
   const payloadFingerprint = sha256(canonicalJson(payload));
   const result = canonicalize({ ...payload, payloadFingerprint });
