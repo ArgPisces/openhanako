@@ -207,18 +207,30 @@ describe("session-compactor", () => {
   });
 
   it("treats missing timestamps as stale but leaves non-compacted budgeting untouched", () => {
-    const usage = { input: 10_000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 10_100 };
+    const usage = {
+      input: 10_000,
+      output: 100,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 10_100,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    };
     const ordinaryMessages = [{ ...piAssistant("ordinary", 100), usage }];
     expect(projectMessagesToLatestCompactionUsageEpoch(ordinaryMessages)).toBe(ordinaryMessages);
 
+    const legacyRetained: ReturnType<typeof piAssistant> & { timestamp: number | undefined } = {
+      ...piAssistant("legacy retained", 0),
+      timestamp: undefined,
+      usage,
+    };
     const legacyMessages = [
       { role: "compactionSummary", summary: "checkpoint", tokensBefore: 10_100, timestamp: 200 },
-      { ...piAssistant("legacy retained", 0), timestamp: undefined, usage },
+      legacyRetained,
     ];
     const projected = projectMessagesToLatestCompactionUsageEpoch(legacyMessages);
 
     expect(projected[1].usage.totalTokens).toBe(0);
-    expect(legacyMessages[1].usage).toBe(usage);
+    expect(legacyRetained.usage).toBe(usage);
   });
 
   it("sends the full live prefix once, keeps the previous summary in place, and scopes the retained tail in one hidden instruction", async () => {
@@ -364,6 +376,52 @@ describe("session-compactor", () => {
       tokensBefore: 4321,
       details: { readFiles: [], modifiedFiles: [] },
     });
+  });
+
+  it("records an explicit checkpoint notice when malformed old history was safely removed", async () => {
+    const historyRecovery = {
+      kind: "reasoning-replay-prefix-trim",
+      removedMessageCount: 4,
+    };
+    const result = await createCachePreservingCompactionResult({
+      preparation: {
+        firstKeptEntryId: "retained-entry",
+        tokensBefore: 4321,
+        messagesToSummarize: [piUser("valid old suffix", 1)],
+        turnPrefixMessages: [],
+        settings: { reserveTokens: 1000 },
+        fileOps: { read: new Set(), written: new Set(), edited: new Set() },
+      },
+      model: {
+        id: "deepseek-reasoner",
+        provider: "deepseek",
+        api: "openai-completions",
+        reasoning: true,
+        contextWindow: 128_000,
+        maxTokens: 8_192,
+      },
+      systemPrompt: "system",
+      messages: [piUser("valid old suffix", 1)],
+      retainedMessageCount: 0,
+      messagesAreNormalized: true,
+      cacheMetadataOverride: {
+        cacheStrategy: "cache_recovery",
+        cacheGroup: "compaction.history",
+        strict: false,
+        degradeReason: "malformed_reasoning_history_trim",
+      },
+      customInstructions: undefined,
+      signal: undefined,
+      thinkingLevel: "off",
+      streamFn: vi.fn(async () => agentStreamOf()),
+      usageLedger: undefined,
+      usageContext: undefined,
+      historyRecovery,
+    });
+
+    expect(result.summary).toContain("<history-recovery>");
+    expect(result.summary).toContain("Removed provider-visible messages: 4.");
+    expect(result.details).toMatchObject({ historyRecovery });
   });
 
   it("proves a first-compaction boundary from a real Pi SessionManager context", async () => {
@@ -781,6 +839,165 @@ describe("session-compactor", () => {
       [...result.messages, result.instruction]
         .every((message) => Object.getOwnPropertySymbols(message).length === 0),
     ).toBe(true);
+  });
+
+  it("trims only a malformed old tool turn at a complete transaction boundary", async () => {
+    const malformedToolCall = {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call-old", name: "read", arguments: {} }],
+      timestamp: 2,
+    };
+    const malformedToolResult = {
+      role: "toolResult",
+      toolCallId: "call-old",
+      toolName: "read",
+      content: [{ type: "text", text: "old result" }],
+      timestamp: 3,
+    };
+    const validOldUser = piUser("newer old request", 5);
+    const validOldAssistant = piAssistant("newer old answer", 6);
+    const retained = piUser("retained tail", 7);
+    const liveMessages = [
+      piUser("malformed old request", 1),
+      malformedToolCall,
+      malformedToolResult,
+      piAssistant("old tool answer", 4),
+      validOldUser,
+      validOldAssistant,
+      retained,
+    ];
+    const normalizeMessages = vi.fn((messages) => {
+      const missingReasoning = messages.some((message) => (
+        message.role === "assistant"
+        && Array.isArray(message.content)
+        && message.content.some((block) => block?.type === "toolCall")
+        && typeof message.reasoning_content !== "string"
+      ));
+      if (missingReasoning) {
+        throw new Error(
+          "DeepSeek Anthropic thinking mode history is missing non-empty thinking content for a tool call.",
+        );
+      }
+      return messages;
+    });
+
+    const result = await sessionCompactorModule.buildCachePreservingCompactionPrefix({
+      liveMessages,
+      preparation: {
+        messagesToSummarize: liveMessages.slice(0, -1),
+        turnPrefixMessages: [],
+        isSplitTurn: false,
+      },
+      model: {
+        id: "deepseek-reasoner",
+        provider: "deepseek",
+        api: "openai-completions",
+        reasoning: true,
+      },
+      transformContext: async (messages) => messages,
+      convertToLlm: (messages) => messages,
+      normalizeMessages,
+    });
+
+    expect(result.messages).toEqual([validOldUser, validOldAssistant, retained]);
+    expect(result).toMatchObject({
+      oldMessageCount: 2,
+      retainedMessageCount: 1,
+      historyRecovery: {
+        kind: "reasoning-replay-prefix-trim",
+        removedMessageCount: 4,
+      },
+    });
+    expect(result.instruction.content[0].text).toContain("live message indexes [0, 2)");
+  });
+
+  it("returns a typed 422 when malformed old reasoning has no complete tool boundary", async () => {
+    const oldUser = piUser("old request", 1);
+    const incompleteToolCall = {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call-incomplete", name: "read", arguments: {} }],
+      timestamp: 2,
+    };
+    const retained = piUser("retained tail", 3);
+    const normalizeMessages = (messages) => {
+      if (messages.some((message) => (
+        message.role === "assistant"
+        && Array.isArray(message.content)
+        && message.content.some((block) => block?.id === "call-incomplete")
+      ))) {
+        throw new Error(
+          "DeepSeek thinking mode reasoning_content is missing for tool_calls history (assistant tool call).",
+        );
+      }
+      return messages;
+    };
+
+    await expect(sessionCompactorModule.buildCachePreservingCompactionPrefix({
+      liveMessages: [oldUser, incompleteToolCall, retained],
+      preparation: {
+        messagesToSummarize: [oldUser, incompleteToolCall],
+        turnPrefixMessages: [],
+        isSplitTurn: false,
+      },
+      model: {
+        id: "deepseek-reasoner",
+        provider: "deepseek",
+        api: "openai-completions",
+        reasoning: true,
+      },
+      transformContext: async (messages) => messages,
+      convertToLlm: (messages) => messages,
+      normalizeMessages,
+    })).rejects.toMatchObject({
+      name: "CompactionHistoryReplayError",
+      code: "COMPACTION_HISTORY_REPLAY_UNPROCESSABLE",
+      statusCode: 422,
+      details: { boundaryRegion: "old" },
+    });
+  });
+
+  it("never trims valid old history when the retained suffix itself cannot replay", async () => {
+    const oldUser = piUser("valid old request", 1);
+    const retainedToolCall = {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call-retained", name: "read", arguments: {} }],
+      timestamp: 2,
+    };
+    const normalizeMessages = (messages) => {
+      if (messages.some((message) => (
+        message.role === "assistant"
+        && Array.isArray(message.content)
+        && message.content.some((block) => block?.id === "call-retained")
+      ))) {
+        throw new Error(
+          "DeepSeek thinking mode reasoning_content is missing for tool_calls history (assistant tool call).",
+        );
+      }
+      return messages;
+    };
+
+    await expect(sessionCompactorModule.buildCachePreservingCompactionPrefix({
+      liveMessages: [oldUser, retainedToolCall],
+      preparation: {
+        messagesToSummarize: [oldUser],
+        turnPrefixMessages: [],
+        isSplitTurn: false,
+      },
+      model: {
+        id: "deepseek-reasoner",
+        provider: "deepseek",
+        api: "openai-completions",
+        reasoning: true,
+      },
+      transformContext: async (messages) => messages,
+      convertToLlm: (messages) => messages,
+      normalizeMessages,
+    })).rejects.toMatchObject({
+      name: "CompactionHistoryReplayError",
+      code: "COMPACTION_HISTORY_REPLAY_UNPROCESSABLE",
+      statusCode: 422,
+      details: { boundaryRegion: "retained" },
+    });
   });
 
   it("survives the installed Pi ExtensionRunner structured-clone boundary without leaking proof carriers", async () => {

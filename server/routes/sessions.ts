@@ -2424,7 +2424,7 @@ export function createSessionsRoute(engine, hub = null) {
       });
     } catch (err) {
       lifecycleLog.error(`fresh-compact failed: ${err.message}`);
-      return c.json({ error: err.message }, 500);
+      return c.json(bodyFromRouteError(err), statusFromRouteError(err));
     }
   });
 

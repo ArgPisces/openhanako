@@ -258,7 +258,8 @@ export function ensureReasoningContentForToolCalls(messages, options: { provider
 
 export function isReasoningReplayUnavailable(error) {
   const message = error instanceof Error ? error.message : String(error || "");
-  return message.includes("reasoning_content is missing for tool_calls history");
+  return message.includes("reasoning_content is missing for tool_calls history")
+    || message.includes("thinking mode history is missing non-empty thinking content for a tool call");
 }
 
 /**

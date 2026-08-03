@@ -25,6 +25,10 @@ import {
   normalizeProviderPayload,
 } from "./provider-compat.ts";
 import { resolveOutputCapCapability } from "./provider-compat/output-budget.ts";
+import {
+  isReasoningReplayUnavailable,
+  reasoningReplayCanClear,
+} from "./provider-compat/reasoning-content-replay.ts";
 import { normalizeRequestThinkingLevel } from "./session-thinking-level.ts";
 import { resolveRequestReasoningLevel } from "./request-reasoning-level.ts";
 
@@ -136,6 +140,31 @@ export class CachePreservingCompactionPrefixContractError extends Error {
     this.name = "CachePreservingCompactionPrefixContractError";
     this.details = details;
   }
+}
+
+export const COMPACTION_HISTORY_REPLAY_UNPROCESSABLE =
+  "COMPACTION_HISTORY_REPLAY_UNPROCESSABLE";
+
+export class CompactionHistoryReplayError extends Error {
+  code = COMPACTION_HISTORY_REPLAY_UNPROCESSABLE;
+  status = 422;
+  statusCode = 422;
+  details: Record<string, any>;
+
+  constructor(details: Record<string, any> = {}) {
+    const retained = details.boundaryRegion === "retained";
+    super(
+      retained
+        ? "This session cannot be compacted safely because its recent tool-call history is missing reasoning data required by the model. Start a new session, or continue with a model or mode that does not require this reasoning history to be replayed."
+        : "This session cannot be compacted safely because older tool-call history is missing reasoning data required by the model, and no complete tool transaction boundary can be used to remove only the damaged prefix. Start a new session, or continue with a model or mode that does not require this reasoning history to be replayed.",
+    );
+    this.name = "CompactionHistoryReplayError";
+    this.details = details;
+  }
+}
+
+export function isCompactionHistoryReplayError(error: any) {
+  return error?.code === COMPACTION_HISTORY_REPLAY_UNPROCESSABLE;
 }
 
 function prefixContractError(message: string, details: Record<string, any> = {}) {
@@ -824,6 +853,225 @@ function assertNormalizedPartition({
   }
 }
 
+function readToolCallIds(message: any) {
+  if (message?.role !== "assistant") return null;
+  const canonicalCalls = Array.isArray(message.content)
+    ? message.content.filter((block) => block?.type === "toolCall")
+    : [];
+  const providerCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  const calls = canonicalCalls.length > 0 ? canonicalCalls : providerCalls;
+  if (calls.length === 0) return null;
+  const ids = calls.map((call) => (
+    typeof call?.id === "string" && call.id.trim() ? call.id.trim() : null
+  ));
+  return ids.every((id) => id !== null) ? ids : null;
+}
+
+function readToolResultId(message: any) {
+  if (message?.role === "toolResult") {
+    return typeof message.toolCallId === "string" && message.toolCallId.trim()
+      ? message.toolCallId.trim()
+      : null;
+  }
+  if (message?.role === "tool") {
+    return typeof message.tool_call_id === "string" && message.tool_call_id.trim()
+      ? message.tool_call_id.trim()
+      : null;
+  }
+  return undefined;
+}
+
+function isConversationRestartBoundary(message: any) {
+  return message?.role === "user"
+    || message?.role === "system"
+    || message?.role === "compactionSummary";
+}
+
+/**
+ * Find prefixes that can be removed without separating a tool call from any of
+ * its results. We wait until the next conversation turn (or the old-region
+ * edge), so an assistant's post-tool answer stays with the request that caused
+ * it. Missing or duplicate call ids make every later boundary unprovable.
+ */
+function completeToolTransactionTrimBoundaries(messages: any[]) {
+  const pending = new Set<string>();
+  const boundaries: number[] = [];
+  let transactionSeen = false;
+  let transactionCompleted = false;
+  let unprovable = false;
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    const callIds = readToolCallIds(message);
+    if (callIds) {
+      transactionSeen = true;
+      for (const callId of callIds) {
+        if (pending.has(callId)) {
+          unprovable = true;
+          continue;
+        }
+        pending.add(callId);
+      }
+    } else if (
+      message?.role === "assistant"
+      && (
+        (Array.isArray(message.content) && message.content.some((block) => block?.type === "toolCall"))
+        || (Array.isArray(message.tool_calls) && message.tool_calls.length > 0)
+      )
+    ) {
+      transactionSeen = true;
+      unprovable = true;
+    }
+
+    const resultId = readToolResultId(message);
+    if (resultId !== undefined) {
+      if (!resultId || !pending.delete(resultId)) {
+        unprovable = true;
+      } else if (pending.size === 0) {
+        transactionCompleted = true;
+      }
+    }
+
+    const nextMessage = messages[index + 1];
+    const atTurnBoundary = nextMessage === undefined || isConversationRestartBoundary(nextMessage);
+    if (
+      transactionSeen
+      && transactionCompleted
+      && !unprovable
+      && pending.size === 0
+      && atTurnBoundary
+    ) {
+      boundaries.push(index + 1);
+    }
+  }
+
+  return boundaries;
+}
+
+function compactionHistoryReplayError({
+  boundaryRegion,
+  safeBoundaryCount = 0,
+  cause,
+}: {
+  boundaryRegion: "old" | "retained" | "final-request";
+  safeBoundaryCount?: number;
+  cause?: any;
+}) {
+  return new CompactionHistoryReplayError({
+    boundaryRegion,
+    safeBoundaryCount,
+    providerError: cause instanceof Error ? cause.message : String(cause || ""),
+  });
+}
+
+async function normalizeCompactionPartitionsWithHistoryRecovery({
+  transformed,
+  convertToLlm,
+  normalizeMessages,
+  model,
+}: {
+  transformed: {
+    prefix: any[];
+    oldRegion: any[];
+    retainedRegion: any[];
+  };
+  convertToLlm: any;
+  normalizeMessages: any;
+  model: any;
+}) {
+  let normalizedRetained;
+  try {
+    normalizedRetained = await convertAndNormalizePartition({
+      messages: transformed.retainedRegion,
+      convertToLlm,
+      normalizeMessages,
+      label: "transformed-retained-region",
+    });
+  } catch (error) {
+    if (!isReasoningReplayUnavailable(error) || reasoningReplayCanClear(model)) throw error;
+    throw compactionHistoryReplayError({
+      boundaryRegion: "retained",
+      cause: error,
+    });
+  }
+
+  try {
+    const [normalizedFull, normalizedOld] = await Promise.all([
+      convertAndNormalizePartition({
+        messages: transformed.prefix,
+        convertToLlm,
+        normalizeMessages,
+        label: "transformed-live-prefix",
+      }),
+      convertAndNormalizePartition({
+        messages: transformed.oldRegion,
+        convertToLlm,
+        normalizeMessages,
+        label: "transformed-old-region",
+      }),
+    ]);
+    assertNormalizedPartition({
+      full: normalizedFull,
+      oldRegion: normalizedOld,
+      retainedRegion: normalizedRetained,
+    });
+    return {
+      transformedPrefix: transformed.prefix,
+      normalizedFull,
+      normalizedOld,
+      normalizedRetained,
+      historyRecovery: null,
+    };
+  } catch (error) {
+    if (!isReasoningReplayUnavailable(error) || reasoningReplayCanClear(model)) throw error;
+
+    const boundaries = completeToolTransactionTrimBoundaries(transformed.oldRegion);
+    for (const boundary of boundaries) {
+      const candidateOld = transformed.oldRegion.slice(boundary);
+      const candidatePrefix = [...candidateOld, ...transformed.retainedRegion];
+      try {
+        const [normalizedFull, normalizedOld] = await Promise.all([
+          convertAndNormalizePartition({
+            messages: candidatePrefix,
+            convertToLlm,
+            normalizeMessages,
+            label: "recovered-live-prefix",
+          }),
+          convertAndNormalizePartition({
+            messages: candidateOld,
+            convertToLlm,
+            normalizeMessages,
+            label: "recovered-old-region",
+          }),
+        ]);
+        assertNormalizedPartition({
+          full: normalizedFull,
+          oldRegion: normalizedOld,
+          retainedRegion: normalizedRetained,
+        });
+        return {
+          transformedPrefix: candidatePrefix,
+          normalizedFull,
+          normalizedOld,
+          normalizedRetained,
+          historyRecovery: {
+            kind: "reasoning-replay-prefix-trim",
+            removedMessageCount: boundary,
+          },
+        };
+      } catch (candidateError) {
+        if (!isReasoningReplayUnavailable(candidateError)) throw candidateError;
+      }
+    }
+
+    throw compactionHistoryReplayError({
+      boundaryRegion: "old",
+      safeBoundaryCount: boundaries.length,
+      cause: error,
+    });
+  }
+}
+
 export async function buildCachePreservingCompactionPrefix({
   liveMessages,
   preparation,
@@ -864,31 +1112,19 @@ export async function buildCachePreservingCompactionPrefix({
     transformContext,
     signal,
   });
-  const [normalizedFull, normalizedOld, normalizedRetained] = await Promise.all([
-    convertAndNormalizePartition({
-      messages: transformed.prefix,
-      convertToLlm,
-      normalizeMessages,
-      label: "transformed-live-prefix",
-    }),
-    convertAndNormalizePartition({
-      messages: transformed.oldRegion,
-      convertToLlm,
-      normalizeMessages,
-      label: "transformed-old-region",
-    }),
-    convertAndNormalizePartition({
-      messages: transformed.retainedRegion,
-      convertToLlm,
-      normalizeMessages,
-      label: "transformed-retained-region",
-    }),
-  ]);
-  assertNormalizedPartition({
-    full: normalizedFull,
-    oldRegion: normalizedOld,
-    retainedRegion: normalizedRetained,
+  const normalized = await normalizeCompactionPartitionsWithHistoryRecovery({
+    transformed,
+    convertToLlm,
+    normalizeMessages,
+    model,
   });
+  const {
+    transformedPrefix,
+    normalizedFull,
+    normalizedOld,
+    normalizedRetained,
+    historyRecovery,
+  } = normalized;
 
   const oldRegionEnd = normalizedFull.length - normalizedRetained.length;
   const instruction = replaceStringToken(
@@ -899,26 +1135,37 @@ export async function buildCachePreservingCompactionPrefix({
   if (countStringTokenOccurrences(instruction, boundaryPlaceholder) !== 0) {
     throw prefixContractError("boundary placeholder survived instruction materialization");
   }
-  const [finalFull, finalPrefix, finalInstruction] = await Promise.all([
-    convertAndNormalizePartition({
-      messages: [...transformed.prefix, instruction],
-      convertToLlm,
-      normalizeMessages,
-      label: "transformed-final-request",
-    }),
-    convertAndNormalizePartition({
-      messages: transformed.prefix,
-      convertToLlm,
-      normalizeMessages,
-      label: "transformed-final-prefix",
-    }),
-    convertAndNormalizePartition({
-      messages: [instruction],
-      convertToLlm,
-      normalizeMessages,
-      label: "transformed-final-instruction",
-    }),
-  ]);
+  let finalFull;
+  let finalPrefix;
+  let finalInstruction;
+  try {
+    [finalFull, finalPrefix, finalInstruction] = await Promise.all([
+      convertAndNormalizePartition({
+        messages: [...transformedPrefix, instruction],
+        convertToLlm,
+        normalizeMessages,
+        label: "transformed-final-request",
+      }),
+      convertAndNormalizePartition({
+        messages: transformedPrefix,
+        convertToLlm,
+        normalizeMessages,
+        label: "transformed-final-prefix",
+      }),
+      convertAndNormalizePartition({
+        messages: [instruction],
+        convertToLlm,
+        normalizeMessages,
+        label: "transformed-final-instruction",
+      }),
+    ]);
+  } catch (error) {
+    if (!isReasoningReplayUnavailable(error) || reasoningReplayCanClear(model)) throw error;
+    throw compactionHistoryReplayError({
+      boundaryRegion: "final-request",
+      cause: error,
+    });
+  }
   if (
     finalInstruction.length !== 1
     || stableSerialize(finalFull) !== stableSerialize([...finalPrefix, ...finalInstruction])
@@ -938,7 +1185,8 @@ export async function buildCachePreservingCompactionPrefix({
     instruction: finalInstruction[0],
     oldMessageCount: normalizedOld.length,
     retainedMessageCount: normalizedRetained.length,
-    previousSummaryRepresented: rawBoundary.previousSummaryRepresented,
+    previousSummaryRepresented: rawBoundary.previousSummaryRepresented && !historyRecovery,
+    historyRecovery,
   };
 }
 
@@ -988,6 +1236,14 @@ function appendFileOperationContext(summary, details) {
   }
   if (sections.length === 0) return summary;
   return `${summary.trimEnd()}\n\n${sections.join("\n\n")}`;
+}
+
+function appendHistoryRecoveryContext(summary, historyRecovery) {
+  if (!historyRecovery) return summary;
+  return `${summary.trimEnd()}\n\n<history-recovery>\n`
+    + `Earlier messages were removed at a complete tool-transaction boundary because the model-required reasoning data was unavailable. `
+    + `Removed provider-visible messages: ${historyRecovery.removedMessageCount}.\n`
+    + `</history-recovery>`;
 }
 
 function cacheKeyParamsFromSnapshot(snapshot) {
@@ -1241,6 +1497,7 @@ export async function createCachePreservingCompactionResult({
   convertToLlm = convertAgentMessagesToLlm,
   usageLedger,
   usageContext,
+  historyRecovery = null,
 }: {
   preparation: any;
   model: any;
@@ -1263,6 +1520,7 @@ export async function createCachePreservingCompactionResult({
   convertToLlm?: any;
   usageLedger: any;
   usageContext: any;
+  historyRecovery?: any;
 }) {
   if (!preparation) throw new Error("Cache-preserving compaction requires preparation");
   if (!model) throw new Error("Cache-preserving compaction requires a model");
@@ -1371,9 +1629,15 @@ export async function createCachePreservingCompactionResult({
     cacheMetadata,
   });
 
-  const details = computeFileDetails(preparation.fileOps);
+  const details = {
+    ...computeFileDetails(preparation.fileOps),
+    ...(historyRecovery ? { historyRecovery } : {}),
+  };
   return {
-    summary: appendFileOperationContext(runResult.summary, details),
+    summary: appendHistoryRecoveryContext(
+      appendFileOperationContext(runResult.summary, details),
+      historyRecovery,
+    ),
     firstKeptEntryId: preparation.firstKeptEntryId,
     tokensBefore: preparation.tokensBefore,
     details,
@@ -1575,6 +1839,15 @@ export async function runCachePreservingCompactionForSession(session: any, {
       tools,
       sessionSnapshot,
       cacheKeyParams,
+      cacheMetadataOverride: prefix.historyRecovery
+        ? buildCacheStrategyMetadata({
+            cacheStrategy: CACHE_STRATEGIES.CACHE_RECOVERY,
+            cacheGroup: "compaction.history",
+            templateVersion: "v1",
+            strict: false,
+            degradeReason: "malformed_reasoning_history_trim",
+          })
+        : null,
       outputPolicy: COMPACTION_OUTPUT_POLICIES.PROVIDER_DEFAULT,
       streamFn: session.agent.streamFn,
       streamOptions: {
@@ -1588,6 +1861,7 @@ export async function runCachePreservingCompactionForSession(session: any, {
       convertToLlm: async (input: any[]) => input,
       usageLedger,
       usageContext,
+      historyRecovery: prefix.historyRecovery,
     });
 
     const saved = await appendCompactionResultToSession(session, result, { fromExtension: true, onCompacted });

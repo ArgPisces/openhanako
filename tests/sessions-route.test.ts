@@ -1200,6 +1200,40 @@ describe("sessions route", () => {
     });
   });
 
+  it("returns an actionable typed 422 when fresh compaction cannot replay retained history", async () => {
+    const { createSessionsRoute } = await import("../server/routes/sessions.ts");
+    const { CompactionHistoryReplayError } = await import("../core/session-compactor.ts");
+    const app = new Hono();
+    const sessionPath = path.join(tmpDir, "agents", "hana", "sessions", "unsafe.jsonl");
+    const replayError = new CompactionHistoryReplayError({
+      boundaryRegion: "retained",
+      safeBoundaryCount: 0,
+    });
+    const engine = {
+      agentsDir: path.join(tmpDir, "agents"),
+      isDeletedAgentSession: vi.fn(() => false),
+      freshCompactDesktopSession: vi.fn(async () => {
+        throw replayError;
+      }),
+    };
+
+    app.route("/api", createSessionsRoute(engine));
+
+    const res = await app.request("/api/sessions/fresh-compact", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: sessionPath }),
+    });
+    const data = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(engine.freshCompactDesktopSession).toHaveBeenCalledWith(sessionPath);
+    expect(data).toMatchObject({
+      code: "COMPACTION_HISTORY_REPLAY_UNPROCESSABLE",
+      error: expect.stringContaining("cannot be compacted safely"),
+    });
+  });
+
   it("rejects content/runtime writes but allows safe unpin for deleted-agent sessions", async () => {
     const { createSessionsRoute } = await import("../server/routes/sessions.ts");
     const app = new Hono();
