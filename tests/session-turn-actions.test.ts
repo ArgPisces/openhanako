@@ -109,6 +109,46 @@ describe("replayLatestUserTurn", () => {
     }));
   });
 
+  it("preserves a leading reference listing when editing the visible text", async () => {
+    const manager = SessionManager.inMemory("/workspace");
+    const envelope = [
+      "[hana_reference]",
+      "yuque (4 tools)",
+      "[/hana_reference]",
+      "",
+      "[hana_reminder]",
+      "- New memory facts recorded: the user prefers dark mode",
+      "[/hana_reminder]",
+      "",
+      "[attached_image: /tmp/a.png]",
+    ].join("\n");
+    const latestUserId = manager.appendMessage({
+      role: "user",
+      content: [{ type: "text", text: `${envelope}\nold text` }],
+    } as any);
+    manager.appendMessage({ role: "assistant", content: [{ type: "text", text: "bad answer" }] } as any);
+    const session = makeNavigableSession(manager);
+    const submit = vi.fn(async () => ({ text: "new answer", toolMedia: [] }));
+    const readFile = vi.fn(async () => Buffer.from("png-by-filename"));
+    const engine = {
+      ensureSessionLoaded: vi.fn(async () => session),
+      isSessionStreaming: vi.fn(() => false),
+      emitEvent: vi.fn(),
+      setSessionBranchHead: vi.fn(),
+    };
+
+    await replayLatestUserTurn(engine, {
+      sessionPath: "/tmp/main.jsonl",
+      sourceEntryId: latestUserId,
+      replacementText: "new text",
+      displayMessage: { text: "new text" },
+    }, { submit, readFile });
+
+    expect(submit).toHaveBeenCalledWith(engine, expect.objectContaining({
+      text: `${envelope}\nnew text`,
+    }));
+  });
+
   it("branches before the latest user when editing a leaf user message", async () => {
     const manager = SessionManager.inMemory("/workspace");
     const priorUserId = manager.appendMessage({ role: "user", content: [{ type: "text", text: "context" }] } as any);

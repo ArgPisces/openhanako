@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:0326c45cd3dcf5863594b5210b3be4b9595d7c895e6b98ba5eebaa1789b94d15",
+  "payloadFingerprint": "sha256:4e77214f9c0fb74f91446eef298e9916a293fa8e3adfe5ac964a734326d9c494",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3080,8 +3080,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Payload provenance only: the fingerprint now records its source digest method (parse-tree-v1) and the exact TypeScript compiler that computed the module hashes, and the payload format steps to version 3. When a toolchain change makes every hash incomparable, the guard now names the compiler change instead of reporting it as persisted-schema drift. No store, stored shape, persisted byte, or module hash changed.",
-    "payloadFingerprint": "sha256:0326c45cd3dcf5863594b5210b3be4b9595d7c895e6b98ba5eebaa1789b94d15"
+    "compatibilityReason": "Session title hygiene: a new startup migration deletes session-titles.json entries whose stored value is an injected prompt envelope rather than a title, and the shared visible-prompt projection it reuses now lives in the reminder module. The titles file keeps its shape (session key to title string), entries are only removed and never rewritten, and no store, stored shape, or persisted byte layout changed.",
+    "payloadFingerprint": "sha256:4e77214f9c0fb74f91446eef298e9916a293fa8e3adfe5ac964a734326d9c494"
   },
   "schemas": [
     {
@@ -4574,6 +4574,14 @@
       "reason": "Owns provider catalog, authentication, model compatibility, local provider plugin state, or the retention of their migration backups.",
       "sourceFile": "core/migrate-providers.ts",
       "storeId": "provider-state"
+    },
+    {
+      "exemptionId": "cross-store-legacy-migrations",
+      "kind": "atomic-write",
+      "ordinal": 0,
+      "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
+      "sourceFile": "core/migrations.ts",
+      "storeId": null
     },
     {
       "exemptionId": "cross-store-legacy-migrations",

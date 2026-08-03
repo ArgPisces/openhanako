@@ -81,6 +81,15 @@ export function renderReferenceBlock({
 // 当前块头是静态的；`at <时间戳>` 是历史 JSONL 里的旧块头，剥离端必须继续认
 const REMINDER_HEADER_LINE_RE = /^\[hana_reminder(?: at \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\]$/;
 
+/**
+ * Whole-line forms of the two markers the submit path prepends to a prompt so
+ * the model can see which files came with the message. They live here, next to
+ * the envelope projection, so every consumer that needs "what did the user
+ * actually type" reads one definition instead of keeping its own copy.
+ */
+export const ATTACHMENT_MARKER_RE = /^\[(attached_(?:image|video|audio):[^\]]+)\]\s*$/;
+export const SESSION_FILE_MARKER_RE = /^\[SessionFile\]\s+\{.*\}\s*$/;
+
 const BLOCK_BODY_CHAR_LIMIT = 300;
 
 /**
@@ -131,6 +140,28 @@ export function stripSessionReminderBlocks(value: unknown): string {
 
   while (visibleLines.at(-1) === "") visibleLines.pop();
   return visibleLines.join("\n");
+}
+
+/**
+ * The text the user actually typed, with everything the submit path prepended
+ * removed: the model-only envelopes above, plus the attachment and session-file
+ * markers that stand in for the files carried alongside the message.
+ *
+ * Consumers that summarize, title, or otherwise reason about the user's own
+ * words compose this instead of reading the raw prompt, so a new envelope shape
+ * only has to be taught to the projections above to be honored everywhere.
+ */
+export function visiblePromptText(value: unknown): string {
+  const withoutBlocks = stripSessionReminderBlocks(value);
+  if (!withoutBlocks) return "";
+  return withoutBlocks
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !ATTACHMENT_MARKER_RE.test(trimmed) && !SESSION_FILE_MARKER_RE.test(trimmed);
+    })
+    .join("\n")
+    .trim();
 }
 
 /** Projects a persisted message for display without mutating the JSONL truth. */

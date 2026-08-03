@@ -13,6 +13,15 @@ import {
   isHiddenTurnInputMessage,
   isSessionTurnInputEntry,
 } from "../lib/turn-input-presentation.ts";
+import {
+  ATTACHMENT_MARKER_RE,
+  REFERENCE_BLOCK_END,
+  REFERENCE_BLOCK_PREFIX,
+  REMINDER_BLOCK_END,
+  REMINDER_BLOCK_PREFIX,
+  SESSION_FILE_MARKER_RE,
+  visiblePromptText,
+} from "./session-reminders.ts";
 
 export type SessionNodeTarget =
   | { role: "user"; entryId: string }
@@ -24,8 +33,6 @@ const HANA_USER_ENVELOPE_TYPES = new Set([
   MESSAGE_ORIGIN_RECORD_TYPE,
   AGENT_REVIEW_RECORD_TYPE,
 ]);
-const ATTACHMENT_MARKER_RE = /^\[(attached_(?:image|video|audio):[^\]]+)\]\s*$/;
-const SESSION_FILE_MARKER_RE = /^\[SessionFile\]\s+\{.*\}\s*$/;
 export const SESSION_BRANCH_RESET_RECORD_TYPE = "hana-session-branch-reset";
 const BACKGROUND_TASK_ID_KEYS = new Set(["taskId", "runId", "replacesTaskId"]);
 const ACTIVE_BACKGROUND_TASK_STATUSES = new Set(["pending", "running", "paused", "blocked", "recovering"]);
@@ -792,11 +799,20 @@ function leadingPromptEnvelope(text) {
   const lines = String(text || "").split(/\r?\n/);
   const kept = [];
   let index = 0;
-  if (lines[index]?.startsWith("[hana_reminder")) {
+  // A prompt may lead with a reference listing, a reminder broadcast, or both,
+  // so every envelope at the head is consumed rather than just the first kind.
+  while (index < lines.length) {
+    const header = lines[index];
+    const closing = header.startsWith(REMINDER_BLOCK_PREFIX)
+      ? REMINDER_BLOCK_END
+      : header.trim() === REFERENCE_BLOCK_PREFIX
+        ? REFERENCE_BLOCK_END
+        : null;
+    if (!closing) break;
     while (index < lines.length) {
       const line = lines[index++];
       kept.push(line);
-      if (line.trim() === "[/hana_reminder]") break;
+      if (line.trim() === closing) break;
     }
     while (index < lines.length && !lines[index].trim()) kept.push(lines[index++]);
   }
@@ -819,9 +835,7 @@ function leadingPromptEnvelope(text) {
 }
 
 function visibleUserText(text) {
-  const original = String(text || "");
-  const prefix = leadingPromptEnvelope(original);
-  return (prefix ? original.slice(prefix.length) : original).trim();
+  return visiblePromptText(text);
 }
 
 function branchBeforeResolvedTurnInput(session, resolved) {

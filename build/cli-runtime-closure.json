@@ -3061,6 +3061,11 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "core/migrations.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/message-utils.ts",
           "kind": "import-statement"
         },
@@ -3076,12 +3081,22 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "core/session-turn-actions.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "core/session-coordinator.ts",
           "kind": "import-statement"
         },
         {
           "root": "server-bootstrap",
           "from": "core/engine.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "server/routes/chat.ts",
           "kind": "import-statement"
         },
         {
@@ -3095,7 +3110,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/message-utils.ts (import-statement); lib/session-collab/transcript.ts (import-statement); core/session-list-projection-cache.ts (import-statement); +4 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); core/message-utils.ts (import-statement); lib/session-collab/transcript.ts (import-statement); +7 more importer(s)."
     },
     {
       "path": "core/session-teardown.ts",
@@ -6188,12 +6203,12 @@
       "provenance": [
         {
           "root": "server-bootstrap",
-          "from": "core/session-compactor.ts",
+          "from": "core/session-reminders.ts",
           "kind": "import-statement"
         },
         {
           "root": "server-bootstrap",
-          "from": "core/session-reminders.ts",
+          "from": "core/session-compactor.ts",
           "kind": "import-statement"
         },
         {
@@ -6202,7 +6217,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); core/session-reminders.ts (import-statement); core/tool-catalog.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-reminders.ts (import-statement); core/session-compactor.ts (import-statement); core/tool-catalog.ts (import-statement)."
     },
     {
       "path": "lib/llm/prompt-layout.ts",

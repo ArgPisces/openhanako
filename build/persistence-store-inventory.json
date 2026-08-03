@@ -3573,6 +3573,15 @@
     },
     {
       "sourceFile": "core/migrations.ts",
+      "kind": "atomic-write",
+      "excerpt": "atomicWriteSync(titlePath, JSON.stringify(titles, null, 2))",
+      "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",
+      "storeId": null,
+      "exemptionId": "cross-store-legacy-migrations",
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "core/migrations.ts",
       "kind": "copy-file",
       "excerpt": "fs.copyFileSync(store.catalogPath, backupPath)",
       "reason": "The legacy migration orchestrator mutates many registered targets. Each target is inventoried, while exact-site flow attribution remains prerequisite work for the coordinator.",

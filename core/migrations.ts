@@ -58,6 +58,7 @@ import { safeConversationStem } from "../lib/conversations/agent-phone-projectio
 import { DEFAULT_DISABLED_TOOL_NAMES } from "../shared/tool-categories.ts";
 import { ProviderCatalogStore } from "./provider-catalog.ts";
 import { migrationBackupsRoot } from "./migration-backups.ts";
+import { REFERENCE_BLOCK_PREFIX, REMINDER_BLOCK_PREFIX } from "./session-reminders.ts";
 import { repairProviderModelMetadata } from "./provider-model-metadata-migration.ts";
 import { sessionIdFromFilename } from "../lib/session-jsonl.ts";
 import {
@@ -180,7 +181,13 @@ const migrations = {
   51: migrateUserNameToGlobalPreferences,
   // agent 级 user.name 覆盖层取消：读取侧不再看这个字段，残留字段一并删掉
   52: migrateClearUserNameOverrides,
+  // 标题生成曾直接读注入过信封的首条 user 消息；删掉被信封字面量占满的存量标题
+  53: migrateCleanEnvelopeSessionTitles,
 };
+
+// Migration ids are a single monotonic ladder shared across release channels;
+// a new id must exceed the highest id ever shipped on ANY channel, because the
+// runner treats id <= highWaterMark as completed.
 
 const migrationDependencies = {
   8: [5],
@@ -1107,6 +1114,74 @@ function migrateClearUserNameOverrides(ctx) {
     writeSecretFileSync(cfgPath, YAML.dump(config, { indent: 2, lineWidth: -1, sortKeys: false, quotingType: '"' }));
     log(`[migrations] #52 ${dir.name}: 移除失效的 user.name 覆盖`);
   }
+}
+
+/**
+ * 会话标题曾直接取首条 user 消息，而提交路径会在那条消息前面注入 reminder /
+ * reference 信封和附件标记。没配摘要模型的用户于是拿到一堆信封字面量当标题
+ * （截断到 30 字，所以只看得到开头）。
+ *
+ * 这里只删不改：标题条目删掉之后，列表回退到同样剥离过信封的首条消息展示，
+ * 下一轮对话也可以重新生成。判定按前缀而不是完整标记正则——存量标题是截断
+ * 过的，附件标记的结尾方括号大概率已经被切掉了。
+ *
+ * 幂等：脏条目删完之后重跑什么都不做。
+ */
+const ENVELOPE_TITLE_PREFIXES = [
+  REMINDER_BLOCK_PREFIX,
+  REFERENCE_BLOCK_PREFIX,
+  "[attached_",
+  "[SessionFile]",
+];
+
+function collectAgentSessionTitlePaths(agentsDir) {
+  let agentDirs;
+  try {
+    agentDirs = readDirectoryLikeDirentsSync(agentsDir);
+  } catch {
+    return [];
+  }
+
+  const out = [];
+  for (const dir of agentDirs) {
+    const titlePath = path.join(agentsDir, dir.name, "sessions", "session-titles.json");
+    try {
+      if (fs.statSync(titlePath).isFile()) out.push(titlePath);
+    } catch {
+      // 还没生成过标题的 agent 没有这个文件，属于正常情况。
+    }
+  }
+  return out;
+}
+
+function migrateCleanEnvelopeSessionTitles(ctx) {
+  const { agentsDir, log } = ctx;
+  let removed = 0;
+
+  for (const titlePath of collectAgentSessionTitlePaths(agentsDir)) {
+    let titles;
+    try {
+      titles = JSON.parse(fs.readFileSync(titlePath, "utf-8"));
+    } catch (err) {
+      log?.(`[migrations] #53: 跳过无法解析的标题文件 ${titlePath}: ${err.message}`);
+      continue;
+    }
+    if (!titles || typeof titles !== "object" || Array.isArray(titles)) continue;
+
+    let changed = false;
+    for (const [sessionKey, title] of Object.entries(titles)) {
+      if (typeof title !== "string") continue;
+      if (!ENVELOPE_TITLE_PREFIXES.some((prefix) => title.startsWith(prefix))) continue;
+      delete titles[sessionKey];
+      changed = true;
+      removed += 1;
+    }
+    if (!changed) continue;
+
+    atomicWriteSync(titlePath, JSON.stringify(titles, null, 2));
+  }
+
+  log?.(`[migrations] #53: 清除注入信封污染的会话标题（${removed}）`);
 }
 
 /**
