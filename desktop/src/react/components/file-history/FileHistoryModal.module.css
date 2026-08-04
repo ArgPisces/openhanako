@@ -12,7 +12,7 @@
   flex-direction: column;
   overflow: hidden;
   font-family: var(--font-ui, system-ui, -apple-system, "Segoe UI", sans-serif);
-  box-shadow: 0 16px 48px var(--shadow, rgba(0, 0, 0, 0.12)), 0 4px 14px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 16px 48px var(--shadow, rgba(0, 0, 0, 0.12));
 }
 
 .header {
@@ -231,12 +231,12 @@
 }
 
 .lineAdded {
-  background: rgba(var(--green-rgb, 123, 174, 127), 0.14);
+  background: color-mix(in srgb, var(--green, #7BAE7F) 14%, transparent);
   color: var(--text, #3b3d3f);
 }
 
 .lineRemoved {
-  background: rgba(var(--danger-rgb, 139, 58, 58), 0.12);
+  background: color-mix(in srgb, var(--danger, #8B3A3A) 12%, transparent);
   color: var(--text, #3b3d3f);
 }
 

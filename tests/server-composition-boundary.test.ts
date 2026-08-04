@@ -60,6 +60,8 @@ const PRE_REFACTOR_MOUNT_CALLS = Object.freeze([
   '"/api" :: createDiaryRoute',
   '"/api" :: createDmRoute',
   '"/api" :: createExperimentsRoute',
+  // 工作区文件历史的查询与还原面（挂载点 open-root，与 resource-io 同域）
+  '"/api" :: createFileHistoryRoute',
   '"/api" :: createFsRoute',
   '"/api" :: createInputDraftsRoute',
   // Added after the split: the MCP surface used to reach the app through the
