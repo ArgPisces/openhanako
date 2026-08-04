@@ -540,6 +540,25 @@ export const PERSISTENT_STORES: readonly StoreDescriptor[] = Object.freeze([
     ],
   }),
   defineStore({
+    id: "file-history-sqlite",
+    ownerModule: "lib/file-history/history-store.ts",
+    pathPatterns: [
+      "file-history/{workspaceHash}/history.sqlite",
+      "file-history/{workspaceHash}/history.sqlite-wal",
+      "file-history/{workspaceHash}/history.sqlite-shm",
+    ],
+    format: "sqlite",
+    schemaSource: { kind: "sqlite-runtime", module: "lib/file-history/history-store.ts", contract: "FileHistoryStore runtime DDL and meta.schema_version" },
+    openEntry: ["new FileHistoryStore"],
+    firstPossibleOpenPhase: "engine_construct",
+    firstPossibleWritePhase: "engine_construct",
+    identityContract: "workspaceHash derives from the resolved workspace root path; one database per workspace; rel_path inside is workspace-relative posix.",
+    siteRules: [
+      ...rules(["lib/file-history/history-store.ts"], "Opens and writes the per-workspace file-history database."),
+      ...rules(["lib/file-history/file-history-service.ts"], "Constructs per-workspace stores and manages their lifecycle.", ["persistent-store-constructor"], "FileHistoryStore"),
+    ],
+  }),
+  defineStore({
     id: "session-manifest-sqlite",
     ownerModule: "core/session-manifest/store.ts",
     pathPatterns: ["session-manifest.db", "session-manifest.db-wal", "session-manifest.db-shm"],

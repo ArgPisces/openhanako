@@ -954,6 +954,44 @@
       "exemption": null
     },
     {
+      "id": "file-history-sqlite",
+      "ownerModule": "lib/file-history/history-store.ts",
+      "pathPattern": "file-history/{workspaceHash}/history.sqlite",
+      "pathPatterns": [
+        "file-history/{workspaceHash}/history.sqlite",
+        "file-history/{workspaceHash}/history.sqlite-wal",
+        "file-history/{workspaceHash}/history.sqlite-shm"
+      ],
+      "pathExclusions": [],
+      "pathKind": "file",
+      "format": "sqlite",
+      "schemaSource": {
+        "kind": "sqlite-runtime",
+        "module": "lib/file-history/history-store.ts",
+        "contract": "FileHistoryStore runtime DDL and meta.schema_version"
+      },
+      "schemaContract": {
+        "kind": "runtime-source",
+        "source": "lib/file-history/history-store.ts",
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs."
+      },
+      "openEntry": [
+        "new FileHistoryStore"
+      ],
+      "migrationEntry": [],
+      "protocolModules": [],
+      "firstPossibleOpenPhase": "engine_construct",
+      "firstPossibleWritePhase": "engine_construct",
+      "epochPolicy": "epoch-managed",
+      "checkpointPolicy": "Included in a future epoch checkpoint unless the coordinator explicitly classifies it otherwise.",
+      "restorePolicy": "Restore only through the owning module after reader compatibility is established.",
+      "affectedByEpochMigration": true,
+      "bootstrapSafety": null,
+      "preCoordinatorReadProjection": null,
+      "identityContract": "workspaceHash derives from the resolved workspace root path; one database per workspace; rel_path inside is workspace-relative posix.",
+      "exemption": null
+    },
+    {
       "id": "installed-plugins",
       "ownerModule": "core/plugin-manager.ts",
       "pathPattern": "plugins/{pluginId}",
@@ -6350,6 +6388,33 @@
       "reason": "Writes command output to an explicit tool-selected path under the active sandbox/workspace.",
       "storeId": null,
       "exemptionId": "sandbox-command-output",
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/file-history/file-history-service.ts",
+      "kind": "persistent-store-constructor",
+      "excerpt": "new FileHistoryStore({ dbPath: path.join(this._historyRoot, workspaceHashForRoot(root), \"history.sqlite\"), mergeWindowMs: this._mergeWindowMs, now: this._now, })",
+      "reason": "Constructs per-workspace stores and manages their lifecycle.",
+      "storeId": "file-history-sqlite",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/file-history/history-store.ts",
+      "kind": "database-open",
+      "excerpt": "new Database(dbPath)",
+      "reason": "Opens and writes the per-workspace file-history database.",
+      "storeId": "file-history-sqlite",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/file-history/history-store.ts",
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(path.dirname(dbPath), { recursive: true })",
+      "reason": "Opens and writes the per-workspace file-history database.",
+      "storeId": "file-history-sqlite",
+      "exemptionId": null,
       "ordinal": 0
     },
     {

@@ -90,6 +90,7 @@ const PERSISTENT_CONSTRUCTORS = new Set([
   "CronStore",
   "DeferredResultStore",
   "FactStore",
+  "FileHistoryStore",
   "InputDraftsStore",
   "LoopStore",
   "PreferencesManager",

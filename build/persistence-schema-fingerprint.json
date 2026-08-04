@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:ad371a90d84780d8943117deb0f9929873313862966957042bd58c36c2bf847d",
+  "payloadFingerprint": "sha256:0103b3720cdb56ff9011510d4ca15ccbfadd96cbd136db347f30daa8a47c3fd5",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -1575,6 +1575,44 @@
         "contract": "execution lease registry validator and atomic serializer",
         "kind": "runtime-contract",
         "module": "core/execution-lease-registry.ts"
+      }
+    },
+    {
+      "affectedByEpochMigration": true,
+      "bootstrapSafety": null,
+      "checkpointPolicy": "Included in a future epoch checkpoint unless the coordinator explicitly classifies it otherwise.",
+      "epochPolicy": "epoch-managed",
+      "exemption": null,
+      "firstPossibleOpenPhase": "engine_construct",
+      "firstPossibleWritePhase": "engine_construct",
+      "format": "sqlite",
+      "id": "file-history-sqlite",
+      "identityContract": "workspaceHash derives from the resolved workspace root path; one database per workspace; rel_path inside is workspace-relative posix.",
+      "migrationEntry": [],
+      "openEntry": [
+        "new FileHistoryStore"
+      ],
+      "ownerModule": "lib/file-history/history-store.ts",
+      "pathExclusions": [],
+      "pathKind": "file",
+      "pathPattern": "file-history/{workspaceHash}/history.sqlite",
+      "pathPatterns": [
+        "file-history/{workspaceHash}/history.sqlite",
+        "file-history/{workspaceHash}/history.sqlite-wal",
+        "file-history/{workspaceHash}/history.sqlite-shm"
+      ],
+      "preCoordinatorReadProjection": null,
+      "protocolModules": [],
+      "restorePolicy": "Restore only through the owning module after reader compatibility is established.",
+      "schemaContract": {
+        "compatibility": "The named runtime reader is canonical; this inventory does not imply stricter validation than runtime currently performs.",
+        "kind": "runtime-source",
+        "source": "lib/file-history/history-store.ts"
+      },
+      "schemaSource": {
+        "contract": "FileHistoryStore runtime DDL and meta.schema_version",
+        "kind": "sqlite-runtime",
+        "module": "lib/file-history/history-store.ts"
       }
     },
     {
@@ -3080,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Session capability-drift notices and their future dismissed-fingerprint writes were removed. Existing capabilityDriftDismissedFingerprint data remains readable through the manifest store and legacy migration paths, is preserved when copying sessions, and is ignored safely; no persisted field, table, type, or DATA_EPOCH changed.",
-    "payloadFingerprint": "sha256:ad371a90d84780d8943117deb0f9929873313862966957042bd58c36c2bf847d"
+    "compatibilityReason": "Adds the new file-history-sqlite store to the inventory; no existing store's schema, reader, or on-disk layout changes. The per-workspace history database is created on first open and carries its own meta.schema_version, so homes without it stay readable.",
+    "payloadFingerprint": "sha256:0103b3720cdb56ff9011510d4ca15ccbfadd96cbd136db347f30daa8a47c3fd5"
   },
   "schemas": [
     {
@@ -3294,6 +3332,48 @@
       "module": "core/execution-lease-registry.ts",
       "sourceHash": "sha256:466f63f0b4ee2839b4d70bb51a85f28ec643c35c324b06b465ff39181b6716c7",
       "storeId": "execution-leases"
+    },
+    {
+      "contract": "FileHistoryStore runtime DDL and meta.schema_version",
+      "kind": "sqlite-runtime",
+      "module": "lib/file-history/history-store.ts",
+      "runtimeSchema": {
+        "objects": [
+          {
+            "name": "idx_snapshots_file_time",
+            "sql": "CREATE INDEX idx_snapshots_file_time ON snapshots(file_id, captured_at DESC)",
+            "tableName": "snapshots",
+            "type": "index"
+          },
+          {
+            "name": "idx_snapshots_time",
+            "sql": "CREATE INDEX idx_snapshots_time ON snapshots(captured_at)",
+            "tableName": "snapshots",
+            "type": "index"
+          },
+          {
+            "name": "files",
+            "sql": "CREATE TABLE files( id INTEGER PRIMARY KEY AUTOINCREMENT, rel_path TEXT NOT NULL UNIQUE, deleted_at INTEGER )",
+            "tableName": "files",
+            "type": "table"
+          },
+          {
+            "name": "meta",
+            "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            "tableName": "meta",
+            "type": "table"
+          },
+          {
+            "name": "snapshots",
+            "sql": "CREATE TABLE snapshots( id INTEGER PRIMARY KEY AUTOINCREMENT, file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE, content_hash TEXT NOT NULL, content BLOB NOT NULL, raw_size INTEGER NOT NULL, stored_size INTEGER NOT NULL, captured_at INTEGER NOT NULL, origin TEXT NOT NULL, op_context TEXT )",
+            "tableName": "snapshots",
+            "type": "table"
+          }
+        ],
+        "userVersion": 0
+      },
+      "sourceHash": "sha256:d06b4e7e0f6f4bc7040bad4d517fe77c220a1f680a5f51d42086bae66622683d",
+      "storeId": "file-history-sqlite"
     },
     {
       "contract": "installed manifest, install receipt, backup, and source-package directory protocols",
@@ -7110,6 +7190,30 @@
       "reason": "Writes command output to an explicit tool-selected path under the active sandbox/workspace.",
       "sourceFile": "lib/exec-command/runner.ts",
       "storeId": null
+    },
+    {
+      "exemptionId": null,
+      "kind": "persistent-store-constructor",
+      "ordinal": 0,
+      "reason": "Constructs per-workspace stores and manages their lifecycle.",
+      "sourceFile": "lib/file-history/file-history-service.ts",
+      "storeId": "file-history-sqlite"
+    },
+    {
+      "exemptionId": null,
+      "kind": "database-open",
+      "ordinal": 0,
+      "reason": "Opens and writes the per-workspace file-history database.",
+      "sourceFile": "lib/file-history/history-store.ts",
+      "storeId": "file-history-sqlite"
+    },
+    {
+      "exemptionId": null,
+      "kind": "mkdir",
+      "ordinal": 0,
+      "reason": "Opens and writes the per-workspace file-history database.",
+      "sourceFile": "lib/file-history/history-store.ts",
+      "storeId": "file-history-sqlite"
     },
     {
       "exemptionId": "external-file-ref-io",

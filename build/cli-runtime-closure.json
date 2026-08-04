@@ -5576,6 +5576,59 @@
       "reason": "Reached via esbuild source module graph, imported by lib/pi-sdk/search-tools.ts (import-statement); lib/skills/skill-package-installer.ts (import-statement); server/routes/plugins.ts (import-statement)."
     },
     {
+      "path": "lib/file-history/file-history-service.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/engine.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/engine.ts (import-statement)."
+    },
+    {
+      "path": "lib/file-history/history-store.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/file-history/file-history-service.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/file-history/file-history-service.ts (import-statement)."
+    },
+    {
+      "path": "lib/file-history/text-file-policy.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/file-history/workspace-watcher.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/file-history/file-history-service.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/file-history/workspace-watcher.ts (import-statement); lib/file-history/file-history-service.ts (import-statement)."
+    },
+    {
+      "path": "lib/file-history/workspace-watcher.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/file-history/file-history-service.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/file-history/file-history-service.ts (import-statement)."
+    },
+    {
       "path": "lib/file-metadata.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112659,9 +112712,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9629,
+    "totalFiles": 9633,
     "byInputType": {
-      "source-graph": 651,
+      "source-graph": 655,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }
