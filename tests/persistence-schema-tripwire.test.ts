@@ -4,13 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   SOURCE_DIGEST_METHOD,
   assertCommittedPersistenceSchemaFingerprint,
   executableSourceHash,
   generatePersistenceSchemaFingerprint,
+  persistenceSchemaCacheStats,
+  resetPersistenceSchemaCaches,
   validateSchemaChangeDeclaration,
   writePersistenceSchemaFingerprint,
 } from "../scripts/generate-persistence-schema-fingerprint.mjs";
@@ -36,6 +38,17 @@ function temporaryRepository() {
   }
   return root;
 }
+
+// The expensive step here is the cold one: parsing every guarded source in the
+// inventory, then building three real SQLite databases to read their schemas
+// back. That is under a second on a developer machine and nearly an order of
+// magnitude slower on the Windows CI runner, where it once consumed the whole
+// default ten-second budget and failed the run. Memoization has taken the
+// repeated cost out; this headroom covers the cold start itself and the stores
+// still to come. A regression should be caught by the two "once per run"
+// contracts above, which name the work directly — not by a timeout, which only
+// ever reports that something, somewhere, took too long.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe("persistence schema tripwire", () => {
   it("uses real SQLite stores and matches the deterministic committed fingerprint", async () => {
@@ -181,6 +194,119 @@ describe("persistence schema tripwire", () => {
         sourceOverrides: new Map([[module, mutated]]),
       })).resolves.not.toThrow();
     }
+  });
+
+  it("opens each SQLite store once per repository root, however many payloads one run computes", async () => {
+    // Every payload this generator computes introspects the real SQLite stores
+    // by creating a throwaway database and reading its schema back. That result
+    // depends only on the repository root — `sourceOverrides` cannot reach it,
+    // and the store classes themselves come from an ESM import the runtime has
+    // already cached — so recomputing it per payload buys nothing and costs a
+    // temp directory, a database build and a teardown each time.
+    //
+    // The cost lands unevenly: on this machine the repetition is invisible, on
+    // the Windows CI runner filesystem work is nearly an order of magnitude
+    // slower and the tests above spend most of their budget here. They timed
+    // out on CI once a third SQLite store was registered. Pin the contract that
+    // makes those tests affordable rather than the symptom of the timeout.
+    resetPersistenceSchemaCaches();
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+    const sqliteStores = inventory.stores.filter(
+      (store: { schemaSource: { kind: string } }) => store.schemaSource.kind === "sqlite-runtime",
+    );
+    expect(sqliteStores.length).toBeGreaterThan(0);
+
+    const mkdtempSync = vi.spyOn(fs, "mkdtempSync");
+    try {
+      for (const module of ["shared/data-epoch.cjs", "core/data-epoch-coordinator.ts", "server/index.ts"]) {
+        const original = fs.readFileSync(path.join(ROOT, module), "utf-8");
+        await assertCommittedPersistenceSchemaFingerprint({
+          rootDir: ROOT,
+          committedFingerprint: committed,
+          inventory,
+          sourceOverrides: new Map([[module, `// introspection budget probe\n${original}`]]),
+        });
+      }
+      const introspections = mkdtempSync.mock.calls
+        .map(([prefix]) => String(prefix))
+        .filter((prefix) => /hana-(?:session-manifest|facts|file-history)-schema-/.test(prefix));
+      expect(introspections).toHaveLength(sqliteStores.length);
+    } finally {
+      mkdtempSync.mockRestore();
+    }
+  });
+
+  it("parses each distinct source once, however many payloads reuse it", async () => {
+    // Hashing a guarded module means parsing it, and parsing is where this
+    // tripwire actually spends its time: roughly seven tenths of one payload.
+    // Each probe below re-verifies the whole inventory while overriding a
+    // single module, so all but one source is byte-identical to the round
+    // before — re-parsing them buys nothing.
+    //
+    // Assert the contract rather than a call count: no (path, content) pair is
+    // ever parsed twice. That stays true as stores are added, and it is exactly
+    // the property that makes the memoization safe — a changed byte is a
+    // different key, so a cached digest can never describe source that moved.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+
+    resetPersistenceSchemaCaches();
+    const parsesPerRound: number[] = [];
+    let before = persistenceSchemaCacheStats().sourceParses;
+    for (const module of ["shared/data-epoch.cjs", "core/data-epoch-coordinator.ts", "server/index.ts"]) {
+      const original = fs.readFileSync(path.join(ROOT, module), "utf-8");
+      await assertCommittedPersistenceSchemaFingerprint({
+        rootDir: ROOT,
+        committedFingerprint: committed,
+        inventory,
+        sourceOverrides: new Map([[module, `// parse budget probe\n${original}`]]),
+      });
+      const after = persistenceSchemaCacheStats().sourceParses;
+      parsesPerRound.push(after - before);
+      before = after;
+    }
+
+    // The first round has to read the whole inventory. Every later round differs
+    // from it by at most two sources: the module this round overrides, and the
+    // one the round before overrode, now back to its committed bytes.
+    const [firstRound, ...laterRounds] = parsesPerRound;
+    expect(firstRound).toBeGreaterThan(20);
+    for (const round of laterRounds) expect(round).toBeLessThanOrEqual(2);
+  });
+
+  it("re-introspects after the cache is dropped, so a fresh run never reuses a stale schema", async () => {
+    // Memoizing runtime schemas is only safe because the cache cannot outlive
+    // the process that filled it. Prove the reset actually clears it: without
+    // this, a cache that silently ignored resets would let every later test in
+    // this file assert against whatever the first one happened to observe.
+    const committed = JSON.parse(fs.readFileSync(FINGERPRINT_PATH, "utf-8"));
+    const inventory = JSON.parse(fs.readFileSync(INVENTORY_PATH, "utf-8"));
+    const sqliteStores = inventory.stores.filter(
+      (store: { schemaSource: { kind: string } }) => store.schemaSource.kind === "sqlite-runtime",
+    );
+
+    const countIntrospections = async () => {
+      const mkdtempSync = vi.spyOn(fs, "mkdtempSync");
+      try {
+        await assertCommittedPersistenceSchemaFingerprint({
+          rootDir: ROOT,
+          committedFingerprint: committed,
+          inventory,
+        });
+        return mkdtempSync.mock.calls
+          .map(([prefix]) => String(prefix))
+          .filter((prefix) => /hana-(?:session-manifest|facts|file-history)-schema-/.test(prefix)).length;
+      } finally {
+        mkdtempSync.mockRestore();
+      }
+    };
+
+    resetPersistenceSchemaCaches();
+    expect(await countIntrospections()).toBe(sqliteStores.length);
+    expect(await countIntrospections()).toBe(0);
+    resetPersistenceSchemaCaches();
+    expect(await countIntrospections()).toBe(sqliteStores.length);
   });
 
   it("catches a statement-boundary rewrite that keeps the flat token stream intact", async () => {
