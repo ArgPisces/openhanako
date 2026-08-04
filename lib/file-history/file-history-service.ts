@@ -126,6 +126,9 @@ export class FileHistoryService {
           } catch (err) {
             this._log(`file-history retention error: ${(err as Error).message}`);
           }
+          // macOS 的 fsevents 在高并发文件系统活动下会静默丢弃事件且不报 error，
+          // "watcher 出错时重扫"兜不住这种丢失，靠周期性基线扫描把漏网变更补进历史
+          this._track(this._sweep(entry));
         }
       }, FILE_HISTORY_DEFAULTS.retentionIntervalMs);
       this._retentionTimer.unref?.();
