@@ -2738,7 +2738,8 @@
       "deleteSelected": "刪除 {count} 項",
       "deleteN": "刪除 {n} 項",
       "newMdFile": "新建 Markdown 文件",
-      "newFolder": "新建資料夾"
+      "newFolder": "新建資料夾",
+      "history": "歷史版本"
     },
     "deleteConfirm": "要把「{name}」移到系統垃圾桶嗎？",
     "deleteSelectedConfirm": "要把選取的 {count} 項移到系統垃圾桶嗎？",
@@ -3416,7 +3417,25 @@
       "text": "Beautify 当前支持两类能力。1) Markdown cover 工作流：先读取封面风格说明，再准备一张图片，可以来自生图工具、未来的内置头图库或用户本地图片，最后把图片复制到附件文件夹并写入 cover frontmatter。2) 整页 HTML 美学规范：生成网页 / 排版页 / 报告页前，先用 beautify_get-html-style-guide 获取 Hana 預設美术方向（无参拿路由器，再按 section 逐节取规范）。"
     }
   },
+  "fileHistory": {
+    "title": "檔案歷史",
+    "searchPlaceholder": "搜尋檔案…",
+    "deletedGroup": "已刪除檔案",
+    "empty": "尚無歷史記錄",
+    "noVersions": "該檔案暫無版本",
+    "selectVersion": "選擇一個版本查看變化",
+    "restore": "還原此版本",
+    "restoreDone": "已還原",
+    "error": "操作失敗",
+    "origin": {
+      "event": "應用內修改",
+      "watcher": "外部修改",
+      "sweep": "基線快照",
+      "restore": "還原"
+    }
+  },
   "preview": {
+    "fileHistory": "歷史版本",
     "fileMovedOrDeleted": "原稿件已移动或者删除",
     "legacyImageUpgrade": "此图片预览已升级，点此在新查看器打开",
     "coverLayoutSaveFailed": "Cover 布局保存失败，文件可能已被外部修改。",

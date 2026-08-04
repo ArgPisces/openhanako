@@ -2738,7 +2738,8 @@
       "deleteSelected": "删除 {count} 项",
       "deleteN": "删除 {n} 项",
       "newMdFile": "新建 Markdown 文档",
-      "newFolder": "新建文件夹"
+      "newFolder": "新建文件夹",
+      "history": "历史版本"
     },
     "deleteConfirm": "要把「{name}」移到系统废纸篓吗？",
     "deleteSelectedConfirm": "要把选中的 {count} 项移到系统废纸篓吗？",
@@ -3378,7 +3379,25 @@
       "attachmentDirName": "文本附件"
     }
   },
+  "fileHistory": {
+    "title": "文件历史",
+    "searchPlaceholder": "搜索文件…",
+    "deletedGroup": "已删除文件",
+    "empty": "暂无历史记录",
+    "noVersions": "该文件暂无版本",
+    "selectVersion": "选择一个版本查看变化",
+    "restore": "还原此版本",
+    "restoreDone": "已还原",
+    "error": "操作失败",
+    "origin": {
+      "event": "应用内修改",
+      "watcher": "外部修改",
+      "sweep": "基线快照",
+      "restore": "还原"
+    }
+  },
   "preview": {
+    "fileHistory": "历史版本",
     "cover": {
       "saveImage": "保存图片",
       "regenerateWithPrompt": "自定义提示词生成图片",

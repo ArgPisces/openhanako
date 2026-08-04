@@ -2738,7 +2738,8 @@
       "deleteSelected": "Delete {count} items",
       "deleteN": "Delete {n} items",
       "newMdFile": "New Markdown Document",
-      "newFolder": "New Folder"
+      "newFolder": "New Folder",
+      "history": "File history"
     },
     "deleteConfirm": "Move \"{name}\" to the system Trash?",
     "deleteSelectedConfirm": "Move {count} selected items to the system Trash?",
@@ -3501,7 +3502,25 @@
       "attachmentDirName": "Attachments"
     }
   },
+  "fileHistory": {
+    "title": "File History",
+    "searchPlaceholder": "Search files…",
+    "deletedGroup": "Deleted files",
+    "empty": "No history yet",
+    "noVersions": "No versions for this file",
+    "selectVersion": "Select a version to see changes",
+    "restore": "Restore this version",
+    "restoreDone": "Restored",
+    "error": "Operation failed",
+    "origin": {
+      "event": "In-app edit",
+      "watcher": "External change",
+      "sweep": "Baseline snapshot",
+      "restore": "Restore"
+    }
+  },
   "preview": {
+    "fileHistory": "File history",
     "cover": {
       "saveImage": "Save image",
       "regenerateWithPrompt": "Generate image with custom prompt",

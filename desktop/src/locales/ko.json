@@ -2738,7 +2738,8 @@
       "deleteSelected": "{count}개 항목 삭제",
       "deleteN": "{n}개 항목 삭제",
       "newMdFile": "새 Markdown 문서",
-      "newFolder": "새 폴더"
+      "newFolder": "새 폴더",
+      "history": "파일 기록"
     },
     "deleteConfirm": "\"{name}\"을 시스템 휴지통으로 이동할까요?",
     "deleteSelectedConfirm": "선택한 {count}개 항목을 시스템 휴지통으로 이동할까요?",
@@ -3416,7 +3417,25 @@
       "text": "Beautify는 현재 두 가지 기능을 제공해요. 1) Markdown 커버 워크플로: 먼저 커버 스타일 가이드를 읽고, 이미지를 준비(Media Generation, 향후 내장 갤러리, 로컬 파일)한 뒤 attachments 폴더에 복사하고 cover frontmatter를 기록해요. 2) 전체 페이지 HTML 미학 가이드: 웹 페이지/조판 페이지/보고서 생성 전 beautify_get-html-style-guide로 Hana 기본 아트 디렉션을 받으세요(인수 없이 호출하면 라우터, 필요 시 섹션별로 가져오기)."
     }
   },
+  "fileHistory": {
+    "title": "파일 기록",
+    "searchPlaceholder": "파일 검색…",
+    "deletedGroup": "삭제된 파일",
+    "empty": "아직 기록이 없습니다",
+    "noVersions": "이 파일의 버전이 없습니다",
+    "selectVersion": "버전을 선택하여 변경 사항 보기",
+    "restore": "이 버전으로 복원",
+    "restoreDone": "복원됨",
+    "error": "작업 실패",
+    "origin": {
+      "event": "앱 내 편집",
+      "watcher": "외부 변경",
+      "sweep": "기준 스냅샷",
+      "restore": "복원"
+    }
+  },
   "preview": {
+    "fileHistory": "파일 기록",
     "fileMovedOrDeleted": "원고가 이동했거나 삭제되었어요",
     "legacyImageUpgrade": "이미지 미리보기가 업그레이드되었어요. 새 뷰어에서 열려면 클릭하세요.",
     "coverLayoutSaveFailed": "Cover 레이아웃 저장에 실패했어요. 파일이 외부에서 변경되었을 수 있어요.",

@@ -2738,7 +2738,8 @@
       "deleteSelected": "{count} 件を削除",
       "deleteN": "{n} 件を削除",
       "newMdFile": "新しい Markdown ドキュメント",
-      "newFolder": "新しいフォルダ"
+      "newFolder": "新しいフォルダ",
+      "history": "履歴"
     },
     "deleteConfirm": "「{name}」をシステムのゴミ箱に移動しますか？",
     "deleteSelectedConfirm": "選択した {count} 件をシステムのゴミ箱に移動しますか？",
@@ -3416,7 +3417,25 @@
       "text": "Beautify は現在 2 つの機能を提供しています。1) Markdown カバーワークフロー: まずカバースタイルガイドを読み、画像を準備（Media Generation、将来の組み込みギャラリー、またはローカルファイルから）、attachments フォルダーにコピーし、カバー frontmatter を書き込みます。2) フルページ HTML 美学ガイド: Web ページ/組版ページ/レポートを生成する前に beautify_get-html-style-guide を呼び出し、Hana のデフォルトアートディレクションを取得（引数なしでルーターを返し、必要に応じてセクションを取得）。"
     }
   },
+  "fileHistory": {
+    "title": "履歴",
+    "searchPlaceholder": "ファイルを検索…",
+    "deletedGroup": "削除されたファイル",
+    "empty": "履歴はまだありません",
+    "noVersions": "このファイルにはバージョンがありません",
+    "selectVersion": "バージョンを選択して変更を表示",
+    "restore": "このバージョンに戻す",
+    "restoreDone": "復元しました",
+    "error": "操作に失敗しました",
+    "origin": {
+      "event": "アプリ内編集",
+      "watcher": "外部変更",
+      "sweep": "ベースラインスナップショット",
+      "restore": "復元"
+    }
+  },
   "preview": {
+    "fileHistory": "履歴",
     "fileMovedOrDeleted": "原稿が移動または削除されました",
     "legacyImageUpgrade": "この画像プレビューは更新されました。新しいビューアで開くにはクリックしてください。",
     "coverLayoutSaveFailed": "Cover レイアウトの保存に失敗しました。ファイルが外部で変更された可能性があります。",
