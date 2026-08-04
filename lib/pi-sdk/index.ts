@@ -89,6 +89,9 @@ export { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
 // ── Utilities ──
 export { formatSkillsForPrompt, getLastAssistantUsage } from "@earendil-works/pi-coding-agent";
 export { AuthStorage };
+// The file-backed store is exported alongside AuthStorage because forcing a
+// credential rotation has to take the same auth.json lock the SDK takes.
+export { FileAuthStorageBackend } from "@earendil-works/pi-coding-agent";
 
 type OAuthProviderId = Parameters<AuthStorage["login"]>[0];
 export type OAuthLoginCallbacks = Parameters<AuthStorage["login"]>[1];

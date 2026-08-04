@@ -11,10 +11,12 @@
 import path from "path";
 import {
   AuthStorage,
+  FileAuthStorageBackend,
   createModelRegistry,
   registerModelProvider,
   unregisterModelProvider,
 } from "../lib/pi-sdk/index.ts";
+import { forceRefreshOAuthApiKey } from "./oauth-force-refresh.ts";
 import { t } from "../lib/i18n.ts";
 import { ProviderRegistry } from "./provider-registry.ts";
 import { ExecutionRouter } from "./execution-router.ts";
@@ -124,6 +126,7 @@ function applyProviderModelMetadata(model, metadataByModel) {
 }
 
 export class ModelManager {
+  declare _authBackend: any;
   declare _authStorage: any;
   declare _availableModels: any;
   declare _defaultModel: any;
@@ -139,6 +142,7 @@ export class ModelManager {
   constructor({ hanakoHome }) {
     this._hanakoHome = hanakoHome;
     this._authStorage = null;
+    this._authBackend = null;
     this._modelRegistry = null;
     this._registeredSdkProviderIds = new Set();
     this._defaultModel = null;   // 设置页面选的，持久化，bridge 用这个
@@ -152,6 +156,8 @@ export class ModelManager {
   /** 初始化 AuthStorage + ModelRegistry + 新架构模块 */
   init() {
     this._authStorage = AuthStorage.create(path.join(this._hanakoHome, "auth.json"));
+    // Same file, same lock: forced OAuth rotation writes through this backend.
+    this._authBackend = new FileAuthStorageBackend(path.join(this._hanakoHome, "auth.json"));
     this.providerRegistry.reload();
     this._removeApiKeyProviderAuthEntries();
     const projection = this._buildChatProjectionInputs();
@@ -495,10 +501,16 @@ export class ModelManager {
    * the refresh boundary explicit without moving adapter-specific semantics into
    * ProviderRegistry.
    *
+   * `options.forceRefresh` goes one step further: it rotates the OAuth
+   * credential regardless of the locally recorded expiry, for callers whose
+   * request was just rejected by the provider. `options.staleApiKey` is the
+   * token that got rejected, so a concurrent rotation is not repeated.
+   *
    * @param {string} provider
+   * @param {{ forceRefresh?: boolean, staleApiKey?: string }} [options]
    * @returns {Promise<{ api_key: string, base_url: string, api: string, accountId?: string }>}
    */
-  async resolveProviderCredentialsFresh(provider) {
+  async resolveProviderCredentialsFresh(provider, options: { forceRefresh?: boolean, staleApiKey?: string } = {}) {
     if (!provider) return { api_key: "", base_url: "", api: "" };
     const chatProvider = this.providerRegistry.resolveChatProvider?.(provider);
     const entry = chatProvider?.entry || this.providerRegistry.get(provider);
@@ -515,7 +527,14 @@ export class ModelManager {
       if (!this._authStorage || typeof this._authStorage.getApiKey !== "function") {
         throw new Error(`${t("error.providerMissingCreds", { provider })} (auth: ${authKey})`);
       }
-      refreshedOAuthKey = await this._authStorage.getApiKey(authKey, { includeFallback: false });
+      refreshedOAuthKey = options.forceRefresh
+        ? await forceRefreshOAuthApiKey({
+            authStorage: this._authStorage,
+            backend: this._authBackend,
+            authKey,
+            staleApiKey: options.staleApiKey,
+          })
+        : await this._authStorage.getApiKey(authKey, { includeFallback: false });
       this._authStorage.reload?.();
       this.providerRegistry.clearAuthCache?.();
       if (!refreshedOAuthKey) {

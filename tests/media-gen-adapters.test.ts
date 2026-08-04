@@ -873,6 +873,83 @@ describe("openai codex oauth adapter", () => {
     }, ctx)).rejects.toThrow(/Codex.*size/i);
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  it("rotates the OAuth credential and retries once when the backend rejects the token", async () => {
+    const { openaiCodexImageAdapter } = await import("../core/media-adapters/openai-codex.ts");
+
+    const fakeB64 = Buffer.from("fake-codex-image").toString("base64");
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ detail: "Provided authentication token is expired." }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: [{ type: "image_generation_call", result: fakeB64 }],
+        }),
+      });
+
+    const credentialCalls = [];
+    const ctx = makeBusCtx("stale-token", "https://chatgpt.com/backend-api", "openai-codex-oauth");
+    ctx.bus.request = vi.fn(async (type, payload) => {
+      if (type === "provider:credentials" && payload.providerId === "openai-codex-oauth") {
+        credentialCalls.push(payload);
+        return {
+          apiKey: payload.forceRefresh ? "rotated-token" : "stale-token",
+          baseUrl: "https://chatgpt.com/backend-api",
+          api: "openai-codex-responses",
+          accountId: "acct_123",
+        };
+      }
+      return { error: "not_found" };
+    });
+
+    const result = await openaiCodexImageAdapter.submit({
+      prompt: "a quiet notebook",
+    }, ctx);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(credentialCalls).toHaveLength(2);
+    expect(credentialCalls[0].forceRefresh).toBeUndefined();
+    expect(credentialCalls[1]).toMatchObject({
+      providerId: "openai-codex-oauth",
+      forceRefresh: true,
+      staleApiKey: "stale-token",
+    });
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe("Bearer stale-token");
+    expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe("Bearer rotated-token");
+    expect(result.files).toHaveLength(1);
+  });
+
+  it("surfaces the backend error when the retried request is rejected again", async () => {
+    const { openaiCodexImageAdapter } = await import("../core/media-adapters/openai-codex.ts");
+
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ detail: "Provided authentication token is expired." }),
+    });
+
+    const ctx = makeBusCtx("stale-token", "https://chatgpt.com/backend-api", "openai-codex-oauth");
+    ctx.bus.request = vi.fn(async (type, payload) => {
+      if (type === "provider:credentials" && payload.providerId === "openai-codex-oauth") {
+        return {
+          apiKey: payload.forceRefresh ? "rotated-token" : "stale-token",
+          baseUrl: "https://chatgpt.com/backend-api",
+          api: "openai-codex-responses",
+          accountId: "acct_123",
+        };
+      }
+      return { error: "not_found" };
+    });
+
+    await expect(openaiCodexImageAdapter.submit({
+      prompt: "a quiet notebook",
+    }, ctx)).rejects.toThrow(/API error 401/);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("minimax adapter", () => {

@@ -1612,6 +1612,18 @@
       "reason": "Reached via esbuild source module graph, imported by server/routes/mobile-workbench.ts (import-statement); server/routes/sessions.ts (import-statement); server/routes/studio-workspaces.ts (import-statement)."
     },
     {
+      "path": "core/oauth-force-refresh.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/model-manager.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/model-manager.ts (import-statement)."
+    },
+    {
       "path": "core/output-length-contract.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112647,9 +112659,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9628,
+    "totalFiles": 9629,
     "byInputType": {
-      "source-graph": 650,
+      "source-graph": 651,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

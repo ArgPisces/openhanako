@@ -727,13 +727,16 @@ export class Hub {
 
     // ── provider & agent handlers ──
 
-    this._sessionHandlerCleanups.push(bus.handle("provider:credentials", async ({ providerId }) => {
+    this._sessionHandlerCleanups.push(bus.handle("provider:credentials", async ({ providerId, forceRefresh, staleApiKey }) => {
       if (typeof engine.resolveProviderCredentialsFresh !== "function") {
         return { error: "fresh_credentials_unavailable" };
       }
       let fresh;
       try {
-        fresh = await engine.resolveProviderCredentialsFresh(providerId);
+        fresh = await engine.resolveProviderCredentialsFresh(providerId, {
+          forceRefresh: !!forceRefresh,
+          ...(staleApiKey ? { staleApiKey } : {}),
+        });
       } catch {
         return { error: "credential_refresh_failed" };
       }

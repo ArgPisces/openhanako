@@ -2303,7 +2303,7 @@ export class HanaEngine {
   _resolveExecutionModel(r) { return this._models.resolveExecutionModel(r); }
   _resolveProviderCredentials(p) { return this._models.resolveProviderCredentials(p); }
   resolveProviderCredentials(p) { return this._resolveProviderCredentials(p); }
-  resolveProviderCredentialsFresh(p) { return this._models.resolveProviderCredentialsFresh(p); }
+  resolveProviderCredentialsFresh(p, options) { return this._models.resolveProviderCredentialsFresh(p, options); }
   resolveModelWithCredentials(ref) { return this._models.resolveModelWithCredentials(ref); }
   resolveModelWithCredentialsFresh(ref) { return this._models.resolveModelWithCredentialsFresh(ref); }
   async refreshAvailableModels() { return this._models.refreshAvailable(); }

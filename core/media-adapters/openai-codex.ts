@@ -164,8 +164,11 @@ function resolveCodexToolSize(params, providerDefaults) {
   });
 }
 
-async function getCredentials(ctx) {
-  const creds = await ctx.bus.request("provider:credentials", { providerId: PROVIDER_ID });
+async function getCredentials(ctx, opts: { forceRefresh?: boolean, staleApiKey?: string } = {}) {
+  const creds = await ctx.bus.request("provider:credentials", {
+    providerId: PROVIDER_ID,
+    ...(opts.forceRefresh ? { forceRefresh: true, staleApiKey: opts.staleApiKey } : {}),
+  });
   if (creds.error || !creds.apiKey) {
     throw new Error(t("plugin.imageGen.providerNotLoggedIn", { providerId: PROVIDER_ID }));
   }
@@ -196,7 +199,7 @@ export const openaiCodexImageAdapter = {
   },
 
   async submit(params, ctx) {
-    const creds = await getCredentials(ctx);
+    let creds = await getCredentials(ctx);
     const allDefaults = ctx.config?.get?.("providerDefaults") || {};
     const providerDefaults = allDefaults[PROVIDER_ID] || {};
     const outputFormat = params.format || providerDefaults?.format || "png";
@@ -232,17 +235,25 @@ export const openaiCodexImageAdapter = {
       parallel_tool_calls: false,
     };
 
-    const res = await fetch(resolveCodexResponsesUrl(creds.baseUrl), {
+    const performRequest = (credentials) => fetch(resolveCodexResponsesUrl(credentials.baseUrl), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${creds.apiKey}`,
-        "chatgpt-account-id": creds.accountId,
+        "Authorization": `Bearer ${credentials.apiKey}`,
+        "chatgpt-account-id": credentials.accountId,
         "OpenAI-Beta": "responses=experimental",
         "originator": "pi",
       },
       body: JSON.stringify(body),
     });
+
+    let res = await performRequest(creds);
+    if (res.status === 401) {
+      // The backend can reject an access token before the locally recorded
+      // expiry, so rotate the credential once and retry with the new token.
+      creds = await getCredentials(ctx, { forceRefresh: true, staleApiKey: creds.apiKey });
+      res = await performRequest(creds);
+    }
 
     if (!res.ok) {
       let msg = `API error ${res.status}`;

@@ -90,6 +90,7 @@
     "core/model-manager.ts",
     "core/model-sync.ts",
     "core/mount-aware-file-service.ts",
+    "core/oauth-force-refresh.ts",
     "core/output-length-contract.ts",
     "core/persona-source.ts",
     "core/platform-prompt.ts",
