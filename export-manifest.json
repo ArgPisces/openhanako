@@ -578,6 +578,7 @@
     "server/routes/devices.ts",
     "server/routes/dm.ts",
     "server/routes/experiments.ts",
+    "server/routes/file-history.ts",
     "server/routes/fs.ts",
     "server/routes/html-preview.ts",
     "server/routes/input-drafts.ts",

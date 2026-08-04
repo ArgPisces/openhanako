@@ -110023,6 +110023,18 @@
       "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
     },
     {
+      "path": "server/routes/file-history.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "server/composition/open-root.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
+    },
+    {
       "path": "server/routes/fs.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112712,9 +112724,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9633,
+    "totalFiles": 9634,
     "byInputType": {
-      "source-graph": 655,
+      "source-graph": 656,
       "runtime-asset": 11,
       "nft-runtime-trace": 8967
     }

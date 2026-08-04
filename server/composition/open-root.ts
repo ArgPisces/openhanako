@@ -44,6 +44,7 @@ import { createCommandsRoute } from "../routes/commands.ts";
 import { createServerIdentityRoute } from "../routes/server-identity.ts";
 import { createResourcesRoute } from "../routes/resources.ts";
 import { createResourceIoRoute } from "../routes/resource-io.ts";
+import { createFileHistoryRoute } from "../routes/file-history.ts";
 import { createUsageRoute } from "../routes/usage.ts";
 import { createWebAuthRoute } from "../routes/web-auth.ts";
 import { createWebSocketAuthRoute } from "../routes/ws-auth.ts";
@@ -125,6 +126,7 @@ export function registerOpenRoutes(app: Hono, ctx: CompositionContext): void {
   app.route("/api", createCheckpointsRoute(engine));
   app.route("/api", createCommandsRoute(engine));
   app.route("/api", createResourceIoRoute(engine));
+  app.route("/api", createFileHistoryRoute(engine));
   app.route("/api", createResourcesRoute(engine));
   app.route("/api", createUsageRoute(engine));
   app.route("/api", createSpeechRecognitionRoute(engine));
