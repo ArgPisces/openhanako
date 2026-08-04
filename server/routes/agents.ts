@@ -190,6 +190,7 @@ function emitAgentConfigAppEvents(engine, agentId, { globalFields, agentPartial,
       agentId,
       homeFolder: agentPartial.desk.home_folder || null,
     });
+    engine.refreshFileHistoryWorkspaces?.();
   }
 
   if (hasOwn(agentPartial?.memory, "enabled")) {
