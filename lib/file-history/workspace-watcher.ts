@@ -28,11 +28,14 @@ export function createWorkspaceWatcher({ root, onChanged, onDeleted, onError }: 
   const watcher = chokidar.watch(resolvedRoot, {
     ignoreInitial: true,
     persistent: true,
-    ignored: (absPath: string) => {
+    ignored: (absPath: string, stats?: fs.Stats) => {
       const rel = toRel(absPath);
-      // 对目录本身补尾斜杠使其落入策略函数的"目录段"判定，整棵剪枝；
-      // 文件路径补尾斜杠不会误伤（其目录段判定不受末段影响）
-      return rel != null && rel !== "" && isIgnoredRelPath(rel + "/");
+      if (rel == null || rel === "") return false;
+      // 目录：补尾斜杠使其落入策略函数的"目录段"判定，整棵剪枝
+      if (stats?.isDirectory()) return isIgnoredRelPath(rel + "/");
+      // 文件或 stats 未知：只按父目录段判定，绝不把末段当目录，
+      // 避免误伤 .gitignore / .env 这类点开头文件（策略表明确要追踪它们）
+      return isIgnoredRelPath(rel);
     },
     awaitWriteFinish: { stabilityThreshold: 400, pollInterval: 100 },
   });

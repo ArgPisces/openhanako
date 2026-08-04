@@ -45,4 +45,25 @@ describe("workspace watcher", () => {
     fs.rmSync(path.join(root, "sub", "a.md"));
     await waitFor(() => deleted.includes("sub/a.md"));
   }, 15_000);
+
+  it("does not ignore dot-files while still pruning dot-directories", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "hana-fh-watch-"));
+    cleanups.push(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, ".obsidian"));
+
+    const changed: string[] = [];
+    const watcher = createWorkspaceWatcher({
+      root,
+      onChanged: (relPath) => changed.push(relPath),
+      onDeleted: () => {},
+      onError: () => {},
+    });
+    cleanups.push(() => watcher.close());
+    await watcher.ready;
+
+    fs.writeFileSync(path.join(root, ".gitignore"), "node_modules\n");
+    fs.writeFileSync(path.join(root, ".obsidian", "app.json"), "{}");
+    await waitFor(() => changed.includes(".gitignore"));
+    expect(changed).not.toContain(".obsidian/app.json");
+  }, 15_000);
 });
