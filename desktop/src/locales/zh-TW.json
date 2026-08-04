@@ -875,9 +875,9 @@
       "failed": "📄 檔案沒弄好"
     },
     "session": {
-      "running": "🔗 {name} 正在聯絡另一個會話",
-      "done": "🔗 {name} 跟另一個會話聯絡上了",
-      "failed": "🔗 {name} 沒聯絡上那個會話"
+      "running": "💬 正在查看別的會話",
+      "done": "💬 查看了別的會話",
+      "failed": "💬 別的會話沒打開"
     },
     "subagent_reply": {
       "running": "🧭 {name} 正在給 subagent 派新任務",
@@ -988,6 +988,16 @@
       "running": "🧩 {name} 正在用外掛做事",
       "done": "🧩 {name} 用外掛做完了",
       "failed": "🧩 外掛沒幫上忙"
+    },
+    "session_send": {
+      "running": "💬 正在擬給別的會話的訊息",
+      "done": "💬 訊息擬好了，等你確認",
+      "failed": "💬 訊息沒擬成"
+    },
+    "session_create": {
+      "running": "💬 正在擬一個新會話",
+      "done": "💬 新會話擬好了，等你確認",
+      "failed": "💬 新會話沒擬成"
     }
   },
   "file_output": {

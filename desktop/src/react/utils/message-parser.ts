@@ -306,6 +306,12 @@ export function extractToolDetail(name: string, args: Record<string, unknown> | 
     }
     case 'update_settings':
       return { text: (args.key || args.setting || '') as string };
+    case 'session': {
+      // 目标会话名由渲染侧按 sessionId 查出来覆盖，这里只给查不到时的兜底
+      if (args.action === 'create') return { text: (args.agent || '') as string };
+      const sessionId = (args.sessionId || '') as string;
+      return { text: sessionId ? `…${sessionId.slice(-4)}` : '' };
+    }
     default: {
       // 插件工具：取第一个有意义的字符串参数作详情
       const first = Object.values(args).find(v => typeof v === 'string' && v.length > 0);

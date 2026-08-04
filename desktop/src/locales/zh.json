@@ -875,9 +875,9 @@
       "failed": "📄 文件没弄好"
     },
     "session": {
-      "running": "🔗 {name} 正在联系另一个会话",
-      "done": "🔗 {name} 跟另一个会话联系上了",
-      "failed": "🔗 {name} 没联系上那个会话"
+      "running": "💬 正在查看别的会话",
+      "done": "💬 查看了别的会话",
+      "failed": "💬 别的会话没打开"
     },
     "subagent_reply": {
       "running": "🧭 {name} 正在给 subagent 派新任务",
@@ -988,6 +988,16 @@
       "running": "🧩 {name} 正在用插件干活",
       "done": "🧩 {name} 用插件干完了",
       "failed": "🧩 插件没帮上忙"
+    },
+    "session_send": {
+      "running": "💬 正在拟给别的会话的消息",
+      "done": "💬 消息拟好了，等你确认",
+      "failed": "💬 消息没拟成"
+    },
+    "session_create": {
+      "running": "💬 正在拟一个新会话",
+      "done": "💬 新会话拟好了，等你确认",
+      "failed": "💬 新会话没拟成"
     }
   },
   "file_output": {

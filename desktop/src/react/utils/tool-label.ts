@@ -18,6 +18,26 @@ export const TOOL_LABEL_ALIASES: Record<string, string> = {
 };
 
 /**
+ * session 一个工具管三件不同的事，一套文案盖不住：read/list 是查看别的会话，
+ * send/create 只是拟了一张待确认的草稿卡，那一刻消息还没发出去。用一套
+ * "联系上了"的说法会在卡片还等着确认的时候就宣布结果。
+ */
+export const SESSION_ACTION_LABEL_KEYS: Record<string, string> = {
+  send: 'session_send',
+  create: 'session_create',
+};
+
+function labelKeyFor(name: string, args?: Record<string, unknown>): string {
+  const aliased = TOOL_LABEL_ALIASES[name];
+  if (aliased) return aliased;
+  if (name === 'session') {
+    const action = typeof args?.action === 'string' ? args.action : '';
+    return SESSION_ACTION_LABEL_KEYS[action] ?? 'session';
+  }
+  return name;
+}
+
+/**
  * 一方工具名。插件工具由 PluginManager 注册成 `<pluginId>_<tool>`，MCP 工具是
  * `mcp_<tool>`，都不在这张表里，因此查不到专属文案时能落到插件兜底而不是通用兜底。
  *
@@ -49,13 +69,61 @@ function resolveToolCopy(key: string, phase: ToolPhase, vars: Record<string, str
   return value && value !== path ? value : null;
 }
 
-export function getToolLabel(name: string, phase: ToolPhase, agentName: string): string {
+export function getToolLabel(
+  name: string,
+  phase: ToolPhase,
+  agentName: string,
+  args?: Record<string, unknown>,
+): string {
   const vars = { name: agentName };
-  const key = TOOL_LABEL_ALIASES[name] ?? name;
+  const key = labelKeyFor(name, args);
   return resolveToolCopy(key, phase, vars)
     ?? (isExternalTool(name) ? resolveToolCopy('_plugin', phase, vars) : null)
     ?? resolveToolCopy('_fallback', phase, vars)
     ?? name;
+}
+
+/**
+ * session 工具的目标会话，用来填工具行右侧那格。
+ *
+ * 只认 args 里的 sessionId，再从按 sessionId 索引的容器里查，不从当前焦点推导归属。
+ * 查不到（会话已归档或不在列表里）返回 null，由调用方退回 id 短尾，不猜。
+ */
+export interface SessionTargetState {
+  sessions?: Array<{ sessionId?: string | null; title?: string | null; agentName?: string | null }>;
+  sessionLocatorsById?: Record<string, { path: string | null }>;
+}
+
+function targetSessionId(args?: Record<string, unknown>): string | null {
+  const raw = args?.sessionId;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+export function sessionToolTargetName(
+  state: SessionTargetState,
+  args?: Record<string, unknown>,
+): string | null {
+  // create 还没有目标会话，args 里给的是要派给谁
+  if (args?.action === 'create') {
+    const agent = args?.agent;
+    return typeof agent === 'string' && agent.trim() ? agent.trim() : null;
+  }
+  const sessionId = targetSessionId(args);
+  if (!sessionId) return null;
+  const found = (state.sessions || []).find((item) => item?.sessionId === sessionId);
+  if (!found) return null;
+  const parts = [found.agentName, found.title].filter((v): v is string => Boolean(v && v.trim()));
+  return parts.length ? parts.join(' · ') : null;
+}
+
+export function sessionToolTargetPath(
+  state: SessionTargetState,
+  args?: Record<string, unknown>,
+): string | null {
+  if (args?.action === 'create') return null;
+  const sessionId = targetSessionId(args);
+  if (!sessionId) return null;
+  return state.sessionLocatorsById?.[sessionId]?.path || null;
 }
 
 /** unknown 归到 done：工具已经不转了，说"正在忙碌"会一直挂着。 */

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { BUILTIN_TOOL_NAMES, TOOL_LABEL_ALIASES as RUNTIME_ALIASES, isExternalTool, phaseForStatus }
-  from '../desktop/src/react/utils/tool-label';
+import {
+  BUILTIN_TOOL_NAMES, TOOL_LABEL_ALIASES as RUNTIME_ALIASES, SESSION_ACTION_LABEL_KEYS,
+  isExternalTool, phaseForStatus, sessionToolTargetName, sessionToolTargetPath,
+} from '../desktop/src/react/utils/tool-label';
 
 /**
  * 工具行文案对账。
@@ -47,6 +49,12 @@ const LABELED_TOOL_NAMES = [
   // 已下线但历史 JSONL 里仍有调用记录，回看旧会话时要能正常渲染
   'create_artifact', 'dm',
 ];
+
+/**
+ * 文案键但不是工具名：同一个工具按 action 分出来的档位。
+ * 它们要有完整三相位，但不进内置工具名单（那张表是拿工具名判断内外部用的）。
+ */
+const ACTION_LABEL_KEYS = ['session_send', 'session_create'];
 
 /**
  * 不进进程区、因而不需要文案的工具。
@@ -94,7 +102,7 @@ describe('工具行文案对账', () => {
     it(`${locale}.json 为每个已登记工具提供三相位文案`, () => {
       const tool = loadLocale(locale).tool ?? {};
       const missing: string[] = [];
-      for (const name of LABELED_TOOL_NAMES) {
+      for (const name of [...LABELED_TOOL_NAMES, ...ACTION_LABEL_KEYS]) {
         const key = TOOL_LABEL_ALIASES[name] ?? name;
         for (const phase of phases) {
           const value = tool[key]?.[phase];
@@ -109,6 +117,7 @@ describe('工具行文案对账', () => {
     const tool = loadLocale('zh').tool ?? {};
     const known = new Set([
       ...LABELED_TOOL_NAMES.map((n) => TOOL_LABEL_ALIASES[n] ?? n),
+      ...ACTION_LABEL_KEYS,
       '_fallback',
       '_plugin',
     ]);
@@ -147,6 +156,35 @@ describe('工具行文案对账', () => {
     expect(isExternalTool('mcp_search_issues')).toBe(true);
     // 第三方插件里叫 read 的工具不能撞上内置 read 的文案
     expect(isExternalTool('acme_read')).toBe(true);
+  });
+
+  it('session 按 action 分档，send/create 不用查看那套说法', () => {
+    // read/list 没有专属档位，落回 tool.session
+    expect(SESSION_ACTION_LABEL_KEYS.read).toBeUndefined();
+    expect(SESSION_ACTION_LABEL_KEYS.list).toBeUndefined();
+    expect(SESSION_ACTION_LABEL_KEYS.send).toBe('session_send');
+    expect(SESSION_ACTION_LABEL_KEYS.create).toBe('session_create');
+
+    // send/create 那一刻只是拟了草稿卡，文案不能宣布消息已经发出去
+    const zh = loadLocale('zh').tool;
+    expect(zh.session_send.done).toContain('等你确认');
+    expect(zh.session_create.done).toContain('等你确认');
+  });
+
+  it('session 工具的目标会话靠 sessionId 查，查不到就不猜', () => {
+    const state = {
+      sessions: [{ sessionId: 'sess_abc', title: '项目讨论', agentName: '小花' }],
+      sessionLocatorsById: { sess_abc: { path: '/agents/hanako/sessions/abc.jsonl' } },
+    };
+    expect(sessionToolTargetName(state, { action: 'read', sessionId: 'sess_abc' })).toBe('小花 · 项目讨论');
+    expect(sessionToolTargetPath(state, { action: 'read', sessionId: 'sess_abc' }))
+      .toBe('/agents/hanako/sessions/abc.jsonl');
+    // 已归档 / 不在列表里的会话查不到，退回 null 让调用方显示 id 短尾
+    expect(sessionToolTargetName(state, { action: 'read', sessionId: 'sess_gone' })).toBeNull();
+    expect(sessionToolTargetPath(state, { action: 'read', sessionId: 'sess_gone' })).toBeNull();
+    // create 的目标会话还不存在，只给出要派给谁，也没有可跳转的路径
+    expect(sessionToolTargetName(state, { action: 'create', agent: '小马' })).toBe('小马');
+    expect(sessionToolTargetPath(state, { action: 'create', agent: '小马' })).toBeNull();
   });
 
   it('失败的工具调用取 failed 相位', () => {

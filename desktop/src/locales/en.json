@@ -875,9 +875,9 @@
       "failed": "📄 Couldn't sort out the file"
     },
     "session": {
-      "running": "🔗 {name} is reaching another session",
-      "done": "🔗 {name} got through to the other session",
-      "failed": "🔗 {name} couldn't reach that session"
+      "running": "💬 Looking into another session",
+      "done": "💬 Looked into another session",
+      "failed": "💬 Couldn't open that session"
     },
     "subagent_reply": {
       "running": "🧭 {name} is handing the subagent a new task",
@@ -988,6 +988,16 @@
       "running": "🧩 {name} is working through a plugin",
       "done": "🧩 {name} finished with the plugin",
       "failed": "🧩 The plugin didn't help"
+    },
+    "session_send": {
+      "running": "💬 Drafting a message to another session",
+      "done": "💬 Message drafted, waiting for your OK",
+      "failed": "💬 Couldn't draft the message"
+    },
+    "session_create": {
+      "running": "💬 Drafting a new session",
+      "done": "💬 New session drafted, waiting for your OK",
+      "failed": "💬 Couldn't draft the new session"
     }
   },
   "file_output": {
