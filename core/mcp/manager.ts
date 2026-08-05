@@ -387,30 +387,68 @@ export function toMcpToolId(serverId, toolName) {
 }
 
 /**
- * Refuse any ambiguous projection before tools reach the model or catalog.
- * Lowercasing is intentionally lossy for display names; this check is what
- * prevents two distinct server identities from silently sharing one executor.
+ * Find every model-facing tool id that more than one raw identity claims.
+ *
+ * Lowercasing and sanitizing are lossy by design: display names keep their
+ * case and their punctuation, the id the model sees does not. Two distinct raw
+ * identities can therefore land on one canonical name, in two ways that both
+ * occur in the wild — two connectors whose ids differ only in case, and one
+ * connector whose server lists two tool names that differ only in characters
+ * `sanitizeId` folds away or strips.
+ *
+ * Ambiguity fails closed: when several identities claim one name there is no
+ * way to say which executor a call was meant for, so every claimant is dropped
+ * rather than one being picked. That verdict is unchanged. What changed is
+ * where it lands. This used to throw out of config normalization, which meant
+ * one bad pair anywhere in the file failed every config read — including the
+ * one the server performs while starting, so a single duplicated tool name
+ * took the whole application down. A bad config may only degrade the tools it
+ * actually made ambiguous, so the finding is returned and the caller that
+ * publishes tools is the one that drops them.
+ *
+ * Returns canonical id -> the claimants, in the order encountered, and only
+ * for ids with more than one. The host's own connectors_status tool seeds the
+ * table, so a connector tool that would shadow it counts as ambiguous too.
  */
-export function assertUniqueMcpToolIds(connectors) {
-  const seen = new Map([
-    [MCP_CONNECTORS_STATUS_TOOL_NAME, { connectorId: MCP_TOOL_NAMESPACE, toolName: MCP_CONNECTORS_STATUS_TOOL_NAME }],
+export function computeMcpToolIdCollisions(connectors) {
+  const claimed = new Map([
+    [MCP_CONNECTORS_STATUS_TOOL_NAME, [{ connectorId: MCP_TOOL_NAMESPACE, toolName: MCP_CONNECTORS_STATUS_TOOL_NAME }]],
   ]);
   for (const connector of Array.isArray(connectors) ? connectors : []) {
     for (const tool of connector?.tools || []) {
       const canonical = toMcpToolId(connector.id, tool.name);
-      const previous = seen.get(canonical);
-      if (!previous) {
-        seen.set(canonical, { connectorId: connector.id, toolName: tool.name });
-        continue;
-      }
-      const error: any = new Error(
-        `MCP tool id collision "${canonical}": `
-        + `"${previous.connectorId}/${previous.toolName}" and "${connector.id}/${tool.name}" `
-        + "both normalize to the same lowercase model-facing name. Rename the connector id or server tool.",
-      );
-      error.code = "MCP_TOOL_ID_COLLISION";
-      throw error;
+      const claimants = claimed.get(canonical);
+      if (claimants) claimants.push({ connectorId: connector.id, toolName: tool.name });
+      else claimed.set(canonical, [{ connectorId: connector.id, toolName: tool.name }]);
     }
+  }
+  const collisions = new Map();
+  for (const [canonical, claimants] of claimed) {
+    if (claimants.length > 1) collisions.set(canonical, claimants);
+  }
+  return collisions;
+}
+
+/**
+ * Refuse a connector id that no longer tells itself apart from an existing one.
+ *
+ * Two connector ids that differ only in case, or only in characters sanitizeId
+ * folds away, prefix every tool they carry identically — so accepting the
+ * second one makes both connectors' entire tool lists ambiguous at once. The
+ * check belongs at the write boundary because only the writer can still do
+ * something useful about it: refuse the save and name the connector to rename.
+ * Once it is on disk the reader can do nothing but drop the tools.
+ */
+function assertConnectorIdIsDistinct(connectors, id, { excludeId = "" } = {}) {
+  const canonical = sanitizeId(id).toLowerCase();
+  for (const existing of Array.isArray(connectors) ? connectors : []) {
+    if (excludeId && existing.id === excludeId) continue;
+    if (sanitizeId(existing.id).toLowerCase() !== canonical) continue;
+    const error: any = new Error(
+      `MCP connector id "${id}" conflicts with existing connector "${existing.id}" after normalization`,
+    );
+    error.code = "MCP_CONNECTOR_ID_COLLISION";
+    throw error;
   }
 }
 
@@ -440,7 +478,6 @@ export function normalizeMcpConfig(value) {
   const connectors = rawConnectors
     .map((connector, index) => normalizeConnector(connector, `connector_${index + 1}`))
     .filter(Boolean);
-  assertUniqueMcpToolIds(connectors);
   return {
     ...DEFAULT_CONFIG,
     enabled: input.enabled === true,
@@ -762,6 +799,7 @@ interface McpManagerOptions {
 export class McpManager {
   declare Client: any;
   declare clientErrors: any;
+  declare toolCollisions: any;
   declare toolListFreshness: any;
   declare _runtimeToolAnnotations: Map<string, Map<string, any>>;
   declare _getConfirmStore: any;
@@ -816,6 +854,11 @@ export class McpManager {
     ));
     this.clients = new Map();
     this.clientErrors = new Map();
+    // Per-connector record of the tools registerCachedTools refused to publish
+    // because another raw identity normalizes onto the same model-facing id.
+    // Rebuilt wholesale on every registration, exactly like the tool list it
+    // explains, so a notice can never outlive the projection it describes.
+    this.toolCollisions = new Map();
     // Per-connector tool-list caching hints from the last refresh. Deliberately
     // in memory only: a hint describes one live response, so persisting it
     // would let it outlive the answer it describes.
@@ -899,6 +942,7 @@ export class McpManager {
     }
     this.clients.clear();
     this.clientErrors.clear();
+    this.toolCollisions.clear();
     this.connectorStatus.clear();
     this.desiredStates.clear();
     this.oauthSessions.clear();
@@ -956,6 +1000,7 @@ export class McpManager {
       error: this.clientErrors.get(connector.id) || "",
       toolListFreshness: this.toolListFreshness.get(connector.id) || null,
       toolAnnotations: this._runtimeToolAnnotations.get(connector.id) || null,
+      collisions: this.toolCollisions.get(connector.id) || [],
     }));
     return {
       enabled: config.enabled,
@@ -1016,6 +1061,10 @@ export class McpManager {
     const id = uniqueConnectorId(config.connectors, input?.id || input?.name || input?.url || input?.command || "connector");
     const connector = normalizeConnector({ ...input, id }, id);
     validateConnector(connector);
+    // uniqueConnectorId only avoids an exactly taken id. An id that differs
+    // from an existing one by case alone survives it and would then make both
+    // connectors' tools ambiguous, so it is refused here instead.
+    assertConnectorIdIsDistinct(config.connectors, connector.id);
     config.connectors.push(connector);
     const saved = this.saveConfig(config);
     this.registerCachedTools();
@@ -1056,6 +1105,10 @@ export class McpManager {
         const id = uniqueConnectorId([...config.connectors, ...staged], input?.id || input?.name || input?.url || input?.command || "connector");
         const connector = normalizeConnector({ ...input, id }, id);
         validateConnector(connector);
+        // Checked against the batch in progress too, so an imported file that
+        // carries two case-variant ids fails the row that introduces the clash
+        // rather than saving a pair whose tools all go missing afterwards.
+        assertConnectorIdIsDistinct([...config.connectors, ...staged], connector.id);
         staged.push(connector);
         results.push({ ok: true, id });
       } catch (err) {
@@ -1106,6 +1159,14 @@ export class McpManager {
     const unmaskedPatch = unmaskConnectorPatch(existing, patch || {});
     const next = normalizeConnector({ ...existing, ...unmaskedPatch, id: existing.id, tools: patch?.tools || existing.tools }, existing.id);
     validateConnector(next);
+    // Only when the id actually moves. An edit that leaves the id alone must
+    // stay possible even on a config that already holds a clashing pair —
+    // otherwise the user could not use this screen to repair the very config
+    // the check is complaining about. Today the id is pinned to the existing
+    // one above, so this guards a patchable id rather than the current one.
+    if (next.id !== existing.id) {
+      assertConnectorIdIsDistinct(config.connectors, next.id, { excludeId: existing.id });
+    }
     const changedClient = connectorClientFingerprint(next) !== connectorClientFingerprint(existing);
     config.connectors[index] = next;
     const saved = this.saveConfig(config);
@@ -1642,6 +1703,14 @@ export class McpManager {
    * Rebuild the agent-facing tool list from the cached connector config.
    * The whole list is replaced at once: cached tools are a pure projection of
    * config, so there is no incremental state to reconcile.
+   *
+   * This is also where a canonical id collision is acted on. Two raw identities
+   * that normalize onto one model-facing name are ambiguous, and the response
+   * to ambiguity is to publish neither of them: choosing one would route the
+   * user's call to a server they never named. Every other tool in the config,
+   * including the rest of the offending connectors' own tools, is published as
+   * usual, and each claimant is recorded so the settings page can say what went
+   * missing and why.
    */
   registerCachedTools() {
     const tools = [];
@@ -1651,8 +1720,36 @@ export class McpManager {
     });
     tools.push(this._publishTool(statusDefinition));
     const config = this.getConfig();
+    const collisions = computeMcpToolIdCollisions(config.connectors);
+    this.toolCollisions = new Map();
     for (const connector of config.connectors) {
       for (const tool of connector.tools || []) {
+        const canonical = toMcpToolId(connector.id, tool.name);
+        const claimants = collisions.get(canonical);
+        if (claimants) {
+          // Name one other claimant rather than all of them: two is the case
+          // that actually happens, and one concrete counterpart is what makes
+          // the notice actionable. Falling back to this same entry keeps the
+          // notice truthful for a hand-edited config that lists one identity
+          // twice, instead of reporting an undefined counterpart.
+          const other = claimants.find(
+            (claim) => claim.connectorId !== connector.id || claim.toolName !== tool.name,
+          ) || { connectorId: connector.id, toolName: tool.name };
+          const bucket = this.toolCollisions.get(connector.id) || [];
+          bucket.push({
+            canonical,
+            toolName: tool.name,
+            otherConnectorId: other.connectorId,
+            otherToolName: other.toolName,
+          });
+          this.toolCollisions.set(connector.id, bucket);
+          this.log.warn(
+            `MCP tool "${connector.id}/${tool.name}" was not registered: it and `
+            + `"${other.connectorId}/${other.toolName}" both normalize to "${canonical}". `
+            + "Rename the connector id or the server tool.",
+          );
+          continue;
+        }
         const definition = createMcpToolDefinition({
           connectorId: connector.id,
           serverId: connector.id,
@@ -2387,7 +2484,14 @@ function connectorClientFingerprint(connector) {
   });
 }
 
-function publicConnector({ connector, status, error = "", toolListFreshness = null, toolAnnotations = null }: any) {
+function publicConnector({
+  connector,
+  status,
+  error = "",
+  toolListFreshness = null,
+  toolAnnotations = null,
+  collisions = [],
+}: any) {
   return {
     ...connector,
     // Live annotations ride along the runtime view only, so surfaces can badge
@@ -2405,6 +2509,11 @@ function publicConnector({ connector, status, error = "", toolListFreshness = nu
     status,
     error,
     toolListFreshness,
+    // Tools this connector carries but that were not published, because some
+    // other raw identity normalizes onto the same model-facing name. Surfaces
+    // render them as a per-connector notice: without one, the tools would just
+    // be quietly missing and nobody could tell why.
+    collisions,
     apps: appsForConnector(connector),
     env: redactRecord(connector.env),
     headers: redactRecord(connector.headers),

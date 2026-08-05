@@ -85,6 +85,24 @@ export function ConnectorList({
                   {connector.error}
                 </div>
               )}
+              {/* A tool dropped for an ambiguous id is otherwise indistinguishable
+                  from a tool the server never offered. Both sides of the clash
+                  say so, because renaming either one brings both back. */}
+              {(connector.collisions || []).length > 0 && (
+                <div data-testid={`mcp-connector-collisions-${connector.id}`}>
+                  {(connector.collisions || []).map(collision => (
+                    <div
+                      key={`${collision.canonical}-${collision.toolName}`}
+                      className={styles['settings-inline-error']}
+                    >
+                      {t('settings.mcp.toolCollisionNotice', {
+                        a: `${connector.id}/${collision.toolName}`,
+                        b: `${collision.otherConnectorId}/${collision.otherToolName}`,
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className={`${styles['skills-list-actions']} ${styles['mcp-list-actions']}`}>
               {canStart(connector.status) ? (

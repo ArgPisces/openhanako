@@ -35,6 +35,22 @@ export interface McpTool {
   annotations?: McpToolAnnotations;
 }
 
+/**
+ * One tool the runtime refused to publish because another raw identity
+ * normalizes onto the same model-facing id. Both sides of a clash get their own
+ * entry, since renaming either one resolves it.
+ */
+export interface McpToolCollision {
+  /** The model-facing id both identities claim. */
+  canonical: string;
+  /** The tool of this connector that was dropped. */
+  toolName: string;
+  /** The other claimant's connector id; equal to this connector's own id when a connector clashes with itself. */
+  otherConnectorId: string;
+  /** The other claimant's tool name. */
+  otherToolName: string;
+}
+
 export interface McpOAuthState {
   connected?: boolean;
   scope?: string;
@@ -58,6 +74,8 @@ export interface McpConnector {
   status: McpConnectorStatus;
   /** Last failure reported by the runtime. Empty when the connector is healthy. */
   error?: string;
+  /** Tools dropped for an ambiguous model-facing id. Empty when nothing clashes. */
+  collisions?: McpToolCollision[];
   tools: McpTool[];
   authType?: McpAuthType;
   authStatus?: string;

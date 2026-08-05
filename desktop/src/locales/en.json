@@ -2207,6 +2207,7 @@
       "permissionTitle": "Permissions",
       "toolsTitle": "Tools",
       "noTools": "No tools yet. Start the connector and refresh once to see them.",
+      "toolCollisionNotice": "{a} and {b} normalize to the same tool name, so both are disabled. Change a connector id, or have the server rename its tool.",
       "noToolMatches": "No matching tools",
       "toolSearch": "Search tools",
       "selectAll": "Select all",

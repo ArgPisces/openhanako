@@ -8,9 +8,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorList } from '../ConnectorList';
 import type { McpConnector } from '../types';
 
-vi.mock('../../../helpers', () => ({
-  t: (key: string) => key,
-}));
+vi.mock('../../../helpers', () => {
+  // Keys still render as themselves, which is what the label assertions below
+  // rely on. Keys the component fills in carry a stand-in template with the
+  // same placeholders as the shipped strings, substituted the way the real
+  // translator does, so what the component computed can be asserted on.
+  const templates: Record<string, string> = {
+    'settings.mcp.toolCollisionNotice': '{a} and {b} collide',
+  };
+  return {
+    t: (key: string, params?: Record<string, any>) => Object.entries(params || {}).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      templates[key] ?? key,
+    ),
+  };
+});
 
 function connector(overrides: Partial<McpConnector> = {}): McpConnector {
   return {
@@ -60,6 +72,33 @@ describe('ConnectorList', () => {
     renderList({ connectors: [connector({ status: 'running' })] });
 
     expect(screen.queryByTestId('mcp-connector-error-alpha')).toBeNull();
+  });
+
+  it('names both sides of a dropped tool whose id is ambiguous', () => {
+    renderList({
+      connectors: [connector({
+        status: 'running',
+        collisions: [{
+          canonical: 'alpha_moneyflow_hsgt',
+          toolName: 'moneyflow_hsgt',
+          otherConnectorId: 'alpha',
+          otherToolName: 'moneyflow_hsgt_backup',
+        }],
+      })],
+    });
+
+    // Without the notice the tool is simply absent, which is indistinguishable
+    // from a server that never offered it. Naming both claimants is what tells
+    // the user which of the two names to change.
+    const notice = screen.getByTestId('mcp-connector-collisions-alpha').textContent || '';
+    expect(notice).toContain('alpha/moneyflow_hsgt');
+    expect(notice).toContain('alpha/moneyflow_hsgt_backup');
+  });
+
+  it('renders no collision notice when nothing is ambiguous', () => {
+    renderList({ connectors: [connector({ status: 'running' })] });
+
+    expect(screen.queryByTestId('mcp-connector-collisions-alpha')).toBeNull();
   });
 
   it('opens the detail view when the row is clicked', () => {

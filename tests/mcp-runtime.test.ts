@@ -6,6 +6,7 @@ import {
   MCP_CONNECTORS_STATUS_TOOL_NAME,
   createMcpConnectorsStatusToolDefinition,
   createMcpToolDefinition,
+  computeMcpToolIdCollisions,
   isMcpToolEnabledForAgentConfig,
   normalizeMcpConfig,
   resolveMcpToolPermissionKind,
@@ -113,24 +114,38 @@ describe("MCP runtime policy", () => {
     })).toBe(true);
   });
 
-  it("rejects raw MCP identities that collapse to the same lowercase tool id", () => {
+  it("reads back raw MCP identities that collapse to the same lowercase tool id", () => {
+    // Reading a config must never fail on account of its contents: every read
+    // of every session goes through here, so an exception raised on a bad pair
+    // used to take the whole runtime down with it. The ambiguity is reported
+    // instead, and acted on where the tools are published.
     for (const collidingTools of [
       [{ name: "SearchIssues" }, { name: "searchissues" }],
       [{ name: "search/issues" }, { name: "search.issues" }],
     ]) {
-      expect(() => normalizeMcpConfig({
+      const config = normalizeMcpConfig({
         enabled: true,
         connectors: [{ id: "GitHub", url: "https://mcp.example.test", tools: collidingTools }],
-      })).toThrow(/MCP tool id collision.*github.*GitHub\/.*both normalize/i);
+      });
+      expect(config.connectors[0].tools.map((tool) => tool.name))
+        .toEqual(collidingTools.map((tool) => tool.name));
+      const collisions = computeMcpToolIdCollisions(config.connectors);
+      expect([...collisions.values()][0]).toEqual(
+        collidingTools.map((tool) => ({ connectorId: "GitHub", toolName: tool.name })),
+      );
     }
 
-    expect(() => normalizeMcpConfig({
+    const crossConnector = normalizeMcpConfig({
       enabled: true,
       connectors: [
         { id: "GitHub", url: "https://one.example.test", tools: [{ name: "Search" }] },
         { id: "github", url: "https://two.example.test", tools: [{ name: "search" }] },
       ],
-    })).toThrow(/MCP tool id collision.*GitHub\/Search.*github\/search/i);
+    });
+    expect(computeMcpToolIdCollisions(crossConnector.connectors).get("github_search")).toEqual([
+      { connectorId: "GitHub", toolName: "Search" },
+      { connectorId: "github", toolName: "search" },
+    ]);
   });
 
   it("folds repeated tool names to their first occurrence within a connector", () => {
@@ -2179,6 +2194,135 @@ describe("MCP duplicate tool listings", () => {
     expect(annotations.readOnlyHint).not.toBe(true);
     // Lowering hints need every occurrence to agree, so one dissent is enough.
     expect(annotations.idempotentHint).not.toBe(true);
+  });
+});
+
+describe("MCP canonical tool id collisions", () => {
+  /** A manager reading a fixed config out of memory, with writes captured. */
+  function runtimeWithConnectors(connectors) {
+    let stored: any = { enabled: true, connectors };
+    const set = vi.fn((_key, value) => { stored = value; });
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-tool-collisions"),
+      config: { get: () => stored, set },
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+    return { runtime, set };
+  }
+
+  it("reports every ambiguous canonical id and leaves unambiguous ones out", () => {
+    const { runtime } = runtimeWithConnectors([
+      { id: "Tushare", url: "https://one.example.test", tools: [{ name: "moneyflow_hsgt" }] },
+      {
+        id: "tushare",
+        url: "https://two.example.test",
+        tools: [{ name: "moneyflow_hsgt" }, { name: "daily_basic" }],
+      },
+    ]);
+
+    const collisions = computeMcpToolIdCollisions(runtime.getConfig().connectors);
+    expect(collisions.get("tushare_moneyflow_hsgt")).toEqual([
+      { connectorId: "Tushare", toolName: "moneyflow_hsgt" },
+      { connectorId: "tushare", toolName: "moneyflow_hsgt" },
+    ]);
+    // A tool only one identity claims is not ambiguous and must not be reported.
+    expect(collisions.has("tushare_daily_basic")).toBe(false);
+  });
+
+  it("skips every ambiguous entry when publishing and keeps the rest", () => {
+    const { runtime } = runtimeWithConnectors([
+      { id: "Tushare", url: "https://one.example.test", tools: [{ name: "moneyflow_hsgt" }] },
+      {
+        id: "tushare",
+        url: "https://two.example.test",
+        tools: [{ name: "moneyflow_hsgt" }, { name: "daily_basic" }],
+      },
+    ]);
+    runtime.registerCachedTools();
+
+    const published = runtime.getAllTools().map((tool) => tool.name);
+    // Neither claimant is published: with two identities behind one name there
+    // is no way to say which executor a call was meant for, so picking either
+    // would be routing the user's call by coin flip.
+    expect(published).not.toContain("mcp_tushare_moneyflow_hsgt");
+    expect(published).toContain("mcp_tushare_daily_basic");
+
+    // Both sides carry the notice, since either one of them is the fix.
+    const state = runtime.getState();
+    expect(state.connectors[0].collisions).toEqual([{
+      canonical: "tushare_moneyflow_hsgt",
+      toolName: "moneyflow_hsgt",
+      otherConnectorId: "tushare",
+      otherToolName: "moneyflow_hsgt",
+    }]);
+    expect(state.connectors[1].collisions).toEqual([{
+      canonical: "tushare_moneyflow_hsgt",
+      toolName: "moneyflow_hsgt",
+      otherConnectorId: "Tushare",
+      otherToolName: "moneyflow_hsgt",
+    }]);
+  });
+
+  it("detects sanitize-induced collisions within one connector", () => {
+    // The pair that crashed a real install: sanitizeId folds the illegal
+    // characters into an underscore and then strips it off the end, so the
+    // suffixed backup tool lands on exactly the original's canonical id.
+    const { runtime } = runtimeWithConnectors([{
+      id: "tushareMcp",
+      url: "https://one.example.test",
+      tools: [{ name: "moneyflow_hsgt" }, { name: "moneyflow_hsgt_备份" }],
+    }]);
+
+    const collisions = computeMcpToolIdCollisions(runtime.getConfig().connectors);
+    expect(collisions.get("tusharemcp_moneyflow_hsgt")).toEqual([
+      { connectorId: "tushareMcp", toolName: "moneyflow_hsgt" },
+      { connectorId: "tushareMcp", toolName: "moneyflow_hsgt_备份" },
+    ]);
+
+    runtime.registerCachedTools();
+    expect(runtime.getAllTools().map((tool) => tool.name))
+      .not.toContain("mcp_tusharemcp_moneyflow_hsgt");
+    // Self-collision: the other claimant is this same connector, so the notice
+    // names it rather than inventing a second connector.
+    expect(runtime.getState().connectors[0].collisions).toEqual([
+      {
+        canonical: "tusharemcp_moneyflow_hsgt",
+        toolName: "moneyflow_hsgt",
+        otherConnectorId: "tushareMcp",
+        otherToolName: "moneyflow_hsgt_备份",
+      },
+      {
+        canonical: "tusharemcp_moneyflow_hsgt",
+        toolName: "moneyflow_hsgt_备份",
+        otherConnectorId: "tushareMcp",
+        otherToolName: "moneyflow_hsgt",
+      },
+    ]);
+  });
+
+  it("still starts a connector whose config carries a collision", async () => {
+    // The whole point of the change: a bad pair may cost its own two tools and
+    // nothing else. Loading the runtime must still bring the config up.
+    const { runtime } = runtimeWithConnectors([{
+      id: "tushareMcp",
+      url: "https://one.example.test",
+      autoStart: false,
+      tools: [{ name: "moneyflow_hsgt" }, { name: "moneyflow_hsgt_备份" }, { name: "daily_basic" }],
+    }]);
+    await runtime.load();
+    expect(runtime.getAllTools().map((tool) => tool.name)).toContain("mcp_tusharemcp_daily_basic");
+  });
+
+  it("rejects an added id whose sanitized form collides with an existing connector", () => {
+    const { runtime, set } = runtimeWithConnectors([
+      { id: "Tushare", url: "https://one.example.test", tools: [] },
+    ]);
+
+    // Refused at the boundary that can still name the fix, before anything is
+    // written: after the fact the reader can only drop tools.
+    expect(() => runtime.addConnector({ id: "tushare", url: "https://two.example.test" }))
+      .toThrow(/conflicts with existing connector "Tushare"/i);
+    expect(set).not.toHaveBeenCalled();
   });
 });
 

@@ -2207,6 +2207,7 @@
       "permissionTitle": "权限",
       "toolsTitle": "工具",
       "noTools": "还没有工具。启动连接器后刷新一次即可看到。",
+      "toolCollisionNotice": "{a} 与 {b} 规范化后为同一工具名，双方已停用，请调整连接器 id 或让 server 侧改名。",
       "noToolMatches": "没有匹配的工具",
       "toolSearch": "搜索工具",
       "selectAll": "全选",
