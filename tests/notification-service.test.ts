@@ -348,6 +348,45 @@ describe("NotificationService", () => {
     expect(result.deliveries[0].error).not.toBe("no bridge owner delivery target available");
   });
 
+  it("surfaces send_failed from BridgeManager with adapter message on bridge_owner", async () => {
+    const bridgeManager = {
+      sendProactive: vi.fn().mockResolvedValue({
+        ok: false,
+        error: "send_failed",
+        message: "upstream 503",
+        deliveries: [{
+          status: "failed",
+          platform: "wechat",
+          chatId: "wx-user",
+          error: "upstream 503",
+        }],
+      }),
+    };
+    const service = new NotificationService({
+      emitDesktop: vi.fn(),
+      getBridgeManager: () => bridgeManager,
+    });
+
+    const result = await service.notify(
+      { title: "提醒", body: "正文", channels: ["bridge_owner"] },
+      { agentId: "hana" },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.deliveries[0]).toMatchObject({
+      channel: "bridge_owner",
+      status: "failed",
+      error: "send_failed",
+      message: "upstream 503",
+      bridgeDeliveries: [{
+        status: "failed",
+        platform: "wechat",
+        chatId: "wx-user",
+        error: "upstream 503",
+      }],
+    });
+  });
+
   it("surfaces target_missing from BridgeManager when no owner target exists", async () => {
     const bridgeManager = {
       sendProactive: vi.fn().mockResolvedValue({

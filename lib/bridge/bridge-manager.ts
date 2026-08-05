@@ -2772,8 +2772,16 @@ export class BridgeManager {
    *
    * @param {string} text - 要发送的文本（会自动 clean mood/pulse 标签）
    * @param {string} [targetAgentId]
-   * @param {{ contextPolicy?: "none"|"record_when_delivered", bridgePlatforms?: string[], idempotencyKey?: string }} [opts]
-   * @returns {{ platform: string, chatId: string, sessionKey: string, recorded: boolean, deliveries?: Array<any> } | null} 发送成功返回平台信息，失败返回 null
+   * @param {{ contextPolicy?: "none"|"record_when_delivered", bridgePlatforms?: string[], deliveryTarget?: object, idempotencyKey?: string }} [opts]
+   * @returns {Promise<
+   *   | { platform: string, chatId: string, sessionKey: string, recorded: boolean, deliveries?: Array<any>, skipped?: boolean }
+   *   | { ok: false, error: "target_missing"|"disconnected"|"reply_context_unavailable"|"send_failed", deliveries: Array<any>, message?: string }
+   *   | null
+   * >}
+   *   Success: platform delivery info (optional `skipped` when an idempotency key hits a prior success).
+   *   Failure: structured `{ ok: false, error, deliveries, message? }` — `send_failed` includes `message` from the adapter throw.
+   *   `null` only when cleaned text is empty (nothing to send).
+   *   Fan-out aggregate `error` prefers `send_failed` when any platform threw, else `reply_context_unavailable`, else connectivity/target codes.
    */
   async sendProactive(text, targetAgentId, opts: any = {}) {
     const cleaned = this._cleanReplyForPlatform(text);
@@ -2803,6 +2811,11 @@ export class BridgeManager {
     }
   }
 
+  /**
+   * Single proactive attempt (caller already cleaned non-empty text).
+   * Never returns null: success object, or `{ ok: false, error, deliveries, message? }`.
+   * Fan-out aggregate prefers `send_failed` over `reply_context_unavailable` when both occur.
+   */
   async _sendProactiveOnce(cleaned, targetAgentId, opts: any = {}, idempotencyKey = null) {
     const contextPolicy = opts.contextPolicy || "record_when_delivered";
     const explicitTarget = normalizeProactiveBridgeDeliveryTarget(opts.deliveryTarget, targetAgentId);
@@ -2952,10 +2965,12 @@ export class BridgeManager {
     if (idempotencyKey) this._proactiveIdempotency.delete(idempotencyKey);
 
     let error = "target_missing";
-    if (sawReplyContextUnavailable) {
-      error = "reply_context_unavailable";
-    } else if (sawSendFailed) {
+    // Prefer send_failed when present: a transport throw is more actionable than a
+    // missing reply window on another fan-out platform.
+    if (sawSendFailed) {
       error = "send_failed";
+    } else if (sawReplyContextUnavailable) {
+      error = "reply_context_unavailable";
     } else if (!sawBoundConnected) {
       const hasConnectedPlatform = deliveryEntries.some((entry) => entry.status === "connected" && entry.adapter);
       error = hasConnectedPlatform ? "target_missing" : "disconnected";

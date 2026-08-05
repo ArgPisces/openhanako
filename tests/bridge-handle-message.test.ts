@@ -632,6 +632,50 @@ describe("BridgeManager._handleMessage", () => {
       });
     });
 
+    it("returns send_failed when a connected adapter with reply context throws from sendReply", async () => {
+      const { bm, engine } = createMocks();
+      const wechatAdapter = {
+        capabilities: { proactive: false },
+        canReply: vi.fn().mockReturnValue(true),
+        sendReply: vi.fn().mockRejectedValue(new Error("upstream 503")),
+      };
+      bm._platforms.clear();
+      bm._platforms.set("wechat:hana", {
+        adapter: wechatAdapter,
+        status: "connected",
+        agentId: "hana",
+        platform: "wechat",
+      });
+      engine.getAgent.mockImplementation((id) => {
+        if (id === "hana") return { agentName: "TestAgent", config: { bridge: { wechat: { owner: "wx-user" } } }, sessionDir: os.tmpdir() };
+        return null;
+      });
+      engine.getBridgeIndex = vi.fn().mockReturnValue({
+        "wx_dm_wx-user@hana": {
+          file: "owner/wx.jsonl",
+          userId: "wx-user",
+          name: "微信用户",
+        },
+      });
+
+      const result = await bm.sendProactive("hello", "hana");
+
+      expect(wechatAdapter.canReply).toHaveBeenCalledWith("wx-user");
+      expect(wechatAdapter.sendReply).toHaveBeenCalledWith("wx-user", "hello");
+      expect(result).toMatchObject({
+        ok: false,
+        error: "send_failed",
+        message: "upstream 503",
+        deliveries: [{
+          status: "failed",
+          platform: "wechat",
+          chatId: "wx-user",
+          error: "upstream 503",
+        }],
+      });
+      expect(engine.bridgeSessionManager.recordAssistantMessage).not.toHaveBeenCalled();
+    });
+
     it("returns target_missing when no owner delivery target can be resolved", async () => {
       const { bm, engine } = createMocks();
       const wechatAdapter = {
