@@ -602,6 +602,56 @@ describe("session manifest legacy migration", () => {
       expect(second.skippedMetaSources).toEqual([]);
     });
 
+    it("UTF-8 BOM 前缀的合法 session-meta.json 被正常消费，不记 parse_error", () => {
+      const active = writeSession("hana", "bom-meta.jsonl");
+      const metaPath = path.join(active.sessionDir, "session-meta.json");
+      const payload = {
+        "bom-meta.jsonl": { pinnedAt: "2026-06-18T03:01:00.000Z" },
+      };
+      fs.writeFileSync(metaPath, `\uFEFF${JSON.stringify(payload)}`);
+
+      const result = migrateLegacySessions({ hanaHome, store, migratedAt: "2026-06-18T03:02:00.000Z" });
+
+      expect(result.created).toBe(1);
+      expect(result.skippedMetaSources).toEqual([]);
+      expect(store.resolveByLocatorPath(active.sessionPath)).toMatchObject({
+        pinnedAt: "2026-06-18T03:01:00.000Z",
+      });
+      const ledger: any = store.getState(LEGACY_META_SCAN_LEDGER_KEY);
+      expect(ledger[metaPath]).toMatchObject({ status: "consumed" });
+    });
+
+    it("旧账本把 BOM 文件误记为 parse_error 后，即使 size/mtime 未变也会重验并消费", () => {
+      const active = writeSession("hana", "bom-stale-ledger.jsonl");
+      const metaPath = path.join(active.sessionDir, "session-meta.json");
+      const payload = {
+        "bom-stale-ledger.jsonl": { pinnedAt: "2026-06-18T03:01:00.000Z" },
+      };
+      fs.writeFileSync(metaPath, `\uFEFF${JSON.stringify(payload)}`);
+      const stat = fs.statSync(metaPath);
+
+      // 模拟 BOM-unaware 旧运行留下的死刑账本（无 verdictSchema / 旧 schema）
+      store.setState(LEGACY_META_SCAN_LEDGER_KEY, {
+        [metaPath]: {
+          size: stat.size,
+          mtimeMs: stat.mtimeMs,
+          status: "parse_error",
+          recordedAt: "2026-06-18T02:00:00.000Z",
+        },
+      });
+
+      const result = migrateLegacySessions({ hanaHome, store, migratedAt: "2026-06-18T03:02:00.000Z" });
+
+      expect(result.created).toBe(1);
+      expect(result.skippedMetaSources).toEqual([]);
+      expect(store.resolveByLocatorPath(active.sessionPath)).toMatchObject({
+        pinnedAt: "2026-06-18T03:01:00.000Z",
+      });
+      const ledger: any = store.getState(LEGACY_META_SCAN_LEDGER_KEY);
+      expect(ledger[metaPath]).toMatchObject({ status: "consumed" });
+      expect(listSkippedMetaSources(store)).toEqual([]);
+    });
+
     it("签名未变的 consumed session-meta.json 第二次迁移仍照常重读（consumed 不做免读优化）", () => {
       // 裁定：账本只对判死刑的文件（too_large / parse_error）做跳过记忆。健康文件（consumed）
       // 体积已被运行时 1MB compact 闸门收窄过，重读是毫秒级开销；免读会让"同目录多行共享一份

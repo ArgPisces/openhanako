@@ -22,9 +22,22 @@ const LOCATOR_REQUIRED_LIFECYCLES = new Set(["active", "archived", "promoted"]);
 export const LEGACY_META_SOURCE_MAX_BYTES = 64 * 1024 * 1024;
 export const LEGACY_META_SCAN_LEDGER_KEY = "legacy-meta-scan-ledger-v1";
 
+// parse_error 死刑判决的 schema：BOM-unaware 旧账本没有此字段（或 < 2），升级后允许对
+// 同 size/mtime 的 parse_error 重验一次；真正损坏的 JSON 重验失败后会带上 schema=2，
+// 之后继续跳过。too_large 不走这套重验。
+const PARSE_ERROR_VERDICT_SCHEMA = 2;
+
+function stripBom(text) {
+  return typeof text === "string" && text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+}
+
+function readJsonFileUtf8(filePath) {
+  return JSON.parse(stripBom(fs.readFileSync(filePath, "utf-8")));
+}
+
 function readJsonFile(filePath, fallback = {}) {
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return readJsonFileUtf8(filePath);
   } catch {
     return fallback;
   }
@@ -46,14 +59,17 @@ function normalizeLedger(raw) {
 // 不走这个闸门，继续用普通的 readJsonFile。
 //
 // 跳过语义：账本只对"判了死刑"的文件（too_large / parse_error）做跳过记忆——这类文件
-// 内容不会自愈，重复整读是纯粹的浪费，值得用账本省下来。健康文件（consumed）运行时早被
-// 1MB compact 闸门收窄过，每次重读是毫秒级开销；如果对 consumed 也做"签名不变就不读"，
-// 会导致一个真实场景失效：同一目录下多个会话行共享同一份 session-meta.json，其中一行
-// 因为跟 meta 内容毫无关系的瞬时原因（比如 createForPath 抛错）第一轮建档失败、下一轮
-// rescan 才补上——这时候 meta 文件签名没变，如果按"消费过就不读"处理，这一行就会永久
-// 拿不到 pinnedAt / capability / executor / permission 等 legacy 属性，而且完全静默、
-// 没有任何 skippedMetaSources 记录能提示这件事。rescan 机制存在的意义就是兜住这类迟到的
-// 行，所以 consumed 状态一律照常重读并返回数据，不做跳过。
+// 内容不会自愈，重复整读是纯粹的浪费，值得用账本省下来。例外：旧版 BOM-unaware 读者
+// 留下的 parse_error（无 verdictSchema 或 schema < 2）允许重验一次——带 UTF-8 BOM 的
+// 合法 JSON 会被误判，签名不变也必须再读；重验仍失败则写入 schema=2，之后照常跳过。
+// too_large 不参与重验。健康文件（consumed）运行时早被 1MB compact 闸门收窄过，每次重读
+// 是毫秒级开销；如果对 consumed 也做"签名不变就不读"，会导致一个真实场景失效：同一目录
+// 下多个会话行共享同一份 session-meta.json，其中一行因为跟 meta 内容毫无关系的瞬时原因
+// （比如 createForPath 抛错）第一轮建档失败、下一轮 rescan 才补上——这时候 meta 文件签名
+// 没变，如果按"消费过就不读"处理，这一行就会永久拿不到 pinnedAt / capability / executor /
+// permission 等 legacy 属性，而且完全静默、没有任何 skippedMetaSources 记录能提示这件事。
+// rescan 机制存在的意义就是兜住这类迟到的行，所以 consumed 状态一律照常重读并返回数据，
+// 不做跳过。
 //
 // 并发假设：这个 gate 假设单一顺序调用者（一次 migrateLegacySessions / auditLegacySessionManifests
 // 调用内部顺序遍历），内存里的 ledger 副本只在 flush() 时整体写回一次。不支持多个调用者
@@ -78,8 +94,26 @@ export function createMetaSourceGate(opts: any = {}) {
   const skippedEntries: any[] = [];
 
   function recordEntry(filePath, size, mtimeMs, status) {
-    ledger[filePath] = { size, mtimeMs, status, recordedAt: now() };
+    const entry: any = { size, mtimeMs, status, recordedAt: now() };
+    if (status === "parse_error") {
+      entry.verdictSchema = PARSE_ERROR_VERDICT_SCHEMA;
+    }
+    ledger[filePath] = entry;
     dirty = true;
+  }
+
+  function shouldSkipCachedDeathSentence(prior, size, mtimeMs) {
+    if (!prior || prior.size !== size || prior.mtimeMs !== mtimeMs || prior.status === "consumed") {
+      return false;
+    }
+    // 旧账本把带 BOM 的合法 JSON 误判为 parse_error：无 verdictSchema（或 < 2）时重验一次。
+    if (
+      prior.status === "parse_error"
+      && !(Number.isFinite(prior.verdictSchema) && prior.verdictSchema >= PARSE_ERROR_VERDICT_SCHEMA)
+    ) {
+      return false;
+    }
+    return true;
   }
 
   return {
@@ -98,7 +132,7 @@ export function createMetaSourceGate(opts: any = {}) {
       }
       const { size, mtimeMs } = stat;
       const prior = ledger[filePath];
-      if (prior && prior.size === size && prior.mtimeMs === mtimeMs && prior.status !== "consumed") {
+      if (shouldSkipCachedDeathSentence(prior, size, mtimeMs)) {
         // 签名未变且上次判了死刑：内容不会自愈，跳过。
         return { skipped: { reason: prior.status } };
       }
@@ -108,7 +142,7 @@ export function createMetaSourceGate(opts: any = {}) {
         return { skipped: { reason: "too_large" } };
       }
       try {
-        const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+        const data = readJsonFileUtf8(filePath);
         recordEntry(filePath, size, mtimeMs, "consumed");
         return { data };
       } catch {
@@ -180,7 +214,7 @@ function hydrateSessionMetaPayloads(sessionDir, metaPath, data) {
         continue;
       }
       try {
-        next[field] = JSON.parse(fs.readFileSync(path.join(path.dirname(metaPath), ref.path), "utf-8"));
+        next[field] = readJsonFileUtf8(path.join(path.dirname(metaPath), ref.path));
       } catch {
         delete next[field];
       }
