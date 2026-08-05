@@ -481,7 +481,7 @@ let _crashFallbackNotice = null;
  * 诊断专用文案（crash log、`dialog.trainUpdateApplyFailedBody` 这类"进程崩了
  * 请重启"对话框）刻意继续读 `app.getVersion()`，不经这个访问器——那些场景
  * 问的是"哪个壳进程崩了"，不是"用户在用哪个内容版本"。
- * 例外的修订：crash.log 头部自本次起两行并写——壳行（`HanaAgent shell:`）
+ * 该例外的适用范围收窄如下：crash.log 头部自本次起两行并写——壳行（`HanaAgent shell:`）
  * 保留上述"哪个壳进程崩了"的例外语义，内容行（`Content:`）由本访问器提供。
  * 原因是热更新后壳版本与内容版本会分叉，只报壳版本会把新内容里的崩溃标成
  * 老版本，系统性误导排障；两行并写让"哪个壳崩的"和"崩的是哪份代码"都可读。
@@ -2250,6 +2250,11 @@ function writeCrashLog(errorMessage) {
   const logs = _serverLogs.join("");
   const timestamp = new Date().toISOString();
   const diagnostics = buildServerCrashDiagnostics();
+  // 内容版本取不到就写 unknown，不猜、也不回落到壳版本——两行必须各自独立，
+  // 否则一行出问题会污染另一行，读日志的人无从分辨。
+  const contentVersion = (() => {
+    try { return getCurrentContentVersion(); } catch { return "unknown"; }
+  })();
 
   const content = redactMainLogText([
     `=== HanaAgent Crash Log ===`,
@@ -2257,9 +2262,8 @@ function writeCrashLog(errorMessage) {
     // getCurrentContentVersion() 声明处对这类诊断文案的例外说明，该例外保留），
     // 内容行回答"崩的是哪个版本的代码"——热更新后两者会分叉，只写壳版本会把
     // 新内容里的崩溃标成老版本，误导用户与排障（已实际发生过一次）。
-    // 内容行取不到就写 unknown，不猜、不回落到壳版本，避免两行互相污染。
     `HanaAgent shell: v${app?.getVersion?.() || "unknown"}`,
-    `Content: v${(() => { try { return getCurrentContentVersion(); } catch { return "unknown"; } })()}`,
+    `Content: v${contentVersion}`,
     `Time: ${timestamp}`,
     `Error: ${errorMessage}`,
     `Platform: ${process.platform} ${process.arch}`,
