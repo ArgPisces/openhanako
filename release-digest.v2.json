@@ -3,6 +3,495 @@
   "entries": [
     {
       "schemaVersion": 1,
+      "tag": "v0.443.46",
+      "version": "0.443.46",
+      "previousTag": "v0.442.0",
+      "generatedAt": "2026-08-05T17:54:18.000Z",
+      "noUserFacingChanges": false,
+      "summary": {
+        "zh": "这一版最实用的新东西是助手终于能读办公文档了：文件工具新增 extract 动作，docx、xlsx、pptx、pdf、csv、odt、rtf、epub 都能转成 Markdown 读出来，以前这些格式读出来是一堆乱码。读不了的时候会说清楚原因，扫描版 PDF 没有文字层需要 OCR、格式不支持、文件太大都会明说，而不是丢回一段空白。MCP 连接器做了一整轮整顿：开关现在是持久化的，开着的会在启动时和用到时自动连上，手动关掉的就一直关着直到你重新打开；关掉的连接器会彻底从模型看得到的工具列表里消失，而不是留在那里等调用失败，ui:// 资源和 app 工具这些入口也认这个开关了。升级后有一次性行为需要留意：这个版本之前被你停掉的连接器会重连一次，因为旧数据里没有这个开关，读的时候按「存在即启用」处理，不想要的在设置里关掉即可，这次会记住。还修了两个能把程序推到不可用的问题：MCP 连接器有两个工具重名、或两个连接器 id 规范化后撞在一起，以前会让配置读取失败并直接表现为服务起不来，现在只跳过冲突的那两个工具、其余照常，设置页会指出是哪两个名字；文件历史以前给每个文件挂一个系统监听句柄，工作区一大就把服务推过两万个文件描述符，越线之后所有 shell 命令都会失败，现在每个工作区只用一个递归监听，占用固定。其余是一批让出错时看得懂的修复：会话创建与切换失败、切换到模型已经没了的助手、设置页切换助手，以前要么是一句裸的 500，要么把后端英文原句甚至整段带 trace id 的 JSON 糊进提示条，现在都是能照着做的中文提示；在还没加载的会话里敲斜杠命令不再失败；侧边栏的恢复提示关掉之后不再每次启动重现，也不再占死整个提示位挡住更新提醒。",
+        "en": "The most useful addition this release is that the assistant can finally read office documents: the file tool gains an extract action covering docx, xlsx, pptx, pdf, csv, odt, rtf and epub, converting them to Markdown, where these formats previously came back as mojibake. When extraction cannot work it says why, whether a scanned PDF with no text layer needs OCR, the format is unsupported, or the file is too large, instead of returning silent emptiness. MCP connectors got a full pass: the on/off switch is now persisted, so an enabled connector reconnects at startup and on demand while one you switched off stays off until you turn it back on; a disabled connector disappears from the tool list the model sees rather than lingering there to fail on call, and the ui:// resource and app-tool entry points honor the switch too. One upgrade-time behavior to note: connectors you had stopped before this version reconnect once, because older configs carry no such field and are read as enabled-by-presence; switch them off again in Settings and it will stick. Two failures that could render the app unusable are fixed: an MCP connector carrying two tools with the same name, or two connector ids that normalize onto each other, used to fail config loading and surfaced as the server refusing to start, and now only the two colliding tools are skipped while everything else keeps working, with Settings naming which two to rename; and workspace file history used to register one OS watch handle per file, pushing the server past twenty thousand file descriptors in a large workspace, after which every shell command failed outright, where one recursive watcher per workspace now keeps that footprint constant. The rest is a round of making failures legible: session creation and switching, switching to an assistant whose model is gone, and switching assistants from the settings page used to surface either a bare 500 or the backend's raw English sentence, sometimes an entire JSON document with a trace id, pasted into a one-line toast, and now show something you can act on; a slash command in a session that has not loaded yet no longer fails; and the sidebar recovery notice no longer returns on every launch after being dismissed, nor blanks the whole notice slot and hides update prompts."
+      },
+      "counts": {
+        "feature": 2,
+        "fix": 7,
+        "improvement": 1,
+        "migration": 1
+      },
+      "source": {
+        "owner": "liliMozi",
+        "repo": "openhanako",
+        "commitRange": "v0.442.0..v0.443.46",
+        "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.443.46",
+        "releaseNotes": ""
+      },
+      "items": [
+        {
+          "id": "office-document-extract",
+          "kind": "feature",
+          "importance": "high",
+          "title": {
+            "zh": "助手能读办公文档了：文件工具新增 extract 动作",
+            "en": "The assistant can read office documents: a new extract action on the file tool"
+          },
+          "summary": {
+            "zh": "以前把 Word、Excel、PPT、PDF 这类文件交给助手，它用普通的读取工具打开，得到的是二进制被当成文本解出来的乱码，等于读不了。现在文件工具多了一个 extract 动作，把这些格式转成 Markdown 再读，覆盖 docx、xlsx、pptx、pdf、csv、odt、rtf、epub 以及同族的容器格式。取用方式和已有的 stat、copy 一致，可以给文件 id、路径或文件引用。",
+            "en": "Handing a Word, Excel, PowerPoint or PDF file to the assistant used to mean it opened the file with the ordinary read tool and got binary content decoded as text, which is to say it could not read it at all. The file tool now has an extract action that converts these formats to Markdown first, covering docx, xlsx, pptx, pdf, csv, odt, rtf, epub and related container formats. It takes the same inputs as the existing stat and copy actions: a file id, a path, or a file reference."
+          },
+          "details": [
+            {
+              "zh": "失败会说明原因，不会静悄悄返回空白：扫描版 PDF 没有文字层会明说需要 OCR，另外还区分格式不支持、解析失败、文件过大三种情况。",
+              "en": "Failures report a reason instead of returning silent emptiness: a scanned PDF with no text layer says outright that OCR would be required, and unsupported format, parse failure and too-large are told apart."
+            },
+            {
+              "zh": "输出长度的截断规则跟普通读取工具一致，不会因为文档大就把上下文撑爆。",
+              "en": "Output truncation follows the same rule as the ordinary read tool, so a large document does not blow up the context."
+            },
+            {
+              "zh": "读取仍然受工作区授权目录的约束，这条新路径和已有的复制走同一套「解析引用、确认存在、校验授权根目录」的检查，没有绕开权限的新入口。",
+              "en": "Reads remain bound by authorized workspace folders: the new path runs the same resolve-reference, verify-existence, enforce-authorized-root sequence that copy already used, so it is not a new way around folder permissions."
+            },
+            {
+              "zh": "转换器是一个随打包一起发出去的原生模块，安装包里的服务会把它一并带上；万一它在你的机器上加载不起来，只有这一次提取会报错，不会把整个会话带下去。",
+              "en": "The converter is a native module shipped with the package, and the packaged server carries it. If it fails to load on your machine, only that one extraction reports an error rather than taking the session down with it."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "194e13607",
+              "title": "feat(agent): file tool gains extract action for office documents"
+            },
+            {
+              "type": "commit",
+              "ref": "6dfab9a4a",
+              "title": "fix(build): keep the native document converter out of the server bundle"
+            }
+          ]
+        },
+        {
+          "id": "mcp-connector-enabled-switch",
+          "kind": "feature",
+          "importance": "high",
+          "title": {
+            "zh": "MCP 连接器有了一个记得住的开关",
+            "en": "MCP connectors get an on/off switch that is remembered"
+          },
+          "summary": {
+            "zh": "以前连接器的「在跑」和「该跑」是两回事：手动启动的重启之后被忘掉，手动停掉的下次启动又自己回来，你的意图留不下来。现在开关本身被存下来，它同时决定启动时连不连、用到时能不能临时连。开着的连接器在启动时自动连上，没连上也会在第一次调用时按需连；关掉的就一直关着，直到你在设置里重新打开。",
+            "en": "A connector's running state and its intended state used to be separate things: one you started by hand was forgotten on restart, one you stopped by hand came back on the next launch, and your intent was never kept. The switch is now persisted and drives both whether it connects at startup and whether it may connect on demand. An enabled connector reconnects at startup, or on first call if it is not up yet; a disabled one stays down until you turn it back on in Settings."
+          },
+          "details": [
+            {
+              "zh": "关掉的连接器会整个从模型看得到的工具列表里消失，而不是留在列表里等到被调用才报错。设置页仍然照常列出它，方便你重新打开。",
+              "en": "A disabled connector leaves the model-facing tool list entirely, instead of staying listed and failing only when called. Settings still shows it so you can switch it back on."
+            },
+            {
+              "zh": "读 ui:// 资源、调用 app 工具、以及 MCP 应用启动这几个入口以前不认这个开关：对着关掉的连接器会先把它唤醒，然后报一句含糊的「没在运行」；刚重启还没连的则直接失败。现在这三处和工具调用走同样的顺序，关着的告诉你去哪里打开，开着但没连的当场连上。这类请求的状态码也从 502 改成 409：502 的意思是上游网关出了问题，但这里根本没有联系过任何上游，原因就是开关被你关掉了。",
+              "en": "Reading a ui:// resource, calling an app tool and launching an MCP app never knew about the switch: against a disabled connector they would wake it up and then report a vague not-running, and right after a restart, before anything had connected, they simply failed. All three now run the same checks in the same order as tool calls: a disabled connector is refused with a message saying where to turn it on, an idle one is started on demand. Such a call also answers 409 rather than the previous 502, because a 502 claims an upstream gateway failed while nothing upstream was ever contacted; the connector is off because you turned it off."
+            },
+            {
+              "zh": "导入一个处于关闭状态的连接器不会再照样拨号并无限重连；停止一个不存在的连接器 id 会明确报错，而不是假装成功。",
+              "en": "Importing a connector that is switched off no longer dials it anyway and reconnects forever; stopping an unknown connector id now fails with a clear error instead of silently succeeding."
+            },
+            {
+              "zh": "设置页和助手自检里，被关掉的连接器现在显示「已禁用」而不是「已停止」，两者的差别在于前者只有你能改。",
+              "en": "In Settings and in the assistant's self-diagnosis a switched-off connector now reads disabled rather than stopped, the difference being that only you can change the former."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "1591bf9b7",
+              "title": "feat(mcp): one persisted enabled switch drives connector lifecycle"
+            },
+            {
+              "type": "commit",
+              "ref": "0e1319a7c",
+              "title": "fix(mcp): disabled connectors leave the model-facing surface entirely"
+            },
+            {
+              "type": "commit",
+              "ref": "ba0f60af0",
+              "title": "fix(mcp): honor the enabled switch on the add path and surface the disabled state"
+            },
+            {
+              "type": "commit",
+              "ref": "393fe58ab",
+              "title": "refactor(mcp): the enabled switch gates the connector lifecycle primitives"
+            },
+            {
+              "type": "commit",
+              "ref": "828649005",
+              "title": "fix(mcp): app-facing calls honor the disabled switch and lazy-start like tool calls"
+            },
+            {
+              "type": "commit",
+              "ref": "013c6f9b6",
+              "title": "fix(mcp): a switched-off connector answers 409, not bad gateway, on app routes"
+            },
+            {
+              "type": "commit",
+              "ref": "344f94a36",
+              "title": "fix(mcp): pin the live-client refresh path and tidy the listing counter lifecycle"
+            }
+          ]
+        },
+        {
+          "id": "mcp-stopped-connectors-reconnect-once",
+          "kind": "migration",
+          "importance": "medium",
+          "title": {
+            "zh": "升级后：这个版本之前被停掉的 MCP 连接器会重连一次",
+            "en": "After upgrading: MCP connectors you had stopped will reconnect once"
+          },
+          "summary": {
+            "zh": "开关是这一版新加的字段，旧配置里没有它。为了不让老用户升级后连接器集体消失，读的时候按「配置里存在就是启用」处理。副作用是：你在旧版本里手动停掉的连接器，升级后会重新连上一次。不想要它继续跑，在设置里关掉即可，这一次会被记住，以后不会再自己回来。",
+            "en": "The switch is a field added in this release, and older configs do not carry it. So that upgrading does not make everyone's connectors vanish, a missing field is read as enabled. The side effect: a connector you had stopped by hand in an older version reconnects once after the upgrade. Switch it off in Settings and it will stay off from then on."
+          },
+          "details": [
+            {
+              "zh": "反过来也成立：装回旧版本时，配置里多出来的这个字段不会让旧版本读不懂，你当前的意图会被保留。",
+              "en": "The reverse holds too: rolling back to an older build, the extra field does not confuse it, and your current intent is preserved."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "1591bf9b7",
+              "title": "feat(mcp): one persisted enabled switch drives connector lifecycle"
+            },
+            {
+              "type": "commit",
+              "ref": "d4e74dde6",
+              "title": "chore(persistence): repin the schema fingerprint for the connector enabled switch"
+            }
+          ]
+        },
+        {
+          "id": "mcp-tool-name-collisions",
+          "kind": "fix",
+          "importance": "high",
+          "title": {
+            "zh": "MCP 工具重名不再让整个服务起不来",
+            "en": "Duplicate MCP tool names no longer keep the whole service from starting"
+          },
+          "summary": {
+            "zh": "有两种情况会让工具名撞车：一个连接器自己列出了两个同名工具，或者两个连接器的 id 在规范化之后变成同一个。以前这两种都会让配置读取直接失败，而配置在服务启动时就要读一遍，所以后果是整个服务起不来，一个第三方服务器的命名问题变成了你的应用打不开。现在冲突不再向上炸：同一个连接器内的重名折叠成第一条，跨连接器的歧义则把冲突的两个工具都跳过，其余工具照常发布。重名折叠时，几次列举给出的安全标注如果不一致，会按更谨慎的一边合并：任何一次说它有破坏性或会访问外部，就按有算；只有每一次都说它只读、幂等，才按只读算。这会让个别工具从此需要你确认才执行。",
+            "en": "Tool names can collide two ways: one connector lists two tools with the same name, or two connector ids normalize onto the same one. Either used to fail config loading outright, and config is read while the service starts, so the consequence was the service not coming up at all, a third-party server's naming problem turning into your app not opening. Collisions no longer propagate upward: duplicates inside one connector fold to the first entry, and a cross-connector ambiguity skips both colliding tools while every other tool is published as usual. When duplicates fold and their safety annotations disagree, the merge takes the more cautious side: destructive or open-world counts if any listing said so, while read-only and idempotent count only when every listing agreed. That can move an individual tool into the category that asks you to confirm before it runs."
+          },
+          "details": [
+            {
+              "zh": "设置页会说清楚发生了什么：哪个 id 有歧义、是哪两个名字在争它，你据此知道该改哪一个。整个连接器级别的 id 冲突会让它名下所有工具一起被跳过，以前那会按工具数量刷出几十条一模一样的红线、把页面其余内容淹掉，现在按对手方聚合成一条，因为那本来就是一个错误、一个改法；连接器和自己冲突时仍然一对一列，因为每一对要改的名字都不同。",
+              "en": "Settings spells out what happened: which id is ambiguous and which two names are claiming it, so you know which one to rename. A whole-connector id collision drops every tool it carries, which used to stack one identical red line per dropped tool and bury the rest of the page; those now fold into a single summary per counterpart, since it is one mistake with one fix, while a connector clashing with itself still lists each pair, because each pair names a different tool to rename."
+            },
+            {
+              "zh": "和内置的连接器状态工具撞名是另一回事，这时只有第三方连接器的那个工具被跳过，内置的不受影响，提示文案也会照实这么说，而不是声称两边都被禁用了。",
+              "en": "Clashing with the built-in connector-status tool is a different case: only the connector's own tool is dropped, the built-in one is unaffected, and the notice says so rather than claiming both sides were disabled."
+            },
+            {
+              "zh": "冲突信息也进了模型可见的连接器状态里。以前状态只报一个工具数量，一个因为歧义而被丢掉工具的连接器看起来完全健康，工具只是「不见了」，助手无从判断是服务器没提供还是被本地跳过。",
+              "en": "The collision entries also reach the model-facing connector status. It used to report only a tool count, so a connector whose tools were dropped for an ambiguous id looked entirely healthy with its tools merely absent, and the assistant could not tell that from a server that never offered them."
+            },
+            {
+              "zh": "添加或导入一个 id 会与现有连接器规范化撞车的连接器，会在写入时就被拒绝，那时候还来得及告诉你换个名字。",
+              "en": "Adding or importing a connector whose id would normalize onto an existing one is refused at the write boundary, while there is still someone to tell which name to pick."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "db39d9030",
+              "title": "fix(mcp): fold duplicate tool names within a connector at the config boundary"
+            },
+            {
+              "type": "commit",
+              "ref": "a472fa3c0",
+              "title": "fix(mcp): fail closed per colliding tool instead of killing config reads"
+            },
+            {
+              "type": "commit",
+              "ref": "6c523b8ed",
+              "title": "fix(mcp): surface tool collisions in the connectors status tool"
+            },
+            {
+              "type": "commit",
+              "ref": "298adc8f9",
+              "title": "fix(mcp): aggregate collision notices and mark host-tool collisions"
+            },
+            {
+              "type": "commit",
+              "ref": "e8720f2b5",
+              "title": "fix(desktop): review-ledger copy and comment polish"
+            }
+          ]
+        },
+        {
+          "id": "file-history-watcher-descriptor-exhaustion",
+          "kind": "fix",
+          "importance": "high",
+          "title": {
+            "zh": "文件历史不再耗光文件描述符、把所有 shell 命令拖垮",
+            "en": "File history no longer exhausts file descriptors and breaks every shell command"
+          },
+          "summary": {
+            "zh": "上一版加入的工作区文件历史，实现上是给每个文件单独挂一个系统级监听。在 macOS 上这意味着一个文件占一个文件描述符，工作区一大就把服务推过两万个描述符这条线。越线之后的表现不是文件历史本身出问题，而是启动子进程直接失败，也就是所有 shell 命令都跑不了了，症状和原因隔得很远，很难往这上面想。现在改成每个工作区根目录挂一个递归监听，无论多少文件，占用都是固定的。",
+            "en": "The workspace file history added in the previous release registered one OS-level watch per file. On macOS that costs one file descriptor each, and a large workspace pushed the server past twenty thousand descriptors. Past that line the symptom was not file history misbehaving but spawning child processes failing outright, which is to say every shell command stopped working, a symptom far enough from its cause to be hard to connect. A single recursive watcher per workspace root now keeps that footprint constant no matter how many files there are."
+          },
+          "details": [
+            {
+              "zh": "捕获范围完全没变，过滤挪到了事件层面做。系统的文件事件流在并发读写下本来就会静默丢事件，兜底的定期基线扫描仍然是最终依据。",
+              "en": "Capture coverage is unchanged, with the filtering moved to the event level. The OS event stream silently drops events under concurrent activity anyway, and the periodic baseline sweep remains the ground truth for whatever it misses."
+            },
+            {
+              "zh": "一处行为变化：监听不再跟随符号链接指向的目录。这和一直以来的基线扫描保持了一致，它本来就不进入符号链接目录。",
+              "en": "One behavior change: the watcher no longer follows symlinked directories. That matches the baseline sweep, which never entered them either."
+            },
+            {
+              "zh": "文件历史弹窗里的列表还修了一个视觉问题：条目多到需要滚动时，每一行都会被压成一条细缝。",
+              "en": "The list in the history dialog also had a visual bug fixed: once it had enough entries to scroll, every row was crushed to a sliver."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "c059a9f4f",
+              "title": "fix(file-history): watch each workspace with one recursive watcher instead of per-file handles"
+            },
+            {
+              "type": "commit",
+              "ref": "f86a960c6",
+              "title": "fix(desktop): keep file-history list rows at full height when the list overflows"
+            }
+          ]
+        },
+        {
+          "id": "actionable-failure-messages",
+          "kind": "fix",
+          "importance": "high",
+          "title": {
+            "zh": "出错时给的是能照着做的提示，不再是裸 500 或一段英文原文",
+            "en": "Failures now say something you can act on, not a bare 500 or raw English"
+          },
+          "summary": {
+            "zh": "一批失败路径的提示以前都不能用。会话创建和切换遇到老数据问题时统一压成一句裸的 500；切换到一个模型已经不存在的助手同样只有 500；设置页里切换助手则把后端的英文句子直接拼进中文界面的提示条。最糟的一种是服务端未捕获的异常：它回来的是一个嵌套结构，而设置页只认扁平结构，于是整段 JSON 连着 trace id 和花括号被当成「错误信息」塞进一行提示条。现在这些失败都带上了真实的状态码，能对上错误码的会翻译成一句你能照着做的中文，对不上的至少保留后端原文而不是一堆结构。",
+            "en": "A batch of failure paths gave you nothing usable. Session creation and switching flattened old-data problems into a bare 500; switching to an assistant whose model no longer exists gave the same; and switching assistants from the settings page pasted the backend's English sentence straight into a localized UI. Worst was an uncaught server-side exception: it comes back in a nested shape the settings page did not understand, so the entire JSON document, trace id and braces included, was treated as the error message and stuffed into a one-line toast. All of these now carry a real status code; a failure whose code is recognized becomes a sentence you can act on, and one without a code at least keeps the backend's own wording rather than a pile of structure."
+          },
+          "details": [
+            {
+              "zh": "切换到模型已经没了的助手，现在返回 409 并明说「这个助手用的模型不可用，去设置里换一个」。",
+              "en": "Switching to an assistant whose model is gone now answers 409 and says outright that the model this assistant uses is unavailable and to pick a different one in settings."
+            },
+            {
+              "zh": "没有错误码的失败仍然原样保留后端文案，因为这类提示条只有一行、没有折叠详情的地方，把原文吞掉会让你连报障的依据都没有。",
+              "en": "A failure carrying no code still shows the backend text verbatim, because this kind of toast is a single line with nowhere to fold details away, and swallowing the original would leave nothing to report a problem with."
+            },
+            {
+              "zh": "服务端在把状态码发出去之前会先验一遍范围。文件系统、数据库、子进程抛出来的异常也走同一个出口，而子进程把退出码挂在同一个字段上，0 或 999 这种值会让响应构造直接抛错，客户端最后拿到的是框架兜底的纯文本，原始错误连同错误码一起被毁掉；302 这种值更会让客户端真的去跟一次重定向。",
+              "en": "The server now range-checks a status code before sending it. Exceptions from the filesystem, the database and child processes travel through the same exit, and a child process hangs its exit code on the same field: values like 0 or 999 make response construction throw, so the client ends up with the framework's fallback plain text and the original error and its code are destroyed, while a value like 302 would have the client actually follow a redirect."
+            },
+            {
+              "zh": "内部契约类的错误（比如请求根本没带身份）不再把断言原文推到你面前，改为一句通用文案，原文折叠进详情供报障用。这类错误里还有一种以前完全无声：没有附带会话的那一种只写进控制台警告，服务端明明拒绝了请求，界面上什么都不显示，现在会正常弹提示。",
+              "en": "Internal-contract errors, such as a request carrying no identity at all, no longer push the raw assertion text at you: they show a generic sentence with the original folded into details for reporting. One variety of them used to be entirely silent, too: an identity error with no session attached only reached a console warning, so a server-side refusal showed up as nothing at all, and it now raises a toast like the others."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "fa0df8d7f",
+              "title": "fix(sessions): surface classified errors from create and switch routes"
+            },
+            {
+              "type": "commit",
+              "ref": "912d60149",
+              "title": "fix(agents): tag the unavailable-model switch error with its code"
+            },
+            {
+              "type": "commit",
+              "ref": "851b36282",
+              "title": "fix(sessions): finish the error-surface polish from review"
+            },
+            {
+              "type": "commit",
+              "ref": "b608b2e07",
+              "title": "fix(server): agent switch surfaces coded errors instead of a blanket 500"
+            },
+            {
+              "type": "commit",
+              "ref": "984f3305b",
+              "title": "fix(server): route error helpers converge foreign status shapes at the boundary"
+            },
+            {
+              "type": "commit",
+              "ref": "6c44431e0",
+              "title": "fix(desktop): agent switch failures show the mapped localized message"
+            },
+            {
+              "type": "commit",
+              "ref": "ca625a3c6",
+              "title": "fix(desktop): settings fetch carries the server's error code across the throw boundary"
+            },
+            {
+              "type": "commit",
+              "ref": "583c420e7",
+              "title": "fix(desktop): settings errors survive the nested server shape and share one presentation helper"
+            },
+            {
+              "type": "commit",
+              "ref": "9d21444de",
+              "title": "fix(server,desktop): fail closed on ownership lookup errors and surface internal-contract ws errors"
+            }
+          ]
+        },
+        {
+          "id": "slash-command-in-unloaded-session",
+          "kind": "fix",
+          "importance": "medium",
+          "title": {
+            "zh": "在还没加载的会话里敲斜杠命令不再失败",
+            "en": "Slash commands no longer fail in a session that has not loaded yet"
+          },
+          "summary": {
+            "zh": "斜杠命令发出去的时候没有带上它属于哪个助手，服务端只好去找当前加载在内存里的会话记录来倒推。会话还没被加载时那里什么都没有，于是命令直接失败，弹出来的是一句「agentId required」，一个内部契约的断言原文，对你没有任何意义。现在命令自己带上会话的助手身份，服务端也改为以会话记录的归属为准，不再依赖它当下有没有被加载。",
+            "en": "A slash command was sent without saying which assistant it belonged to, so the server tried to work that out from whichever session record happened to be loaded in memory. In a session that had not loaded yet there was nothing there, so the command simply failed with an agentId-required message, the raw text of an internal contract assertion, which means nothing to you. The command now carries its session's assistant identity, and the server resolves ownership from the session's own record rather than from whether it happens to be loaded."
+          },
+          "details": [
+            {
+              "zh": "输入框里的助手提及菜单现在和斜杠命令读的是同一个身份来源，两者不会再各算各的。",
+              "en": "The assistant-mention menu in the input box now reads the same identity as slash execution, so the two can no longer disagree."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "1d1da6265",
+              "title": "fix(chat): slash commands carry their session's agent identity"
+            },
+            {
+              "type": "commit",
+              "ref": "b6cf5ee16",
+              "title": "refactor(input): share the slash agent identity expression"
+            },
+            {
+              "type": "commit",
+              "ref": "90cc2b3fb",
+              "title": "refactor(server): resolve ws session identity in one place"
+            }
+          ]
+        },
+        {
+          "id": "sidebar-recovery-notice",
+          "kind": "fix",
+          "importance": "medium",
+          "title": {
+            "zh": "侧边栏的恢复提示关掉之后就真的关掉了",
+            "en": "Dismissing the sidebar recovery notice actually dismisses it"
+          },
+          "summary": {
+            "zh": "数据降级后侧边栏会出现一条恢复提示。它有两个毛病叠在一起：关掉之后每次启动又会冒出来，等于关不掉；而关掉这个动作又会把整个提示位永久清空，于是更新提醒、壳阻塞提示这些本该显示的卡片也一起看不见了。现在关掉是对「这一组具体的降级」永久静默，只有出现新的降级才会再提示一次，而且只提示一次；提示位则是让出来给下一张卡片，而不是被清空。",
+            "en": "After a data degradation the sidebar shows a recovery notice. Two problems compounded: dismissing it did not stick, since it returned on every launch, and dismissing it permanently blanked the entire notice slot, so update prompts and shell-blocked cards that belonged there disappeared too. Dismissing now silences that exact set of degradations for good, with only a new degradation showing it again and only once; and the slot is yielded to the next card rather than emptied."
+          },
+          "details": [
+            {
+              "zh": "空列表状态下的文案也改成了跟当前语境相符的说法。",
+              "en": "The empty-state copy was also reworded to match the context it actually appears in."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "68c5668b2",
+              "title": "fix(desktop): meta-recovery notice dismisses permanently per degradation set"
+            },
+            {
+              "type": "commit",
+              "ref": "6ace340e2",
+              "title": "fix(desktop): a dismissed recovery notice yields the slot instead of emptying it"
+            }
+          ]
+        },
+        {
+          "id": "detached-session-memory-flag",
+          "kind": "fix",
+          "importance": "medium",
+          "title": {
+            "zh": "新建独立会话不再改动上一个会话的记忆开关",
+            "en": "Creating a detached session no longer rewrites the previous session's memory switch"
+          },
+          "summary": {
+            "zh": "写入会话元信息的那段代码不接收「要写哪个会话」，而是去读当前焦点所在的会话，然后写在那儿。新建一个独立会话时，焦点还停在上一个会话上，于是新会话的记忆设置被写进了上一个会话，两边都不对。现在写入方必须被明确告知目标会话，不再从全局焦点指针猜。",
+            "en": "The code that writes session metadata was never told which session to write to; it read whichever session currently had focus and wrote there. When creating a detached session, focus was still on the previous one, so the new session's memory setting landed on the old session and both ended up wrong. The writer must now be told its target explicitly rather than inferring it from a global focus pointer."
+          },
+          "details": [
+            {
+              "zh": "所有创建路径都走同一个显式接口，包括路由、调度器和会话工具。",
+              "en": "Every creation path goes through the same explicit interface, including routes, the scheduler and the session tool."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "424ebb58b",
+              "title": "fix(session): persistSessionMeta takes an explicit session path"
+            }
+          ]
+        },
+        {
+          "id": "startup-failure-dialog-versions",
+          "kind": "fix",
+          "importance": "low",
+          "title": {
+            "zh": "崩溃日志和启动失败对话框同时记下外壳与内容两个版本号",
+            "en": "The crash log and startup-failure dialog record both the shell and content versions"
+          },
+          "summary": {
+            "zh": "应用的外壳和内容走的是两条独立的版本线，出问题时只知道其中一个，往往判断不出来是哪一侧的问题。崩溃日志的头部和启动失败时弹出的对话框现在两个都写上，报障时把这段贴出来就够了。",
+            "en": "The app's shell and its content follow two separate version lines, and knowing only one of them often makes it impossible to tell which side failed. The crash log header and the startup-failure dialog now record both, so pasting that section is enough when reporting a problem."
+          },
+          "details": [],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "a294a14be",
+              "title": "fix(desktop): crash log carries both shell and content versions"
+            },
+            {
+              "type": "commit",
+              "ref": "623733d5c",
+              "title": "test(desktop): pin the crash log version header contract"
+            }
+          ]
+        },
+        {
+          "id": "screenshot-reveal-in-file-manager",
+          "kind": "improvement",
+          "importance": "low",
+          "title": {
+            "zh": "点击保存好的截图会在系统文件管理器里定位到它",
+            "en": "Clicking a saved screenshot reveals it in the system file manager"
+          },
+          "summary": {
+            "zh": "截图保存后会出现一条可点的结果提示。以前点它是在应用内打开这个文件或跳到工作区树，现在改为调起系统的文件管理器并选中那个文件（拿不到文件本身时退一步打开它所在的目录），方便你接着拖到别处去用。",
+            "en": "A saved screenshot leaves a clickable result notice. Clicking it used to open the file inside the app or jump to the workspace tree; it now opens the system file manager with the file selected, falling back to opening its containing directory, so you can drag it somewhere else from there."
+          },
+          "details": [
+            {
+              "zh": "这条提示同时补上了键盘可达性：可以用 Tab 移到它上面，再用回车或空格触发，不必非得用鼠标点。",
+              "en": "The notice also became keyboard-reachable: you can Tab to it and trigger it with Enter or Space rather than having to click it."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "750f79060",
+              "title": "fix(input): reveal screenshot results in file manager"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
       "tag": "v0.442.0",
       "version": "0.442.0",
       "previousTag": "v0.441.32",
