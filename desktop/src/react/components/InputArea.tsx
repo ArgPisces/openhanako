@@ -843,7 +843,8 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
   }, [editor, t]);
 
   // 这个输入框归属哪个助手：已有会话以会话自己的记录为准，新会话草稿才用选中的助手。
-  // 它既决定菜单里列出谁的命令，也随 slash 请求发给服务端作为执行身份，两处必须同源。
+  // 菜单里列出谁的命令、@ 菜单把谁认作"当前助手"、以及 slash 请求发给服务端的执行身份，
+  // 三处都读这一个值——它们说的是同一件事，分头算迟早会算出不一样的答案。
   const slashAgentId = pendingNewSession
     ? (selectedAgentId || currentAgentId)
     : (currentSessionProjection?.agentId || currentAgentId);
@@ -891,10 +892,8 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
   const agentMentionItems = useMemo(() => buildAgentMentionItems({
     agents,
     query: fileMentionQuery,
-    currentAgentId: pendingNewSession
-      ? (selectedAgentId || currentAgentId)
-      : (currentSessionProjection?.agentId || currentAgentId),
-  }), [agents, currentAgentId, currentSessionProjection?.agentId, fileMentionQuery, pendingNewSession, selectedAgentId]);
+    currentAgentId: slashAgentId,
+  }), [agents, fileMentionQuery, slashAgentId]);
 
   const mentionItems = useMemo<MentionMenuItem[]>(() => {
     if (mentionTab === 'sessions') return sessionMentionItems;
