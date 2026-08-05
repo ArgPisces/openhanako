@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:b8da44c17b45e35d8e3fbc1f2981e1d164b5b380ffbb9b6eb0a2ba470fd25a22",
+  "payloadFingerprint": "sha256:67a03699e52849aba211a31a5b07cc9c901e68b7141968e7a832f1d77daae2ab",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Source-hash refresh only: the desktop crash log header now writes shell and content versions as two lines (a diagnostic text change inside an already-registered write site). No stored schema, field, or write primitive changed; nothing parses the crash log header.",
-    "payloadFingerprint": "sha256:b8da44c17b45e35d8e3fbc1f2981e1d164b5b380ffbb9b6eb0a2ba470fd25a22"
+    "compatibilityReason": "Source-hash refresh only: the MCP manager app-facing calls (resource read, app tool call, tool refresh) now run the same enabled-switch and on-demand-start checks the tool call path already ran, plus an in-memory counter of tool listings. No stored schema, field, or write primitive changed.",
+    "payloadFingerprint": "sha256:67a03699e52849aba211a31a5b07cc9c901e68b7141968e7a832f1d77daae2ab"
   },
   "schemas": [
     {
@@ -3421,7 +3421,7 @@
       "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:c8ce9cda4b2f39c33300a3e62f3f084db53dae1c0b9ad1d1f0ec6f9e2349062c",
+      "sourceHash": "sha256:689dca295da5fc877ae4bce7543e2cd1a92ddfe7b2553d4484dda91797ad20c3",
       "storeId": "mcp-config"
     },
     {
