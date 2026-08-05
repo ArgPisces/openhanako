@@ -29,6 +29,7 @@ export const ERROR_CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = Object.
   session_identity_unresolved: 'error.code.sessionIdentityUnresolved',
   session_identity_mismatch: 'error.code.sessionIdentityMismatch',
   session_manifest_not_found: 'error.code.sessionManifestNotFound',
+  session_manifest_unavailable: 'error.code.sessionManifestUnavailable',
   session_locator_not_active: 'error.code.sessionLocatorNotActive',
   active_session_conflict: 'error.code.activeSessionConflict',
   session_delete_staged_conflict: 'error.code.sessionDeleteStagedConflict',
@@ -40,6 +41,7 @@ export const ERROR_CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = Object.
 
   // 模型 / 工作区 / 权限
   no_available_model: 'error.code.noAvailableModel',
+  agent_model_not_available: 'error.code.agentModelNotAvailable',
   workspace_not_found: 'error.code.workspaceNotFound',
   capability_denied: 'error.code.capabilityDenied',
 });
@@ -80,4 +82,29 @@ export function errorCodeFromResponseBody(body: unknown): string | null {
   if (errorField && ERROR_CODE_SHAPE.test(errorField)) return errorField;
 
   return null;
+}
+
+/**
+ * 把 session 路由的错误响应体读成 { message, code }。
+ *
+ * 同一个请求失败会有两种完全不同的响应形状，这是现状的一个坑：
+ * route handler 自己应答的是扁平的 `{ error: "英文句子", code }`，而异常冒泡到
+ * 顶层 `app.onError` 时会被包成嵌套的 `{ error: { code, message, traceId } }`。
+ * 调用方只认扁平形状的话，嵌套形状会被 String() 成 "[object Object]" 显示给用户，
+ * 错误码也一并丢掉。这里两种都读，调用方不必关心自己撞上了哪一种。
+ */
+export function normalizeSessionRouteError(body: unknown): { message: string; code: string | null } {
+  if (!body || typeof body !== 'object') return { message: '', code: null };
+  const error = (body as Record<string, unknown>).error;
+
+  if (error && typeof error === 'object') {
+    const nested = error as Record<string, unknown>;
+    const message = typeof nested.message === 'string' ? nested.message.trim() : '';
+    const code = typeof nested.code === 'string' ? nested.code.trim() : '';
+    return { message, code: code || null };
+  }
+
+  const code = errorCodeFromResponseBody(body);
+  const message = typeof error === 'string' ? error.trim() : '';
+  return { message, code };
 }

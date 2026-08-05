@@ -3,6 +3,7 @@ import {
   ERROR_CODE_MESSAGE_KEYS,
   UNKNOWN_ERROR_MESSAGE_KEY,
   errorCodeFromResponseBody,
+  normalizeSessionRouteError,
   userMessageKeyForCode,
 } from '../../../../../shared/error-user-messages.ts';
 import en from '../../../locales/en.json';
@@ -87,5 +88,38 @@ describe('error-user-messages · response body normalization', () => {
     expect(errorCodeFromResponseBody({})).toBeNull();
     expect(errorCodeFromResponseBody('boom')).toBeNull();
     expect(errorCodeFromResponseBody({ code: '   ' })).toBeNull();
+  });
+});
+
+describe('error-user-messages · normalizeSessionRouteError', () => {
+  it('reads the flat shape route handlers answer with', () => {
+    expect(normalizeSessionRouteError({
+      error: 'session locator is not active',
+      code: 'session_locator_not_active',
+    })).toEqual({ message: 'session locator is not active', code: 'session_locator_not_active' });
+  });
+
+  it('reads the nested shape the top-level onError wrapper answers with', () => {
+    // app.onError 把异常包成 { error: { code, message, traceId } }，跟 route handler
+    // 自己应答的扁平形状不是一回事。两种都要读得出来，否则用户会看到 "[object Object]"。
+    expect(normalizeSessionRouteError({
+      error: { code: 'session_manifest_unavailable', message: 'session index is rebuilding', traceId: 't-1' },
+    })).toEqual({ message: 'session index is rebuilding', code: 'session_manifest_unavailable' });
+  });
+
+  it('keeps the bare-code shape working', () => {
+    expect(normalizeSessionRouteError({ error: 'session_busy' }))
+      .toEqual({ message: 'session_busy', code: 'session_busy' });
+  });
+
+  it('returns a null code when the body carries no code', () => {
+    expect(normalizeSessionRouteError({ error: 'Invalid session path' }))
+      .toEqual({ message: 'Invalid session path', code: null });
+  });
+
+  it('tolerates missing or malformed bodies', () => {
+    expect(normalizeSessionRouteError(null)).toEqual({ message: '', code: null });
+    expect(normalizeSessionRouteError({})).toEqual({ message: '', code: null });
+    expect(normalizeSessionRouteError({ error: { traceId: 't-2' } })).toEqual({ message: '', code: null });
   });
 });

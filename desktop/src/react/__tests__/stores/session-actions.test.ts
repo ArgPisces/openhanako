@@ -1185,6 +1185,61 @@ function mockPermissionDefault(mode = 'ask') {
       );
       expect(mockState.pendingNewSession).toBe(true);
     });
+
+    it('新建失败带错误码时说人话，原始英文留在详情区', async () => {
+      const copy: Record<string, string> = {
+        'session.createFailed': 'Create session failed',
+        'error.code.unexpected': 'Something went wrong',
+        'error.code.noAvailableModel': '当前没有可用的对话模型',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
+      Object.assign(mockState, {
+        pendingNewSession: true,
+        pendingDraftId: 'draft-coded',
+        memoryEnabled: true,
+      });
+      mockFetch.mockResolvedValueOnce(jsonResponse({
+        error: 'no available model',
+        code: 'no_available_model',
+      }, false));
+
+      await expect(ensureSession()).resolves.toBeNull();
+
+      expect(mockState.inlineErrors).toMatchObject({
+        '': {
+          text: 'Create session failed: 当前没有可用的对话模型',
+          detail: 'no available model',
+          code: 'no_available_model',
+        },
+      });
+    });
+
+    it('新建失败走顶层 onError 的嵌套形状时，仍读得出 code 和 message', async () => {
+      const copy: Record<string, string> = {
+        'session.createFailed': 'Create session failed',
+        'error.code.unexpected': 'Something went wrong',
+        'error.code.sessionManifestUnavailable': '会话索引暂时不可用，请稍后重试',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
+      Object.assign(mockState, {
+        pendingNewSession: true,
+        pendingDraftId: 'draft-nested',
+        memoryEnabled: true,
+      });
+      mockFetch.mockResolvedValueOnce(jsonResponse({
+        error: { code: 'session_manifest_unavailable', message: 'session index is rebuilding', traceId: 't-1' },
+      }, false));
+
+      await expect(ensureSession()).resolves.toBeNull();
+
+      expect(mockState.inlineErrors).toMatchObject({
+        '': {
+          text: 'Create session failed: 会话索引暂时不可用，请稍后重试',
+          detail: 'session index is rebuilding',
+          code: 'session_manifest_unavailable',
+        },
+      });
+    });
   });
 
   describe('loadMessages 竞态护栏', () => {
@@ -1658,6 +1713,63 @@ function mockPermissionDefault(mode = 'ask') {
         6000,
         undefined,
       );
+    });
+
+    it('切换失败带错误码时说人话，toast 带上错误码', async () => {
+      const copy: Record<string, string> = {
+        'session.switchFailed': 'Switch session failed',
+        'error.code.unexpected': 'Something went wrong',
+        'error.code.sessionLocatorNotActive': '这个会话已经不是当前版本，刷新一下列表',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
+      Object.assign(mockState, {
+        currentSessionPath: '/session/current.jsonl',
+      });
+      mockFetch.mockResolvedValueOnce(jsonResponse({
+        error: 'session locator is not active',
+        code: 'session_locator_not_active',
+      }, false));
+
+      await switchSession('/session/old.jsonl');
+
+      expect(mockState.inlineErrors).toMatchObject({
+        '/session/current.jsonl': {
+          text: 'Switch session failed: 这个会话已经不是当前版本，刷新一下列表',
+          detail: 'session locator is not active',
+          code: 'session_locator_not_active',
+        },
+      });
+      expect(mockState.addToast).toHaveBeenCalledWith(
+        'Switch session failed: 这个会话已经不是当前版本，刷新一下列表',
+        'error',
+        6000,
+        { errorCode: 'session_locator_not_active' },
+      );
+    });
+
+    it('切换失败走顶层 onError 的嵌套形状时，仍读得出 code 和 message', async () => {
+      const copy: Record<string, string> = {
+        'session.switchFailed': 'Switch session failed',
+        'error.code.unexpected': 'Something went wrong',
+        'error.code.sessionManifestUnavailable': '会话索引暂时不可用，请稍后重试',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
+      Object.assign(mockState, {
+        currentSessionPath: '/session/current.jsonl',
+      });
+      mockFetch.mockResolvedValueOnce(jsonResponse({
+        error: { code: 'session_manifest_unavailable', message: 'session index is rebuilding', traceId: 't-1' },
+      }, false));
+
+      await switchSession('/session/old.jsonl');
+
+      expect(mockState.inlineErrors).toMatchObject({
+        '/session/current.jsonl': {
+          text: 'Switch session failed: 会话索引暂时不可用，请稍后重试',
+          detail: 'session index is rebuilding',
+          code: 'session_manifest_unavailable',
+        },
+      });
     });
 
     it('后端返回 currentModelId，uncached session 仍然触发 loadMessages', async () => {

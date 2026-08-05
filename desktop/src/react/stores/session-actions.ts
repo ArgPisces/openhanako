@@ -21,7 +21,7 @@ import { browserStateForPath, setBrowserStateForPath } from './browser-slice';
 import { computerOverlayForSession } from './computer-overlay-slice';
 import { snapshotStreamBuffer, type StreamBufferSnapshot } from './stream-invalidator';
 import { errorWithCode, presentError, presentErrorWithLabel } from '../errors/error-presenter';
-import { errorCodeFromResponseBody } from '../../../../shared/error-user-messages.ts';
+import { errorCodeFromResponseBody, normalizeSessionRouteError } from '../../../../shared/error-user-messages.ts';
 import { renderMarkdown } from '../utils/markdown';
 import type { ChatMessage, ContentBlock } from './chat-types';
 import { readMessageLiveVersion } from './message-live-version';
@@ -778,9 +778,11 @@ export async function switchSession(path: string): Promise<void> {
     const data = await res.json();
     if (!isCurrentSwitch(myVersion, path)) return;
     if (data.error) {
-      console.error('[session] switch failed:', data.error);
+      // 带上错误码，呈现层才能把它翻成人话；没有码的原生崩溃走兜底文案 + 详情。
+      const routeError = normalizeSessionRouteError(data);
+      console.error('[session] switch failed:', routeError.message, routeError.code || '');
       useStore.setState({ pendingSessionSwitchPath: null });
-      showSessionSwitchError(path, data.error);
+      showSessionSwitchError(path, errorWithCode(routeError.message, routeError.code));
       return;
     }
 
@@ -1225,7 +1227,10 @@ export async function ensureSession(expectedPendingDraftId?: string | null): Pro
 
     const data = await postPendingSessionCreate(draft.body);
     // 带上错误码，呈现层才能把它翻成人话；没有码的原生崩溃走兜底文案 + 详情。
-    if (data?.error) throw errorWithCode(String(data.error), errorCodeFromResponseBody(data));
+    if (data?.error) {
+      const routeError = normalizeSessionRouteError(data);
+      throw errorWithCode(routeError.message, routeError.code);
+    }
     const ref = frozenSessionRefFromCreateResponse(data);
     if (!ref) throw new Error('session creation returned an incomplete session identity');
 
