@@ -3245,18 +3245,21 @@ describe("MCP app-facing calls and the enabled switch", () => {
 
     it("lists the tools itself when the start found the connection already live", async () => {
       // The other half of the same decision. A start that arrives to find a live
-      // connection — someone else's start won the race while this refresh was
-      // waiting — has nothing to list, so there is no fresh answer to inherit and
-      // the refresh has to ask for one. Handing back the stored list here would
-      // answer a refresh with whatever happened to be on disk.
+      // connection has nothing to list, so there is no fresh answer to inherit
+      // and the refresh has to ask for one. Handing back the stored list here
+      // would answer a refresh with whatever happened to be on disk.
       const listTools = vi.fn(async () => [{ name: "fresh" }]);
       const { runtime, built } = appRuntime(
         [{ id: "acme", name: "Acme", url: "https://mcp.acme.test/mcp", tools: [{ name: "stale" }] }],
         { listTools },
       );
+      // Stubbed deliberately: the real call graph cannot drive this branch —
+      // the client is read and the branch entered in one tick, and a concurrent
+      // start marks the connector as establishing, which is excluded earlier.
+      // The stub reproduces exactly what startConnector does when it finds a
+      // running client, so the branch is held to its contract regardless.
       runtime.startConnector = vi.fn(async () => {
-        // Exactly what startConnector does when it finds a running client: adopt
-        // it and return, without listing anything.
+        // Adopt the live client and return, without listing anything.
         const live: any = { running: true, stop: vi.fn(async () => {}), listTools };
         built.push(live);
         runtime.clients.set("acme", live);

@@ -1613,6 +1613,14 @@ export class McpManager {
       // repeat the round trip. The counter is what tells that apart from a start
       // that found an already-live client and listed nothing: in that case there
       // is no fresh answer to hand back and we still have to ask ourselves.
+      //
+      // That second case is defensive rather than reachable today: this method
+      // reads the client and enters the branch in one tick, and a start racing
+      // in alongside marks the connector as establishing, which the guard above
+      // already excludes. It is written and tested anyway because the condition
+      // it protects is a property of the counter, not of today's call graph —
+      // the alternative is a branch that silently starts serving stored data if
+      // some future caller ever does reach it.
       if ((this._toolListings.get(id) ?? 0) !== listedBefore) {
         return this.getConfig().connectors.find((s) => s.id === id)?.tools || [];
       }
@@ -1637,6 +1645,10 @@ export class McpManager {
     // caller act on tools that are not on disk.
     const saved = this.saveConfig(latest);
     this.registerCachedTools();
+    // Counted only once the list is on disk. A refresh that inherits this
+    // listing answers by reading the store, so bumping any earlier would make
+    // the count visible while the store still holds the previous list — the
+    // inheriting caller would hand back data this one had not written yet.
     this._toolListings.set(id, (this._toolListings.get(id) ?? 0) + 1);
     return saved.connectors.find((s) => s.id === id)?.tools || [];
   }

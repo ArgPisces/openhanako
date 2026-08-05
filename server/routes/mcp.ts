@@ -414,6 +414,13 @@ function statusForError(message) {
   if (/not found|content not found/i.test(message)) return 404;
   if (/not visible|does not expose/i.test(message)) return 403;
   if (/not running|disabled globally/i.test(message)) return 409;
+  // One connector switched off by the user. Its sibling states above already
+  // answer 409, and this is the same kind of answer: nothing upstream failed,
+  // the system is simply in a state that conflicts with the request, and the
+  // remedy is a switch the user owns. Matched on the shared part of the wording
+  // so both refusals land here — the one raised when something needs the
+  // connector, and the one raised when a start is refused outright.
+  if (/is disabled; enable it in Settings/i.test(message)) return 409;
   if (/must start with ui:\/\/|uri is required|invalid JSON request body/i.test(message)) return 400;
   return 502;
 }
