@@ -161,7 +161,7 @@
     "searchFailed": "검색 실패",
     "metaRecoveryNoticeTitle": "일부 대화가 복구 대기 중입니다",
     "metaRecoveryNoticeBody": "대화 메타데이터에 이상이 감지되었습니다. 본문은 디스크에 그대로 저장되어 있지만 일부 대화 속성이 일시적으로 누락될 수 있습니다",
-    "metaRecoveryEmpty": "대화 목록을 지금은 완전히 표시할 수 없습니다. 본문은 디스크에 남아 있습니다. 잠시 후 다시 시도하거나 앱을 재시작해 주세요",
+    "metaRecoveryEmpty": "일부 대화의 메타데이터가 복구 대기 중입니다. 본문은 디스크에 남아 있습니다",
     "view": {
       "time": "시간순 정렬",
       "project": "프로젝트순 정렬",

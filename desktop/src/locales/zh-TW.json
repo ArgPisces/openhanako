@@ -161,7 +161,7 @@
     "searchFailed": "搜尋失敗",
     "metaRecoveryNoticeTitle": "部分對話待復原",
     "metaRecoveryNoticeBody": "偵測到對話元資料異常，歷史正文仍保存在磁碟上，受影響的對話屬性可能暫缺",
-    "metaRecoveryEmpty": "對話清單暫時無法完整顯示，正文仍保存在磁碟上，請稍候或重新啟動應用程式",
+    "metaRecoveryEmpty": "部分對話的中繼資料待復原，正文仍保存在磁碟上",
     "view": {
       "time": "按時間排序",
       "project": "按項目排序",

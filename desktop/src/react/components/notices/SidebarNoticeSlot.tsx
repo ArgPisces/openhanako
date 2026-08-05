@@ -31,12 +31,20 @@ import styles from './SidebarNoticeSlot.module.css';
  *
  * 第四种触发态 meta-recovery（session 元数据待恢复）优先级次于 fallback、
  * 高于 blocked/train——同样是"已经发生的事情"（session-meta 损坏/隔离），
- * 但不像 fallback 那样有主进程一次性 ack 通道，叉号语义退化成 blocked 那种
- * 组件内存态（本 session 安静，下次挂载/刷新重新出现）。数据源是
- * store.metaRecovery（loadSessions() 从 /api/health 的 sessionStore 附块写入），
- * 没有可点击的动作——点击卡面无事发生，只能叉掉。
+ * 但不像 fallback 那样有主进程一次性 ack 通道。数据源是 store.metaRecovery
+ * （loadSessions() 从 /api/health 的 sessionStore 附块写入），没有可点击的
+ * 动作——点击卡面无事发生，只能叉掉。
+ *
+ * 它的叉号语义是"按劣化签名永久关闭，出现新劣化时重现一次"：比照 train 的
+ * dismissed-key 落 localStorage，只是键值不是版本号而是当前劣化集合的签名。
+ * 之所以不能用 blocked 那种会话内存态：这条提示的信号来自持久化账本里被判
+ * 死刑的旧文件全集，它永不自愈，于是"下次启动重新出现"意味着用户每次开应用
+ * 都被同一张、且没有任何可执行动作的警示卡拦一次——那是对注意力的无意义
+ * 消耗。反过来，新出现的劣化是事件而不是稳态，签名一变卡片自然重现一次，
+ * 该打扰的时候仍然打扰。
  */
 const DISMISSED_TRAIN_UPDATE_KEY = 'hana-sidebar-train-update-dismissed-key';
+const DISMISSED_META_RECOVERY_KEY = 'hana-sidebar-meta-recovery-dismissed-key';
 
 type NoticeStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -80,6 +88,21 @@ function writeDismissedKey(storage: NoticeStorage | null, storageKey: string, va
 
 function trainNoticeKey(available: { version: string } | null): string | null {
   return available ? `version:${available.version}` : null;
+}
+
+/**
+ * 劣化集合的签名：排序后拼接，让"同一组原因"无论服务端返回顺序如何都得到
+ * 同一个键，只有集合真的变了（多一条/换一条原因）才产生新键。degraded 为真
+ * 但 reasons 为空时退回常量 'degraded'——空字符串会被"已存键 === 当前签名"
+ * 的比较读成"没关过"，那样卡片会立刻回来。reasons 来自 /api/health 的原样
+ * 转发（没有做形状校验），所以这里按运行时真相判断是不是数组，不信类型。
+ */
+function metaRecoverySignature(metaRecovery: SessionMetaRecoveryStatus | null | undefined): string | null {
+  if (!metaRecovery?.degraded) return null;
+  const parts = (Array.isArray(metaRecovery.reasons) ? metaRecovery.reasons : [])
+    .map((r) => `${r?.kind ?? ''}:${r?.detail || ''}`)
+    .sort();
+  return parts.join('|') || 'degraded';
 }
 
 function percentOf(progress: TrainUpdateProgressState | null): number {
@@ -208,9 +231,17 @@ export function SidebarUpdateNoticeCard({
   // blocked 形态的叉号状态只活在组件内存里（不落 localStorage）：进程
   // 重启 = 组件重新挂载 = 天然重置为"未叉过"，这正是"下次启动重新出现"的实现。
   const [blockedDismissed, setBlockedDismissed] = useState(false);
-  // meta-recovery 没有 fallback 那样的主进程一次性 ack 通道，叉号语义比照
-  // blocked：本 session 内存态，组件重新挂载（含刷新/重启）天然重置。
-  const [metaRecoveryDismissed, setMetaRecoveryDismissed] = useState(false);
+
+  // meta-recovery 的叉号比照 train 落 localStorage，键值是当前劣化集合的签名：
+  // 关掉的是"这一组劣化"，不是"这一次挂载"。签名变了（新劣化）与已存键不等，
+  // 卡片自然重现一次。
+  const metaRecoveryKey = metaRecoverySignature(metaRecovery);
+  const [metaRecoveryDismissedKey, setMetaRecoveryDismissedKey] = useState<string | null>(
+    () => readDismissedKey(resolvedStorage, DISMISSED_META_RECOVERY_KEY),
+  );
+  useEffect(() => {
+    setMetaRecoveryDismissedKey(readDismissedKey(resolvedStorage, DISMISSED_META_RECOVERY_KEY));
+  }, [metaRecoveryKey, resolvedStorage]);
 
   const trainKey = trainNoticeKey(available);
   const [trainDismissedKey, setTrainDismissedKey] = useState<string | null>(
@@ -234,7 +265,7 @@ export function SidebarUpdateNoticeCard({
   });
 
   if (!content) return null;
-  if (content.kind === 'meta-recovery' && metaRecoveryDismissed) return null;
+  if (content.kind === 'meta-recovery' && metaRecoveryKey && metaRecoveryDismissedKey === metaRecoveryKey) return null;
   if (content.kind === 'blocked' && blockedDismissed) return null;
   if (content.kind === 'train' && trainKey && trainDismissedKey === trainKey) return null;
 
@@ -247,7 +278,10 @@ export function SidebarUpdateNoticeCard({
       return;
     }
     if (content.kind === 'meta-recovery') {
-      setMetaRecoveryDismissed(true);
+      if (metaRecoveryKey) {
+        writeDismissedKey(resolvedStorage, DISMISSED_META_RECOVERY_KEY, metaRecoveryKey);
+        setMetaRecoveryDismissedKey(metaRecoveryKey);
+      }
       return;
     }
     if (content.kind === 'blocked') {
