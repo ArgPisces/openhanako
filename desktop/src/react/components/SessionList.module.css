@@ -419,13 +419,14 @@
     flex-shrink: 0;
 }
 
+/* Static state cue only — continuous opacity animation kept the compositor
+   busy under software rendering (esp. WARP). Do not restore infinite pulse. */
 .sessionStreamingDot[data-state="running"] {
-    animation: hana-pulse 2s ease-in-out infinite;
+    opacity: 1;
 }
 
 .sessionStreamingDot[data-state="pending"] {
-    opacity: 0.78;
-    animation: hana-pulse 1.2s ease-in-out infinite;
+    opacity: 0.55;
 }
 
 @media (prefers-reduced-motion: reduce) {
