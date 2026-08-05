@@ -24,7 +24,6 @@ import {
   upsertOptimisticSessionFirstMessage,
   type SessionRef,
 } from '../stores/session-actions';
-import { revealDeskDirectory, toggleJianSidebar } from '../stores/desk-actions';
 import { getWebSocket } from '../services/websocket';
 import { collectUiContext } from '../utils/ui-context';
 import { formatQuotedSelectionForPrompt } from '../utils/quoted-selection';
@@ -2139,12 +2138,11 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
 
   const handleSlashResultClick = useCallback(() => {
     if (slashResult?.filePath) {
-      window.platform?.openFile?.(slashResult.filePath);
+      window.platform?.showInFinder?.(slashResult.filePath);
       return;
     }
     if (!slashResult?.deskDir) return;
-    toggleJianSidebar(true);
-    void revealDeskDirectory(slashResult.deskDir);
+    window.platform?.openFolder?.(slashResult.deskDir);
   }, [slashResult?.deskDir, slashResult?.filePath]);
 
   const handleContinueDeletedAgentSession = useCallback(async () => {
