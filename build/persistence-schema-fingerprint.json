@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:01f263d384513c5b45f030ce47ba505031f4feb2e53a6c443ec71de35108712e",
+  "payloadFingerprint": "sha256:3d1967e51c93f85db08a7b5b5ae4536df063fc3b4070517c20333e98dce7f241",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "MCP config normalization now folds duplicate tool names within a connector, reports canonical tool-id collisions as data instead of throwing on read, and adds a runtime-only collisions projection. No stored schema, persisted field, or write primitive changes: config.json keeps its shape, and the collisions view never reaches saveConfig.",
-    "payloadFingerprint": "sha256:01f263d384513c5b45f030ce47ba505031f4feb2e53a6c443ec71de35108712e"
+    "compatibilityReason": "MCP connectors gain a persisted `enabled` boolean (read-time default true, so configs written before the field stay fully usable without migration) with `autoStart` mirrored to the same value on write for downgrade safety. No field is removed or reinterpreted destructively: old readers see a truthy autoStart matching current intent, new readers treat absence as enabled.",
+    "payloadFingerprint": "sha256:3d1967e51c93f85db08a7b5b5ae4536df063fc3b4070517c20333e98dce7f241"
   },
   "schemas": [
     {
@@ -3421,7 +3421,7 @@
       "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:1d3357ae4e32f8dc2c211f9d59c1f68abbe520cd70d06a758e5735e7278c2c60",
+      "sourceHash": "sha256:c8ce9cda4b2f39c33300a3e62f3f084db53dae1c0b9ad1d1f0ec6f9e2349062c",
       "storeId": "mcp-config"
     },
     {
