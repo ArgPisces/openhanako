@@ -882,6 +882,7 @@ describe("chat route model switch guard", () => {
       abortAllStreaming: vi.fn(async () => {}),
       getSessionByPath: vi.fn(() => ({ entries: [] })),
       getSessionIdForPath: vi.fn(() => "sess_running"),
+      getSessionManifest: vi.fn(() => ({ currentLocator: { path: "/tmp/running-session.jsonl" } })),
       isSessionStreaming: vi.fn((sessionPath) => sessionPath === "/tmp/running-session.jsonl"),
       isSessionSwitching: vi.fn(() => false),
       steerSession: vi.fn(() => false),

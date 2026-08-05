@@ -36,6 +36,7 @@ import {
   appendSessionStreamEvent,
   resumeSessionStream,
 } from "../session-stream-store.ts";
+import { resolveWsSessionContext } from "./ws-session-context.ts";
 import { visiblePromptText } from "../../core/session-reminders.ts";
 import { AppError } from "../../shared/errors.ts";
 import { errorBus } from "../../shared/error-bus.ts";
@@ -238,50 +239,15 @@ export function buildDesktopSlashSessionRef(engine: any, agentId: string, sessio
   };
 }
 
+// compact 只接受 manifest 当前定位器：压缩会重写 JSONL，落到过期路径上等于写错文件。
 export function resolveCompactSessionTarget(engine: any, msg: any) {
-  let sessionId = normalizedIdentity(msg?.sessionId);
-  const legacySessionPath = normalizedIdentity(msg?.sessionPath);
-
-  if (sessionId && legacySessionPath) {
-    const legacySessionId = sessionIdForLegacyCompactPath(engine, legacySessionPath);
-    if (legacySessionId && legacySessionId !== sessionId) {
-      return {
-        ok: false as const,
-        code: "session_identity_mismatch",
-        message: "sessionId and sessionPath refer to different sessions",
-        sessionId,
-      };
-    }
+  const ctx = resolveWsSessionContext(engine, msg, { requireManifestLocator: true });
+  // 显式比较 false 而不是 !ctx.ok：本项目 server 侧关掉了 strictNullChecks，
+  // 取反写法不会把联合类型收窄到错误分支。
+  if (ctx.ok === false) {
+    return { ok: false as const, code: ctx.code, message: ctx.message, sessionId: ctx.sessionId };
   }
-
-  if (!sessionId && legacySessionPath) {
-    sessionId = sessionIdForLegacyCompactPath(engine, legacySessionPath);
-  }
-  if (!sessionId) {
-    return {
-      ok: false as const,
-      code: "session_identity_unresolved",
-      message: "Unable to resolve session identity",
-      sessionId: null,
-    };
-  }
-
-  let sessionPath = null;
-  try {
-    sessionPath = normalizedIdentity(engine.getSessionManifest?.(sessionId)?.currentLocator?.path);
-  } catch {
-    sessionPath = null;
-  }
-  if (!sessionPath) {
-    return {
-      ok: false as const,
-      code: "session_identity_unresolved",
-      message: "Unable to resolve current session locator",
-      sessionId,
-    };
-  }
-
-  return { ok: true as const, sessionId, sessionPath };
+  return { ok: true as const, sessionId: ctx.sessionId, sessionPath: ctx.sessionPath };
 }
 
 function compactionNoopReason(message: string) {
@@ -372,45 +338,25 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
 
   const MAX_SESSION_STATES = 100;
 
-  function requireSessionPath(msg, ws) {
-    if (msg.sessionPath) return msg.sessionPath;
-    wsSend(ws, { type: "error", message: "sessionPath is required" });
-    return null;
-  }
-
-  function requireBoundSessionTarget(msg, ws) {
-    const sessionPath = requireSessionPath(msg, ws);
-    if (!sessionPath) return null;
-    const requestedSessionId = typeof msg.sessionId === "string" && msg.sessionId.trim()
-      ? msg.sessionId.trim()
-      : null;
-    const pathSessionId = sessionIdForPath(sessionPath);
-    if (requestedSessionId && pathSessionId && requestedSessionId !== pathSessionId) {
+  // 所有 WS 分支的身份入口：解析一次，失败就地回错，成功的结果由 handler 直接消费。
+  function requireWsSessionContext(msg, ws, opts = {}) {
+    const ctx = resolveWsSessionContext(engine, msg, opts);
+    if (ctx.ok === false) {
       wsSend(ws, {
         type: "error",
-        code: "session_identity_mismatch",
-        message: "sessionId and sessionPath refer to different sessions",
-        sessionId: requestedSessionId,
-        sessionPath,
+        code: ctx.code,
+        message: ctx.message,
+        ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
+        ...(ctx.sessionPath ? { sessionPath: ctx.sessionPath } : {}),
       });
       return null;
     }
-    if (requestedSessionId && typeof engine.getSessionManifest === "function") {
-      const manifestPath = engine.getSessionManifest(requestedSessionId)?.currentLocator?.path || null;
-      if (!manifestPath || manifestPath !== sessionPath) {
-        wsSend(ws, {
-          type: "error",
-          code: "session_identity_mismatch",
-          message: "sessionId and sessionPath refer to different sessions",
-          sessionId: requestedSessionId,
-          sessionPath,
-        });
-        return null;
-      }
-    }
-    return { sessionPath, sessionId: requestedSessionId || pathSessionId || null };
+    return ctx;
   }
 
+  // compact 走 resolveCompactSessionTarget（错误回包形状与前端路由绑定，不能换成通用
+  // 身份错误），拿不到解析结果里的归属标记，所以这一条分支仍单独问引擎要删除状态。
+  // 问的是同一个归属权威，不是另开身份来源。
   function isDeletedAgentSessionPath(sessionPath) {
     if (!sessionPath) return false;
     return engine.isDeletedAgentSession?.(sessionPath) === true;
@@ -1788,7 +1734,7 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
           // Wrap the async handler with error handling (replaces wrapWsHandler)
           (async () => {
             if (msg.type === "abort") {
-              const abortTarget = requireBoundSessionTarget(msg, ws); if (!abortTarget) return;
+              const abortTarget = requireWsSessionContext(msg, ws); if (!abortTarget) return;
               const abortPath = abortTarget.sessionPath;
               const abortSs = getState(abortPath);
               const requestedStreamId = typeof msg.streamId === "string" && msg.streamId.trim()
@@ -1849,9 +1795,9 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
 
             if (msg.type === "steer" && msg.text) {
               debugLog()?.log("ws", `steer (${msg.text.length} chars)`);
-              const steerTarget = requireBoundSessionTarget(msg, ws); if (!steerTarget) return;
+              const steerTarget = requireWsSessionContext(msg, ws); if (!steerTarget) return;
               const steerPath = steerTarget.sessionPath;
-              if (isDeletedAgentSessionPath(steerPath)) {
+              if (steerTarget.agentDeleted) {
                 rejectDeletedAgentSession(ws, steerPath);
                 return;
               }
@@ -1866,7 +1812,7 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
 
             // session 切回时，前端请求补发离屏期间的流式内容
             if (msg.type === "resume_stream") {
-              const resumeTarget = requireBoundSessionTarget(msg, ws); if (!resumeTarget) return;
+              const resumeTarget = requireWsSessionContext(msg, ws); if (!resumeTarget) return;
               const currentPath = resumeTarget.sessionPath;
               const currentSessionId = resumeTarget.sessionId;
               const ss = getExistingState(currentPath);
@@ -1908,7 +1854,8 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
             }
 
             if (msg.type === "context_usage") {
-              const usagePath = requireSessionPath(msg, ws); if (!usagePath) return;
+              const usageCtx = requireWsSessionContext(msg, ws); if (!usageCtx) return;
+              const usagePath = usageCtx.sessionPath;
               const usage = engine.getSessionContextUsage?.(usagePath)
                 || engine.getSessionByPath(usagePath)?.getContextUsage?.();
               wsSend(ws, {
@@ -1922,8 +1869,9 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
             }
 
             if (msg.type === "slash" && typeof msg.text === "string") {
-              const sp = requireSessionPath(msg, ws); if (!sp) return;
-              if (isDeletedAgentSessionPath(sp)) {
+              const slashCtx = requireWsSessionContext(msg, ws); if (!slashCtx) return;
+              const sp = slashCtx.sessionPath;
+              if (slashCtx.agentDeleted) {
                 rejectDeletedAgentSession(ws, sp);
                 return;
               }
@@ -1932,15 +1880,14 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 wsSend(ws, { type: "error", message: "slash system not ready", sessionPath: sp });
                 return;
               }
-              const session = engine.getSessionByPath(sp);
-              const agentId = session?.agentId || msg.agentId;
+              const agentId = slashCtx.agentId;
               if (!agentId) {
-                // 走到这里说明调用方既没带身份、服务端也没加载过这个会话——是内部契约被
+                // 走到这里说明服务端认不出这个会话的归属、调用方也没带身份——是内部契约被
                 // 破坏，不是用户操作错误。带上 code 让前端换成通用文案，英文原文进详情。
                 wsSend(ws, {
                   type: "error",
                   code: "internal_contract",
-                  message: "agentId required",
+                  message: "agent identity unresolved",
                   sessionPath: sp,
                 });
                 return;
@@ -2090,9 +2037,9 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
               }
               debugLog()?.log("ws", `user message (${promptText.length} chars, ${msg.images?.length || 0} images, ${msg.videos?.length || 0} videos, ${msg.audios?.length || 0} audios)`);
               // Phase 2: 客户端可指定 sessionPath，否则用焦点 session
-              const promptTarget = requireBoundSessionTarget(msg, ws); if (!promptTarget) return;
+              const promptTarget = requireWsSessionContext(msg, ws); if (!promptTarget) return;
               const promptSessionPath = promptTarget.sessionPath;
-              if (isDeletedAgentSessionPath(promptSessionPath)) {
+              if (promptTarget.agentDeleted) {
                 rejectDeletedAgentSession(ws, promptSessionPath);
                 return;
               }

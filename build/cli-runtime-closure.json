@@ -110419,6 +110419,18 @@
       "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
     },
     {
+      "path": "server/routes/ws-session-context.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "server/routes/chat.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by server/routes/chat.ts (import-statement)."
+    },
+    {
       "path": "server/session-stream-store.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112781,9 +112793,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9639,
+    "totalFiles": 9640,
     "byInputType": {
-      "source-graph": 658,
+      "source-graph": 659,
       "runtime-asset": 11,
       "nft-runtime-trace": 8970
     }

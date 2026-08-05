@@ -29,14 +29,14 @@ describe("desktop slash session identity", () => {
 });
 
 /**
- * The slash handler resolves the agent from the loaded session first and from the
- * client payload second. A session the server has not loaded (the usual state for a
- * remote/mobile client that only ever talked to the HTTP routes) leaves the first
- * source empty, so the payload has to carry the identity or the command dies on an
- * assertion the user can do nothing about.
+ * The slash handler takes the agent from the session's recorded owner first and from
+ * the client payload second. A session the server has no ownership record for (the
+ * usual state for a brand new draft) leaves the first source empty, so the payload has
+ * to carry the identity or the command dies on an assertion the user can do nothing
+ * about.
  */
 describe("slash WS handler agent identity", () => {
-  function mountSlashRoute({ sessionAgentId = null, handled = true } = {}) {
+  function mountSlashRoute({ ownerAgentId = null, handled = true } = {}) {
     let createHandlers: any;
     const upgradeWebSocket = vi.fn((factory: any) => {
       createHandlers = factory;
@@ -51,8 +51,13 @@ describe("slash WS handler agent identity", () => {
     const engine = {
       agentName: "Hana",
       abortAllStreaming: vi.fn(async () => {}),
-      getSessionByPath: vi.fn(() => (sessionAgentId ? { agentId: sessionAgentId, entries: [] } : null)),
+      getSessionByPath: vi.fn(() => null),
       getSessionIdForPath: vi.fn(() => "sess_a"),
+      resolveSessionOwnership: vi.fn(() => ({
+        agentId: ownerAgentId,
+        source: ownerAgentId ? "manifest" : "none",
+        agentDeleted: false,
+      })),
       isSessionStreaming: vi.fn(() => false),
       isSessionSwitching: vi.fn(() => false),
       steerSession: vi.fn(() => false),
@@ -67,7 +72,7 @@ describe("slash WS handler agent identity", () => {
     return { handlers, ws, tryDispatch, sent };
   }
 
-  it("dispatches with the agent id the client carried when the session is not loaded", async () => {
+  it("dispatches with the agent id the client carried when the session has no recorded owner", async () => {
     const { handlers, ws, tryDispatch, sent } = mountSlashRoute();
 
     handlers.onMessage({
@@ -97,24 +102,24 @@ describe("slash WS handler agent identity", () => {
     expect(sent().find((payload: any) => payload.type === "error")).toEqual({
       type: "error",
       code: "internal_contract",
-      message: "agentId required",
+      message: "agent identity unresolved",
       sessionPath: "/sessions/remote.jsonl",
     });
   });
 
-  it("still prefers the loaded session's own agent over the payload", async () => {
-    const { handlers, ws, tryDispatch } = mountSlashRoute({ sessionAgentId: "agent-loaded" });
+  it("prefers the session's recorded owner over the payload", async () => {
+    const { handlers, ws, tryDispatch } = mountSlashRoute({ ownerAgentId: "agent-owner" });
 
     handlers.onMessage({
       data: JSON.stringify({
         type: "slash",
         text: "/stop",
-        sessionPath: "/sessions/loaded.jsonl",
+        sessionPath: "/sessions/owned.jsonl",
         agentId: "agent-remote",
       }),
     }, ws);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(tryDispatch.mock.calls[0][1].sessionRef).toMatchObject({ agentId: "agent-loaded" });
+    expect(tryDispatch.mock.calls[0][1].sessionRef).toMatchObject({ agentId: "agent-owner" });
   });
 });
