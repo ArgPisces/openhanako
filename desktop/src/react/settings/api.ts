@@ -9,7 +9,7 @@ import {
   requireServerConnection,
 } from '../services/server-connection';
 import { errorWithCode } from '../errors/error-presenter';
-import { errorCodeFromResponseBody } from '../../../../shared/error-user-messages.ts';
+import { normalizeSessionRouteError } from '../../../../shared/error-user-messages.ts';
 
 const DEFAULT_TIMEOUT = 30_000;
 
@@ -62,26 +62,41 @@ export async function hanaFetch(
 /**
  * 读错误响应：给调用方一句话，外加一个错误码。
  *
- * 提码走 shared 的 errorCodeFromResponseBody，跟其它消费点认的是同一套形状
- * （既认 `{error, code}`，也认少数老路由把码直接塞进 error 字段的写法）。
- * body 读不出来或不是 JSON 时没有码，那种情况的文案跟以前一样。
+ * 同一个失败会有两种响应形状：route handler 自己应答的是扁平的 `{error, code}`，
+ * 而没被 route 接住、冒到服务端顶层错误处理器的异常会被包成嵌套的
+ * `{error: {code, message, traceId}}`。只认扁平形状的话，嵌套那种会把整段 JSON
+ * 文本当成"错误消息"显示出来，错误码也一并丢掉。归一交给 shared 的
+ * normalizeSessionRouteError——它两种都认，跟其它消费点用的是同一个归一器。
+ *
+ * 归一取不到消息时才往下退：先看 `{message}` 这种不带 error 字段的写法，
+ * 最后退回整段响应文本。body 读不出来或根本不是 JSON 时没有码，文案跟以前一样。
  */
 async function readErrorResponse(res: Response): Promise<{ message: string | null; code: string | null }> {
+  let text: string;
   try {
-    const text = await res.text();
-    if (!text) return { message: null, code: null };
-    try {
-      const data = JSON.parse(text);
-      const code = errorCodeFromResponseBody(data);
-      if (typeof data?.error === 'string' && data.error.trim()) return { message: data.error.trim(), code };
-      if (typeof data?.message === 'string' && data.message.trim()) return { message: data.message.trim(), code };
-      return { message: text.trim() || null, code };
-    } catch {
-      return { message: text.trim() || null, code: null };
-    }
+    text = await res.text();
   } catch {
     return { message: null, code: null };
   }
+  if (!text) return { message: null, code: null };
+
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // try 只围 JSON.parse：底下的字段读取若有缺陷，应该原地炸出来让人看见，
+    // 而不是被这个 catch 收编成"body 不是 JSON"，把 bug 伪装成正常分支。
+    return { message: text.trim() || null, code: null };
+  }
+
+  const routeError = normalizeSessionRouteError(data);
+  if (routeError.message) return { message: routeError.message, code: routeError.code };
+
+  const legacyMessage = (data as { message?: unknown } | null)?.message;
+  if (typeof legacyMessage === 'string' && legacyMessage.trim()) {
+    return { message: legacyMessage.trim(), code: routeError.code };
+  }
+  return { message: text.trim() || null, code: routeError.code };
 }
 
 /** 根据 yuan 类型返回 fallback 头像路径 */

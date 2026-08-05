@@ -4,11 +4,8 @@
 import { useSettingsStore } from './store';
 import { hanaFetch, hanaUrl } from './api';
 import { t } from './helpers';
-import { errorWithCode, translateKeyOrNull } from '../errors/error-presenter';
-import {
-  normalizeSessionRouteError,
-  userMessageKeyForCode,
-} from '../../../../shared/error-user-messages.ts';
+import { errorWithCode, localizedReasonOrRaw } from '../errors/error-presenter';
+import { normalizeSessionRouteError } from '../../../../shared/error-user-messages.ts';
 import {
   createRemoteResource,
   failRemoteLoad,
@@ -355,13 +352,7 @@ export async function switchToAgent(agentId: string) {
     store.showToast(t('settings.agent.switched', { name: data.agent.name }), 'success');
   } catch (err: any) {
     console.error('[agents] switch failed:', err);
-    // 错误码查得到文案就说人话；查不到才退回后端原文。这里不走 presentError 的
-    // 兜底文案，是因为设置页的 toast 只有一行、没有详情区：一旦把原文换成"操作没能
-    // 完成"这种通用句，英文原文就彻底看不到了，排障线索会连同它一起消失。
-    const mappedKey = userMessageKeyForCode(err?.code);
-    const reason = (mappedKey ? translateKeyOrNull(mappedKey, t) : null)
-      || (err instanceof Error ? err.message : String(err));
-    store.showToast(t('settings.agent.switchFailed') + ': ' + reason, 'error');
+    store.showToast(t('settings.agent.switchFailed') + ': ' + localizedReasonOrRaw(err, t), 'error');
   }
 }
 
@@ -374,11 +365,17 @@ export async function setPrimaryAgent(agentId: string) {
       body: JSON.stringify({ id: agentId }),
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    // 同 switchToAgent：非 2xx 已在 hanaFetch 边界抛成带码的异常，这里只补 2xx 带
+    // error 字段的老写法，同样要把码带过 throw，catch 才有得翻。
+    if (data.error) {
+      const routeError = normalizeSessionRouteError(data);
+      throw errorWithCode(routeError.message, routeError.code);
+    }
 
     await loadAgents();
     store.showToast(t('settings.agent.setPrimary'), 'success');
   } catch (err: any) {
-    store.showToast(t('settings.agent.setPrimaryFailed') + ': ' + err.message, 'error');
+    console.error('[agents] set primary failed:', err);
+    store.showToast(t('settings.agent.setPrimaryFailed') + ': ' + localizedReasonOrRaw(err, t), 'error');
   }
 }

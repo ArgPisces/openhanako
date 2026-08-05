@@ -7,7 +7,7 @@
  * 剩下的路径（hanaFetch → switchToAgent → toast）全部跑真的。
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockState: Record<string, any> = {};
 const mockTranslations: Record<string, string> = {};
@@ -64,12 +64,20 @@ function stubFetch(switchResponse: { status: number; body: unknown }) {
 describe('switchToAgent over the real hanaFetch boundary', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.unstubAllGlobals();
     resetState();
+    // 每个用例都会打日志，统一在这里静音，afterEach 负责还原，
+    // 不依赖各用例自己记得 restore（漏一个就会污染后面的用例）。
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    // 清理放在用例之后：留到下一个 beforeEach 才清，意味着最后一个用例跑完后
+    // 全局 fetch 仍是被替换的状态，会漏给同一进程里后跑的测试文件。
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('把服务端 409 带的错误码翻成本地化文案，而不是把英文原文糊到 toast 上', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockTranslations['error.code.agentModelNotAvailable'] = AGENT_MODEL_UNAVAILABLE;
     stubFetch({
       status: 409,
@@ -88,11 +96,9 @@ describe('switchToAgent over the real hanaFetch boundary', () => {
     );
     // 切换失败不改焦点。
     expect(mockState.currentAgentId).toBe('agent-a');
-    consoleSpy.mockRestore();
   });
 
   it('遇到没有错误码的失败时保留服务端原文，不把排障线索换成通用兜底句', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     stubFetch({ status: 500, body: { error: 'ENOENT: agent config is unreadable' } });
 
     const { switchToAgent } = await import('../../settings/actions');
@@ -102,11 +108,52 @@ describe('switchToAgent over the real hanaFetch boundary', () => {
       'settings.agent.switchFailed: ENOENT: agent config is unreadable',
       'error',
     );
-    consoleSpy.mockRestore();
+  });
+
+  it('服务端顶层错误处理器的嵌套形状同样翻得出人话，不把整段 JSON 糊到 toast 上', async () => {
+    // 未被路由 catch 的异常会冒到 app.onError，那里回的是 {error:{code,message,traceId}}，
+    // 跟路由自己应答的扁平形状不是一个形。只认扁平的话，这里会把整个 JSON 字符串
+    // 当成"错误消息"显示出来，错误码也一并丢掉。
+    mockTranslations['error.code.agentModelNotAvailable'] = AGENT_MODEL_UNAVAILABLE;
+    stubFetch({
+      status: 500,
+      body: {
+        error: {
+          code: 'agent_model_not_available',
+          message: 'agent "agent-b" is configured with model "ghost-1" which is not available',
+          traceId: 'trace-123',
+        },
+      },
+    });
+
+    const { switchToAgent } = await import('../../settings/actions');
+    await switchToAgent('agent-b');
+
+    expect(mockState.showToast).toHaveBeenCalledWith(
+      `settings.agent.switchFailed: ${AGENT_MODEL_UNAVAILABLE}`,
+      'error',
+    );
+    const [[shown]] = mockState.showToast.mock.calls;
+    expect(shown).not.toContain('traceId');
+    expect(shown).not.toContain('{');
+  });
+
+  it('2xx 里带 error 信封、消息却是空串时退到错误码，不留下"切换失败: "这样的悬空冒号', async () => {
+    // 200 配一个消息为空的 error 信封：非 2xx 那条路上 hanaFetch 总会兜一句
+    // "status statusText"，永远不会空；真正可能空手抵达呈现层的是这一条。
+    stubFetch({
+      status: 200,
+      body: { error: { code: 'session_busy', message: '', traceId: 'trace-9' } },
+    });
+
+    const { switchToAgent } = await import('../../settings/actions');
+    await switchToAgent('agent-b');
+
+    const [[shown]] = mockState.showToast.mock.calls;
+    expect(shown).toBe('settings.agent.switchFailed: session_busy');
   });
 
   it('成功切换时更新焦点助手并报成功', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     stubFetch({
       status: 200,
       body: { ok: true, agent: { id: 'agent-b', name: 'Agent B' } },
@@ -119,6 +166,5 @@ describe('switchToAgent over the real hanaFetch boundary', () => {
     expect(mockState.agentName).toBe('Agent B');
     expect(mockState.settingsAgentId).toBeNull();
     expect(mockState.showToast).toHaveBeenCalledWith('settings.agent.switched', 'success');
-    consoleSpy.mockRestore();
   });
 });
