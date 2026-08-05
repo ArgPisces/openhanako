@@ -275,6 +275,9 @@ export function SidebarUpdateNoticeCard({
   });
 
   if (!content) return null;
+  // blocked 关掉后是清空卡槽而不是让位给 train：这是有意例外，不是漏改。
+  // 壳被卡住时 train 卡提供的"点击应用更新"是一个执行不了的动作（壳过旧
+  // 装不上新列车），让位等于给用户一个假按钮；清空比让位诚实。
   if (content.kind === 'blocked' && blockedDismissed) return null;
   if (content.kind === 'train' && trainKey && trainDismissedKey === trainKey) return null;
 
