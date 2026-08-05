@@ -49,6 +49,12 @@ export interface McpToolCollision {
   otherConnectorId: string;
   /** The other claimant's tool name. */
   otherToolName: string;
+  /**
+   * Set when the counterpart is the built-in connectors_status tool. That one
+   * is published before connector tools are considered and survives the clash,
+   * so only this connector's tool was dropped.
+   */
+  host?: boolean;
 }
 
 export interface McpOAuthState {

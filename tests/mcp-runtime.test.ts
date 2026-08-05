@@ -2348,6 +2348,41 @@ describe("MCP canonical tool id collisions", () => {
     expect(payload.connectors[0].toolCount).toBe(3);
   });
 
+  it("keeps the built-in status tool and marks the connector side of that clash", () => {
+    // The host tool is published before the connector loop runs, so this is the
+    // one clash that is not symmetric: the diagnostic survives and only the
+    // connector's tool is dropped. The entry says so, so the notice can avoid
+    // claiming both sides went away.
+    const { runtime } = runtimeWithConnectors([
+      { id: "connectors", url: "https://one.example.test", tools: [{ name: "status" }] },
+    ]);
+    runtime.registerCachedTools();
+
+    const published = runtime.getAllTools().map((tool) => tool.name);
+    expect(published).toContain("mcp_connectors_status");
+    expect(published).toHaveLength(1);
+    expect(runtime.getState().connectors[0].collisions).toEqual([{
+      canonical: "connectors_status",
+      toolName: "status",
+      otherConnectorId: "mcp",
+      otherToolName: "connectors_status",
+      host: true,
+    }]);
+  });
+
+  it("rejects a batch whose own rows normalize onto one another", () => {
+    const { runtime, set } = runtimeWithConnectors([]);
+
+    // The clash is between two rows of the same import, neither of which is on
+    // disk yet, so checking only against the saved connectors would let it
+    // through and cost both connectors all of their tools afterwards.
+    expect(() => runtime.addConnectors([
+      { id: "Alpha", url: "https://one.example.test" },
+      { id: "alpha", url: "https://two.example.test" },
+    ])).toThrow(/connector 2:.*conflicts with existing connector "Alpha"/i);
+    expect(set).not.toHaveBeenCalled();
+  });
+
   it("rejects an added id whose sanitized form collides with an existing connector", () => {
     const { runtime, set } = runtimeWithConnectors([
       { id: "Tushare", url: "https://one.example.test", tools: [] },

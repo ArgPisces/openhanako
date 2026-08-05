@@ -44,6 +44,7 @@ export function ConnectorList({
       {connectors.map(connector => {
         const busy = (key: string) => busyKeys.has(`${key}-${connector.id}`);
         const enabledAgents = countEnabledAgents(agentConfig, connector.id);
+        const collisionRows = buildCollisionRows(connector);
         return (
           <div key={connector.id} className={`${styles['skills-list-item']} ${styles['mcp-list-item']}`}>
             {/* The whole summary is the way into the detail view; the action
@@ -86,19 +87,17 @@ export function ConnectorList({
                 </div>
               )}
               {/* A tool dropped for an ambiguous id is otherwise indistinguishable
-                  from a tool the server never offered. Both sides of the clash
-                  say so, because renaming either one brings both back. */}
-              {(connector.collisions || []).length > 0 && (
+                  from a tool the server never offered, so each clash is spelled
+                  out — but grouped by the fix it needs, not by its casualties. */}
+              {collisionRows.length > 0 && (
                 <div data-testid={`mcp-connector-collisions-${connector.id}`}>
-                  {(connector.collisions || []).map(collision => (
+                  {collisionRows.map(row => (
                     <div
-                      key={`${collision.canonical}-${collision.toolName}`}
+                      key={row.key}
                       className={styles['settings-inline-error']}
+                      data-testid="mcp-connector-collision-row"
                     >
-                      {t('settings.mcp.toolCollisionNotice', {
-                        a: `${connector.id}/${collision.toolName}`,
-                        b: `${collision.otherConnectorId}/${collision.otherToolName}`,
-                      })}
+                      {row.text}
                     </div>
                   ))}
                 </div>
@@ -149,6 +148,62 @@ export function ConnectorList({
       })}
     </div>
   );
+}
+
+/**
+ * One notice per thing the user has to fix, rather than one per casualty.
+ *
+ * Two connector ids that normalize onto each other take down every tool both of
+ * them carry. That is a single mistake with a single fix, and a connector with
+ * fifty tools would otherwise stack fifty identical red lines onto its row and
+ * bury everything else on the page, so those fold into one summary per
+ * counterpart. A connector clashing with itself is the opposite case: each pair
+ * is its own tool naming to correct, and summarizing them would throw away the
+ * only detail that makes them actionable. A clash with the built-in status tool
+ * gets its own wording, because there the host tool survives and the generic
+ * notice would claim a casualty that does not exist.
+ */
+function buildCollisionRows(connector: McpConnector): Array<{ key: string; text: string }> {
+  const collisions = connector.collisions || [];
+  const perCounterpart = new Map<string, number>();
+  for (const collision of collisions) {
+    if (collision.host || collision.otherConnectorId === connector.id) continue;
+    perCounterpart.set(
+      collision.otherConnectorId,
+      (perCounterpart.get(collision.otherConnectorId) || 0) + 1,
+    );
+  }
+
+  const summarized = new Set<string>();
+  const rows: Array<{ key: string; text: string }> = [];
+  for (const collision of collisions) {
+    const a = `${connector.id}/${collision.toolName}`;
+    if (collision.host) {
+      rows.push({
+        key: `host-${collision.toolName}`,
+        text: t('settings.mcp.toolCollisionHostNotice', { a }),
+      });
+      continue;
+    }
+    const count = perCounterpart.get(collision.otherConnectorId) || 0;
+    if (count > 1) {
+      if (summarized.has(collision.otherConnectorId)) continue;
+      summarized.add(collision.otherConnectorId);
+      rows.push({
+        key: `summary-${collision.otherConnectorId}`,
+        text: t('settings.mcp.toolCollisionSummary', { count, other: collision.otherConnectorId }),
+      });
+      continue;
+    }
+    rows.push({
+      key: `${collision.canonical}-${collision.toolName}`,
+      text: t('settings.mcp.toolCollisionNotice', {
+        a,
+        b: `${collision.otherConnectorId}/${collision.otherToolName}`,
+      }),
+    });
+  }
+  return rows;
 }
 
 function countEnabledAgents(

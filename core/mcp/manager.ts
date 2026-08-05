@@ -409,6 +409,12 @@ export function toMcpToolId(serverId, toolName) {
  * Returns canonical id -> the claimants, in the order encountered, and only
  * for ids with more than one. The host's own connectors_status tool seeds the
  * table, so a connector tool that would shadow it counts as ambiguous too.
+ *
+ * That seed is the one exception to "every claimant is dropped". The status
+ * tool is published before any connector tool is considered, and it is a host
+ * diagnostic rather than a connector's capability, so it stays and only the
+ * connector side of that clash goes. Callers mark those entries so a notice
+ * does not tell the user both sides were disabled when one of them was not.
  */
 export function computeMcpToolIdCollisions(connectors) {
   const claimed = new Map([
@@ -1741,12 +1747,24 @@ export class McpManager {
           const other = claimants.find(
             (claim) => claim.connectorId !== connector.id || claim.toolName !== tool.name,
           ) || { connectorId: connector.id, toolName: tool.name };
+          // The host diagnostic is already published and is not a connector
+          // capability, so this clash costs the connector's tool alone. Flagged
+          // rather than inferred downstream, because "mcp" is a legal connector
+          // id and a surface comparing ids could not tell the two apart.
+          // Matched on the seeded bucket as well as the claimant, because a
+          // connector legitimately named "mcp" carrying a tool named
+          // "connectors_status" produces that same pair under a different
+          // canonical id, and it is not the host.
+          const host = canonical === MCP_CONNECTORS_STATUS_TOOL_NAME
+            && other.connectorId === MCP_TOOL_NAMESPACE
+            && other.toolName === MCP_CONNECTORS_STATUS_TOOL_NAME;
           const bucket = this.toolCollisions.get(connector.id) || [];
           bucket.push({
             canonical,
             toolName: tool.name,
             otherConnectorId: other.connectorId,
             otherToolName: other.toolName,
+            ...(host ? { host: true } : {}),
           });
           this.toolCollisions.set(connector.id, bucket);
           this.log.warn(

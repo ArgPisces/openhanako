@@ -2142,6 +2142,8 @@
       "toolsTitle": "工具",
       "noTools": "還沒有工具。啟動連接器後重新整理一次即可看到。",
       "toolCollisionNotice": "{a} 與 {b} 正規化後為同一工具名稱，雙方皆已停用，請調整連接器 id 或請 server 端改名。",
+      "toolCollisionSummary": "{count} 個工具與 {other} 的同名工具正規化後衝突，皆已停用，請調整連接器 id。",
+      "toolCollisionHostNotice": "{a} 與內建狀態工具正規化後同名，該工具已停用，請調整名稱。",
       "noToolMatches": "沒有符合的工具",
       "toolSearch": "搜尋工具",
       "selectAll": "全選",

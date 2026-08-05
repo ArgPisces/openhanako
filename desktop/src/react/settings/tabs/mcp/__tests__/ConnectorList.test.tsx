@@ -15,6 +15,8 @@ vi.mock('../../../helpers', () => {
   // translator does, so what the component computed can be asserted on.
   const templates: Record<string, string> = {
     'settings.mcp.toolCollisionNotice': '{a} and {b} collide',
+    'settings.mcp.toolCollisionSummary': '{count} tools collide with {other}',
+    'settings.mcp.toolCollisionHostNotice': '{a} collides with the built-in status tool',
   };
   return {
     t: (key: string, params?: Record<string, any>) => Object.entries(params || {}).reduce(
@@ -79,10 +81,10 @@ describe('ConnectorList', () => {
       connectors: [connector({
         status: 'running',
         collisions: [{
-          canonical: 'alpha_moneyflow_hsgt',
-          toolName: 'moneyflow_hsgt',
+          canonical: 'alpha_daily_report',
+          toolName: 'daily_report',
           otherConnectorId: 'alpha',
-          otherToolName: 'moneyflow_hsgt_backup',
+          otherToolName: 'daily_report_backup',
         }],
       })],
     });
@@ -91,8 +93,78 @@ describe('ConnectorList', () => {
     // from a server that never offered it. Naming both claimants is what tells
     // the user which of the two names to change.
     const notice = screen.getByTestId('mcp-connector-collisions-alpha').textContent || '';
-    expect(notice).toContain('alpha/moneyflow_hsgt');
-    expect(notice).toContain('alpha/moneyflow_hsgt_backup');
+    expect(notice).toContain('alpha/daily_report');
+    expect(notice).toContain('alpha/daily_report_backup');
+  });
+
+  it('folds a whole-connector clash into one summary instead of one line per tool', () => {
+    renderList({
+      connectors: [connector({
+        status: 'running',
+        collisions: Array.from({ length: 50 }, (_, index) => ({
+          canonical: `alpha_tool_${index}`,
+          toolName: `tool_${index}`,
+          otherConnectorId: 'Alpha',
+          otherToolName: `tool_${index}`,
+        })),
+      })],
+    });
+
+    // Two connector ids that normalize onto each other is one mistake with one
+    // fix. Fifty red lines saying so would bury the row it is attached to.
+    const rows = screen.getAllByTestId('mcp-connector-collision-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toBe('50 tools collide with Alpha');
+  });
+
+  it('keeps one line per tool when a connector clashes with itself', () => {
+    renderList({
+      connectors: [connector({
+        status: 'running',
+        collisions: [
+          {
+            canonical: 'alpha_daily_report',
+            toolName: 'daily_report',
+            otherConnectorId: 'alpha',
+            otherToolName: 'daily_report_备份',
+          },
+          {
+            canonical: 'alpha_daily_report',
+            toolName: 'daily_report_备份',
+            otherConnectorId: 'alpha',
+            otherToolName: 'daily_report',
+          },
+        ],
+      })],
+    });
+
+    // Each of these is a separate pair of tool names to correct, so summarizing
+    // them would drop the only information that makes them actionable.
+    const rows = screen.getAllByTestId('mcp-connector-collision-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('alpha/daily_report and alpha/daily_report_备份');
+    expect(rows[1].textContent).toContain('alpha/daily_report_备份 and alpha/daily_report');
+  });
+
+  it('says only the connector tool went away when it clashes with the built-in tool', () => {
+    renderList({
+      connectors: [connector({
+        status: 'running',
+        collisions: [{
+          canonical: 'connectors_status',
+          toolName: 'status',
+          otherConnectorId: 'mcp',
+          otherToolName: 'connectors_status',
+          host: true,
+        }],
+      })],
+    });
+
+    // The built-in diagnostic survives this clash, so the generic notice would
+    // be telling the user something that did not happen.
+    const rows = screen.getAllByTestId('mcp-connector-collision-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toBe('alpha/status collides with the built-in status tool');
   });
 
   it('renders no collision notice when nothing is ambiguous', () => {
