@@ -460,42 +460,10 @@ describe("updateConfig with agentId", () => {
     expect(writeSessionMeta).not.toHaveBeenCalled();
   });
 
-  it("setMemoryEnabled updates the current session state through SessionCoordinator", async () => {
-    const focusAgent = {
-      id: "focus",
-      setMemoryEnabled: vi.fn(),
-      memoryEnabled: true,
-      sessionMemoryEnabled: true,
-    };
-    const setSessionMemoryEnabled = vi.fn(async () => undefined);
-    const coord = new ConfigCoordinator({
-      hanakoHome: "/tmp/test",
-      agentsDir: "/tmp/test/agents",
-      getAgent: () => focusAgent,
-      getAgentById: () => null,
-      getActiveAgentId: () => "focus",
-      getAgents: () => new Map([["focus", focusAgent]]),
-      getModels: () => ({ availableModels: [], defaultModel: null }),
-      getPrefs: () => ({ getPreferences: () => ({}), savePreferences: vi.fn() }),
-      getSkills: () => ({ syncAgentSkills: vi.fn() }),
-      getSession: () => ({
-        sessionManager: {
-          getSessionFile: () => "/tmp/test/agents/focus/sessions/current.jsonl",
-        },
-      }),
-      getSessionCoordinator: () => ({ setSessionMemoryEnabled }),
-      getHub: () => null,
-      emitEvent: vi.fn(),
-      emitDevLog: vi.fn(),
-      getCurrentModel: () => null,
-    });
-
-    await coord.setMemoryEnabled(false);
-
-    expect(setSessionMemoryEnabled).toHaveBeenCalledWith(
-      "/tmp/test/agents/focus/sessions/current.jsonl",
-      false,
-    );
-    expect(focusAgent.setMemoryEnabled).not.toHaveBeenCalled();
-  });
+  // 这里曾经有一条 ConfigCoordinator.setMemoryEnabled 的用例，用来防止它写错
+  // session。那个方法本身从"当前焦点会话"反推写入目标，违反状态归属只能显式
+  // 传递的底线，而且生产路径零调用方，已随实现一起删除，所以这条用例的保护
+  // 对象也不存在了。别从 git 历史里把它原样抄回来：会话进行中切记忆开关的正确
+  // 形状是调用方显式传 sessionPath 调 sessionCoord.setSessionMemoryEnabled，
+  // 那种实现要配的是一条针对显式入参的用例。
 });

@@ -605,7 +605,6 @@ export class HanaEngine {
       getModels: () => this._models,
       getPrefs: () => this._prefs,
       getSkills: () => this._skills,
-      getSession: () => this._sessionCoord.session,
       getSessionCoordinator: () => this._sessionCoord,
       getHub: () => this._hubCallbacks,
       emitEvent: (e, sp) => this._emitEvent(e, sp),
@@ -2046,7 +2045,6 @@ export class HanaEngine {
   setAutoCheckUpdates(v) { this._prefs.setAutoCheckUpdates(v); }
   getKeepAwake() { return this._prefs.getKeepAwake(); }
   setKeepAwake(v) { this._prefs.setKeepAwake(v); }
-  setMemoryEnabled(v) { return this._configCoord.setMemoryEnabled(v); }
   setMemoryMasterEnabled(id, v) { return this._configCoord.setMemoryMasterEnabled(id, v); }
   persistSessionMeta(sessionPath) { return this._configCoord.persistSessionMeta(sessionPath); }
   get permissionMode() { return this._sessionCoord.getPermissionMode(); }
