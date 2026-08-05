@@ -31,6 +31,7 @@ import { createModuleLogger } from "../debug-log.ts";
 import { t } from "../i18n.ts";
 import { stripToolProtocolTagsFromProse } from "../tool-protocol-sanitizer.ts";
 import { sanitizeBridgeVisibleText } from "../../shared/bridge-visible-text.ts";
+import { createVisibleTextAccumulator } from "./visible-text-accumulator.ts";
 
 const log = createModuleLogger("bridge");
 const blockChunkerLog = createModuleLogger("block-chunker");
@@ -2582,7 +2583,7 @@ export class BridgeManager {
         ...target,
         delivery,
         replyContext,
-        text: "",
+        visibleText: createVisibleTextAccumulator(),
         toolMedia: [],
       });
       return;
@@ -2596,30 +2597,38 @@ export class BridgeManager {
     if (event.type === "message_update") {
       const sub = event.assistantMessageEvent;
       if (sub?.type === "text_delta") {
-        const delta = sub.delta || "";
-        state.text += delta;
-        try { state.delivery.onDelta?.(delta, state.text); } catch (err) { log.warn(`rc mirror onDelta failed: ${err?.message}`); }
+        const { emittedDelta, text } = state.visibleText.appendTextDelta(sub.delta || "");
+        try { state.delivery.onDelta?.(emittedDelta, text); } catch (err) { log.warn(`rc mirror onDelta failed: ${err?.message}`); }
       }
+      return;
+    }
+
+    if (event.type === "tool_execution_start") {
+      state.visibleText.markHiddenToolBoundary();
       return;
     }
 
     if (event.type === "tool_execution_end" && !event.isError) {
       state.toolMedia.push(...collectMediaItems(event.result?.details?.media));
+      let appendedDetail = false;
       const card = event.result?.details?.card;
       if (card?.description) {
-        state.text += (state.text ? "\n\n" : "") + card.description;
+        state.visibleText.appendVisibleDetail(card.description);
+        appendedDetail = true;
       }
       const settingsUpdateText = formatSettingsUpdateText(event.result?.details?.settingsUpdate);
       if (settingsUpdateText) {
-        state.text += (state.text ? "\n\n" : "") + settingsUpdateText;
+        state.visibleText.appendVisibleDetail(settingsUpdateText);
+        appendedDetail = true;
       }
+      if (!appendedDetail) state.visibleText.markHiddenToolBoundary();
       return;
     }
 
     if (event.type === "session_status" && event.isStreaming === false) {
       this._rcMirrorStreams.delete(streamKey);
       if (streamKey !== sessionPath) this._rcMirrorStreams.delete(sessionPath);
-      const cleaned = this._cleanReplyForPlatform(state.text || "");
+      const cleaned = this._cleanReplyForPlatform(state.visibleText.getText() || "");
       if (!cleaned) return;
 
       let allMediaItems = await state.delivery.finish(cleaned);
