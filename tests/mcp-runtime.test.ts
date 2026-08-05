@@ -2836,6 +2836,27 @@ describe("MCP management-center seams", () => {
       await runtime.dispose();
     });
 
+    it("records intent before touching the transport in the settings action too", async () => {
+      const { runtime } = enabledSwitchRuntime([{ id: "alpha", url: "https://alpha.example.test" }]);
+      const order: string[] = [];
+      const persist = runtime.setConnectorEnabled.bind(runtime);
+      runtime.setConnectorEnabled = async (id, enabled) => {
+        order.push(`persist:${enabled}`);
+        return persist(id, enabled);
+      };
+      runtime.startConnector = async () => {
+        order.push("start");
+        return runtime.getConfig().connectors[0];
+      };
+      runtime.stopConnector = async () => { order.push("stop"); };
+
+      await runtime.handleSettingsAction({ action: "mcp.connector.start", payload: { connectorId: "alpha" } });
+      await runtime.handleSettingsAction({ action: "mcp.connector.stop", payload: { connectorId: "alpha" } });
+
+      // Same pairing the HTTP route is held to: persist, then transport.
+      expect(order).toEqual(["persist:true", "start", "persist:false", "stop"]);
+    });
+
     it("internal reconnect paths never rewrite enabled", async () => {
       const start = vi.fn(async () => { throw new Error("connection refused"); });
       const { runtime, store } = enabledSwitchRuntime(
@@ -2983,6 +3004,43 @@ describe("MCP management-center seams", () => {
       // the guard has to hold one level below the settings action too.
       await runtime.updateConnector("alpha", { name: "Alpha two", enabled: false });
       expect(store.read().connectors[0]).toMatchObject({ enabled: true, name: "Alpha two" });
+    });
+
+    it("refuses a direct start of a switched-off connector instead of forking intent", async () => {
+      const { runtime, start } = enabledSwitchRuntime([
+        { id: "off", url: "https://off.example.test", enabled: false },
+      ]);
+
+      await expect(runtime.startConnector("off"))
+        .rejects.toThrow(/is disabled; enable it in Settings . MCP before starting/);
+      expect(start).not.toHaveBeenCalled();
+      // The refusal has to land before the intent is recorded, or the very
+      // divergence the switch exists to prevent is created by the guard itself.
+      expect(runtime.desiredStates.get("off")).toBeUndefined();
+    });
+
+    it("refuses to reconnect a connector the switch says is off, whatever memory claims", () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "off", url: "https://off.example.test", enabled: false },
+      ]);
+      // A hand-made fork of the two sources of truth: the process still thinks
+      // this connector is wanted, the disk says it was switched off. The disk
+      // is the one the user edited, so it wins.
+      runtime.desiredStates.set("off", "running");
+
+      expect(runtime._isDesiredLiveConnector("off")).toBe(false);
+      expect(runtime._canAutoReconnect("off")).toBe(false);
+    });
+
+    it("drops in-flight lazy starts on dispose", async () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "alpha", url: "https://alpha.example.test", tools: [{ name: "search" }] },
+      ]);
+      runtime._lazyStarts.set("alpha", Promise.resolve());
+
+      await runtime.dispose();
+
+      expect(runtime._lazyStarts.size).toBe(0);
     });
 
     it("tells the agent's own diagnostic which connectors are switched off", async () => {

@@ -331,18 +331,16 @@ export function ConnectorForm({
         </>
       )}
 
-      <div className={styles['settings-form-grid']}>
-        <div className={fieldHalfClass}>
-          <label className={styles['settings-form-label']}>{t('settings.mcp.timeout')}</label>
-          <input
-            className={styles['settings-input']}
-            type="number"
-            min={1}
-            value={form.timeout}
-            onChange={(e) => setForm({ ...form, timeout: e.target.value })}
-            placeholder="30"
-          />
-        </div>
+      <div className={fieldFullClass}>
+        <label className={styles['settings-form-label']}>{t('settings.mcp.timeout')}</label>
+        <input
+          className={styles['settings-input']}
+          type="number"
+          min={1}
+          value={form.timeout}
+          onChange={(e) => setForm({ ...form, timeout: e.target.value })}
+          placeholder="30"
+        />
       </div>
 
       {error && <p className={styles['settings-muted-note']}>{error}</p>}

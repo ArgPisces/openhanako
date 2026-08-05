@@ -376,6 +376,31 @@ function normalizeConnector(connector, fallbackId = "") {
   };
 }
 
+/**
+ * Three different switches in this system are spelled `enabled`. They are not
+ * interchangeable, and reading one where another was meant silently changes who
+ * a decision belongs to:
+ *
+ *   - `config.enabled` — the global master switch. Off means MCP does nothing
+ *     at all, for every agent.
+ *   - `connector.enabled` — the connector's own persisted lifecycle switch,
+ *     which this predicate reads. It decides whether the connector connects at
+ *     launch and on demand, and it applies to every agent alike. This file is
+ *     its authority: setConnectorEnabled is the only writer.
+ *   - `agentConfig.mcp.connectors[id].enabled` — a per-agent exposure gate,
+ *     read in isMcpToolEnabledForAgentConfig. It decides whether one agent may
+ *     see a connector that is already switched on, and never starts or stops
+ *     anything.
+ *
+ * Absent means enabled: a connector present in the config is one the user meant
+ * to have, so only an explicit opt-out switches it off. Reading it through one
+ * predicate keeps that default from being restated (and eventually mis-stated)
+ * at each call site.
+ */
+export function isConnectorEnabled(connector) {
+  return connector?.enabled !== false;
+}
+
 export function sanitizeId(value) {
   return String(value || "")
     .trim()
@@ -643,7 +668,7 @@ function statusConnectorView(connector) {
     // Switched off is not the same fact as not running, and the agent acts on
     // the difference: one is fixed by starting the connector, the other only
     // by the user turning it back on.
-    enabled: connector.enabled !== false,
+    enabled: isConnectorEnabled(connector),
     status: connector.status,
     error: connector.error || "",
     authType: connector.authType,
@@ -949,7 +974,7 @@ export class McpManager {
     this.registerCachedTools();
     const config = this.getConfig();
     if (config.enabled) {
-      for (const connector of config.connectors.filter((s) => s.enabled)) {
+      for (const connector of config.connectors.filter(isConnectorEnabled)) {
         this.startConnector(connector.id, { retryInitialFailure: true }).catch((err) => {
           this.log.warn(`auto-start failed for ${connector.id}: ${err.message}`);
         });
@@ -982,6 +1007,7 @@ export class McpManager {
     this.desiredStates.clear();
     this.oauthSessions.clear();
     this.refreshInFlight.clear();
+    this._lazyStarts.clear();
   }
 
   getConfig() {
@@ -1071,7 +1097,7 @@ export class McpManager {
       connectorId,
       toolName,
       connectorPresent,
-      connectorEnabled: connector?.enabled !== false,
+      connectorEnabled: isConnectorEnabled(connector),
       toolPresent,
       status,
       transportAvailable: this.clients.get(connectorId)?.running === true,
@@ -1103,6 +1129,12 @@ export class McpManager {
    * stopConnector and leaves the stored intent alone. Otherwise a server that
    * happened to be unreachable at launch would end up recorded as "the user
    * turned this off".
+   *
+   * Callers must pair this with the matching transport action, in this order:
+   * persist first, then start or stop. Writing the decision down before the
+   * attempt is what makes it survive a connection that fails right now, and
+   * startConnector refuses a connector whose switch is still off. Both entry
+   * points' call sites point here rather than restating the rule.
    */
   async setConnectorEnabled(id, enabled) {
     const config = this.getConfig();
@@ -1207,7 +1239,7 @@ export class McpManager {
     // in memory while the disk says off, and every later drop would reconnect
     // forever against the user's stated intent.
     const connector = config.connectors.find((item) => item.id === id);
-    if (connector?.enabled === false) return;
+    if (!isConnectorEnabled(connector)) return;
     try {
       await this.startConnector(id);
     } catch {
@@ -1268,6 +1300,16 @@ export class McpManager {
     if (!config.enabled) throw new Error("MCP connectors are disabled globally");
     const connector = config.connectors.find((s) => s.id === id);
     if (!connector) throw new Error(`MCP connector "${id}" not found`);
+    // Starting a switched-off connector is refused here rather than left to
+    // each caller to remember. Everything below records "wanted running", and a
+    // run recorded against a connector the disk says is off is exactly the
+    // divergence the switch exists to prevent. It fails loudly instead of
+    // quietly doing nothing: a caller that got here without flipping the switch
+    // first has a bug worth seeing. The two user entry points persist the
+    // switch before they call this, so they never meet it.
+    if (!isConnectorEnabled(connector)) {
+      throw new Error(`MCP connector "${id}" is disabled; enable it in Settings → MCP before starting`);
+    }
     // Record intent up front: a manual/auto start means the user wants this
     // connector running, which is what later authorizes auto-reconnect.
     this.desiredStates.set(id, "running");
@@ -1424,16 +1466,23 @@ export class McpManager {
     this.clientErrors.set(id, reason);
   }
 
-  // Is this connector still one the user wants live, and that still exists and is
-  // globally enabled? These are the intent gates that say "this connector is a
-  // going concern" — independent of the keepalive (autoReconnect) preference.
-  // A needs-auth credential fact is reported whenever this holds, even when
-  // autoReconnect is off (re-auth is orthogonal to retry-on-drop).
+  // Is this connector still one the user wants live? Four gates: the process
+  // was asked to run it, MCP is globally on, the connector still exists, and
+  // its own switch is on. These say "this connector is a going concern" —
+  // independent of the keepalive (autoReconnect) preference. A needs-auth
+  // credential fact is reported whenever this holds, even when autoReconnect is
+  // off (re-auth is orthogonal to retry-on-drop).
+  //
+  // The persisted switch is checked here rather than trusted to whoever set
+  // desiredStates, because the two live in different places and can disagree:
+  // desiredStates is this process's memory, the switch is what the user last
+  // decided. When they disagree the user's decision wins, so a connector
+  // switched off never reconnects on the strength of a stale in-memory intent.
   _isDesiredLiveConnector(id) {
     if (this.desiredStates.get(id) !== "running") return false;
     const config = this.getConfig();
     if (!config.enabled) return false;
-    return config.connectors.some((s) => s.id === id);
+    return config.connectors.some((s) => s.id === id && isConnectorEnabled(s));
   }
 
   // Reconnect is permitted only when ALL intent gates agree. This is the red
@@ -1633,7 +1682,7 @@ export class McpManager {
     // made and only they can undo; merely idle (never started this process, or
     // dropped since) is the runtime's problem to solve, so we solve it here
     // rather than failing a call the connector is perfectly able to serve.
-    if (connector.enabled === false) {
+    if (!isConnectorEnabled(connector)) {
       throw new Error(`MCP connector "${connectorId}" is disabled; enable it in Settings → MCP to use this tool`);
     }
     let client = this.clients.get(connectorId);
@@ -1839,7 +1888,7 @@ export class McpManager {
     // identically-named tool down with it. This is the model's view only: the
     // settings page still lists every connector, because a connector the user
     // cannot see is one the user cannot switch back on.
-    const liveConnectors = config.connectors.filter((connector) => connector.enabled !== false);
+    const liveConnectors = config.connectors.filter(isConnectorEnabled);
     const collisions = computeMcpToolIdCollisions(liveConnectors);
     this.toolCollisions = new Map();
     for (const connector of liveConnectors) {
@@ -1937,7 +1986,7 @@ export class McpManager {
     for (const connector of this.getConfig().connectors) {
       // Same cut as the direct-load path. A tool the model can see in the
       // catalog but can never load is worse than one it cannot see at all.
-      if (connector.enabled === false) continue;
+      if (!isConnectorEnabled(connector)) continue;
       for (const tool of connector.tools || []) {
         if (!tool?.name) continue;
         entries.push({
