@@ -100,8 +100,10 @@ function normalizeTool(tool) {
  * alone selects the executor, so folding to the first occurrence is a
  * deterministic merge, not a guess. The first occurrence is also the one that
  * was already in effect: an invocation dispatches by name to the server, and
- * every lookup by name over a connector's tool list (the app-resource
- * resolution, the availability probe) stops at the first match.
+ * the lookups that actually pick one entry out of a connector's tool list (the
+ * two app-resource resolutions) stop at the first match. The availability probe
+ * is not one of those — it only asks whether any entry carries the name, so
+ * dropping the later duplicates cannot change its answer either way.
  */
 function dedupeToolsByName(tools) {
   const seen = new Set();
@@ -252,9 +254,18 @@ const SCRUTINY_LOWERING_HINTS = ["readOnlyHint", "idempotentHint"];
  * merge may only ever move in the direction of more scrutiny: a raising hint
  * counts when any occurrence declares it, a lowering hint only when every
  * occurrence does.
+ *
+ * "Every occurrence" means every occurrence that reached this merge. The caller
+ * skips listings whose `annotations` is not a plain object, so a duplicate that
+ * carries no annotations field at all never gets a vote, while one carrying an
+ * empty `{}` does and can therefore veto a lowering hint. The two silences are
+ * deliberately judged differently: an absent field is a listing that says
+ * nothing, an empty object is a listing that was asked and claimed nothing.
  */
 function mergeDuplicateToolAnnotations(previous, next) {
-  if (!isPlainObject(previous)) return next;
+  // A copy, not the caller's object: the side table owns every value it holds,
+  // so the first listing and the merged ones enter it the same way.
+  if (!isPlainObject(previous)) return { ...next };
   const merged = { ...previous, ...next };
   for (const hint of DANGER_RAISING_HINTS) {
     if (previous[hint] === true || next[hint] === true) merged[hint] = true;
