@@ -188,6 +188,11 @@ export function executeCompact(
  * 一期服务 /stop /new /reset 三条系统命令；未来扩展时（插件命令、skill 命令）也共用这条 WS 通道。
  * 后端在 server/routes/chat.ts 接收 {type:'slash'}，走 engine.slashDispatcher.tryDispatch。
  *
+ * agentId 由调用方显式传入，不在这里从任何全局指针推导：命令要在哪个助手身上执行，
+ * 只有渲染这个输入框的会话说了算。服务端优先用它自己加载的 session 记录，加载不到时
+ * 就靠这个字段——远程/移动端的会话常常不在服务端内存里，字段缺了命令就会直接失败。
+ * 身份确实未知时传 null，让"不知道"显式出现在协议上，而不是悄悄少一个字段。
+ *
  * TODO(frontend): 服务端会通过 WS {type:'slash_result'} 回复结果（未知命令 / handler reply），
  *   目前前端没有 consumer——/new /reset 的 not-found、已归档等 distinct reply 无法显示给用户。
  *   下一步应在 ws-message-handler.ts 加 slash_result 分支，把 text 展示到 slashResult state。
@@ -195,6 +200,7 @@ export function executeCompact(
  */
 export function executeSlashViaWs(
   cmd: string,
+  agentId: string | null,
   setBusy: (name: string | null) => void,
   setInput: (text: string) => void,
   setMenuOpen: (open: boolean) => void,
@@ -213,6 +219,7 @@ export function executeSlashViaWs(
           type: 'slash',
           text: rawText,
           sessionPath: useStore.getState().currentSessionPath,
+          agentId: agentId || null,
         }));
       }
     } finally {

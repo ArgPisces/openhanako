@@ -7,8 +7,12 @@
  * 用户看得懂的一句话。
  *
  * 收录标准：用户在正常使用中真的会撞到、并且会显示在 inline error 或 toast 上的
- * 错误码。内部一致性校验类的码（写坏了才会出现）不收录，交给兜底文案，原始英文
+ * 错误码。内部一致性校验类的码（写坏了才会出现）不逐条收录，交给兜底文案，原始英文
  * 仍会保留在详情区，排障不丢信息。
+ *
+ * 例外是 internal_contract 这一条：它不描述某个具体故障，而是给"这是我们的 bug、
+ * 不是你操作错了"这类断言提供统一档位。兜底文案说的是"操作没能完成"，读起来像用户
+ * 做错了什么还可以重试；内部契约被破坏时重试永远没用，得换一句话说清责任在应用侧。
  */
 
 /** 高频业务错误码 → i18n key。未收录的码走 UNKNOWN_ERROR_MESSAGE_KEY。 */
@@ -47,6 +51,10 @@ export const ERROR_CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = Object.
   agent_model_not_available: 'error.code.agentModelNotAvailable',
   workspace_not_found: 'error.code.workspaceNotFound',
   capability_denied: 'error.code.capabilityDenied',
+
+  // 内部契约违规：某个调用方漏了它本该显式携带的东西。用户无从下手，
+  // 只告诉他这是应用的问题、原文已经记下来了。
+  internal_contract: 'error.code.internalContract',
 });
 
 /** 未收录错误码与无码异常共用的兜底文案 key。 */

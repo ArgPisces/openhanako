@@ -56,6 +56,16 @@ import { dispatchStreamKey } from '../../services/stream-key-dispatcher';
 import { handleAppEvent } from '../../services/app-event-actions';
 import { clearMessageLiveVersion, readMessageLiveVersion } from '../../stores/message-live-version';
 import { loadSessions } from '../../stores/session-actions';
+import zh from '../../../locales/zh.json';
+
+/** Resolve a dotted i18n key against the real Chinese pack, the way window.t does. */
+function translateZh(key: string): string {
+  const value = key.split('.').reduce<unknown>(
+    (node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined),
+    zh as unknown,
+  );
+  return typeof value === 'string' ? value : key;
+}
 
 afterEach(() => {
   resetSessionRefreshSchedulerForTest();
@@ -1684,5 +1694,36 @@ describe('ws-message-handler turn_end side effects', () => {
     await vi.advanceTimersByTimeAsync(300);
 
     expect(loadSessions).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ws-message-handler error presentation', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', { t: translateZh });
+    useStore.setState({
+      currentSessionPath: '/session/a.jsonl',
+      pendingNewSession: false,
+      sessionLocatorsById: {},
+      sessions: [],
+      inlineErrors: {},
+      toasts: [],
+    } as never);
+  });
+
+  it('shows the generic internal-contract sentence and hides the raw assertion in the details', () => {
+    handleServerMessage({
+      type: 'error',
+      code: 'internal_contract',
+      message: 'agentId required',
+      sessionPath: '/session/a.jsonl',
+    });
+
+    const shown = useStore.getState().inlineErrors['/session/a.jsonl'];
+    expect(shown).toEqual({
+      text: translateZh('error.code.internalContract'),
+      detail: 'agentId required',
+      code: 'internal_contract',
+    });
+    expect(shown?.text).not.toContain('agentId');
   });
 });

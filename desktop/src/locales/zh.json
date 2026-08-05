@@ -3117,7 +3117,8 @@
       "noAvailableModel": "当前没有可用的对话模型，先去设置里配置模型和凭证",
       "agentModelNotAvailable": "这个助手配置的模型当前不可用，去设置里给它换一个",
       "workspaceNotFound": "找不到这个工作台",
-      "capabilityDenied": "这个操作没有获得授权"
+      "capabilityDenied": "这个操作没有获得授权",
+      "internalContract": "应用内部出了点问题，这不是你的操作问题；详情已记录，可在反馈时附上"
     }
   },
   "main": {

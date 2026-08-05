@@ -28,6 +28,14 @@ describe('error-user-messages · code → i18n key', () => {
     expect(userMessageKeyForCode('subagent_run_busy')).toBe('error.code.subagentRunBusy');
   });
 
+  it('gives internal contract violations their own copy instead of the generic fallback', () => {
+    // These only fire when a caller skipped part of an explicit contract. The user
+    // cannot act on the English assertion, so it needs a sentence that says "this is
+    // ours, not yours" and parks the original text in the details area.
+    expect(userMessageKeyForCode('internal_contract')).toBe('error.code.internalContract');
+    expect(ERROR_CODE_MESSAGE_KEYS.internal_contract).not.toBe(UNKNOWN_ERROR_MESSAGE_KEY);
+  });
+
   it('returns null for unmapped codes so callers fall back explicitly', () => {
     expect(userMessageKeyForCode('some_internal_code_nobody_shows')).toBeNull();
     expect(userMessageKeyForCode('')).toBeNull();

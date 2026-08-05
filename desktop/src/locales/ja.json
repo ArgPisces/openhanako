@@ -3116,7 +3116,8 @@
       "noAvailableModel": "利用できる対話モデルがありません。まず設定でモデルと認証情報を設定してください",
       "agentModelNotAvailable": "このアシスタントに設定されたモデルは現在利用できません。設定で別のモデルを選んでください",
       "workspaceNotFound": "このワークスペースが見つかりません",
-      "capabilityDenied": "この操作は許可されていません"
+      "capabilityDenied": "この操作は許可されていません",
+      "internalContract": "アプリ内部で問題が起きました。操作の誤りではありません。詳細は記録済みで、報告の際に添付できます"
     }
   },
   "main": {

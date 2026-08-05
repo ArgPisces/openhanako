@@ -1935,7 +1935,14 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
               const session = engine.getSessionByPath(sp);
               const agentId = session?.agentId || msg.agentId;
               if (!agentId) {
-                wsSend(ws, { type: "error", message: "agentId required", sessionPath: sp });
+                // 走到这里说明调用方既没带身份、服务端也没加载过这个会话——是内部契约被
+                // 破坏，不是用户操作错误。带上 code 让前端换成通用文案，英文原文进详情。
+                wsSend(ws, {
+                  type: "error",
+                  code: "internal_contract",
+                  message: "agentId required",
+                  sessionPath: sp,
+                });
                 return;
               }
               const sendReply = async (text) => {

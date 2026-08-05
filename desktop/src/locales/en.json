@@ -3122,7 +3122,8 @@
       "noAvailableModel": "No chat model is available. Configure a model and its credentials in settings first.",
       "agentModelNotAvailable": "The model this assistant is set to use is unavailable. Pick a different one in settings.",
       "workspaceNotFound": "That workspace could not be found",
-      "capabilityDenied": "This action is not authorized"
+      "capabilityDenied": "This action is not authorized",
+      "internalContract": "Something went wrong inside the app; this is not on you. The details are recorded and can be attached to a report"
     }
   },
   "main": {

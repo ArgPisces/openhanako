@@ -842,7 +842,11 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
     await executeCompact(t, setSlashBusy, () => { editor?.commands.clearContent(); }, setSlashMenuOpen)();
   }, [editor, t]);
 
-  const slashAgentId = pendingNewSession ? (selectedAgentId || currentAgentId) : currentAgentId;
+  // 这个输入框归属哪个助手：已有会话以会话自己的记录为准，新会话草稿才用选中的助手。
+  // 它既决定菜单里列出谁的命令，也随 slash 请求发给服务端作为执行身份，两处必须同源。
+  const slashAgentId = pendingNewSession
+    ? (selectedAgentId || currentAgentId)
+    : (currentSessionProjection?.agentId || currentAgentId);
   const skillItems = useSkillSlashItems({ enabled: surface !== 'mobile', agentId: slashAgentId });
   const serverCommandItems = useServerSlashCommandItems({ enabled: surface !== 'mobile', agentId: slashAgentId });
 
@@ -1567,6 +1571,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
     if (item.type === 'server-command') {
       void executeSlashViaWs(
         item.name,
+        slashAgentId,
         setSlashBusy,
         () => { editor?.commands.clearContent(); },
         setSlashMenuOpen,
@@ -1584,7 +1589,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
       .insertContent(' ')
       .run();
     setSlashMenuOpen(false);
-  }, [editor, inputLocked, inputText]);
+  }, [editor, inputLocked, inputText, slashAgentId]);
 
   const handleFileMentionSelect = useCallback((item: FileMentionItem) => {
     if (inputLocked) return;
