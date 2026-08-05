@@ -5421,6 +5421,30 @@
       "reason": "Reached via esbuild source module graph, imported by core/engine.ts (dynamic-import)."
     },
     {
+      "path": "lib/document-extract/anydoc-loader.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/document-extract/index.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/document-extract/index.ts (import-statement)."
+    },
+    {
+      "path": "lib/document-extract/index.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/tools/file-tool.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/tools/file-tool.ts (import-statement)."
+    },
+    {
       "path": "lib/exec-command/guidance.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -51677,6 +51701,39 @@
     },
     {
       "path": "node_modules/@fast-csv/parse/package.json",
+      "inputType": "nft-runtime-trace",
+      "provenance": [
+        {
+          "root": "nft-server-bundle",
+          "kind": "nft-trace"
+        }
+      ],
+      "reason": "nft-runtime-trace via nft-server-bundle (see roots[] for the full explanation)"
+    },
+    {
+      "path": "node_modules/@firecrawl/anydoc-darwin-arm64/package.json",
+      "inputType": "nft-runtime-trace",
+      "provenance": [
+        {
+          "root": "nft-server-bundle",
+          "kind": "nft-trace"
+        }
+      ],
+      "reason": "nft-runtime-trace via nft-server-bundle (see roots[] for the full explanation)"
+    },
+    {
+      "path": "node_modules/@firecrawl/anydoc/index.js",
+      "inputType": "nft-runtime-trace",
+      "provenance": [
+        {
+          "root": "nft-server-bundle",
+          "kind": "nft-trace"
+        }
+      ],
+      "reason": "nft-runtime-trace via nft-server-bundle (see roots[] for the full explanation)"
+    },
+    {
+      "path": "node_modules/@firecrawl/anydoc/package.json",
       "inputType": "nft-runtime-trace",
       "provenance": [
         {
@@ -112724,11 +112781,11 @@
     }
   ],
   "stats": {
-    "totalFiles": 9634,
+    "totalFiles": 9639,
     "byInputType": {
-      "source-graph": 656,
+      "source-graph": 658,
       "runtime-asset": 11,
-      "nft-runtime-trace": 8967
+      "nft-runtime-trace": 8970
     }
   }
 }
