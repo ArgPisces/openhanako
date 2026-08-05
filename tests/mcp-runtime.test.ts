@@ -3107,3 +3107,170 @@ describe("MCP management-center seams", () => {
     });
   });
 });
+
+// The app-facing surface — reading a ui:// resource, calling an app-visible
+// tool, refreshing a connector's tool list — has to tell the same two states
+// apart that callTool does. A connector the user switched off is refused with
+// the message that says how to undo it, and is never woken up on the way; a
+// connector that merely is not connected yet gets started on demand instead of
+// failing a request it is perfectly able to serve.
+describe("MCP app-facing calls and the enabled switch", () => {
+  const boardTool = () => ({ name: "board", _meta: { ui: { resourceUri: "ui://board/main" } } });
+
+  function appRuntime(connectors, { listTools = vi.fn(async () => [boardTool()]) }: any = {}) {
+    let value: any = { enabled: true, connectors };
+    const store = {
+      get: vi.fn(() => value),
+      set: vi.fn((_key: any, next: any) => { value = next; }),
+      read: () => value,
+    };
+    const built: any[] = [];
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-app-switch"),
+      config: store,
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }, {
+      // A fresh client reports itself as not running until start() resolves,
+      // which is what makes the on-demand start observable from the outside.
+      clientFactory: () => {
+        const client: any = {
+          running: false,
+          start: vi.fn(async () => { client.running = true; }),
+          stop: vi.fn(async () => {}),
+          listTools,
+          readResource: vi.fn(async () => ({
+            contents: [{ uri: "ui://board/main", mimeType: "text/html", text: "<h1>board</h1>" }],
+          })),
+          callTool: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
+        };
+        built.push(client);
+        return client;
+      },
+    });
+    return { runtime, store, built, listTools };
+  }
+
+  const offConnector = () => ({
+    id: "acme", name: "Acme", url: "https://mcp.acme.test/mcp", enabled: false, tools: [boardTool()],
+  });
+  const idleConnector = () => ({
+    id: "acme", name: "Acme", url: "https://mcp.acme.test/mcp", tools: [boardTool()],
+  });
+
+  describe("readResource", () => {
+    it("refuses a switched-off connector with an actionable message and never wakes it", async () => {
+      const { runtime } = appRuntime([offConnector()]);
+      const ensure = vi.spyOn(runtime as any, "_ensureConnectorStarted");
+
+      await expect(runtime.readResource("acme", "ui://board/main"))
+        .rejects.toThrow(/is disabled; enable it in Settings/);
+      expect(ensure).not.toHaveBeenCalled();
+    });
+
+    it("starts an enabled but unconnected connector on demand instead of failing", async () => {
+      const { runtime, built } = appRuntime([idleConnector()]);
+      const ensure = vi.spyOn(runtime as any, "_ensureConnectorStarted");
+
+      const result = await runtime.readResource("acme", "ui://board/main");
+
+      expect(ensure).toHaveBeenCalledWith("acme");
+      expect(result.contents[0].text).toBe("<h1>board</h1>");
+      expect(built[0].readResource).toHaveBeenCalledWith("ui://board/main");
+    });
+
+    it("names an unknown connector instead of reporting it as not running", async () => {
+      const { runtime } = appRuntime([]);
+
+      await expect(runtime.readResource("ghost", "ui://board/main"))
+        .rejects.toThrow('MCP connector "ghost" not found');
+    });
+  });
+
+  describe("callAppTool", () => {
+    it("refuses a switched-off connector with an actionable message and never wakes it", async () => {
+      const { runtime } = appRuntime([offConnector()]);
+      const ensure = vi.spyOn(runtime as any, "_ensureConnectorStarted");
+
+      await expect(runtime.callAppTool("acme", "board", {}))
+        .rejects.toThrow(/is disabled; enable it in Settings/);
+      expect(ensure).not.toHaveBeenCalled();
+    });
+
+    it("starts an enabled but unconnected connector on demand instead of failing", async () => {
+      const { runtime, built } = appRuntime([idleConnector()]);
+      const ensure = vi.spyOn(runtime as any, "_ensureConnectorStarted");
+
+      const result = await runtime.callAppTool("acme", "board", { q: 1 });
+
+      expect(ensure).toHaveBeenCalledWith("acme");
+      expect(result.content[0].text).toBe("ok");
+      expect(built[0].callTool).toHaveBeenCalledWith("board", { q: 1 });
+    });
+
+    it("names an unknown connector instead of reporting it as not running", async () => {
+      const { runtime } = appRuntime([]);
+
+      await expect(runtime.callAppTool("ghost", "board", {}))
+        .rejects.toThrow('MCP connector "ghost" not found');
+    });
+  });
+
+  describe("refreshTools", () => {
+    it("refuses a switched-off connector with an actionable message and never wakes it", async () => {
+      const { runtime } = appRuntime([offConnector()]);
+      const ensure = vi.spyOn(runtime as any, "_ensureConnectorStarted");
+
+      await expect(runtime.refreshTools("acme"))
+        .rejects.toThrow(/is disabled; enable it in Settings/);
+      expect(ensure).not.toHaveBeenCalled();
+    });
+
+    it("starts an enabled but unconnected connector on demand instead of failing", async () => {
+      const listTools = vi.fn(async () => [{ name: "fresh" }]);
+      const { runtime } = appRuntime(
+        [{ id: "acme", name: "Acme", url: "https://mcp.acme.test/mcp", tools: [{ name: "stale" }] }],
+        { listTools },
+      );
+      const ensure = vi.spyOn(runtime as any, "_ensureConnectorStarted");
+
+      const tools = await runtime.refreshTools("acme");
+
+      expect(ensure).toHaveBeenCalledWith("acme");
+      // Bringing the connector up lists its tools as part of connecting, so the
+      // answer is already the freshest one there is: it must be handed back
+      // rather than asked for a second time.
+      expect(tools.map((tool) => tool.name)).toEqual(["fresh"]);
+      expect(listTools).toHaveBeenCalledTimes(1);
+    });
+
+    it("names an unknown connector instead of reporting it as not running", async () => {
+      const { runtime } = appRuntime([]);
+
+      await expect(runtime.refreshTools("ghost"))
+        .rejects.toThrow('MCP connector "ghost" not found');
+    });
+
+    it("does not try to start the connector while it is the one being started", async () => {
+      // A connection ends by listing the connector's tools, so this refresh runs
+      // from inside the start attempt. A transport that comes back from start()
+      // without being usable must surface as a failed connection, not as a
+      // refresh waiting on the very attempt it belongs to.
+      const { runtime, built } = appRuntime([idleConnector()]);
+      const ensure = vi.spyOn(runtime as any, "_ensureConnectorStarted");
+      runtime.clientFactory = () => {
+        const client: any = {
+          running: false,
+          start: vi.fn(async () => {}),
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => []),
+        };
+        built.push(client);
+        return client;
+      };
+
+      await expect(runtime.startConnector("acme")).rejects.toThrow(/is not running/);
+      expect(ensure).not.toHaveBeenCalled();
+      expect(built).toHaveLength(1);
+    });
+  });
+});

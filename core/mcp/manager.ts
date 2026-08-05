@@ -872,6 +872,7 @@ export class McpManager {
   declare reconnectState: any;
   declare refreshInFlight: any;
   declare _lazyStarts: Map<string, Promise<any>>;
+  declare _toolListings: Map<string, number>;
   declare _bus: any;
   declare _busDisposers: any;
   declare _configStore: any;
@@ -954,6 +955,11 @@ export class McpManager {
     // In-flight lazy starts keyed by connector id. A burst of tool calls against
     // one idle connector must produce one connection attempt, not one per call.
     this._lazyStarts = new Map();
+    // How many times each connector's tools have been listed and stored in this
+    // process. Only ever compared for change, by a refresh that had to start the
+    // connector first and needs to know whether the start already did the
+    // listing. Never persisted: it describes this process's own work.
+    this._toolListings = new Map();
   }
 
   /**
@@ -1571,7 +1577,35 @@ export class McpManager {
   }
 
   async refreshTools(id) {
-    const client = this.clients.get(id);
+    const config = this.getConfig();
+    if (!config.enabled) throw new Error("MCP connectors are disabled globally");
+    const connector = config.connectors.find((s) => s.id === id);
+    if (!connector) throw new Error(`MCP connector "${id}" not found`);
+    // Same split callTool makes: switched off is a decision only the user can
+    // undo, so say so and leave the connector down; not connected yet is the
+    // runtime's own problem, so bring it up rather than fail the request.
+    if (!isConnectorEnabled(connector)) {
+      throw new Error(`MCP connector "${id}" is disabled; enable it in Settings → MCP to use this tool`);
+    }
+    let client = this.clients.get(id);
+    // No on-demand start while this connector is mid-connection: the listing
+    // that finishes a connection is issued from inside that very attempt, so
+    // starting the connector from here would be waiting on the attempt this
+    // call is a part of.
+    if (!client?.running && !this.establishing.has(id)) {
+      const listedBefore = this._toolListings.get(id) ?? 0;
+      await this._ensureConnectorStarted(id);
+      // Establishing a connection lists the connector's tools as its last step,
+      // so when that happened the stored list is the answer of a listing that
+      // finished moments ago on this very connection — asking again would only
+      // repeat the round trip. The counter is what tells that apart from a start
+      // that found an already-live client and listed nothing: in that case there
+      // is no fresh answer to hand back and we still have to ask ourselves.
+      if ((this._toolListings.get(id) ?? 0) !== listedBefore) {
+        return this.getConfig().connectors.find((s) => s.id === id)?.tools || [];
+      }
+      client = this.clients.get(id);
+    }
     if (!client?.running) throw new Error(`MCP connector "${id}" is not running`);
     const tools = await client.listTools();
     this.toolListFreshness.set(id, client.toolListFreshness ?? null);
@@ -1579,15 +1613,19 @@ export class McpManager {
     // projects them away on the way to disk. This is the only point where the
     // live, server-declared annotations exist.
     this._captureRuntimeToolAnnotations(id, tools);
-    const config = this.getConfig();
-    const connector = config.connectors.find((s) => s.id === id);
-    if (!connector) throw new Error(`MCP connector "${id}" not found`);
-    connector.tools = tools.map(normalizeTool).filter(Boolean);
+    // Re-read rather than reuse the snapshot taken before the listing: the call
+    // above is an await, and saving a snapshot from before it would write back
+    // whatever else changed meanwhile.
+    const latest = this.getConfig();
+    const latestConnector = latest.connectors.find((s) => s.id === id);
+    if (!latestConnector) throw new Error(`MCP connector "${id}" not found`);
+    latestConnector.tools = tools.map(normalizeTool).filter(Boolean);
     // Hand back what was actually stored, not the pre-normalization local list:
     // saveConfig folds duplicate names, so returning the mutation would let a
     // caller act on tools that are not on disk.
-    const saved = this.saveConfig(config);
+    const saved = this.saveConfig(latest);
     this.registerCachedTools();
+    this._toolListings.set(id, (this._toolListings.get(id) ?? 0) + 1);
     return saved.connectors.find((s) => s.id === id)?.tools || [];
   }
 
@@ -1652,11 +1690,22 @@ export class McpManager {
     if (!isUiResourceUri(resourceUri)) throw new Error("MCP app resource uri must start with ui://");
     const config = this.getConfig();
     if (!config.enabled) throw new Error("MCP connectors are disabled globally");
-    if (!config.connectors.some((connector) => connector.id === connectorId)) {
-      throw new Error(`MCP connector "${connectorId}" not found`);
+    const connector = config.connectors.find((entry) => entry.id === connectorId);
+    if (!connector) throw new Error(`MCP connector "${connectorId}" not found`);
+    // Same split callTool makes: switched off is a decision only the user can
+    // undo, so say so and leave the connector down; not connected yet is the
+    // runtime's own problem, so bring it up rather than fail the request.
+    if (!isConnectorEnabled(connector)) {
+      throw new Error(`MCP connector "${connectorId}" is disabled; enable it in Settings → MCP to use this tool`);
     }
-    const client = this.clients.get(connectorId);
-    if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
+    let client = this.clients.get(connectorId);
+    if (!client?.running) {
+      await this._ensureConnectorStarted(connectorId);
+      client = this.clients.get(connectorId);
+      if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
+    }
+    // Asked only of a live connection: what a connector can do is a property of
+    // the client we ended up with, not of the one we started out without.
     if (typeof client.readResource !== "function") {
       throw new Error(`MCP connector "${connectorId}" does not support resources/read`);
     }
@@ -1667,8 +1716,20 @@ export class McpManager {
     this._requireAppVisibleTool(connectorId, toolName);
     const config = this.getConfig();
     if (!config.enabled) throw new Error("MCP connectors are disabled globally");
-    const client = this.clients.get(connectorId);
-    if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
+    const connector = config.connectors.find((entry) => entry.id === connectorId);
+    if (!connector) throw new Error(`MCP connector "${connectorId}" not found`);
+    // Same split callTool makes: switched off is a decision only the user can
+    // undo, so say so and leave the connector down; not connected yet is the
+    // runtime's own problem, so bring it up rather than fail the request.
+    if (!isConnectorEnabled(connector)) {
+      throw new Error(`MCP connector "${connectorId}" is disabled; enable it in Settings → MCP to use this tool`);
+    }
+    let client = this.clients.get(connectorId);
+    if (!client?.running) {
+      await this._ensureConnectorStarted(connectorId);
+      client = this.clients.get(connectorId);
+      if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
+    }
     return client.callTool(toolName, args || {});
   }
 
