@@ -6,6 +6,7 @@ import fs from "fs/promises";
 import path from "path";
 import { Hono } from "hono";
 import { safeJson } from "../hono-helpers.ts";
+import { bodyFromRouteError, routeError, statusFromRouteError } from "./route-errors.ts";
 import { t } from "../../lib/i18n.ts";
 import { dropUninstalledPluginCards, extractBlocks, pluginInstalledPredicate, resolveMediaGenerationBlocks } from "../block-extractors.ts";
 import { normalizePluginChatSurfaceBlocks } from "../plugin-chat-surface.ts";
@@ -168,28 +169,6 @@ function sessionWorkspaceMountFields(engine, sessionPath, fallback = null) {
   return {
     workspaceMountId: mount.mountId,
     workspaceLabel: mount.label || null,
-  };
-}
-
-function routeError(message, code, status) {
-  const err: any = new Error(message);
-  err.code = code;
-  err.status = status;
-  return err;
-}
-
-function statusFromRouteError(err) {
-  return Number.isInteger(err?.status) ? err.status : 500;
-}
-
-function bodyFromRouteError(err) {
-  return {
-    error: err?.message || String(err),
-    ...(err?.code ? { code: err.code } : {}),
-    ...(err?.sessionId ? { sessionId: err.sessionId } : {}),
-    ...(err?.currentPath ? { currentPath: err.currentPath } : {}),
-    ...(err?.requestedPath ? { requestedPath: err.requestedPath } : {}),
-    ...(err?.lifecycle ? { lifecycle: err.lifecycle } : {}),
   };
 }
 

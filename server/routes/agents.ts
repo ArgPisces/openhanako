@@ -27,6 +27,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { emitAppEvent } from "../app-events.ts";
 import { safeJson } from "../hono-helpers.ts";
+import { bodyFromRouteError, statusFromRouteError } from "./route-errors.ts";
 import { saveConfig, clearConfigCache } from "../../lib/memory/config-loader.ts";
 import {
   listExperienceDocuments,
@@ -324,7 +325,7 @@ export function createAgentsRoute(engine) {
         memoryMasterEnabled,
       });
     } catch (err) {
-      return c.json({ error: err.message }, 500);
+      return c.json(bodyFromRouteError(err), statusFromRouteError(err));
     }
   });
 
