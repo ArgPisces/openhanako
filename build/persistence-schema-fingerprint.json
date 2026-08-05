@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:1f2766eadd748d7e5db3730f7cb4fcbc0ac444b62e63a2e9a4f46167fcf28ed4",
+  "payloadFingerprint": "sha256:ae1d8edbac64c96d7fc0d74cf1e5e4f05d579211a907b5d5b1d57247208dcb29",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Source-hash refresh only: the MCP manager tidies its in-memory tool-listing counter alongside the sibling per-connector state on stop, removal, and dispose. No stored schema, field, or write primitive changed.",
-    "payloadFingerprint": "sha256:1f2766eadd748d7e5db3730f7cb4fcbc0ac444b62e63a2e9a4f46167fcf28ed4"
+    "compatibilityReason": "The legacy session-meta ledger reader now strips a UTF-8 BOM before JSON.parse and revalidates cached parse_error verdicts lacking the current verdict schema, so previously misjudged BOM files are re-read once; stored shapes and paths are unchanged and older ledgers remain readable",
+    "payloadFingerprint": "sha256:ae1d8edbac64c96d7fc0d74cf1e5e4f05d579211a907b5d5b1d57247208dcb29"
   },
   "schemas": [
     {
@@ -3638,7 +3638,7 @@
       "contract": "bridge index, legacy session metadata, title, and vision sidecar readers",
       "kind": "runtime-contract",
       "module": "core/bridge-session-manager.ts",
-      "sourceHash": "sha256:01155fe29dd0b3665ba940297e26ca0c6b566c0d27a9926a1ab8e4af710d2199",
+      "sourceHash": "sha256:c50224c29af58ed7d9753f549c7c2a483844388b0982487365f33ce4b4be06c0",
       "storeId": "session-sidecars"
     },
     {

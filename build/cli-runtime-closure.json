@@ -4295,6 +4295,28 @@
       "reason": "Reached via esbuild source module graph, imported by lib/bridge/telegram-adapter.ts (import-statement)."
     },
     {
+      "path": "lib/bridge/visible-text-accumulator.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/bridge-session-manager.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "core/desktop-session-submit.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/bridge/bridge-manager.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/bridge-session-manager.ts (import-statement); core/desktop-session-submit.ts (import-statement); lib/bridge/bridge-manager.ts (import-statement)."
+    },
+    {
       "path": "lib/bridge/wechat-adapter.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112815,9 +112837,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9641,
+    "totalFiles": 9642,
     "byInputType": {
-      "source-graph": 660,
+      "source-graph": 661,
       "runtime-asset": 11,
       "nft-runtime-trace": 8970
     }
