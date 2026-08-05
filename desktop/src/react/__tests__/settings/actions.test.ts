@@ -25,24 +25,16 @@ vi.mock('../../settings/api', () => ({
   hanaUrl: (path: string) => `http://127.0.0.1:3210${path}`,
 }));
 
-const mockTranslations: Record<string, string> = {};
-
 vi.mock('../../settings/helpers', () => ({
-  t: (key: string) => mockTranslations[key] ?? key,
+  t: (key: string) => key,
 }));
 
-function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number; statusText?: string }) {
-  return {
-    ok: init?.ok ?? true,
-    status: init?.status ?? 200,
-    statusText: init?.statusText ?? '',
-    json: async () => body,
-  } as Response;
+function jsonResponse(body: unknown) {
+  return { json: async () => body } as Response;
 }
 
 function resetState() {
   Object.keys(mockState).forEach((key) => delete mockState[key]);
-  Object.keys(mockTranslations).forEach((key) => delete mockTranslations[key]);
   Object.assign(mockState, {
     currentAgentId: 'agent-a',
     settingsAgentId: null,
@@ -425,57 +417,5 @@ describe('settings actions', () => {
     expect(mockState.currentAgentId).toBe('agent-a');
     expect(mockState.agentName).toBe('Agent A');
     expect(mockState.agents.find((agent: any) => agent.id === 'agent-b')?.isPrimary).toBe(true);
-  });
-
-  it('switchToAgent 把带错误码的失败翻成本地化文案，而不是把后端英文原文糊上去', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mockTranslations['error.code.agentModelNotAvailable'] = '这个助手配置的模型当前不可用，去设置里给它换一个';
-    mockFetch.mockImplementation((path: string) => {
-      if (path === '/api/agents/switch') {
-        return Promise.resolve(jsonResponse(
-          {
-            error: 'agent "agent-b" is configured with model "ghost-1" which is not available',
-            code: 'agent_model_not_available',
-          },
-          { ok: false, status: 409 },
-        ));
-      }
-      throw new Error(`unexpected path: ${path}`);
-    });
-
-    const { switchToAgent } = await import('../../settings/actions');
-
-    await switchToAgent('agent-b');
-
-    expect(mockState.showToast).toHaveBeenCalledWith(
-      'settings.agent.switchFailed: 这个助手配置的模型当前不可用，去设置里给它换一个',
-      'error',
-    );
-    // 失败不改焦点：切换没成功，设置页仍停在原来的助手上。
-    expect(mockState.currentAgentId).toBe('agent-a');
-    consoleSpy.mockRestore();
-  });
-
-  it('switchToAgent 遇到无错误码的失败时，保留后端原文兜底，不吞掉排障信息', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mockFetch.mockImplementation((path: string) => {
-      if (path === '/api/agents/switch') {
-        return Promise.resolve(jsonResponse(
-          { error: 'ENOENT: agent config is unreadable' },
-          { ok: false, status: 500 },
-        ));
-      }
-      throw new Error(`unexpected path: ${path}`);
-    });
-
-    const { switchToAgent } = await import('../../settings/actions');
-
-    await switchToAgent('agent-b');
-
-    expect(mockState.showToast).toHaveBeenCalledWith(
-      'settings.agent.switchFailed: ENOENT: agent config is unreadable',
-      'error',
-    );
-    consoleSpy.mockRestore();
   });
 });

@@ -8,6 +8,8 @@ import {
   buildConnectionUrl,
   requireServerConnection,
 } from '../services/server-connection';
+import { errorWithCode } from '../errors/error-presenter';
+import { errorCodeFromResponseBody } from '../../../../shared/error-user-messages.ts';
 
 const DEFAULT_TIMEOUT = 30_000;
 
@@ -46,8 +48,10 @@ export async function hanaFetch(
       signal: controller.signal,
     });
     if (!res.ok) {
-      const detail = await readErrorMessage(res);
-      throw new Error(detail || `hanaFetch ${path}: ${res.status} ${res.statusText}`);
+      // 错误码在这里就得挂到异常上。调用方拿到的是抛出来的 Error，不是响应体——
+      // 一旦这里只带走那句英文，后面再想把失败翻成人话就没有依据了。
+      const { message, code } = await readErrorResponse(res);
+      throw errorWithCode(message || `hanaFetch ${path}: ${res.status} ${res.statusText}`, code);
     }
     return res;
   } finally {
@@ -55,20 +59,28 @@ export async function hanaFetch(
   }
 }
 
-async function readErrorMessage(res: Response): Promise<string | null> {
+/**
+ * 读错误响应：给调用方一句话，外加一个错误码。
+ *
+ * 提码走 shared 的 errorCodeFromResponseBody，跟其它消费点认的是同一套形状
+ * （既认 `{error, code}`，也认少数老路由把码直接塞进 error 字段的写法）。
+ * body 读不出来或不是 JSON 时没有码，那种情况的文案跟以前一样。
+ */
+async function readErrorResponse(res: Response): Promise<{ message: string | null; code: string | null }> {
   try {
     const text = await res.text();
-    if (!text) return null;
+    if (!text) return { message: null, code: null };
     try {
       const data = JSON.parse(text);
-      if (typeof data?.error === 'string' && data.error.trim()) return data.error.trim();
-      if (typeof data?.message === 'string' && data.message.trim()) return data.message.trim();
+      const code = errorCodeFromResponseBody(data);
+      if (typeof data?.error === 'string' && data.error.trim()) return { message: data.error.trim(), code };
+      if (typeof data?.message === 'string' && data.message.trim()) return { message: data.message.trim(), code };
+      return { message: text.trim() || null, code };
     } catch {
-      return text.trim() || null;
+      return { message: text.trim() || null, code: null };
     }
-    return text.trim() || null;
   } catch {
-    return null;
+    return { message: null, code: null };
   }
 }
 

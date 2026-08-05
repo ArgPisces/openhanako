@@ -338,10 +338,11 @@ export async function switchToAgent(agentId: string) {
       body: JSON.stringify({ id: agentId }),
     });
     const data = await res.json();
-    // 带上错误码，呈现层才能把它翻成人话；裸 new Error(data.error) 会把码丢在这里。
-    if (!res.ok || data.error) {
+    // 走到这里响应一定是 2xx：非 2xx 已经在 hanaFetch 边界抛成带码的异常了。
+    // 剩下要防的是 2xx 里仍带 error 字段的老写法，它同样要把码带过 throw。
+    if (data.error) {
       const routeError = normalizeSessionRouteError(data);
-      throw errorWithCode(routeError.message || res.statusText, routeError.code);
+      throw errorWithCode(routeError.message, routeError.code);
     }
 
     store.set({
