@@ -22,6 +22,9 @@ function fakeMcp(overrides: any = {}) {
     completeOAuth: vi.fn(async () => ({ status: "done" })),
     getOAuthStatus: vi.fn(() => ({ status: "pending" })),
     autoStartAfterAdd: vi.fn(async () => {}),
+    setConnectorEnabled: vi.fn(async () => ({})),
+    startConnector: vi.fn(async () => {}),
+    stopConnector: vi.fn(async () => {}),
     startOAuth: vi.fn(async () => ({ sessionId: "s1", url: "https://auth.example.com/authorize" })),
     listApps: vi.fn(() => []),
     readResource: vi.fn(async () => ({ contents: [] })),
@@ -98,6 +101,38 @@ describe("MCP first-class routes", () => {
 
     expect(res.status).toBe(200);
     expect(mcp.startOAuth).toHaveBeenCalled();
+  });
+
+  it("records the user's intent before touching the transport on start and stop", async () => {
+    const order: string[] = [];
+    const mcp = fakeMcp({
+      setConnectorEnabled: vi.fn(async (_id, enabled) => { order.push(`persist:${enabled}`); }),
+      startConnector: vi.fn(async () => { order.push("start"); }),
+      stopConnector: vi.fn(async () => { order.push("stop"); }),
+    });
+    const app = createApp(mcp);
+
+    await app.request("/api/mcp/connectors/github/start", { method: "POST" });
+    await app.request("/api/mcp/connectors/github/stop", { method: "POST" });
+
+    // Written first, so a connector that fails to come up right now is still
+    // wanted at the next launch.
+    expect(order).toEqual(["persist:true", "start", "persist:false", "stop"]);
+    expect(mcp.setConnectorEnabled).toHaveBeenNthCalledWith(1, "github", true);
+    expect(mcp.setConnectorEnabled).toHaveBeenNthCalledWith(2, "github", false);
+  });
+
+  it("reports an unknown connector id on stop instead of silently succeeding", async () => {
+    const mcp = fakeMcp({
+      setConnectorEnabled: vi.fn(async () => { throw new Error('MCP connector "ghost" not found'); }),
+      stopConnector: vi.fn(async () => {}),
+    });
+
+    const res = await createApp(mcp).request("/api/mcp/connectors/ghost/stop", { method: "POST" });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'MCP connector "ghost" not found' });
+    expect(mcp.stopConnector).not.toHaveBeenCalled();
   });
 
   it("wins over the generic plugin proxy for the legacy alias path", async () => {

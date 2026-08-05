@@ -530,6 +530,7 @@ interface McpLiveAvailabilityInput {
   serverId?: string;
   toolName?: string;
   connectorPresent?: boolean;
+  connectorEnabled?: boolean;
   toolPresent?: boolean;
   status?: string;
   transportAvailable?: boolean;
@@ -553,6 +554,7 @@ export function probeMcpToolLiveAvailability(agentConfig, {
   serverId,
   toolName,
   connectorPresent,
+  connectorEnabled = true,
   toolPresent,
   status,
   transportAvailable,
@@ -570,6 +572,12 @@ export function probeMcpToolLiveAvailability(agentConfig, {
   }
   if (connectorPresent !== true) {
     return { available: false, reason: "mcp_connector_removed", diagnostics };
+  }
+  if (connectorEnabled === false) {
+    // Ahead of the per-agent gate and the transport checks on purpose: a
+    // switched-off connector is not going to start, so reporting it as merely
+    // stopped would point at a retry that cannot work.
+    return { available: false, reason: "mcp_connector_disabled", diagnostics };
   }
   if (toolPresent !== true) {
     return { available: false, reason: "mcp_tool_removed", diagnostics };
@@ -632,6 +640,10 @@ function statusConnectorView(connector) {
     id: connector.id,
     name: connector.name,
     transport: connector.transport,
+    // Switched off is not the same fact as not running, and the agent acts on
+    // the difference: one is fixed by starting the connector, the other only
+    // by the user turning it back on.
+    enabled: connector.enabled !== false,
     status: connector.status,
     error: connector.error || "",
     authType: connector.authType,
@@ -1059,6 +1071,7 @@ export class McpManager {
       connectorId,
       toolName,
       connectorPresent,
+      connectorEnabled: connector?.enabled !== false,
       toolPresent,
       status,
       transportAvailable: this.clients.get(connectorId)?.running === true,
@@ -1186,7 +1199,15 @@ export class McpManager {
    * thrown back at the add request.
    */
   async autoStartAfterAdd(id) {
-    if (this.getConfig().enabled !== true) return;
+    const config = this.getConfig();
+    if (config.enabled !== true) return;
+    // Imported configs may legitimately ship switched-off connectors, and the
+    // same gate load() applies has to apply here. Dialling one anyway costs
+    // more than a wasted connection: the start would record "wanted running"
+    // in memory while the disk says off, and every later drop would reconnect
+    // forever against the user's stated intent.
+    const connector = config.connectors.find((item) => item.id === id);
+    if (connector?.enabled === false) return;
     try {
       await this.startConnector(id);
     } catch {

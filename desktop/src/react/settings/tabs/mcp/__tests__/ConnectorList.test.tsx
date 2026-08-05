@@ -70,6 +70,20 @@ describe('ConnectorList', () => {
     expect(screen.getByTestId('mcp-connector-error-alpha').textContent).toBe('spawn ENOENT');
   });
 
+  it('tells a switched-off connector apart from one that merely is not running', () => {
+    renderList({
+      connectors: [
+        connector({ id: 'off', name: 'Off', status: 'stopped', enabled: false }),
+        connector({ id: 'idle', name: 'Idle', status: 'stopped', enabled: true }),
+      ],
+    });
+
+    // Both sit at status "stopped", but one is waiting to be started and the
+    // other was switched off; one label for both would hide the difference.
+    expect(screen.getByText('settings.mcp.statusDisabled')).toBeTruthy();
+    expect(screen.getByText('settings.mcp.statusStopped')).toBeTruthy();
+  });
+
   it('does not render an error line for a healthy connector', () => {
     renderList({ connectors: [connector({ status: 'running' })] });
 

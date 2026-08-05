@@ -2172,6 +2172,7 @@
       "headersHint": "每行一个 KEY=value。保存后会脱敏展示，请求远程 MCP 时会带上这些 headers。",
       "statusRunning": "运行中",
       "statusStopped": "已停止",
+      "statusDisabled": "已关闭",
       "statusConnecting": "连接中",
       "statusReconnecting": "重连中",
       "statusFailed": "重连失败",

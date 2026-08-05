@@ -2589,6 +2589,57 @@ describe("MCP management-center seams", () => {
       expect(runtime.getState().connectors[0]).toMatchObject({ error: "spawn ENOENT" });
     });
 
+    it("does not dial a connector that was added switched off", async () => {
+      const store = memoryStore();
+      const start = vi.fn(async () => {});
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-autostart-off"),
+        config: store,
+        log: console,
+      }, {
+        clientFactory: () => ({ running: false, start, stop: vi.fn(async () => {}) }),
+      });
+      const connector = runtime.addConnector({
+        name: "Alpha",
+        transport: "stdio",
+        command: "npx",
+        enabled: false,
+      });
+
+      await runtime.autoStartAfterAdd(connector.id);
+
+      expect(start).not.toHaveBeenCalled();
+      // Nothing was started, so nothing claims to be wanted running — which is
+      // what keeps the switch and the live intent from drifting apart.
+      expect(runtime.desiredStates.get(connector.id)).toBeUndefined();
+    });
+
+    it("dials the enabled rows of a bulk import and leaves a switched-off row alone", async () => {
+      const store = memoryStore();
+      const started: string[] = [];
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-autostart-bulk"),
+        config: store,
+        log: console,
+      }, {
+        clientFactory: (connector) => ({
+          running: true,
+          start: vi.fn(async () => { started.push(connector.id); }),
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => []),
+        }),
+      });
+
+      const results = runtime.addConnectors([
+        { name: "Alpha", transport: "stdio", command: "npx" },
+        { name: "Beta", transport: "stdio", command: "npx", enabled: false },
+      ]);
+      // The import route starts each accepted row exactly this way.
+      for (const result of results) await runtime.autoStartAfterAdd(result.id);
+
+      expect(started).toEqual(["Alpha"]);
+    });
+
     it("does not try to start while MCP is globally disabled", async () => {
       const store = memoryStore({ enabled: false, connectors: [] });
       const start = vi.fn(async () => {});
@@ -2932,6 +2983,58 @@ describe("MCP management-center seams", () => {
       // the guard has to hold one level below the settings action too.
       await runtime.updateConnector("alpha", { name: "Alpha two", enabled: false });
       expect(store.read().connectors[0]).toMatchObject({ enabled: true, name: "Alpha two" });
+    });
+
+    it("tells the agent's own diagnostic which connectors are switched off", async () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "live", url: "https://live.example.test", tools: [{ name: "search" }] },
+        { id: "off", url: "https://off.example.test", enabled: false, tools: [{ name: "lookup" }] },
+      ]);
+      runtime.registerCachedTools();
+
+      const statusTool = runtime.getAllTools().find((tool) => tool.name === "mcp_connectors_status");
+      const payload = JSON.parse((await statusTool.execute("call-1", {}, { agentId: "hana" })).content[0].text);
+
+      // Without this the agent sees a stopped connector and keeps suggesting a
+      // start, which is not the action that would fix it.
+      expect(payload.connectors.map((item) => [item.id, item.enabled])).toEqual([
+        ["live", true],
+        ["off", false],
+      ]);
+    });
+
+    it("diagnoses a switched-off connector as disabled rather than stopped", () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "off", url: "https://off.example.test", enabled: false, tools: [{ name: "lookup" }] },
+      ]);
+
+      expect(runtime.probeToolLiveAvailability("off", "lookup", {
+        mcp: { connectors: { off: { enabled: true, tools: { lookup: true } } } },
+      })).toMatchObject({
+        available: false,
+        reason: "mcp_connector_disabled",
+      });
+    });
+
+    it("names an unknown connector instead of reporting it as not running", async () => {
+      const { runtime } = enabledSwitchRuntime([]);
+
+      await expect(runtime.callTool("ghost", "search", {}))
+        .rejects.toThrow('MCP connector "ghost" not found');
+    });
+
+    it("says where to look when the on-demand start fails", async () => {
+      const start = vi.fn(async () => { throw new Error("spawn ENOENT"); });
+      const { runtime } = enabledSwitchRuntime(
+        [{ id: "alpha", url: "https://alpha.example.test", tools: [{ name: "search" }] }],
+        { start, running: false },
+      );
+
+      // The transport's own reason survives; the pointer to the settings page
+      // is appended, because that is where the retry and the detail live.
+      await expect(runtime.callTool("alpha", "search", {})).rejects.toThrow(
+        "spawn ENOENT (automatic reconnect failed; start it manually in Settings → MCP for details)",
+      );
     });
 
     it("callTool refuses a disabled connector with an actionable message", async () => {

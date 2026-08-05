@@ -2172,6 +2172,7 @@
       "headersHint": "One KEY=value pair per line. Values are stored for connector requests and masked after saving.",
       "statusRunning": "Running",
       "statusStopped": "Stopped",
+      "statusDisabled": "Disabled",
       "statusConnecting": "Connecting",
       "statusReconnecting": "Reconnecting",
       "statusFailed": "Reconnect failed",

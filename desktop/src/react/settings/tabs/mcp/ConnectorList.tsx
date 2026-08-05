@@ -224,6 +224,10 @@ function connectorTarget(connector: McpConnector): string {
 }
 
 function statusLabel(connector: McpConnector): string {
+  // The switch outranks the transport state: a switched-off connector reads as
+  // "stopped" too, and calling it that would hide why it is not running. Start
+  // already means enable-and-start, so the row needs no extra control.
+  if (connector.enabled === false) return t('settings.mcp.statusDisabled');
   switch (connector.status) {
     case 'running':
       return t('settings.mcp.statusRunning');
