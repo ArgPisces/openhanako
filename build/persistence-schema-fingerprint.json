@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:0103b3720cdb56ff9011510d4ca15ccbfadd96cbd136db347f30daa8a47c3fd5",
+  "payloadFingerprint": "sha256:01f263d384513c5b45f030ce47ba505031f4feb2e53a6c443ec71de35108712e",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Adds the new file-history-sqlite store to the inventory; no existing store's schema, reader, or on-disk layout changes. The per-workspace history database is created on first open and carries its own meta.schema_version, so homes without it stay readable.",
-    "payloadFingerprint": "sha256:0103b3720cdb56ff9011510d4ca15ccbfadd96cbd136db347f30daa8a47c3fd5"
+    "compatibilityReason": "MCP config normalization now folds duplicate tool names within a connector, reports canonical tool-id collisions as data instead of throwing on read, and adds a runtime-only collisions projection. No stored schema, persisted field, or write primitive changes: config.json keeps its shape, and the collisions view never reaches saveConfig.",
+    "payloadFingerprint": "sha256:01f263d384513c5b45f030ce47ba505031f4feb2e53a6c443ec71de35108712e"
   },
   "schemas": [
     {
@@ -3421,7 +3421,7 @@
       "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:067c1cc1dc29ed5a3009f5b02f4d5bb6505a62b51a18d969f106855cacdb9c0c",
+      "sourceHash": "sha256:1d3357ae4e32f8dc2c211f9d59c1f68abbe520cd70d06a758e5735e7278c2c60",
       "storeId": "mcp-config"
     },
     {
