@@ -92,6 +92,26 @@ function normalizeTool(tool) {
   return normalized;
 }
 
+/**
+ * Collapse repeated tool names inside one connector, keeping the first.
+ *
+ * Third-party servers may legally-but-uselessly list the same tool twice, and
+ * old versions persisted such lists verbatim. Within one connector the name
+ * alone selects the executor, so folding to the first occurrence is a
+ * deterministic merge, not a guess. The first occurrence is also the one that
+ * was already in effect: an invocation dispatches by name to the server, and
+ * every lookup by name over a connector's tool list (the app-resource
+ * resolution, the availability probe) stops at the first match.
+ */
+function dedupeToolsByName(tools) {
+  const seen = new Set();
+  return tools.filter((tool) => {
+    if (seen.has(tool.name)) return false;
+    seen.add(tool.name);
+    return true;
+  });
+}
+
 // Per-connector permission policy. "review-all" is both the default and the
 // safe one: every tool invocation goes through review. "allowlist" opts the
 // connector into policy-driven silent approval, but only for tools the user
@@ -217,6 +237,37 @@ export function resolveMcpToolPermissionKind(policy: any, liveAnnotations: any =
   return "review";
 }
 
+// Hints that raise scrutiny versus hints that lower it. The split is what lets
+// duplicate declarations be merged without ever weakening the outcome.
+const DANGER_RAISING_HINTS = ["destructiveHint", "openWorldHint"];
+const SCRUTINY_LOWERING_HINTS = ["readOnlyHint", "idempotentHint"];
+
+/**
+ * Merge the annotations of two listings that share one tool name.
+ *
+ * Duplicate names fold to their first occurrence, but their annotations may
+ * disagree, and last-one-wins would let a later read-only claim erase an
+ * earlier destructive one. By rule 1 above, a server-declared destructive tool
+ * is never silently approved and known danger outranks authorization, so the
+ * merge may only ever move in the direction of more scrutiny: a raising hint
+ * counts when any occurrence declares it, a lowering hint only when every
+ * occurrence does.
+ */
+function mergeDuplicateToolAnnotations(previous, next) {
+  if (!isPlainObject(previous)) return next;
+  const merged = { ...previous, ...next };
+  for (const hint of DANGER_RAISING_HINTS) {
+    if (previous[hint] === true || next[hint] === true) merged[hint] = true;
+  }
+  for (const hint of SCRUTINY_LOWERING_HINTS) {
+    // Untouched when neither listing mentions the hint: absent already means
+    // "no claim", and inventing a false one would say the server denied it.
+    if (!(hint in merged)) continue;
+    if (previous[hint] !== true || next[hint] !== true) merged[hint] = false;
+  }
+  return merged;
+}
+
 // A pin keeps one tool in the prefix even when its connector is deferred.
 // Only an explicit `true` pins: anything else, including "yes" and 1, is
 // dropped so a malformed value cannot quietly enlarge the prefix.
@@ -242,9 +293,11 @@ function normalizeConnector(connector, fallbackId = "") {
   if (!id) return null;
   const env = normalizeStringRecord(connector.env);
   const headers = normalizeStringRecord(connector.headers);
-  const tools = Array.isArray(connector.tools)
-    ? connector.tools.map(normalizeTool).filter(Boolean)
-    : [];
+  const tools = dedupeToolsByName(
+    (Array.isArray(connector.tools) ? connector.tools : [])
+      .map(normalizeTool)
+      .filter(Boolean),
+  );
   const toolPermissions = mirrorHistoricalToolSettings(
     normalizeToolPermissions(connector.toolPermissions),
     id,
@@ -1339,9 +1392,12 @@ export class McpManager {
     const connector = config.connectors.find((s) => s.id === id);
     if (!connector) throw new Error(`MCP connector "${id}" not found`);
     connector.tools = tools.map(normalizeTool).filter(Boolean);
-    this.saveConfig(config);
+    // Hand back what was actually stored, not the pre-normalization local list:
+    // saveConfig folds duplicate names, so returning the mutation would let a
+    // caller act on tools that are not on disk.
+    const saved = this.saveConfig(config);
     this.registerCachedTools();
-    return connector.tools;
+    return saved.connectors.find((s) => s.id === id)?.tools || [];
   }
 
   /**
@@ -1355,7 +1411,8 @@ export class McpManager {
     const table = new Map();
     for (const tool of Array.isArray(wireTools) ? wireTools : []) {
       if (!tool || typeof tool.name !== "string" || !tool.name) continue;
-      if (isPlainObject(tool.annotations)) table.set(tool.name, tool.annotations);
+      if (!isPlainObject(tool.annotations)) continue;
+      table.set(tool.name, mergeDuplicateToolAnnotations(table.get(tool.name), tool.annotations));
     }
     this._runtimeToolAnnotations.set(connectorId, table);
   }

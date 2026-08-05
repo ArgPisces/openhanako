@@ -133,6 +133,29 @@ describe("MCP runtime policy", () => {
     })).toThrow(/MCP tool id collision.*GitHub\/Search.*github\/search/i);
   });
 
+  it("folds repeated tool names to their first occurrence within a connector", () => {
+    const config = normalizeMcpConfig({
+      enabled: true,
+      connectors: [{
+        id: "tushare",
+        transport: "stdio",
+        command: "python",
+        // Repeats are neither adjacent nor limited to a single pair: the fold
+        // is by name across the whole list, not a neighbour comparison.
+        tools: [
+          { name: "moneyflow_hsgt", description: "first", inputSchema: { type: "object" } },
+          { name: "daily_basic", description: "ok", inputSchema: { type: "object" } },
+          { name: "moneyflow_hsgt", description: "second copy", inputSchema: { type: "object" } },
+          { name: "moneyflow_hsgt", description: "third copy", inputSchema: { type: "object" } },
+        ],
+      }],
+    });
+
+    const tools = config.connectors[0].tools;
+    expect(tools.map((tool) => tool.name)).toEqual(["moneyflow_hsgt", "daily_basic"]);
+    expect(tools[0].description).toBe("first");
+  });
+
   it("keeps legacy lowercase qualified names and raw permission keys compatible", () => {
     const config = normalizeMcpConfig({
       enabled: true,
@@ -2084,6 +2107,78 @@ describe("MCP runtime OAuth persistence", () => {
       toolPermissions: { search: "allow" },
       trustReadOnlyHint: true,
     });
+  });
+});
+
+describe("MCP duplicate tool listings", () => {
+  /**
+   * A running connector whose server reports the given tool listing verbatim,
+   * duplicates included. Writes are persisted back into the in-memory store so
+   * a refresh can be read back the way the on-disk store behaves.
+   */
+  async function runtimeListing(listed) {
+    let stored: any = {
+      enabled: true,
+      connectors: [{ id: "tushare", name: "Tushare", url: "https://mcp.example.com/mcp" }],
+    };
+    const runtime = createManager({
+      dataDir: path.join(os.tmpdir(), "hana-mcp-duplicate-tools"),
+      config: {
+        get: vi.fn(() => stored),
+        set: (_key, value) => { stored = value; },
+      },
+    }, {
+      clientFactory: () => ({
+        running: true,
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {}),
+        listTools: vi.fn(async () => listed),
+      }),
+    });
+    await runtime.startConnector("tushare");
+    return runtime;
+  }
+
+  it("returns the folded tool list from refreshTools, identical to what was persisted", async () => {
+    const runtime = await runtimeListing([
+      { name: "moneyflow_hsgt", description: "first", inputSchema: { type: "object" } },
+      { name: "daily_basic", description: "ok", inputSchema: { type: "object" } },
+      { name: "moneyflow_hsgt", description: "second copy", inputSchema: { type: "object" } },
+    ]);
+
+    const returned = await runtime.refreshTools("tushare");
+    expect(returned.map((tool) => tool.name)).toEqual(["moneyflow_hsgt", "daily_basic"]);
+    expect(returned[0].description).toBe("first");
+
+    // The caller must not be handed a richer list than the one on disk: the
+    // settings page renders this return value directly after a refresh.
+    const persisted = runtime.getConfig().connectors.find((item) => item.id === "tushare").tools;
+    expect(returned).toEqual(persisted);
+  });
+
+  it("keeps a destructive declaration made by any occurrence of a repeated tool name", async () => {
+    const runtime = await runtimeListing([
+      {
+        name: "moneyflow_hsgt",
+        inputSchema: { type: "object" },
+        annotations: { destructiveHint: true, idempotentHint: true },
+      },
+      {
+        name: "moneyflow_hsgt",
+        inputSchema: { type: "object" },
+        annotations: { readOnlyHint: true, idempotentHint: false },
+      },
+    ]);
+    await runtime.refreshTools("tushare");
+
+    // Were the later entry to simply overwrite the earlier one, the side table
+    // would report a read-only tool and implicit trust could approve a call the
+    // server itself called destructive.
+    const annotations = runtime.getRuntimeToolAnnotations("tushare", "moneyflow_hsgt");
+    expect(annotations.destructiveHint).toBe(true);
+    expect(annotations.readOnlyHint).not.toBe(true);
+    // Lowering hints need every occurrence to agree, so one dissent is enough.
+    expect(annotations.idempotentHint).not.toBe(true);
   });
 });
 
