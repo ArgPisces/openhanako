@@ -3243,6 +3243,54 @@ describe("MCP app-facing calls and the enabled switch", () => {
       expect(listTools).toHaveBeenCalledTimes(1);
     });
 
+    it("lists the tools itself when the start found the connection already live", async () => {
+      // The other half of the same decision. A start that arrives to find a live
+      // connection — someone else's start won the race while this refresh was
+      // waiting — has nothing to list, so there is no fresh answer to inherit and
+      // the refresh has to ask for one. Handing back the stored list here would
+      // answer a refresh with whatever happened to be on disk.
+      const listTools = vi.fn(async () => [{ name: "fresh" }]);
+      const { runtime, built } = appRuntime(
+        [{ id: "acme", name: "Acme", url: "https://mcp.acme.test/mcp", tools: [{ name: "stale" }] }],
+        { listTools },
+      );
+      runtime.startConnector = vi.fn(async () => {
+        // Exactly what startConnector does when it finds a running client: adopt
+        // it and return, without listing anything.
+        const live: any = { running: true, stop: vi.fn(async () => {}), listTools };
+        built.push(live);
+        runtime.clients.set("acme", live);
+        return runtime.getConfig().connectors.find((entry) => entry.id === "acme");
+      });
+
+      const tools = await runtime.refreshTools("acme");
+
+      expect(tools.map((tool) => tool.name)).toEqual(["fresh"]);
+      expect(listTools).toHaveBeenCalledTimes(1);
+    });
+
+    it("counts listings from scratch again after the connector was stopped", async () => {
+      // Stopping drops the listing count along with the connection it described.
+      // The next refresh starts the connector again and must still recognize the
+      // listing that start performed, rather than being confused by the reset.
+      const listTools = vi.fn(async () => [{ name: "fresh" }]);
+      const { runtime } = appRuntime(
+        [{ id: "acme", name: "Acme", url: "https://mcp.acme.test/mcp", tools: [{ name: "stale" }] }],
+        { listTools },
+      );
+
+      await runtime.startConnector("acme");
+      await runtime.stopConnector("acme");
+      expect((runtime as any)._toolListings.has("acme")).toBe(false);
+
+      const tools = await runtime.refreshTools("acme");
+
+      expect(tools.map((tool) => tool.name)).toEqual(["fresh"]);
+      // Once for the first start, once for the restart this refresh triggered —
+      // and no third listing, because the restart's own listing was recognized.
+      expect(listTools).toHaveBeenCalledTimes(2);
+    });
+
     it("names an unknown connector instead of reporting it as not running", async () => {
       const { runtime } = appRuntime([]);
 

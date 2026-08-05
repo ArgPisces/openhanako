@@ -1014,6 +1014,7 @@ export class McpManager {
     this.oauthSessions.clear();
     this.refreshInFlight.clear();
     this._lazyStarts.clear();
+    this._toolListings.clear();
   }
 
   getConfig() {
@@ -1290,6 +1291,11 @@ export class McpManager {
 
   async removeConnector(id) {
     await this.stopConnector(id);
+    // stopConnector only tears down per-client state when there was a client to
+    // tear down. A connector that is going away for good takes its bookkeeping
+    // with it either way, so nothing is left keyed to an id that no longer names
+    // anything.
+    this._toolListings.delete(id);
     const config = this.getConfig();
     config.connectors = config.connectors.filter((s) => s.id !== id);
     const saved = this.saveConfig(config);
@@ -1407,6 +1413,12 @@ export class McpManager {
     this.clientErrors.delete(id);
     // The hint described that client's last response; it dies with the client.
     this.toolListFreshness.delete(id);
+    // Likewise the listing count: it records work done on connections that are
+    // now gone. Restarting counts from scratch, which the refresh path reads
+    // correctly — it only ever asks whether a listing finished while it waited,
+    // and a count that restarts can answer that wrongly in one direction only,
+    // by making the refresh do its own listing.
+    this._toolListings.delete(id);
     await client.stop();
   }
 
