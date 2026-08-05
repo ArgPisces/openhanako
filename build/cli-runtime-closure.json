@@ -110280,6 +110280,23 @@
       "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
     },
     {
+      "path": "server/routes/route-errors.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "server/routes/sessions.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "server/routes/agents.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by server/routes/sessions.ts (import-statement); server/routes/agents.ts (import-statement)."
+    },
+    {
       "path": "server/routes/server-identity.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112798,9 +112815,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9640,
+    "totalFiles": 9641,
     "byInputType": {
-      "source-graph": 659,
+      "source-graph": 660,
       "runtime-asset": 11,
       "nft-runtime-trace": 8970
     }

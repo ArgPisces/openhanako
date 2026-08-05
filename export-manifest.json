@@ -595,6 +595,7 @@
     "server/routes/providers.ts",
     "server/routes/resource-io.ts",
     "server/routes/resources.ts",
+    "server/routes/route-errors.ts",
     "server/routes/server-identity.ts",
     "server/routes/session-collab.ts",
     "server/routes/session-projects.ts",
