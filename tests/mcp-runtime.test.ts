@@ -2208,6 +2208,15 @@ describe("MCP canonical tool id collisions", () => {
       dataDir: path.join(os.tmpdir(), "hana-mcp-tool-collisions"),
       config: { get: () => stored, set },
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }, {
+      // A stub transport, so a test that loads the config does not dial the
+      // example addresses these fixtures carry.
+      clientFactory: () => ({
+        running: true,
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {}),
+        listTools: vi.fn(async () => []),
+      }),
     });
     return { runtime, set };
   }
@@ -2308,9 +2317,6 @@ describe("MCP canonical tool id collisions", () => {
     const { runtime } = runtimeWithConnectors([{
       id: "financeMcp",
       url: "https://one.example.test",
-      // Switched off so loading does not try to reach the address; what is
-      // under test is which tools get published, not the connection.
-      enabled: false,
       tools: [{ name: "daily_report" }, { name: "daily_report_备份" }, { name: "daily_basic" }],
     }]);
     await runtime.load();
@@ -2821,6 +2827,111 @@ describe("MCP management-center seams", () => {
       expect(startConnector).toHaveBeenCalledTimes(1);
       expect(callTool).toHaveBeenCalledTimes(2);
       expect(results[0]).toMatchObject({ content: [{ type: "text", text: "ok" }] });
+    });
+
+    it("keeps a disabled connector's tools out of the model-facing tool list", () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "live", url: "https://live.example.test", tools: [{ name: "search" }] },
+        { id: "off", url: "https://off.example.test", enabled: false, tools: [{ name: "lookup" }] },
+      ]);
+
+      runtime.registerCachedTools();
+      const names = runtime.getAllTools().map((tool) => tool.name);
+
+      expect(names).toContain("mcp_live_search");
+      expect(names).not.toContain("mcp_off_lookup");
+      // The host diagnostic is not a connector capability and stays published.
+      expect(names).toContain("mcp_connectors_status");
+    });
+
+    it("keeps the deferred catalog on the same footing as the published tools", () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "live", url: "https://live.example.test", tools: [{ name: "search" }] },
+        { id: "off", url: "https://off.example.test", enabled: false, tools: [{ name: "lookup" }] },
+      ]);
+
+      // Two projections of one config: a tool missing from the direct path but
+      // present in the catalog would let the model ask for something that
+      // cannot be loaded.
+      expect(runtime.getCatalogEntries().map((entry) => entry.name)).toEqual(["live_search"]);
+    });
+
+    it("does not let a disabled connector drag a live connector's tool down with it", () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "Finance", url: "https://one.example.test", tools: [{ name: "daily_report" }] },
+        { id: "finance", url: "https://two.example.test", enabled: false, tools: [{ name: "daily_report" }] },
+      ]);
+
+      runtime.registerCachedTools();
+
+      // Ambiguity is what costs a tool its place, and a connector nobody can
+      // call is not a claimant. Switching one off has to resolve the clash, not
+      // preserve it.
+      expect(runtime.getAllTools().map((tool) => tool.name)).toContain("mcp_finance_daily_report");
+      const byId = new Map<string, any>(runtime.getState().connectors.map((item) => [item.id, item]));
+      expect(byId.get("Finance").collisions).toEqual([]);
+      expect(byId.get("finance").collisions).toEqual([]);
+    });
+
+    it("restores the collision verdict when the disabled claimant is switched back on", async () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "Finance", url: "https://one.example.test", tools: [{ name: "daily_report" }] },
+        { id: "finance", url: "https://two.example.test", enabled: false, tools: [{ name: "daily_report" }] },
+      ]);
+
+      await runtime.setConnectorEnabled("finance", true);
+      runtime.registerCachedTools();
+
+      expect(runtime.getAllTools().map((tool) => tool.name)).not.toContain("mcp_finance_daily_report");
+      const byId = new Map<string, any>(runtime.getState().connectors.map((item) => [item.id, item]));
+      expect(byId.get("Finance").collisions).toMatchObject([{ canonical: "finance_daily_report" }]);
+      expect(byId.get("finance").collisions).toMatchObject([{ canonical: "finance_daily_report" }]);
+    });
+
+    it("keeps a disabled connector visible in the settings projection", () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "live", url: "https://live.example.test" },
+        { id: "off", url: "https://off.example.test", enabled: false },
+      ]);
+
+      // Leaving the model's view is not leaving the user's view: a connector
+      // the user cannot see is a connector the user cannot switch back on.
+      expect(runtime.getState().connectors.map((item) => [item.id, item.enabled])).toEqual([
+        ["live", true],
+        ["off", false],
+      ]);
+    });
+
+    it("holds the connector id namespace against disabled connectors too", () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "Finance", url: "https://one.example.test", enabled: false },
+      ]);
+
+      // Switching a connector off does not surrender its name; taking it would
+      // make both connectors' tools ambiguous the moment it comes back.
+      expect(() => runtime.addConnector({
+        id: "finance",
+        name: "finance",
+        transport: "remote",
+        url: "https://two.example.test",
+      })).toThrow(/conflicts with existing connector/);
+    });
+
+    it("refuses to move the switch through a connector update", async () => {
+      const { runtime, store } = enabledSwitchRuntime([
+        { id: "alpha", url: "https://alpha.example.test", enabled: true },
+      ]);
+
+      await runtime.handleSettingsAction({
+        action: "mcp.connector.update",
+        payload: { connectorId: "alpha", name: "Alpha", enabled: false },
+      });
+      expect(store.read().connectors[0]).toMatchObject({ enabled: true, name: "Alpha" });
+
+      // The HTTP route hands its request body straight to updateConnector, so
+      // the guard has to hold one level below the settings action too.
+      await runtime.updateConnector("alpha", { name: "Alpha two", enabled: false });
+      expect(store.read().connectors[0]).toMatchObject({ enabled: true, name: "Alpha two" });
     });
 
     it("callTool refuses a disabled connector with an actionable message", async () => {

@@ -1201,6 +1201,11 @@ export class McpManager {
     if (index === -1) throw new Error(`MCP connector "${id}" not found`);
     const existing = config.connectors[index];
     const unmaskedPatch = unmaskConnectorPatch(existing, patch || {});
+    // The switch is dropped here rather than only at the settings-action layer
+    // because the HTTP route hands its request body to this method directly,
+    // and a second writer is exactly what the single-writer rule is for. The
+    // connector keeps whatever the last start/stop decision recorded.
+    delete unmaskedPatch.enabled;
     const next = normalizeConnector({ ...existing, ...unmaskedPatch, id: existing.id, tools: patch?.tools || existing.tools }, existing.id);
     validateConnector(next);
     // Only when the id actually moves. An edit that leaves the id alone must
@@ -1805,9 +1810,18 @@ export class McpManager {
     });
     tools.push(this._publishTool(statusDefinition));
     const config = this.getConfig();
-    const collisions = computeMcpToolIdCollisions(config.connectors);
+    // A connector the user switched off leaves the model's world entirely: its
+    // tools are not published, and it does not claim a canonical id either.
+    // The claim matters as much as the publication — ambiguity is what costs a
+    // tool its place, and a connector nobody can call is not a claimant, so
+    // letting a switched-off one keep its claim would take a live connector's
+    // identically-named tool down with it. This is the model's view only: the
+    // settings page still lists every connector, because a connector the user
+    // cannot see is one the user cannot switch back on.
+    const liveConnectors = config.connectors.filter((connector) => connector.enabled !== false);
+    const collisions = computeMcpToolIdCollisions(liveConnectors);
     this.toolCollisions = new Map();
-    for (const connector of config.connectors) {
+    for (const connector of liveConnectors) {
       for (const tool of connector.tools || []) {
         const canonical = toMcpToolId(connector.id, tool.name);
         const claimants = collisions.get(canonical);
@@ -1900,6 +1914,9 @@ export class McpManager {
   getCatalogEntries() {
     const entries = [];
     for (const connector of this.getConfig().connectors) {
+      // Same cut as the direct-load path. A tool the model can see in the
+      // catalog but can never load is worse than one it cannot see at all.
+      if (connector.enabled === false) continue;
       for (const tool of connector.tools || []) {
         if (!tool?.name) continue;
         entries.push({
@@ -2483,7 +2500,11 @@ function connectorInputFromPayload(payload) {
 
 function connectorPatchFromPayload(payload) {
   const source = isPlainObject(payload.patch) ? payload.patch : payload;
-  return omitKeys(source, ["connectorId", "serverId", "id", "patch", "value"]);
+  // `enabled` is not an editable field here: it records a start/stop decision,
+  // and setConnectorEnabled is its only writer. An edit form that happened to
+  // echo it back would otherwise switch a connector off as a side effect of
+  // renaming it.
+  return omitKeys(source, ["connectorId", "serverId", "id", "patch", "value", "enabled"]);
 }
 
 function omitKeys(source, keys) {
