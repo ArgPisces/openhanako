@@ -207,8 +207,15 @@ export function createMcpRoute(engine) {
     if (!rt) return c.json({ error: "not initialized" }, 503);
     try {
       const id = c.req.param("id");
-      if (action === "start") await rt.startConnector(id);
-      else if (action === "stop") await rt.stopConnector(id);
+      // The switch is persisted before the transport is touched, so the user's
+      // decision survives a restart whether or not the connection succeeds.
+      if (action === "start") {
+        await rt.setConnectorEnabled(id, true);
+        await rt.startConnector(id);
+      } else if (action === "stop") {
+        await rt.setConnectorEnabled(id, false);
+        await rt.stopConnector(id);
+      }
       else if (action === "refresh-tools") {
         const tools = await rt.refreshTools(id);
         return c.json({ tools, state: rt.getState() });

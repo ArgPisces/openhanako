@@ -2184,7 +2184,6 @@
       "env": "环境变量",
       "envHint": "每行一个 KEY=value。只会传给本地 stdio MCP server 子进程。",
       "timeout": "超时秒数",
-      "autoStart": "自动启动",
       "addConnector": "添加连接器",
       "updateConnector": "更新连接器",
       "importJson": "导入 JSON",

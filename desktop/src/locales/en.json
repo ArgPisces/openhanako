@@ -2184,7 +2184,6 @@
       "env": "Environment Variables",
       "envHint": "One KEY=value pair per line. Values are passed only to local stdio MCP server processes.",
       "timeout": "Timeout Seconds",
-      "autoStart": "Auto Start",
       "addConnector": "Add Connector",
       "updateConnector": "Update Connector",
       "importJson": "Import JSON",

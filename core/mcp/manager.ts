@@ -347,7 +347,14 @@ function normalizeConnector(connector, fallbackId = "") {
     // when a client id is already present, otherwise "" (unknown/unregistered).
     clientIdSource: normalizeClientIdSource(connector),
     oauth,
-    autoStart: connector.autoStart === true || connector.isActive === true,
+    // Single persisted switch, aligned with every major MCP client: present
+    // means enabled unless the user explicitly opted out. Legacy autoStart /
+    // isActive are not read as gates (they never had a runtime writer, so
+    // almost every real config says false while the user expects the connector
+    // to work); enabled is mirrored onto autoStart on write so a downgraded
+    // build keeps behaving like the user's current intent.
+    enabled: connector.enabled !== false,
+    autoStart: connector.enabled !== false,
     // Read-time compatibility: connectors saved before auto-reconnect
     // existed have no `autoReconnect` field; default them to true so existing
     // users get keepalive without a migration script. Only an explicit `false`
@@ -827,6 +834,7 @@ export class McpManager {
   declare oauthSessions: any;
   declare reconnectState: any;
   declare refreshInFlight: any;
+  declare _lazyStarts: Map<string, Promise<any>>;
   declare _bus: any;
   declare _busDisposers: any;
   declare _configStore: any;
@@ -906,6 +914,9 @@ export class McpManager {
     // In-flight OAuth refresh promises keyed by connector id. Guarantees a single
     // refresh per connector even under concurrent near-expiry / 401 callers.
     this.refreshInFlight = new Map();
+    // In-flight lazy starts keyed by connector id. A burst of tool calls against
+    // one idle connector must produce one connection attempt, not one per call.
+    this._lazyStarts = new Map();
   }
 
   /**
@@ -926,7 +937,7 @@ export class McpManager {
     this.registerCachedTools();
     const config = this.getConfig();
     if (config.enabled) {
-      for (const connector of config.connectors.filter((s) => s.autoStart)) {
+      for (const connector of config.connectors.filter((s) => s.enabled)) {
         this.startConnector(connector.id, { retryInitialFailure: true }).catch((err) => {
           this.log.warn(`auto-start failed for ${connector.id}: ${err.message}`);
         });
@@ -1066,6 +1077,27 @@ export class McpManager {
     }
     this.registerCachedTools();
     return saved;
+  }
+
+  /**
+   * Write down that the user wants this connector on or off.
+   *
+   * This is the only writer of the per-connector switch, and it exists so the
+   * two entry points that carry a user's decision (the settings action and the
+   * HTTP route) share one implementation. Everything the runtime does on its
+   * own — starting connectors at launch, reconnecting after a drop, tearing
+   * down on dispose — deliberately goes straight to startConnector /
+   * stopConnector and leaves the stored intent alone. Otherwise a server that
+   * happened to be unreachable at launch would end up recorded as "the user
+   * turned this off".
+   */
+  async setConnectorEnabled(id, enabled) {
+    const config = this.getConfig();
+    const connector = config.connectors.find((item) => item.id === id);
+    if (!connector) throw new Error(`MCP connector "${id}" not found`);
+    connector.enabled = enabled === true;
+    const saved = this.saveConfig(config);
+    return saved.connectors.find((item) => item.id === id);
   }
 
   addConnector(input) {
@@ -1568,9 +1600,22 @@ export class McpManager {
   async callTool(connectorId, toolName, args, runtimeCtx: any = {}) {
     const config = this.getConfig();
     if (!config.enabled) throw new Error("MCP connectors are disabled globally");
-    const client = this.clients.get(connectorId);
-    if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
     const connector = config.connectors.find((entry) => entry.id === connectorId);
+    if (!connector) throw new Error(`MCP connector "${connectorId}" not found`);
+    // Two very different reasons for "no live connection", told apart because
+    // they need different things from the user. Switched off is a decision they
+    // made and only they can undo; merely idle (never started this process, or
+    // dropped since) is the runtime's problem to solve, so we solve it here
+    // rather than failing a call the connector is perfectly able to serve.
+    if (connector.enabled === false) {
+      throw new Error(`MCP connector "${connectorId}" is disabled; enable it in Settings → MCP to use this tool`);
+    }
+    let client = this.clients.get(connectorId);
+    if (!client?.running) {
+      await this._ensureConnectorStarted(connectorId);
+      client = this.clients.get(connectorId);
+      if (!client?.running) throw new Error(`MCP connector "${connectorId}" is not running`);
+    }
     return this._callToolThroughInputRounds(client, {
       connectorId,
       connectorName: connector?.name || connectorId,
@@ -1578,6 +1623,34 @@ export class McpManager {
       args,
       runtimeCtx,
     });
+  }
+
+  /**
+   * Bring an enabled connector up on demand, at most once at a time.
+   *
+   * A model that decides to use a tool tends to issue several calls at once, so
+   * the in-flight attempt is shared: without it every call in the burst would
+   * spawn its own process or open its own session. Deliberately not a method
+   * marked async — the registration has to happen before the caller's first
+   * await, or two calls made in the same tick would both miss the entry.
+   *
+   * Retrying on the backoff schedule is left off: the caller is waiting on this
+   * attempt, so a failure has to come back now, with the transport's own reason
+   * plus a pointer to where the details live.
+   */
+  _ensureConnectorStarted(id) {
+    const inFlight = this._lazyStarts.get(id);
+    if (inFlight) return inFlight;
+    const attempt = this.startConnector(id, { retryInitialFailure: false })
+      .catch((err) => {
+        const reason = err?.message || String(err);
+        throw new Error(`${reason} (automatic reconnect failed; start it manually in Settings → MCP for details)`);
+      })
+      .finally(() => {
+        this._lazyStarts.delete(id);
+      });
+    this._lazyStarts.set(id, attempt);
+    return attempt;
   }
 
   // A server may answer a tool call by asking for more information instead of
@@ -1991,6 +2064,11 @@ export class McpManager {
 
       case "mcp.connector.start": {
         const connectorId = connectorIdFromPayload(input);
+        // Written down before the attempt, not after it: a connector the user
+        // asked for that fails to come up right now must still be tried again
+        // at the next launch. Recording only successful starts is how the old
+        // behaviour lost the user's decision on every restart.
+        await this.setConnectorEnabled(connectorId, true);
         const connector = await this.startConnector(connectorId);
         key = `mcp.connector.${connector.id}`;
         title = "MCP connector started";
@@ -2002,6 +2080,9 @@ export class McpManager {
       case "mcp.connector.stop": {
         const connectorId = connectorIdFromPayload(input);
         const connector = this.getConfig().connectors.find((item) => item.id === connectorId);
+        // A manual stop lasts until the user re-enables it, including across
+        // restarts — otherwise the connector would quietly come back.
+        await this.setConnectorEnabled(connectorId, false);
         await this.stopConnector(connectorId);
         key = `mcp.connector.${connectorId}`;
         title = "MCP connector stopped";

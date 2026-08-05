@@ -497,7 +497,9 @@ describe("MCP runtime policy", () => {
         "X-API-Key": "key-123",
       },
       timeout: 45,
-      autoStart: true,
+      // An imported server is on by default; neither isActive nor autoStart is
+      // read as a gate any more.
+      enabled: true,
     });
     expect(config.connectors[1]).toMatchObject({
       id: "cherry-stdio",
@@ -505,7 +507,7 @@ describe("MCP runtime policy", () => {
       command: "npx",
       env: { API_KEY: "secret" },
       registryUrl: "https://registry.npmmirror.com",
-      autoStart: true,
+      enabled: true,
     });
   });
 
@@ -2306,7 +2308,9 @@ describe("MCP canonical tool id collisions", () => {
     const { runtime } = runtimeWithConnectors([{
       id: "financeMcp",
       url: "https://one.example.test",
-      autoStart: false,
+      // Switched off so loading does not try to reach the address; what is
+      // under test is which tools get published, not the connection.
+      enabled: false,
       tools: [{ name: "daily_report" }, { name: "daily_report_备份" }, { name: "daily_basic" }],
     }]);
     await runtime.load();
@@ -2677,6 +2681,157 @@ describe("MCP management-center seams", () => {
       name: "search/repositories",
       qualifiedName: "github_com_search_repositories",
       capability: "github_com_search_repositories.invoke",
+    });
+  });
+
+  describe("single persisted enabled switch", () => {
+    /** Let every already-queued continuation run, including fire-and-forget starts. */
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    function enabledSwitchRuntime(connectors, { start = vi.fn(async () => {}), running = true }: any = {}) {
+      const store = memoryStore({ enabled: true, connectors });
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-enabled-switch"),
+        config: store,
+        log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      }, {
+        clientFactory: () => ({
+          running,
+          start,
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => []),
+          callTool: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
+        }),
+      });
+      return { runtime, store, start };
+    }
+
+    it("read-time migration: connectors without enabled default to enabled=true regardless of autoStart", () => {
+      // The old autoStart field never had a runtime writer, so nearly every
+      // real config says false while the user expects the connector to work.
+      // Presence means enabled; only an explicit opt-out disables.
+      const { runtime } = enabledSwitchRuntime([
+        { id: "a", url: "https://a.example.test" },
+        { id: "b", url: "https://b.example.test", autoStart: false },
+        { id: "c", url: "https://c.example.test", enabled: false },
+      ]);
+
+      expect(runtime.getConfig().connectors.map((connector) => [connector.id, connector.enabled])).toEqual([
+        ["a", true],
+        ["b", true],
+        ["c", false],
+      ]);
+    });
+
+    it("mirrors enabled onto autoStart on write for downgrade safety", () => {
+      const { runtime, store } = enabledSwitchRuntime([
+        { id: "on", url: "https://on.example.test" },
+        { id: "off", url: "https://off.example.test", enabled: false },
+      ]);
+
+      runtime.saveConfig(runtime.getConfig());
+
+      // A build rolled back to the previous release reads autoStart only; the
+      // mirror keeps it behaving like the user's current intent.
+      expect(store.read().connectors[0]).toMatchObject({ enabled: true, autoStart: true });
+      expect(store.read().connectors[1]).toMatchObject({ enabled: false, autoStart: false });
+    });
+
+    it("load() starts every enabled connector and skips disabled ones", async () => {
+      const started: string[] = [];
+      const store = memoryStore({
+        enabled: true,
+        connectors: [
+          { id: "live", url: "https://live.example.test" },
+          { id: "legacy", url: "https://legacy.example.test", autoStart: false },
+          { id: "off", url: "https://off.example.test", enabled: false },
+        ],
+      });
+      const runtime = createManager({
+        dataDir: path.join(os.tmpdir(), "hana-mcp-enabled-load"),
+        config: store,
+        log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      }, {
+        clientFactory: (connector) => ({
+          running: true,
+          start: vi.fn(async () => { started.push(connector.id); }),
+          stop: vi.fn(async () => {}),
+          listTools: vi.fn(async () => []),
+        }),
+      });
+
+      await runtime.load();
+      await flush();
+
+      expect(started.sort()).toEqual(["legacy", "live"]);
+      await runtime.dispose();
+    });
+
+    it("stop via settings action persists enabled=false; start persists enabled=true", async () => {
+      const { runtime, store } = enabledSwitchRuntime([{ id: "alpha", url: "https://alpha.example.test" }]);
+
+      await runtime.handleSettingsAction({ action: "mcp.connector.stop", payload: { connectorId: "alpha" } });
+      expect(store.read().connectors[0]).toMatchObject({ enabled: false });
+
+      await runtime.handleSettingsAction({ action: "mcp.connector.start", payload: { connectorId: "alpha" } });
+      expect(store.read().connectors[0]).toMatchObject({ enabled: true });
+
+      await runtime.dispose();
+    });
+
+    it("internal reconnect paths never rewrite enabled", async () => {
+      const start = vi.fn(async () => { throw new Error("connection refused"); });
+      const { runtime, store } = enabledSwitchRuntime(
+        [{ id: "alpha", url: "https://alpha.example.test", enabled: true }],
+        { start, running: false },
+      );
+
+      // A failed auto-start, the backoff teardown behind it, and a dropped
+      // connection are the runtime's own business. Only the user's start/stop
+      // is an intent worth writing down.
+      await runtime.load();
+      await flush();
+      await runtime.stopConnector("alpha");
+      runtime._onClientClose("alpha", { reason: "connection lost" });
+
+      expect(store.read().connectors[0]).toMatchObject({ enabled: true });
+      await runtime.dispose();
+    });
+
+    it("callTool lazily starts an enabled-but-idle connector once, coalescing concurrent calls", async () => {
+      const { runtime } = enabledSwitchRuntime([
+        { id: "alpha", url: "https://alpha.example.test", tools: [{ name: "search" }] },
+      ]);
+      let openGate = () => {};
+      const gate = new Promise<void>((resolve) => { openGate = resolve; });
+      const callTool = vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] }));
+      const startConnector = vi.fn(async () => {
+        await gate;
+        runtime.clients.set("alpha", { running: true, callTool, stop: vi.fn(async () => {}) });
+      });
+      runtime.startConnector = startConnector;
+
+      const calls = Promise.all([
+        runtime.callTool("alpha", "search", {}),
+        runtime.callTool("alpha", "search", {}),
+      ]);
+      openGate();
+      const results = await calls;
+
+      expect(startConnector).toHaveBeenCalledTimes(1);
+      expect(callTool).toHaveBeenCalledTimes(2);
+      expect(results[0]).toMatchObject({ content: [{ type: "text", text: "ok" }] });
+    });
+
+    it("callTool refuses a disabled connector with an actionable message", async () => {
+      const { runtime, start } = enabledSwitchRuntime([
+        { id: "alpha", url: "https://alpha.example.test", enabled: false, tools: [{ name: "search" }] },
+      ]);
+
+      await expect(runtime.callTool("alpha", "search", {}))
+        .rejects.toThrow(/is disabled; enable it in Settings/);
+      // A disabled connector must not be woken up by the refusal path either.
+      expect(start).not.toHaveBeenCalled();
     });
   });
 });

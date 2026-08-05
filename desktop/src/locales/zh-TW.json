@@ -2118,7 +2118,6 @@
       "env": "環境變數",
       "envHint": "每行一個 KEY=value。只會傳給本地 stdio MCP server 子行程。",
       "timeout": "逾時秒數",
-      "autoStart": "自動啟動",
       "addConnector": "新增連接器",
       "updateConnector": "更新連接器",
       "importJson": "匯入 JSON",

@@ -76,7 +76,8 @@ export interface McpConnector {
   headers?: Record<string, string>;
   registryUrl?: string;
   timeout?: number;
-  autoStart?: boolean;
+  /** The single persisted switch. Absent means enabled; only false switches it off. */
+  enabled?: boolean;
   status: McpConnectorStatus;
   /** Last failure reported by the runtime. Empty when the connector is healthy. */
   error?: string;
@@ -128,7 +129,7 @@ export interface McpConnectorInput {
   headers?: Record<string, string>;
   registryUrl?: string;
   timeout?: number;
-  autoStart?: boolean;
+  enabled?: boolean;
   authType?: McpAuthType;
   authorizationToken?: string;
   oauthClientId?: string;
