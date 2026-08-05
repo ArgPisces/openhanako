@@ -4963,6 +4963,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "server/routes/ws-session-context.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "server/routes/chat.ts",
           "kind": "import-statement"
         },
@@ -5157,7 +5162,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); core/plugin-config.ts (import-statement); lib/desk/cron-store.ts (import-statement); +80 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/migrations.ts (import-statement); core/plugin-config.ts (import-statement); lib/desk/cron-store.ts (import-statement); +81 more importer(s)."
     },
     {
       "path": "lib/default-models.json",

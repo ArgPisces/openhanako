@@ -1726,4 +1726,25 @@ describe('ws-message-handler error presentation', () => {
     });
     expect(shown?.text).not.toContain('agentId');
   });
+
+  // 一条既没有 sessionPath 也没有 sessionId 的身份错误没有会话可以挂靠，只能走 toast。
+  // 少了这一档，服务端认定的调用方 bug 会退化成一行 console.warn，用户什么也看不到。
+  it('toasts an identity error that carries no session to attach to', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    handleServerMessage({
+      type: 'error',
+      code: 'internal_contract',
+      message: 'session identity required',
+    });
+
+    expect(useStore.getState().toasts).toEqual([expect.objectContaining({
+      text: translateZh('error.code.internalContract'),
+      type: 'error',
+      errorCode: 'internal_contract',
+    })]);
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+  });
 });

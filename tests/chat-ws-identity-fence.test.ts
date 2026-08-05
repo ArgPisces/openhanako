@@ -13,10 +13,22 @@ describe("chat.ts ws identity fence", () => {
     path.join(ROOT, "server", "routes", "chat.ts"),
     "utf8",
   );
-  it("handlers never read msg.agentId directly", () => {
-    expect(source.includes("msg.agentId")).toBe(false);
+  const FENCE_HINT = "身份解析已收口到 resolveWsSessionContext：消费 ctx 的字段，不要另开一条身份通道";
+
+  it("handlers never read the client's agent id off the raw message", () => {
+    // 覆盖点号、可选链和两种下标写法，绕开一种就等于绕开了整道围栏。
+    const rawAgentIdRead = /\bmsg\s*\??\.\s*agentId\b|\bmsg\s*(?:\?\.)?\s*\[\s*(['"])agentId\1\s*\]/;
+    const hit = source.match(rawAgentIdRead);
+    expect(
+      hit,
+      `chat.ts 出现了直读客户端 agentId 的写法（${hit?.[0]}）。${FENCE_HINT}`,
+    ).toBeNull();
   });
+
   it("raw internal assertion copy never reappears", () => {
-    expect(source.includes("agentId required")).toBe(false);
+    expect(
+      source.includes("agentId required"),
+      `chat.ts 又出现了内部断言原文 "agentId required"，这行文案曾直接漏到用户面。${FENCE_HINT}`,
+    ).toBe(false);
   });
 });

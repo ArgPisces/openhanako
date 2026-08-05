@@ -10,7 +10,14 @@
 // 失败分级：
 //   internal_contract           —— 调用方连身份都没带，是前端 bug，走通用文案
 //   session_identity_mismatch   —— sessionId 与 sessionPath 指向不同会话
-//   session_identity_unresolved —— 身份给了但映射不到当前 locator
+//   session_identity_unresolved —— 身份给了但映射不到当前 locator，或归属查询本身失败
+//
+// 三处查询都可能因为存储损坏抛错，一律记 warn 后再决定怎么降级——静默降级会让
+// 存储故障看起来像"这个会话本来就这样"。定位类查询（路径反查、manifest）失败按
+// 缺失处理仍可继续；归属查询失败必须整条拒掉，见下面 fail-closed 的注释。
+import { createModuleLogger } from "../../lib/debug-log.ts";
+
+const log = createModuleLogger("ws-session-context");
 
 type WsSessionContextOk = {
   ok: true;
@@ -54,7 +61,8 @@ export function resolveWsSessionContext(
   if (rawPath) {
     try {
       pathSessionId = normalized(engine.getSessionIdForPath?.(rawPath));
-    } catch {
+    } catch (err: any) {
+      log.warn(`getSessionIdForPath failed for ${rawPath}: ${err?.message || err}`);
       pathSessionId = null;
     }
   }
@@ -73,7 +81,8 @@ export function resolveWsSessionContext(
   if (sessionId) {
     try {
       manifestPath = normalized(engine.getSessionManifest?.(sessionId)?.currentLocator?.path);
-    } catch {
+    } catch (err: any) {
+      log.warn(`getSessionManifest failed for ${sessionId}: ${err?.message || err}`);
       manifestPath = null;
     }
   }
@@ -103,9 +112,19 @@ export function resolveWsSessionContext(
 
   let ownership: any = null;
   try {
-    ownership = engine.resolveSessionOwnership?.(sessionPath) || null;
-  } catch {
-    ownership = null;
+    ownership = engine.resolveSessionOwnership?.({ sessionId, sessionPath }) || null;
+  } catch (err: any) {
+    // 查不出归属 ≠ 没有归属。没有归属是草稿，可以让客户端说了算；查询失败是存储故障，
+    // 这时候采信客户端的 agentId 等于连"这个 agent 已删除"的门禁一起放行了，
+    // 所以整条请求拒掉，让调用方看到错误而不是拿到一个猜出来的身份。
+    log.warn(`resolveSessionOwnership failed for ${sessionId || sessionPath}: ${err?.message || err}`);
+    return {
+      ok: false,
+      code: "session_identity_unresolved",
+      message: "Unable to resolve session ownership",
+      sessionId,
+      sessionPath,
+    };
   }
   const ownerAgentId = normalized(ownership?.agentId);
   const clientAgentId = normalized(msg?.agentId);

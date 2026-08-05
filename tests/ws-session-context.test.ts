@@ -85,7 +85,6 @@ describe("resolveWsSessionContext", () => {
       sessionId: "sess_from_id",
       sessionPath: "/sessions/a.jsonl",
     });
-    expect(engine.getSessionManifest).not.toHaveBeenCalled();
   });
 
   it("rejects an explicit sessionId whose manifest is missing", () => {
@@ -129,7 +128,7 @@ describe("resolveWsSessionContext", () => {
       sessionId: "sess_b",
       sessionPath: "/sessions/current-b.jsonl",
     });
-    expect(engine.getSessionIdForPath).not.toHaveBeenCalled();
+    expect(engine.getSessionManifest).toHaveBeenCalledWith("sess_b");
   });
 
   it("reports an unresolved locator when a bare sessionId has no manifest locator", () => {
@@ -146,6 +145,8 @@ describe("resolveWsSessionContext", () => {
 
   it("takes the agent from ownership and ignores the client's claim", () => {
     const engine = makeEngine({
+      pathSessionId: "sess_legacy",
+      manifest: { currentLocator: { path: "/sessions/legacy.jsonl" } },
       ownership: { agentId: "agent-owner", source: "manifest", agentDeleted: false },
     });
 
@@ -157,7 +158,11 @@ describe("resolveWsSessionContext", () => {
       agentId: "agent-owner",
       agentIdSource: "ownership",
     });
-    expect(engine.resolveSessionOwnership).toHaveBeenCalledWith("/sessions/legacy.jsonl");
+    // 传 ref 而不是裸路径：协调器认 sessionId 时可以直接查 manifest，省一次按路径反查。
+    expect(engine.resolveSessionOwnership).toHaveBeenCalledWith({
+      sessionId: "sess_legacy",
+      sessionPath: "/sessions/legacy.jsonl",
+    });
   });
 
   it("falls back to the client's agent when the server does not know the session", () => {
@@ -199,7 +204,8 @@ describe("resolveWsSessionContext", () => {
     });
   });
 
-  it("degrades instead of throwing when the path index throws", () => {
+  it("degrades to a legacy path, with a warning, when the path index throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const engine = makeEngine();
     engine.getSessionIdForPath = vi.fn(() => { throw new Error("index corrupt"); });
 
@@ -208,9 +214,13 @@ describe("resolveWsSessionContext", () => {
       sessionId: null,
       sessionPath: "/sessions/legacy.jsonl",
     });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("index corrupt"));
+
+    warn.mockRestore();
   });
 
-  it("degrades instead of throwing when the manifest store throws", () => {
+  it("degrades to the given path, with a warning, when the manifest store throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const engine = makeEngine({ pathSessionId: "sess_a" });
     engine.getSessionManifest = vi.fn(() => { throw new Error("store corrupt"); });
 
@@ -219,19 +229,30 @@ describe("resolveWsSessionContext", () => {
       sessionId: "sess_a",
       sessionPath: "/sessions/legacy.jsonl",
     });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("store corrupt"));
+
+    warn.mockRestore();
   });
 
-  it("degrades instead of throwing when ownership lookup throws", () => {
-    const engine = makeEngine();
+  // 归属查不出来和「查出来没有归属」是两回事。后者是草稿，客户端说自己属于谁就属于谁；
+  // 前者是存储故障，这时候相信客户端等于把删除态门禁一起放行了，所以整条请求拒掉。
+  it("fails closed, with a warning, when the ownership lookup throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const engine = makeEngine({ pathSessionId: "sess_a" });
     engine.resolveSessionOwnership = vi.fn(() => { throw new Error("store corrupt"); });
 
     expect(resolveWsSessionContext(engine, {
       sessionPath: "/sessions/legacy.jsonl",
       agentId: "agent-client",
-    })).toMatchObject({
-      ok: true,
-      agentId: "agent-client",
-      agentIdSource: "client",
+    })).toEqual({
+      ok: false,
+      code: "session_identity_unresolved",
+      message: "Unable to resolve session ownership",
+      sessionId: "sess_a",
+      sessionPath: "/sessions/legacy.jsonl",
     });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("store corrupt"));
+
+    warn.mockRestore();
   });
 });

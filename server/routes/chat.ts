@@ -242,8 +242,8 @@ export function buildDesktopSlashSessionRef(engine: any, agentId: string, sessio
 // compact 只接受 manifest 当前定位器：压缩会重写 JSONL，落到过期路径上等于写错文件。
 export function resolveCompactSessionTarget(engine: any, msg: any) {
   const ctx = resolveWsSessionContext(engine, msg, { requireManifestLocator: true });
-  // 显式比较 false 而不是 !ctx.ok：本项目 server 侧关掉了 strictNullChecks，
-  // 取反写法不会把联合类型收窄到错误分支。
+  // 显式比较 false 而不是 !ctx.ok：server 侧关掉了 strictNullChecks，此时对显式声明的
+  // 判别联合取反不会收窄到错误分支（推导出来的 as const 联合不受此限）。
   if (ctx.ok === false) {
     return { ok: false as const, code: ctx.code, message: ctx.message, sessionId: ctx.sessionId };
   }
@@ -339,8 +339,8 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
   const MAX_SESSION_STATES = 100;
 
   // 所有 WS 分支的身份入口：解析一次，失败就地回错，成功的结果由 handler 直接消费。
-  function requireWsSessionContext(msg, ws, opts = {}) {
-    const ctx = resolveWsSessionContext(engine, msg, opts);
+  function requireWsSessionContext(msg, ws) {
+    const ctx = resolveWsSessionContext(engine, msg);
     if (ctx.ok === false) {
       wsSend(ws, {
         type: "error",
@@ -1805,7 +1805,8 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 wsSend(ws, { type: "steered" });
                 return;
               }
-              // agent 已停止，降级为正常 prompt（下面的 prompt 分支会处理）
+              // agent 已停止，降级为正常 prompt（下面的 prompt 分支会处理）。
+              // prompt 分支会对同一条消息再解析一次身份，输入没变，结果与这里等价。
               debugLog()?.log("ws", `steer missed, falling back to prompt`);
               msg.type = "prompt";
             }
@@ -1976,20 +1977,24 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
 
             if ((msg.type === "prompt" || msg.type === "interject") && (msg.text || msg.images?.length || msg.videos?.length || msg.audios?.length)) {
               const interject = msg.type === "interject";
+              // 身份先解析：媒体校验的错误回包也要报在解析后的会话上，而且一条没有身份的
+              // 消息不值得先把几 MB base64 量一遍再拒。
+              const promptTarget = requireWsSessionContext(msg, ws); if (!promptTarget) return;
+              const promptSessionPath = promptTarget.sessionPath;
               // 图片校验：最多 10 张，单张 ≤ 20MB，仅允许常见图片 MIME
               if (msg.images?.length) {
                 const MAX_IMAGES = 10;
                 if (msg.images.length > MAX_IMAGES) {
-                  wsSend(ws, { type: "error", message: t("error.maxImages", { max: MAX_IMAGES }), sessionPath: msg.sessionPath });
+                  wsSend(ws, { type: "error", message: t("error.maxImages", { max: MAX_IMAGES }), sessionPath: promptSessionPath });
                   return;
                 }
                 for (const img of msg.images) {
                   if (!img?.mimeType || !isAllowedChatImageMime(img.mimeType)) {
-                    wsSend(ws, { type: "error", message: t("error.unsupportedImageFormat", { mime: img?.mimeType || "unknown" }), sessionPath: msg.sessionPath });
+                    wsSend(ws, { type: "error", message: t("error.unsupportedImageFormat", { mime: img?.mimeType || "unknown" }), sessionPath: promptSessionPath });
                     return;
                   }
                   if (img.data && !isChatImageBase64WithinLimit(img.data)) {
-                    wsSend(ws, { type: "error", message: t("error.imageTooLarge"), sessionPath: msg.sessionPath });
+                    wsSend(ws, { type: "error", message: t("error.imageTooLarge"), sessionPath: promptSessionPath });
                     return;
                   }
                 }
@@ -1997,16 +2002,16 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
               if (msg.videos?.length) {
                 const MAX_VIDEOS = 3;
                 if (msg.videos.length > MAX_VIDEOS) {
-                  wsSend(ws, { type: "error", message: t("error.maxVideos", { max: MAX_VIDEOS }), sessionPath: msg.sessionPath });
+                  wsSend(ws, { type: "error", message: t("error.maxVideos", { max: MAX_VIDEOS }), sessionPath: promptSessionPath });
                   return;
                 }
                 for (const video of msg.videos) {
                   if (!video?.mimeType || !isAllowedChatVideoMime(video.mimeType)) {
-                    wsSend(ws, { type: "error", message: t("error.unsupportedVideoFormat", { mime: video?.mimeType || "unknown" }), sessionPath: msg.sessionPath });
+                    wsSend(ws, { type: "error", message: t("error.unsupportedVideoFormat", { mime: video?.mimeType || "unknown" }), sessionPath: promptSessionPath });
                     return;
                   }
                   if (video.data && !isChatVideoBase64WithinLimit(video.data)) {
-                    wsSend(ws, { type: "error", message: t("error.videoTooLarge"), sessionPath: msg.sessionPath });
+                    wsSend(ws, { type: "error", message: t("error.videoTooLarge"), sessionPath: promptSessionPath });
                     return;
                   }
                 }
@@ -2014,16 +2019,16 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
               if (msg.audios?.length) {
                 const MAX_AUDIOS = 3;
                 if (msg.audios.length > MAX_AUDIOS) {
-                  wsSend(ws, { type: "error", message: t("error.maxAudios", { max: MAX_AUDIOS }), sessionPath: msg.sessionPath });
+                  wsSend(ws, { type: "error", message: t("error.maxAudios", { max: MAX_AUDIOS }), sessionPath: promptSessionPath });
                   return;
                 }
                 for (const audio of msg.audios) {
                   if (!audio?.mimeType || !isAllowedChatAudioMime(audio.mimeType)) {
-                    wsSend(ws, { type: "error", message: t("error.unsupportedAudioFormat", { mime: audio?.mimeType || "unknown" }), sessionPath: msg.sessionPath });
+                    wsSend(ws, { type: "error", message: t("error.unsupportedAudioFormat", { mime: audio?.mimeType || "unknown" }), sessionPath: promptSessionPath });
                     return;
                   }
                   if (audio.data && !isChatAudioBase64WithinLimit(audio.data)) {
-                    wsSend(ws, { type: "error", message: t("error.audioTooLarge"), sessionPath: msg.sessionPath });
+                    wsSend(ws, { type: "error", message: t("error.audioTooLarge"), sessionPath: promptSessionPath });
                     return;
                   }
                 }
@@ -2036,9 +2041,8 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 promptText = `${skillNote}\n${promptText}`;
               }
               debugLog()?.log("ws", `user message (${promptText.length} chars, ${msg.images?.length || 0} images, ${msg.videos?.length || 0} videos, ${msg.audios?.length || 0} audios)`);
-              // Phase 2: 客户端可指定 sessionPath，否则用焦点 session
-              const promptTarget = requireWsSessionContext(msg, ws); if (!promptTarget) return;
-              const promptSessionPath = promptTarget.sessionPath;
+              // agentDeleted 门禁只挂在会写入会话的分支（steer / slash / prompt / compact）；
+              // abort、resume_stream、context_usage 是停止和只读，删除态照常放行，与改动前一致。
               if (promptTarget.agentDeleted) {
                 rejectDeletedAgentSession(ws, promptSessionPath);
                 return;
@@ -2113,6 +2117,10 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                   return;
                 }
                 const reviewerAgentId = reviewRequests[0].agentId.trim();
+                // 这里刻意只认 manifest 上写着的属主，不吃路径推导、也不用上面解析出的
+                // ctx.agentId：那个为了让草稿能跑，会退到路径推导甚至客户端声明。评审的
+                // 规则是"评审者不能就是会话属主本人"，属主认错了等于让 agent 自己审自己，
+                // 所以这一处宁可在属主查不出时放行创建，也不拿宽松来源当权威。
                 const ownerAgentId = engine.getSessionManifest?.(promptTarget.sessionId)?.ownerAgentId || null;
                 if (!engine.getAgent?.(reviewerAgentId) || reviewerAgentId === ownerAgentId) {
                   wsSend(ws, {
