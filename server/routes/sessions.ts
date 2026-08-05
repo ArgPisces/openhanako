@@ -1845,12 +1845,11 @@ export function createSessionsRoute(engine, hub = null) {
       });
       return c.json({ ok: true, ...result });
     } catch (err) {
-      const status = Number.isInteger(err?.status)
-        ? err.status
-        : err?.message === "session_busy"
-          ? 409
-          : 400;
-      return c.json(bodyFromRouteError(err), status);
+      // 无码默认 400（重放失败绝大多数是请求本身的问题），session_busy 仍单独回 409。
+      return c.json(
+        bodyFromRouteError(err),
+        statusFromRouteError(err, err?.message === "session_busy" ? 409 : 400),
+      );
     }
   });
 
@@ -1921,12 +1920,11 @@ export function createSessionsRoute(engine, hub = null) {
       }, childPath);
       return c.json(response);
     } catch (err) {
-      const status = Number.isInteger(err?.status)
-        ? err.status
-        : err?.message === "session_busy"
-          ? 409
-          : 500;
-      return c.json(bodyFromRouteError(err), status);
+      // 无码默认 500（fork 失败多半是文件系统或引擎侧的问题），session_busy 仍单独回 409。
+      return c.json(
+        bodyFromRouteError(err),
+        statusFromRouteError(err, err?.message === "session_busy" ? 409 : 500),
+      );
     }
   });
 
