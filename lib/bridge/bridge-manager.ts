@@ -2813,6 +2813,11 @@ export class BridgeManager {
       : platformEntries;
     const fanOut = !explicitTarget && bridgePlatforms.length > 0;
     const deliveries = [];
+    let sawBoundConnected = false;
+    let sawResolvedTarget = false;
+    let sawReplyContextUnavailable = false;
+    let sawSendFailed = false;
+    let lastSendError = null;
 
     for (const entry of deliveryEntries) {
       if (entry.status !== "connected" || !entry.adapter) continue;
@@ -2824,6 +2829,7 @@ export class BridgeManager {
         continue;
       }
 
+      sawBoundConnected = true;
       const entryAgentId = explicitTarget?.agentId || entry.agentId;
       const agent = entryAgentId ? this.engine.getAgent(entryAgentId) : null;
       const ownerTarget = explicitTarget || resolveBridgeOwnerDeliveryTarget({
@@ -2834,10 +2840,18 @@ export class BridgeManager {
       const ownerId = ownerTarget?.userId;
       if (!ownerId) continue;
 
+      sawResolvedTarget = true;
       const chatId = explicitTarget?.chatId || entry.adapter.resolveOwnerChatId?.(ownerId) || ownerTarget.chatId;
 
       if (entry.adapter.capabilities?.proactive === false && !entry.adapter.canReply?.(chatId)) {
         debugLog()?.log("bridge", `→ ${platform} skipped proactive (no reply context for ${chatId})`);
+        sawReplyContextUnavailable = true;
+        deliveries.push({
+          status: "failed",
+          platform,
+          chatId,
+          error: "reply_context_unavailable",
+        });
         continue;
       }
 
@@ -2893,14 +2907,14 @@ export class BridgeManager {
           return result;
         }
       } catch (err) {
-        if (fanOut) {
-          deliveries.push({
-            status: "failed",
-            platform,
-            chatId,
-            error: err.message,
-          });
-        }
+        sawSendFailed = true;
+        lastSendError = err.message;
+        deliveries.push({
+          status: "failed",
+          platform,
+          chatId,
+          error: err.message,
+        });
         log.error(`proactive send failed (${platform}): ${err.message}`);
         debugLog()?.error("bridge", `proactive send failed (${platform}): ${err.message}`);
       }
@@ -2927,7 +2941,25 @@ export class BridgeManager {
     }
 
     if (idempotencyKey) this._proactiveIdempotency.delete(idempotencyKey);
-    return null;
+
+    let error = "target_missing";
+    if (sawReplyContextUnavailable) {
+      error = "reply_context_unavailable";
+    } else if (sawSendFailed) {
+      error = "send_failed";
+    } else if (!sawBoundConnected) {
+      const hasConnectedPlatform = deliveryEntries.some((entry) => entry.status === "connected" && entry.adapter);
+      error = hasConnectedPlatform ? "target_missing" : "disconnected";
+    } else if (!sawResolvedTarget) {
+      error = "target_missing";
+    }
+
+    return {
+      ok: false,
+      error,
+      deliveries,
+      ...(error === "send_failed" && lastSendError ? { message: lastSendError } : {}),
+    };
   }
 
   _readBridgeIndex(agentId, agent) {
