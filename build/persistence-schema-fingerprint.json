@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:8b7621661545990bfbac41b19312388222a74f4b616bc7b0eaf66050e66f04db",
+  "payloadFingerprint": "sha256:b8da44c17b45e35d8e3fbc1f2981e1d164b5b380ffbb9b6eb0a2ba470fd25a22",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Source-hash refresh only: the agent switch error in the agent manager now carries a code and status for route classification. No persisted schema, field, or write primitive changed.",
-    "payloadFingerprint": "sha256:8b7621661545990bfbac41b19312388222a74f4b616bc7b0eaf66050e66f04db"
+    "compatibilityReason": "Source-hash refresh only: the desktop crash log header now writes shell and content versions as two lines (a diagnostic text change inside an already-registered write site). No stored schema, field, or write primitive changed; nothing parses the crash log header.",
+    "payloadFingerprint": "sha256:b8da44c17b45e35d8e3fbc1f2981e1d164b5b380ffbb9b6eb0a2ba470fd25a22"
   },
   "schemas": [
     {
@@ -3316,7 +3316,7 @@
       "contract": "desktop window bounds, release announcement bookmark, and update cache version marker readers",
       "kind": "directory-contract",
       "module": "desktop/main.cjs",
-      "sourceHash": "sha256:ab00d3a87caf3b994faba151ed6c370ee093dd545564535f9fefbaee314640e0",
+      "sourceHash": "sha256:03b3ae01457b17c263ef26b82bca6aa620dc8928eb60ffc171f5f4f489c632fa",
       "storeId": "desktop-window-version-state"
     },
     {
