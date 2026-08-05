@@ -158,16 +158,16 @@ describe("MCP runtime policy", () => {
         // Repeats are neither adjacent nor limited to a single pair: the fold
         // is by name across the whole list, not a neighbour comparison.
         tools: [
-          { name: "moneyflow_hsgt", description: "first", inputSchema: { type: "object" } },
+          { name: "daily_report", description: "first", inputSchema: { type: "object" } },
           { name: "daily_basic", description: "ok", inputSchema: { type: "object" } },
-          { name: "moneyflow_hsgt", description: "second copy", inputSchema: { type: "object" } },
-          { name: "moneyflow_hsgt", description: "third copy", inputSchema: { type: "object" } },
+          { name: "daily_report", description: "second copy", inputSchema: { type: "object" } },
+          { name: "daily_report", description: "third copy", inputSchema: { type: "object" } },
         ],
       }],
     });
 
     const tools = config.connectors[0].tools;
-    expect(tools.map((tool) => tool.name)).toEqual(["moneyflow_hsgt", "daily_basic"]);
+    expect(tools.map((tool) => tool.name)).toEqual(["daily_report", "daily_basic"]);
     expect(tools[0].description).toBe("first");
   });
 
@@ -2156,13 +2156,13 @@ describe("MCP duplicate tool listings", () => {
 
   it("returns the folded tool list from refreshTools, identical to what was persisted", async () => {
     const runtime = await runtimeListing([
-      { name: "moneyflow_hsgt", description: "first", inputSchema: { type: "object" } },
+      { name: "daily_report", description: "first", inputSchema: { type: "object" } },
       { name: "daily_basic", description: "ok", inputSchema: { type: "object" } },
-      { name: "moneyflow_hsgt", description: "second copy", inputSchema: { type: "object" } },
+      { name: "daily_report", description: "second copy", inputSchema: { type: "object" } },
     ]);
 
     const returned = await runtime.refreshTools("tushare");
-    expect(returned.map((tool) => tool.name)).toEqual(["moneyflow_hsgt", "daily_basic"]);
+    expect(returned.map((tool) => tool.name)).toEqual(["daily_report", "daily_basic"]);
     expect(returned[0].description).toBe("first");
 
     // The caller must not be handed a richer list than the one on disk: the
@@ -2174,12 +2174,12 @@ describe("MCP duplicate tool listings", () => {
   it("keeps a destructive declaration made by any occurrence of a repeated tool name", async () => {
     const runtime = await runtimeListing([
       {
-        name: "moneyflow_hsgt",
+        name: "daily_report",
         inputSchema: { type: "object" },
         annotations: { destructiveHint: true, idempotentHint: true },
       },
       {
-        name: "moneyflow_hsgt",
+        name: "daily_report",
         inputSchema: { type: "object" },
         annotations: { readOnlyHint: true, idempotentHint: false },
       },
@@ -2189,7 +2189,7 @@ describe("MCP duplicate tool listings", () => {
     // Were the later entry to simply overwrite the earlier one, the side table
     // would report a read-only tool and implicit trust could approve a call the
     // server itself called destructive.
-    const annotations = runtime.getRuntimeToolAnnotations("tushare", "moneyflow_hsgt");
+    const annotations = runtime.getRuntimeToolAnnotations("tushare", "daily_report");
     expect(annotations.destructiveHint).toBe(true);
     expect(annotations.readOnlyHint).not.toBe(true);
     // Lowering hints need every occurrence to agree, so one dissent is enough.
@@ -2212,18 +2212,18 @@ describe("MCP canonical tool id collisions", () => {
 
   it("reports every ambiguous canonical id and leaves unambiguous ones out", () => {
     const { runtime } = runtimeWithConnectors([
-      { id: "Tushare", url: "https://one.example.test", tools: [{ name: "moneyflow_hsgt" }] },
+      { id: "Tushare", url: "https://one.example.test", tools: [{ name: "daily_report" }] },
       {
         id: "tushare",
         url: "https://two.example.test",
-        tools: [{ name: "moneyflow_hsgt" }, { name: "daily_basic" }],
+        tools: [{ name: "daily_report" }, { name: "daily_basic" }],
       },
     ]);
 
     const collisions = computeMcpToolIdCollisions(runtime.getConfig().connectors);
-    expect(collisions.get("tushare_moneyflow_hsgt")).toEqual([
-      { connectorId: "Tushare", toolName: "moneyflow_hsgt" },
-      { connectorId: "tushare", toolName: "moneyflow_hsgt" },
+    expect(collisions.get("tushare_daily_report")).toEqual([
+      { connectorId: "Tushare", toolName: "daily_report" },
+      { connectorId: "tushare", toolName: "daily_report" },
     ]);
     // A tool only one identity claims is not ambiguous and must not be reported.
     expect(collisions.has("tushare_daily_basic")).toBe(false);
@@ -2231,11 +2231,11 @@ describe("MCP canonical tool id collisions", () => {
 
   it("skips every ambiguous entry when publishing and keeps the rest", () => {
     const { runtime } = runtimeWithConnectors([
-      { id: "Tushare", url: "https://one.example.test", tools: [{ name: "moneyflow_hsgt" }] },
+      { id: "Tushare", url: "https://one.example.test", tools: [{ name: "daily_report" }] },
       {
         id: "tushare",
         url: "https://two.example.test",
-        tools: [{ name: "moneyflow_hsgt" }, { name: "daily_basic" }],
+        tools: [{ name: "daily_report" }, { name: "daily_basic" }],
       },
     ]);
     runtime.registerCachedTools();
@@ -2244,58 +2244,58 @@ describe("MCP canonical tool id collisions", () => {
     // Neither claimant is published: with two identities behind one name there
     // is no way to say which executor a call was meant for, so picking either
     // would be routing the user's call by coin flip.
-    expect(published).not.toContain("mcp_tushare_moneyflow_hsgt");
+    expect(published).not.toContain("mcp_tushare_daily_report");
     expect(published).toContain("mcp_tushare_daily_basic");
 
     // Both sides carry the notice, since either one of them is the fix.
     const state = runtime.getState();
     expect(state.connectors[0].collisions).toEqual([{
-      canonical: "tushare_moneyflow_hsgt",
-      toolName: "moneyflow_hsgt",
+      canonical: "tushare_daily_report",
+      toolName: "daily_report",
       otherConnectorId: "tushare",
-      otherToolName: "moneyflow_hsgt",
+      otherToolName: "daily_report",
     }]);
     expect(state.connectors[1].collisions).toEqual([{
-      canonical: "tushare_moneyflow_hsgt",
-      toolName: "moneyflow_hsgt",
+      canonical: "tushare_daily_report",
+      toolName: "daily_report",
       otherConnectorId: "Tushare",
-      otherToolName: "moneyflow_hsgt",
+      otherToolName: "daily_report",
     }]);
   });
 
   it("detects sanitize-induced collisions within one connector", () => {
-    // The pair that crashed a real install: sanitizeId folds the illegal
-    // characters into an underscore and then strips it off the end, so the
-    // suffixed backup tool lands on exactly the original's canonical id.
+    // Trailing characters outside [A-Za-z0-9_-] are folded to an underscore by
+    // sanitizeId and then stripped off the end, so a tool name and a suffixed
+    // variant of it collapse to one canonical id.
     const { runtime } = runtimeWithConnectors([{
-      id: "tushareMcp",
+      id: "financeMcp",
       url: "https://one.example.test",
-      tools: [{ name: "moneyflow_hsgt" }, { name: "moneyflow_hsgt_备份" }],
+      tools: [{ name: "daily_report" }, { name: "daily_report_备份" }],
     }]);
 
     const collisions = computeMcpToolIdCollisions(runtime.getConfig().connectors);
-    expect(collisions.get("tusharemcp_moneyflow_hsgt")).toEqual([
-      { connectorId: "tushareMcp", toolName: "moneyflow_hsgt" },
-      { connectorId: "tushareMcp", toolName: "moneyflow_hsgt_备份" },
+    expect(collisions.get("financemcp_daily_report")).toEqual([
+      { connectorId: "financeMcp", toolName: "daily_report" },
+      { connectorId: "financeMcp", toolName: "daily_report_备份" },
     ]);
 
     runtime.registerCachedTools();
     expect(runtime.getAllTools().map((tool) => tool.name))
-      .not.toContain("mcp_tusharemcp_moneyflow_hsgt");
+      .not.toContain("mcp_financemcp_daily_report");
     // Self-collision: the other claimant is this same connector, so the notice
     // names it rather than inventing a second connector.
     expect(runtime.getState().connectors[0].collisions).toEqual([
       {
-        canonical: "tusharemcp_moneyflow_hsgt",
-        toolName: "moneyflow_hsgt",
-        otherConnectorId: "tushareMcp",
-        otherToolName: "moneyflow_hsgt_备份",
+        canonical: "financemcp_daily_report",
+        toolName: "daily_report",
+        otherConnectorId: "financeMcp",
+        otherToolName: "daily_report_备份",
       },
       {
-        canonical: "tusharemcp_moneyflow_hsgt",
-        toolName: "moneyflow_hsgt_备份",
-        otherConnectorId: "tushareMcp",
-        otherToolName: "moneyflow_hsgt",
+        canonical: "financemcp_daily_report",
+        toolName: "daily_report_备份",
+        otherConnectorId: "financeMcp",
+        otherToolName: "daily_report",
       },
     ]);
   });
@@ -2304,21 +2304,21 @@ describe("MCP canonical tool id collisions", () => {
     // The whole point of the change: a bad pair may cost its own two tools and
     // nothing else. Loading the runtime must still bring the config up.
     const { runtime } = runtimeWithConnectors([{
-      id: "tushareMcp",
+      id: "financeMcp",
       url: "https://one.example.test",
       autoStart: false,
-      tools: [{ name: "moneyflow_hsgt" }, { name: "moneyflow_hsgt_备份" }, { name: "daily_basic" }],
+      tools: [{ name: "daily_report" }, { name: "daily_report_备份" }, { name: "daily_basic" }],
     }]);
     await runtime.load();
-    expect(runtime.getAllTools().map((tool) => tool.name)).toContain("mcp_tusharemcp_daily_basic");
+    expect(runtime.getAllTools().map((tool) => tool.name)).toContain("mcp_financemcp_daily_basic");
   });
 
   it("tells the agent through connectors_status which tools were dropped and why", async () => {
     const { runtime } = runtimeWithConnectors([{
-      id: "tushareMcp",
-      name: "Tushare",
+      id: "financeMcp",
+      name: "Finance",
       url: "https://one.example.test",
-      tools: [{ name: "moneyflow_hsgt" }, { name: "moneyflow_hsgt_备份" }, { name: "daily_basic" }],
+      tools: [{ name: "daily_report" }, { name: "daily_report_备份" }, { name: "daily_basic" }],
     }]);
     runtime.registerCachedTools();
 
@@ -2331,16 +2331,16 @@ describe("MCP canonical tool id collisions", () => {
     // server never having offered them.
     expect(payload.connectors[0].collisions).toEqual([
       {
-        canonical: "tusharemcp_moneyflow_hsgt",
-        toolName: "moneyflow_hsgt",
-        otherConnectorId: "tushareMcp",
-        otherToolName: "moneyflow_hsgt_备份",
+        canonical: "financemcp_daily_report",
+        toolName: "daily_report",
+        otherConnectorId: "financeMcp",
+        otherToolName: "daily_report_备份",
       },
       {
-        canonical: "tusharemcp_moneyflow_hsgt",
-        toolName: "moneyflow_hsgt_备份",
-        otherConnectorId: "tushareMcp",
-        otherToolName: "moneyflow_hsgt",
+        canonical: "financemcp_daily_report",
+        toolName: "daily_report_备份",
+        otherConnectorId: "financeMcp",
+        otherToolName: "daily_report",
       },
     ]);
     // The count still describes the configured list, so the two numbers only
