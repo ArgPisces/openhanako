@@ -41,7 +41,9 @@ import styles from './SidebarNoticeSlot.module.css';
  * 死刑的旧文件全集，它永不自愈，于是"下次启动重新出现"意味着用户每次开应用
  * 都被同一张、且没有任何可执行动作的警示卡拦一次——那是对注意力的无意义
  * 消耗。反过来，新出现的劣化是事件而不是稳态，签名一变卡片自然重现一次，
- * 该打扰的时候仍然打扰。
+ * 该打扰的时候仍然打扰。关掉之后它是从四态候选里退出、把这个卡槽让给
+ * blocked/train，而不是把卡槽本身清空——否则一次永久关闭会连带永久压掉
+ * 更新贴纸和"必须更新壳"的阻塞卡。
  */
 const DISMISSED_TRAIN_UPDATE_KEY = 'hana-sidebar-train-update-dismissed-key';
 const DISMISSED_META_RECOVERY_KEY = 'hana-sidebar-meta-recovery-dismissed-key';
@@ -96,11 +98,13 @@ function trainNoticeKey(available: { version: string } | null): string | null {
  * 但 reasons 为空时退回常量 'degraded'——空字符串会被"已存键 === 当前签名"
  * 的比较读成"没关过"，那样卡片会立刻回来。reasons 来自 /api/health 的原样
  * 转发（没有做形状校验），所以这里按运行时真相判断是不是数组，不信类型。
+ * 两段各自 encodeURIComponent 之后再拼：detail 里本来就可能出现路径或错误
+ * 文本，含 `:` 或 `|` 时不做转义会让不同的集合撞出同一个签名。
  */
 function metaRecoverySignature(metaRecovery: SessionMetaRecoveryStatus | null | undefined): string | null {
   if (!metaRecovery?.degraded) return null;
   const parts = (Array.isArray(metaRecovery.reasons) ? metaRecovery.reasons : [])
-    .map((r) => `${r?.kind ?? ''}:${r?.detail || ''}`)
+    .map((r) => `${encodeURIComponent(r?.kind ?? '')}:${encodeURIComponent(r?.detail ?? '')}`)
     .sort();
   return parts.join('|') || 'degraded';
 }
@@ -251,6 +255,12 @@ export function SidebarUpdateNoticeCard({
     setTrainDismissedKey(readDismissedKey(resolvedStorage, DISMISSED_TRAIN_UPDATE_KEY));
   }, [trainKey, resolvedStorage]);
 
+  // 已关掉的劣化态在四态选择之前就退出候选，而不是选中之后再把整张卡片
+  // return 掉：通知位只有一张卡，meta-recovery 又排在 blocked/train 前面，
+  // 选中后再隐藏等于让一次永久关闭把更新贴纸和"必须更新壳"的阻塞卡一起
+  // 永久压掉。让位给下一个候选才是这次关闭该有的射程。
+  const activeMetaRecovery = metaRecoveryKey && metaRecoveryDismissedKey === metaRecoveryKey ? null : metaRecovery;
+
   // Resolve translated content during every subscribed render. useI18n owns
   // the locale subscription, so startup loading and runtime language changes
   // cannot leave a module-level or memoized translation frozen in the card.
@@ -260,12 +270,11 @@ export function SidebarUpdateNoticeCard({
     phase,
     progress,
     fallbackNotice,
-    metaRecovery,
+    metaRecovery: activeMetaRecovery,
     translate: t,
   });
 
   if (!content) return null;
-  if (content.kind === 'meta-recovery' && metaRecoveryKey && metaRecoveryDismissedKey === metaRecoveryKey) return null;
   if (content.kind === 'blocked' && blockedDismissed) return null;
   if (content.kind === 'train' && trainKey && trainDismissedKey === trainKey) return null;
 

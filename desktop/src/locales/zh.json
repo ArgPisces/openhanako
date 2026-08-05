@@ -161,7 +161,7 @@
     "searchFailed": "搜索失败",
     "metaRecoveryNoticeTitle": "部分会话待恢复",
     "metaRecoveryNoticeBody": "检测到会话元数据异常，历史正文仍保存在磁盘上，受影响的会话属性可能暂缺",
-    "metaRecoveryEmpty": "部分会话的元数据待恢复，正文仍保存在磁盘上",
+    "metaRecoveryEmpty": "会话列表暂时无法完整显示，正文仍保存在磁盘上",
     "view": {
       "time": "按时间排序",
       "project": "按项目排序",

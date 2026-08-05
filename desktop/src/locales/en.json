@@ -161,7 +161,7 @@
     "searchFailed": "Search failed",
     "metaRecoveryNoticeTitle": "Some chats need recovery",
     "metaRecoveryNoticeBody": "Session metadata looks damaged. Chat content is still saved on disk, but some session details may be temporarily missing",
-    "metaRecoveryEmpty": "Metadata for some chats is pending recovery; the chats themselves are still saved on disk",
+    "metaRecoveryEmpty": "The chat list can't fully load right now. Your chats are still saved on disk",
     "view": {
       "time": "Sort by time",
       "project": "Sort by project",
