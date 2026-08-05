@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:67a03699e52849aba211a31a5b07cc9c901e68b7141968e7a832f1d77daae2ab",
+  "payloadFingerprint": "sha256:1f2766eadd748d7e5db3730f7cb4fcbc0ac444b62e63a2e9a4f46167fcf28ed4",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Source-hash refresh only: the MCP manager app-facing calls (resource read, app tool call, tool refresh) now run the same enabled-switch and on-demand-start checks the tool call path already ran, plus an in-memory counter of tool listings. No stored schema, field, or write primitive changed.",
-    "payloadFingerprint": "sha256:67a03699e52849aba211a31a5b07cc9c901e68b7141968e7a832f1d77daae2ab"
+    "compatibilityReason": "Source-hash refresh only: the MCP manager tidies its in-memory tool-listing counter alongside the sibling per-connector state on stop, removal, and dispose. No stored schema, field, or write primitive changed.",
+    "payloadFingerprint": "sha256:1f2766eadd748d7e5db3730f7cb4fcbc0ac444b62e63a2e9a4f46167fcf28ed4"
   },
   "schemas": [
     {
@@ -3421,7 +3421,7 @@
       "contract": "normalizeMcpConfig read-time normalization (servers/connectors alias, auth and OAuth field defaults, per-connector permission policy defaults, deferred-loading defaults)",
       "kind": "runtime-contract",
       "module": "core/mcp/manager.ts",
-      "sourceHash": "sha256:689dca295da5fc877ae4bce7543e2cd1a92ddfe7b2553d4484dda91797ad20c3",
+      "sourceHash": "sha256:cbd5857f080b687f62e61aa43f046cc9d2b8122e40f1d9711237738ec237304c",
       "storeId": "mcp-config"
     },
     {
