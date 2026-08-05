@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:3d1967e51c93f85db08a7b5b5ae4536df063fc3b4070517c20333e98dce7f241",
+  "payloadFingerprint": "sha256:8b7621661545990bfbac41b19312388222a74f4b616bc7b0eaf66050e66f04db",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "MCP connectors gain a persisted `enabled` boolean (read-time default true, so configs written before the field stay fully usable without migration) with `autoStart` mirrored to the same value on write for downgrade safety. No field is removed or reinterpreted destructively: old readers see a truthy autoStart matching current intent, new readers treat absence as enabled.",
-    "payloadFingerprint": "sha256:3d1967e51c93f85db08a7b5b5ae4536df063fc3b4070517c20333e98dce7f241"
+    "compatibilityReason": "Source-hash refresh only: the agent switch error in the agent manager now carries a code and status for route classification. No persisted schema, field, or write primitive changed.",
+    "payloadFingerprint": "sha256:8b7621661545990bfbac41b19312388222a74f4b616bc7b0eaf66050e66f04db"
   },
   "schemas": [
     {
@@ -3201,7 +3201,7 @@
       "contract": "agent config and authored Markdown/image profile protocol",
       "kind": "directory-contract",
       "module": "core/agent-manager.ts",
-      "sourceHash": "sha256:1eb1515b94791b6ebaab1adbe7551ccbc754c05b04991f9ce9025d145c456c46",
+      "sourceHash": "sha256:a1f883d4596d7fd7abb1ceab44c099deb152351421511933436b765441a4dff2",
       "storeId": "agent-profile"
     },
     {
