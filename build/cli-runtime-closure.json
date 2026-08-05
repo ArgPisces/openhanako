@@ -51716,7 +51716,7 @@
       "reason": "nft-runtime-trace via nft-server-bundle (see roots[] for the full explanation)"
     },
     {
-      "path": "node_modules/@firecrawl/anydoc-darwin-arm64/package.json",
+      "path": "node_modules/@firecrawl/anydoc-<platform>/package.json",
       "inputType": "nft-runtime-trace",
       "provenance": [
         {
