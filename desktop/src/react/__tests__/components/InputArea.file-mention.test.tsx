@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   editorJson: undefined as undefined | JSONContent,
   editorState: undefined as undefined | EditorState,
   updateHandler: undefined as undefined | (() => void),
-  searchDeskFiles: vi.fn(async (): Promise<DeskSearchResult[]> => []),
+  searchDeskFiles: vi.fn(async (_query: string): Promise<DeskSearchResult[]> => []),
   mentionMenuProps: undefined as undefined | {
     items: Array<{ source?: string; name: string }>;
     busy: boolean;
@@ -131,7 +131,7 @@ vi.mock('../../stores/session-actions', () => ({
 
 vi.mock('../../stores/desk-actions', () => ({
   loadDeskFiles: vi.fn(),
-  searchDeskFiles: (...args: unknown[]) => mocks.searchDeskFiles(...args),
+  searchDeskFiles: (query: string) => mocks.searchDeskFiles(query),
   toggleJianSidebar: vi.fn(),
 }));
 
