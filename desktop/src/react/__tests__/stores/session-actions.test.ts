@@ -2567,5 +2567,49 @@ function mockPermissionDefault(mode = 'ask') {
       const capabilityError = (mockState.inlineErrors as Record<string, InlineErrorEntry | null>)[target];
       expect(capabilityError?.text).toContain('already compacting');
     });
+
+    it('嵌套形状不渲染 [object Object]，错误码照样透传', async () => {
+      const copy: Record<string, string> = {
+        'input.refreshAndCompactFailed': 'Refresh failed',
+        'error.code.unexpected': 'Something went wrong',
+        'error.code.sessionBusy': '这个会话正忙，等当前操作结束',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
+      mockFetch.mockResolvedValueOnce(jsonResponse({
+        error: { code: 'session_busy', message: 'session is busy', traceId: 't-3' },
+      }, false));
+
+      const ok = await refreshSessionCapabilities(target);
+
+      expect(ok).toBe(false);
+      const capabilityError = (mockState.inlineErrors as Record<string, InlineErrorEntry | null>)[target];
+      expect(capabilityError?.text).not.toContain('[object Object]');
+      expect(capabilityError?.text).toBe('Refresh failed: 这个会话正忙，等当前操作结束');
+      expect(capabilityError?.code).toBe('session_busy');
+    });
+  });
+
+  describe('continueDeletedAgentSession 的错误呈现', () => {
+    it('嵌套形状不渲染 [object Object]，toast 带上错误码', async () => {
+      const copy: Record<string, string> = {
+        'session.deletedAgent.continueFailed': 'Continue failed',
+        'error.code.unexpected': 'Something went wrong',
+        'error.code.sessionBusy': '这个会话正忙，等当前操作结束',
+      };
+      (globalThis.window as unknown as { t: (key: string) => string }).t = (key: string) => copy[key] ?? key;
+      mockFetch.mockResolvedValueOnce(jsonResponse({
+        error: { code: 'session_busy', message: 'session is busy', traceId: 't-4' },
+      }, false));
+
+      const ok = await continueDeletedAgentSession('/session/deleted.jsonl');
+
+      expect(ok).toBe(false);
+      const toastCalls = (mockState.addToast as ReturnType<typeof vi.fn>).mock.calls;
+      const failureToast = toastCalls.find(call => String(call[0]).startsWith('Continue failed'));
+      expect(failureToast).toBeDefined();
+      expect(String(failureToast?.[0])).not.toContain('[object Object]');
+      expect(failureToast?.[0]).toBe('Continue failed: 这个会话正忙，等当前操作结束');
+      expect(failureToast?.[3]).toEqual({ errorCode: 'session_busy' });
+    });
   });
 });

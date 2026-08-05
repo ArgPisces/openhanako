@@ -23,6 +23,9 @@ export const ERROR_CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = Object.
   workflow_node_busy: 'error.code.workflowNodeBusy',
 
   // 会话生命周期：新建 / 切换 / 删除
+  // session_create_failed 是建会话路由在"有 status 没 code"时合成的兜底码，
+  // 它会真的出现在响应体里，所以这里必须有文案，不能让它掉进 UNKNOWN。
+  session_create_failed: 'error.code.sessionCreateFailed',
   session_busy: 'error.code.sessionBusy',
   session_not_loaded: 'error.code.sessionNotLoaded',
   session_identity_conflict: 'error.code.sessionIdentityConflict',
@@ -92,6 +95,9 @@ export function errorCodeFromResponseBody(body: unknown): string | null {
  * 顶层 `app.onError` 时会被包成嵌套的 `{ error: { code, message, traceId } }`。
  * 调用方只认扁平形状的话，嵌套形状会被 String() 成 "[object Object]" 显示给用户，
  * 错误码也一并丢掉。这里两种都读，调用方不必关心自己撞上了哪一种。
+ *
+ * session-actions 里新增的错误展示点一律先过这个归一化，再交给呈现层；
+ * 直接读 data.error 的写法会在嵌套形状上退化成 "[object Object]"。
  */
 export function normalizeSessionRouteError(body: unknown): { message: string; code: string | null } {
   if (!body || typeof body !== 'object') return { message: '', code: null };

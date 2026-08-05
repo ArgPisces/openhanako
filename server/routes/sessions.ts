@@ -2799,4 +2799,6 @@ function sessionFileLifecycleFields(file, engine) {
 }
 
 // 仅供测试使用的内部函数出口；生产调用一律走 route handler。
+// 这个出口跟 classifySessionCreationError 的文案正则兜底同生共死：它存在的唯一理由
+// 是让那段兜底可被直接测到。兜底删除之日，这个出口一并删除，不要往里加第二个成员。
 export const __testables = { classifySessionCreationError };

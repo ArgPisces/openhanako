@@ -123,3 +123,11 @@ describe('error-user-messages · normalizeSessionRouteError', () => {
     expect(normalizeSessionRouteError({ error: { traceId: 't-2' } })).toEqual({ message: '', code: null });
   });
 });
+
+describe('error-user-messages · session_create_failed', () => {
+  it('maps the synthetic fallback code the create route stamps on coded failures', () => {
+    // sessions.ts 的 classifySessionCreationError 在 err 带 status 但没带 code 时
+    // 会合成这个码，它会真的出现在响应体里，所以必须有文案，不能落到兜底。
+    expect(userMessageKeyForCode('session_create_failed')).toBe('error.code.sessionCreateFailed');
+  });
+});

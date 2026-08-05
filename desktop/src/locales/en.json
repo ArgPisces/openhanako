@@ -3105,6 +3105,7 @@
       "subagentThreadBusy": "The subagent thread is busy. Try again shortly.",
       "workflowRunBusy": "The workflow is still running. Wait for it to finish.",
       "workflowNodeBusy": "That workflow node is busy. Try again shortly.",
+      "sessionCreateFailed": "Creating the session did not succeed. Try again shortly, and check your model and credentials in settings if it keeps happening.",
       "sessionBusy": "This session is busy. Wait for the current operation to finish.",
       "sessionNotLoaded": "The session has not finished loading. Try again shortly.",
       "sessionIdentityConflict": "The session identity does not match. Refresh and try again.",

@@ -3099,6 +3099,7 @@
       "subagentThreadBusy": "subagent 執行緒正忙，稍候再試",
       "workflowRunBusy": "工作流程還在執行，等它結束再試",
       "workflowNodeBusy": "工作流程節點正忙，稍候再試",
+      "sessionCreateFailed": "新建工作階段沒有成功，稍後重試；反覆出現就看一下設定裡的模型與憑證",
       "sessionBusy": "這個工作階段正忙，等目前的操作結束再試",
       "sessionNotLoaded": "工作階段還沒載入完成，稍候再試",
       "sessionIdentityConflict": "工作階段身分對不上，重新整理後再試",

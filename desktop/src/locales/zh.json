@@ -3100,6 +3100,7 @@
       "subagentThreadBusy": "subagent 线程正忙，稍候再试",
       "workflowRunBusy": "工作流还在运行，等它结束再试",
       "workflowNodeBusy": "工作流节点正忙，稍候再试",
+      "sessionCreateFailed": "新建会话没有成功，稍后重试；反复出现就看一下设置里的模型与凭证",
       "sessionBusy": "这个会话正忙，等当前操作结束再试",
       "sessionNotLoaded": "会话还没加载完成，稍候再试",
       "sessionIdentityConflict": "会话身份对不上，刷新一下再试",

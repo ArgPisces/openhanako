@@ -21,7 +21,7 @@ import { browserStateForPath, setBrowserStateForPath } from './browser-slice';
 import { computerOverlayForSession } from './computer-overlay-slice';
 import { snapshotStreamBuffer, type StreamBufferSnapshot } from './stream-invalidator';
 import { errorWithCode, presentError, presentErrorWithLabel } from '../errors/error-presenter';
-import { errorCodeFromResponseBody, normalizeSessionRouteError } from '../../../../shared/error-user-messages.ts';
+import { normalizeSessionRouteError } from '../../../../shared/error-user-messages.ts';
 import { renderMarkdown } from '../utils/markdown';
 import type { ChatMessage, ContentBlock } from './chat-types';
 import { readMessageLiveVersion } from './message-live-version';
@@ -1266,9 +1266,15 @@ export async function continueDeletedAgentSession(path: string): Promise<boolean
     });
     const data = await res.json();
     if (!res.ok || data.error || !data.path) {
-      const message = data.error || res.statusText || 'continue failed';
-      console.error('[session] continue deleted-agent session failed:', message);
-      useStore.getState().addToast(`${tr('session.deletedAgent.continueFailed')}: ${message}`, 'error', 6000);
+      const routeError = normalizeSessionRouteError(data);
+      const message = routeError.message || res.statusText || 'continue failed';
+      console.error('[session] continue deleted-agent session failed:', message, routeError.code || '');
+      // 跟下面 catch 分支同一套呈现：错误码翻成人话，原始英文留在详情，toast 带码。
+      const entry = presentErrorWithLabel(
+        tr('session.deletedAgent.continueFailed'),
+        errorWithCode(message, routeError.code),
+      );
+      useStore.getState().addToast(entry.text, 'error', 6000, entry.code ? { errorCode: entry.code } : undefined);
       return false;
     }
 
@@ -1571,7 +1577,8 @@ export async function refreshSessionCapabilities(path: string): Promise<boolean>
     });
     const data = await res.json();
     if (!res.ok || data.error) {
-      throw errorWithCode(String(data.error || res.statusText), errorCodeFromResponseBody(data));
+      const routeError = normalizeSessionRouteError(data);
+      throw errorWithCode(routeError.message || res.statusText, routeError.code);
     }
     await loadMessages(path);
     return true;
