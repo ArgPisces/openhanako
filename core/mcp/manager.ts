@@ -624,6 +624,12 @@ function statusConnectorView(connector) {
     authType: connector.authType,
     authStatus: connector.authStatus,
     toolCount: Array.isArray(connector.tools) ? connector.tools.length : 0,
+    // toolCount counts what the connector is configured with, so a dropped
+    // tool leaves the agent looking at a healthy connector whose tool is
+    // nowhere to be found — indistinguishable from a server that never
+    // offered it. Carrying the same entries the settings page shows lets the
+    // agent name the clash instead of guessing at an absence.
+    collisions: Array.isArray(connector.collisions) ? connector.collisions : [],
   };
 }
 

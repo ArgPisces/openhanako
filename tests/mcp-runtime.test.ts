@@ -2313,6 +2313,41 @@ describe("MCP canonical tool id collisions", () => {
     expect(runtime.getAllTools().map((tool) => tool.name)).toContain("mcp_tusharemcp_daily_basic");
   });
 
+  it("tells the agent through connectors_status which tools were dropped and why", async () => {
+    const { runtime } = runtimeWithConnectors([{
+      id: "tushareMcp",
+      name: "Tushare",
+      url: "https://one.example.test",
+      tools: [{ name: "moneyflow_hsgt" }, { name: "moneyflow_hsgt_备份" }, { name: "daily_basic" }],
+    }]);
+    runtime.registerCachedTools();
+
+    const statusTool = runtime.getAllTools().find((tool) => tool.name === "mcp_connectors_status");
+    const result = await statusTool.execute("call-1", {}, { agentId: "hana" });
+    const payload = JSON.parse(result.content[0].text);
+
+    // Without this the agent's own diagnostic shows a connector in perfect
+    // health while two of its tools are simply not there, which reads as the
+    // server never having offered them.
+    expect(payload.connectors[0].collisions).toEqual([
+      {
+        canonical: "tusharemcp_moneyflow_hsgt",
+        toolName: "moneyflow_hsgt",
+        otherConnectorId: "tushareMcp",
+        otherToolName: "moneyflow_hsgt_备份",
+      },
+      {
+        canonical: "tusharemcp_moneyflow_hsgt",
+        toolName: "moneyflow_hsgt_备份",
+        otherConnectorId: "tushareMcp",
+        otherToolName: "moneyflow_hsgt",
+      },
+    ]);
+    // The count still describes the configured list, so the two numbers only
+    // agree once the collision is fixed.
+    expect(payload.connectors[0].toolCount).toBe(3);
+  });
+
   it("rejects an added id whose sanitized form collides with an existing connector", () => {
     const { runtime, set } = runtimeWithConnectors([
       { id: "Tushare", url: "https://one.example.test", tools: [] },
