@@ -455,15 +455,16 @@ export class ConfigCoordinator {
     if (ag) ag.setMemoryMasterEnabled(val);
   }
 
-  persistSessionMeta() {
-    const session = this._d.getSession();
-    const sessPath = session?.sessionManager?.getSessionFile?.();
-    if (!sessPath) return;
+  // sessionPath 必传：这个函数曾经从全局焦点指针读要写哪个 session，而新建
+  // 分离会话的路径会在创建结束时把焦点还给上一个会话，于是新会话的记忆开关
+  // 被写到了上一个会话头上。要写哪个 session 只能由调用方显式说明。
+  persistSessionMeta(sessionPath) {
+    if (!sessionPath) throw new Error("persistSessionMeta: sessionPath is required");
     const sessionCoord = this._d.getSessionCoordinator();
     const memoryEnabled = typeof sessionCoord?.getSessionMemoryEnabled === "function"
-      ? sessionCoord.getSessionMemoryEnabled(sessPath)
+      ? sessionCoord.getSessionMemoryEnabled(sessionPath)
       : this._d.getAgent().sessionMemoryEnabled;
-    return sessionCoord.writeSessionMeta(sessPath, {
+    return sessionCoord.writeSessionMeta(sessionPath, {
       // session-meta 持久化的是 session 自身冻结下来的记忆参与态，
       // 不能写 master && session 的临时组合态，否则会把运行时 gate
       // 错写成 session 身份，打穿 prefix cache 前提。

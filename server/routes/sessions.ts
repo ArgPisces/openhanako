@@ -2080,7 +2080,7 @@ export function createSessionsRoute(engine, hub = null) {
           createOptions,
         ));
       }
-      engine.persistSessionMeta();
+      engine.persistSessionMeta(newSessionPath);
       if (projectId && typeof engine.setSessionProjectAssignment === "function") {
         await engine.setSessionProjectAssignment({ sessionPath: newSessionPath, projectId });
       }
@@ -2178,7 +2178,7 @@ export function createSessionsRoute(engine, hub = null) {
       const newSessionPath = result.sessionPath;
       const newAgentId = result.agentId;
       const newSessionId = result.sessionId || engine.getSessionIdForPath?.(newSessionPath) || null;
-      engine.persistSessionMeta?.();
+      engine.persistSessionMeta?.(newSessionPath);
       if (projectId && typeof engine.setSessionProjectAssignment === "function") {
         await engine.setSessionProjectAssignment({ sessionPath: newSessionPath, projectId });
       }

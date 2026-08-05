@@ -2048,7 +2048,7 @@ export class HanaEngine {
   setKeepAwake(v) { this._prefs.setKeepAwake(v); }
   setMemoryEnabled(v) { return this._configCoord.setMemoryEnabled(v); }
   setMemoryMasterEnabled(id, v) { return this._configCoord.setMemoryMasterEnabled(id, v); }
-  persistSessionMeta() { return this._configCoord.persistSessionMeta(); }
+  persistSessionMeta(sessionPath) { return this._configCoord.persistSessionMeta(sessionPath); }
   get permissionMode() { return this._sessionCoord.getPermissionMode(); }
   getSessionPermissionMode(sessionPath) { return this._sessionCoord.getPermissionMode(sessionPath); }
   setSessionPermissionMode(mode) { return this._sessionCoord.setPermissionMode(mode); }

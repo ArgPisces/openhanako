@@ -489,6 +489,8 @@ describe("sessions route", () => {
     );
     expect(data.workspaceFolders).toEqual([extra]);
     expect(data.sessionId).toBe("sess_route_new");
+    // session meta 必须显式落到刚建出来的会话上，而不是由被调方去猜焦点
+    expect(engine.persistSessionMeta).toHaveBeenCalledWith("/tmp/agents/hana/sessions/new.jsonl");
     expect(hub.eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "session_created",
@@ -668,6 +670,10 @@ describe("sessions route", () => {
       sessionPath: "/tmp/agents/hana/sessions/quick.jsonl",
       projectId: "project-quick",
     });
+    // 回归钉子：detached 创建结束时焦点已经还给 focused.jsonl，
+    // 读焦点的旧实现会把新会话的记忆开关写到上一个会话头上。
+    expect(engine.persistSessionMeta).toHaveBeenCalledWith("/tmp/agents/hana/sessions/quick.jsonl");
+    expect(engine.persistSessionMeta).not.toHaveBeenCalledWith("/tmp/agents/hana/sessions/focused.jsonl");
     expect(data).toMatchObject({
       ok: true,
       path: "/tmp/agents/hana/sessions/quick.jsonl",
