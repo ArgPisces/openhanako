@@ -16,9 +16,11 @@ describe("chat.ts ws identity fence", () => {
   const FENCE_HINT = "身份解析已收口到 resolveWsSessionContext：消费 ctx 的字段，不要另开一条身份通道";
 
   it("handlers never read the client's agent id off the raw message", () => {
-    // 覆盖点号、可选链和两种下标写法，绕开一种就等于绕开了整道围栏。
+    // 覆盖点号、可选链、两种下标写法，外加解构——解构是善意贡献者最容易自然写出的
+    // 绕行拼法。绕开一种就等于绕开了整道围栏。
     const rawAgentIdRead = /\bmsg\s*\??\.\s*agentId\b|\bmsg\s*(?:\?\.)?\s*\[\s*(['"])agentId\1\s*\]/;
-    const hit = source.match(rawAgentIdRead);
+    const destructuredRead = /\{[^}]*\bagentId\b[^}]*\}\s*=\s*msg\b/;
+    const hit = source.match(rawAgentIdRead) || source.match(destructuredRead);
     expect(
       hit,
       `chat.ts 出现了直读客户端 agentId 的写法（${hit?.[0]}）。${FENCE_HINT}`,
