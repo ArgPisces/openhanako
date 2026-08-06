@@ -16,16 +16,22 @@ function cssBlock(css: string, selector: string): string {
 }
 
 describe('SessionList streaming dot animation', () => {
-  it('does not use infinite pulse on running or pending dots', () => {
+  it('does not use infinite pulse on the running dot', () => {
     const css = readCss();
 
     const running = cssBlock(css, '.sessionStreamingDot[data-state="running"]');
-    const pending = cssBlock(css, '.sessionStreamingDot[data-state="pending"]');
 
     expect(running.length).toBeGreaterThan(0);
-    expect(pending.length).toBeGreaterThan(0);
     expect(running).not.toMatch(/\binfinite\b/);
-    expect(pending).not.toMatch(/\binfinite\b/);
+  });
+
+  // 会话切换是本地毫秒级操作，任何加载态装饰都只会一闪而过。
+  // 竖线和借来的状态点都已移除，这里守住不让它们回来。
+  it('carries no loading decoration for a pending session switch', () => {
+    const css = readCss();
+
+    expect(css).not.toMatch(/\[data-state="pending"\]/);
+    expect(css).not.toMatch(/\.sessionItemPending\b/);
   });
 
   it('keeps reduced-motion path disabling streaming-dot animation', () => {
