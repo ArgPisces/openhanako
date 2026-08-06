@@ -3,6 +3,182 @@
   "entries": [
     {
       "schemaVersion": 1,
+      "tag": "v0.443.54",
+      "version": "0.443.54",
+      "previousTag": "v0.443.46",
+      "generatedAt": "2026-08-06T08:59:44.000Z",
+      "noUserFacingChanges": false,
+      "summary": {
+        "zh": "这一版全是修复。最该知道的一条：输入框里打 @ 找工作区文件，上一版起候选列表是空的，怎么打都出不来——这是上个版本做音频附件时把输入框的搜索生命周期一起删掉了，现在恢复了，输入关键词也会照常异步搜。Bridge 那边修了两个：一是外部渠道（Telegram、微信这些）收到的回复里，如果助手说完一段话去调了个你看不见的工具再接着说，两段话以前会被直接粘成一句，现在中间会留出段落分隔；二是定时任务通过 Bridge 给你发主动消息失败时，以前不管什么原因都只报一句笼统的「没有可用的投递目标」，现在会分清是微信当下没有可回复的上下文、目标本身缺失、连接断了，还是发送本身失败了，排查时不用再靠猜。会话这边，带 UTF-8 BOM 的老会话元数据文件以前会被当成损坏的 JSON 跳过，而且这个判决还被记进账本、重启后继续沿用，等于永久丢掉那些会话的置顶、权限这类旧属性；现在 BOM 会被正确剥掉，并且升级后会把旧账本里这类误判重新验一次，真正损坏的文件才会继续跳过。最后有一处视觉取舍需要留意：会话列表里「运行中」「排队中」的小圆点不再持续呼吸闪烁，改成固定亮度区分状态——那个无限循环的透明度动画会让合成器一直忙着，在走软件渲染的机器上尤其明显。",
+        "en": "This release is all fixes. The one most worth knowing: typing @ in the input box to find workspace files returned an empty list since the previous release, no matter what you typed. The audio-attachment work had removed the input box's search lifecycle along with it; that is restored, and typing a query searches asynchronously again. Two Bridge fixes: first, in replies delivered to external channels such as Telegram and WeChat, when the assistant finished a paragraph, called a tool you cannot see, then kept writing, the two paragraphs used to be glued into one sentence, and now a paragraph break is kept between them; second, when a scheduled task failed to reach you through Bridge, every cause used to surface as one vague \"no delivery target available\", and it now tells apart a WeChat session with no reply context available right now, a genuinely missing target, a disconnected bridge, and a send that itself failed, so diagnosis no longer runs on guesswork. On the session side, legacy session metadata files carrying a UTF-8 BOM were treated as corrupt JSON and skipped, and that verdict was written into a ledger and reused across restarts, permanently losing those sessions' pinned state, permissions and other legacy attributes. The BOM is now stripped correctly, and upgrading revalidates those cached verdicts once so that only genuinely corrupt files stay skipped. Finally, one visual trade-off to note: the running and pending dots in the session list no longer pulse continuously and use a fixed brightness to tell the two states apart, because that infinite opacity animation kept the compositor busy, most noticeably on machines falling back to software rendering."
+      },
+      "counts": {
+        "feature": 0,
+        "fix": 4,
+        "improvement": 1,
+        "migration": 0
+      },
+      "source": {
+        "owner": "liliMozi",
+        "repo": "openhanako",
+        "commitRange": "v0.443.46..v0.443.54",
+        "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.443.54",
+        "releaseNotes": ""
+      },
+      "items": [
+        {
+          "id": "workspace-mention-search-restored",
+          "kind": "fix",
+          "importance": "high",
+          "title": {
+            "zh": "输入框 @ 提及工作区文件恢复可用",
+            "en": "The @ mention menu finds workspace files again"
+          },
+          "summary": {
+            "zh": "在输入框打 @ 想引用工作区里的文件时，候选列表一直是空的，输入关键词也搜不出任何东西。原因是上一轮做音频附件时，连带把输入框里负责发起和收尾这次搜索的那段逻辑删掉了，搜索结果永远停在空数组。现在这段生命周期回来了，打开菜单能看到工作区候选，继续输入会照常异步搜索。",
+            "en": "Typing @ in the input box to reference a workspace file left the candidate list empty, and typing a query surfaced nothing either. The audio-attachment work had removed the part of the input box that starts and finishes that search, so the result list stayed permanently empty. That lifecycle is back: opening the menu shows workspace candidates, and typing keeps searching asynchronously."
+          },
+          "details": [
+            {
+              "zh": "只影响输入框的 @ 文件提及菜单，工作区本身的文件索引没有变化。",
+              "en": "Only the input box's @ file-mention menu was affected; the workspace file index itself never changed."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "2850ed8ee",
+              "title": "fix(desktop): restore workspace @-mention async search"
+            },
+            {
+              "type": "commit",
+              "ref": "061dcf313",
+              "title": "fix(desktop): align the desk search mock with the real searchDeskFiles signature"
+            }
+          ]
+        },
+        {
+          "id": "bridge-paragraph-breaks",
+          "kind": "fix",
+          "importance": "medium",
+          "title": {
+            "zh": "外部渠道的回复不再把隐藏工具前后的段落粘成一句",
+            "en": "External replies keep paragraph breaks around hidden tool calls"
+          },
+          "summary": {
+            "zh": "助手在回答中途调用工具时，工具本身对外部渠道是隐藏的。以前只把工具前后的文字直接首尾相接，于是 Telegram、微信这类渠道收到的就是两段话被硬拼成一句、中间没有任何断开。现在两段散文之间会补上段落边界，读起来和桌面端一致。",
+            "en": "When the assistant calls a tool mid-answer, the tool itself is hidden from external channels. The text before and after it used to be concatenated end to end, so Telegram, WeChat and similar channels received two paragraphs welded into one sentence with no break at all. A paragraph boundary is now inserted between the two prose segments, matching how it reads on the desktop."
+          },
+          "details": [
+            {
+              "zh": "受影响的是所有走 Bridge 外发的文本：外部消息回复、遥控镜像、以及从外部触发的桌面会话所捕获的文本。",
+              "en": "This covers every text path going out through Bridge: external message replies, the remote-control mirror, and text captured from desktop sessions triggered externally."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "ee3227bd2",
+              "title": "fix(bridge): keep paragraph breaks across hidden tool calls"
+            }
+          ]
+        },
+        {
+          "id": "bridge-proactive-failure-reasons",
+          "kind": "fix",
+          "importance": "medium",
+          "title": {
+            "zh": "主动消息发送失败会说清楚是哪一种失败",
+            "en": "Proactive delivery failures name the actual reason"
+          },
+          "summary": {
+            "zh": "定时任务通过 Bridge 主动给你发消息时，只要没发出去，以前一律报「没有可用的投递目标」这一句，把完全不同的原因压成同一个说法——最常见的其实是微信这类渠道当下没有可回复的上下文，跟真的没配目标是两回事。现在会区分「当下没有可回复的上下文」「目标缺失」「连接已断开」「发送本身失败」四种情况，并把具体渠道的投递结果一并带出来。",
+            "en": "When a scheduled task pushed a message to you through Bridge and it did not go out, every cause used to collapse into the single sentence \"no delivery target available\", which hid genuinely different problems. The most common one is that a channel like WeChat has no reply context available at that moment, which is not the same as having no target configured. Failures now distinguish reply-context-unavailable, target-missing, disconnected and send-failed, and carry the per-channel delivery results along with them."
+          },
+          "details": [
+            {
+              "zh": "同时修正了发送接口的文档：失败时返回的是带原因的结构化结果，而不是文档里写的空值。",
+              "en": "The send API's documentation was corrected at the same time: a failure returns a structured result carrying the reason, not the null value the docs claimed."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "0ef9a77a2",
+              "title": "fix(bridge): distinguish proactive delivery failure reasons"
+            },
+            {
+              "type": "commit",
+              "ref": "4c0900a2d",
+              "title": "fix(bridge): document and test send_failed proactive results"
+            }
+          ]
+        },
+        {
+          "id": "legacy-session-bom-meta",
+          "kind": "fix",
+          "importance": "medium",
+          "title": {
+            "zh": "带 BOM 的老会话元数据不再被误判为损坏并永久跳过",
+            "en": "Legacy session metadata with a BOM is no longer written off as corrupt"
+          },
+          "summary": {
+            "zh": "旧版本的会话元数据文件如果带 UTF-8 BOM（某些编辑器保存时会加上这个不可见标记），读取时会被当成 JSON 解析失败而跳过。更麻烦的是这个「判损坏」的结论会被记进跳过账本，重启后直接沿用、不再重读，等于这些会话的置顶、权限、执行器等旧属性被永久丢掉，而且过程是静默的。现在读取会先剥掉 BOM；升级到这一版后，账本里由旧读取逻辑留下的这类判决会被重新验一次，真正损坏的文件重验失败后才会继续跳过。",
+            "en": "Legacy session metadata files carrying a UTF-8 BOM, an invisible marker some editors add when saving, failed JSON parsing and were skipped. Worse, that corrupt verdict was recorded in a skip ledger and reused after every restart without rereading, so those sessions' pinned state, permissions, executor and other legacy attributes were lost for good, and silently. Reads now strip the BOM first, and upgrading to this version revalidates the verdicts the old reader left behind, so only files that genuinely fail on the second read stay skipped."
+          },
+          "details": [
+            {
+              "zh": "重验只针对「解析失败」这一类判决，文件过大的跳过判决不参与，行为不变。",
+              "en": "Only parse-failure verdicts are revalidated; skips caused by an oversized file are untouched and behave as before."
+            },
+            {
+              "zh": "受影响的还有恢复提示：以前被误判跳过的文件会出现在提示里，现在这类误报会随重验消失。",
+              "en": "Recovery notices are affected too: files that had been falsely skipped used to show up there, and those false reports clear as the revalidation runs."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "677d8a6db",
+              "title": "fix(session): accept BOM JSON and revalidate parse_error ledger"
+            },
+            {
+              "type": "commit",
+              "ref": "afa54cbe7",
+              "title": "chore(build): refresh receipts for the bridge accumulator and ledger reader changes"
+            }
+          ]
+        },
+        {
+          "id": "session-list-dot-static-cue",
+          "kind": "improvement",
+          "importance": "low",
+          "title": {
+            "zh": "会话列表状态圆点改为固定亮度，不再持续闪烁",
+            "en": "Session list status dots use a fixed brightness instead of pulsing"
+          },
+          "summary": {
+            "zh": "会话列表里标记「运行中」和「排队中」的小圆点原来各跑一个无限循环的透明度动画。这个动画只要有会话在跑就一直不停，会让界面合成器持续处于忙碌状态，在显卡加速不可用、退回软件渲染的机器上尤其吃资源。现在改成用固定亮度区分：运行中是全亮，排队中是半透明，状态仍然一眼可辨，但不再有呼吸闪烁的动效。",
+            "en": "The dots marking running and pending sessions each ran an infinite opacity animation. It never stopped while a session was active, keeping the UI compositor permanently busy, which is especially costly on machines where GPU acceleration is unavailable and rendering falls back to software. The two states are now told apart by a fixed brightness, fully opaque for running and semi-transparent for pending: still distinguishable at a glance, but without the pulsing motion."
+          },
+          "details": [
+            {
+              "zh": "只影响会话列表的运行中/排队中指示点，其他位置的动效没有改动。",
+              "en": "Only the session list's running and pending indicators change; motion elsewhere in the app is untouched."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "5b17ae686",
+              "title": "fix(desktop): stop infinite pulse on session streaming dots"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
       "tag": "v0.443.46",
       "version": "0.443.46",
       "previousTag": "v0.442.0",
