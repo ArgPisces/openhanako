@@ -651,6 +651,7 @@
     "shared/hana-runtime-paths.ts",
     "shared/image-mime.ts",
     "shared/input-drafts.ts",
+    "shared/internal-mood-block.ts",
     "shared/known-models.ts",
     "shared/link-aware-fs.ts",
     "shared/log-redactor.ts",

@@ -111351,6 +111351,18 @@
       "reason": "Reached via esbuild source module graph, imported by core/input-drafts-store.ts (import-statement); server/routes/input-drafts.ts (import-statement)."
     },
     {
+      "path": "shared/internal-mood-block.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "core/events.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by core/events.ts (import-statement)."
+    },
+    {
       "path": "shared/known-models.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -112837,9 +112849,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9642,
+    "totalFiles": 9643,
     "byInputType": {
-      "source-graph": 661,
+      "source-graph": 662,
       "runtime-asset": 11,
       "nft-runtime-trace": 8970
     }
