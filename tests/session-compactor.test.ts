@@ -1854,7 +1854,7 @@ describe("session-compactor", () => {
       attribution: { kind: "session", sessionPath: "/sessions/current.jsonl" },
       model: { provider: "openai", modelId: "gpt-5", api: "openai-responses" },
       usage: {
-        input: { totalTokens: 100, uncachedTokens: 20 },
+        input: { totalTokens: 100, uncachedTokens: 100 },
         output: { totalTokens: 25 },
         cache: { readTokens: 80, hit: true },
       },
