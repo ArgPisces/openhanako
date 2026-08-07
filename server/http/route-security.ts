@@ -372,6 +372,7 @@ function isSettingsReadRoute(verb, routePath) {
     || routePath === "/api/memories/health"
     || routePath === "/api/memories/compiled"
     || routePath === "/api/memories/compiled/week/days"
+    || routePath === "/api/memories/dream/status"
     || routePath === "/api/memories/export"
     || routePath === "/api/preferences/notifications"
     || routePath === "/api/preferences/computer-use"
@@ -452,7 +453,11 @@ function isSettingsWriteRoute(verb, routePath) {
       routePath === "/api/memories"
       || routePath === "/api/memories/compiled"
     ))
-    || (verb === "POST" && routePath === "/api/memories/import");
+    || (verb === "POST" && (
+      routePath === "/api/memories/import"
+      || routePath === "/api/memories/dream/runs"
+      || /^\/api\/memories\/dream\/revisions\/[^/]+\/restore$/.test(routePath)
+    ));
 }
 
 function isSkillSettingsReadRoute(verb, routePath) {

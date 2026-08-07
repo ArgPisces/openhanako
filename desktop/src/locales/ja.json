@@ -1791,6 +1791,19 @@
       "longtermSaved": "長期情報を保存しました",
       "saveDay": "この日を保存",
       "daySaved": "この日を保存しました",
+      "dream": {
+        "title": "Dream の整理",
+        "hint": "測定可能な根拠に基づいて現在の記憶を重複排除・選別・圧縮します",
+        "autoLabel": "毎日の自動 Dream（実験）",
+        "autoHint": "この Agent のみに適用。既定はオフで、論理日ごとに最大1回実行します",
+        "run": "現在の記憶を整理",
+        "running": "整理中…",
+        "restore": "Dream 前の版に戻す",
+        "restoring": "復元中…",
+        "view": "整理結果を表示",
+        "success": "{time} に完了：{before} → {after} 文字、{merged} 件を統合、{forgotten} 件を除外。",
+        "failed": "Dream に失敗しました。元の記憶は変更されていません"
+      },
       "sections": {
         "today": "今日",
         "week": "今週のこれまで",

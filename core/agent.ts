@@ -437,6 +437,7 @@ export class Agent {
           };
         },
         getMemoryMasterEnabled: () => this._memoryMasterEnabled,
+        getDreamAutoEnabled: () => this._config?.memory?.dream?.auto_enabled === true,
         isSessionMemoryEnabled: (sessionPath) => this.isSessionMemoryEnabledFor(sessionPath),
         getTimezone: () => this._cb?.getTimezone?.() || Intl.DateTimeFormat().resolvedOptions().timeZone,
         getCacheSnapshotReflectionMode: () => getResolvedExperimentValue(

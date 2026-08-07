@@ -1861,6 +1861,19 @@
       "longtermSaved": "长期情况已保存",
       "saveDay": "保存这一天",
       "daySaved": "这一天已保存",
+      "dream": {
+        "title": "Dream 整理",
+        "hint": "按客观证据去重、筛选并压缩当下记忆",
+        "autoLabel": "每日自动 Dream（实验）",
+        "autoHint": "仅对当前 Agent 生效；默认关闭，每个逻辑日最多运行一次",
+        "run": "整理当下记忆",
+        "running": "正在整理…",
+        "restore": "恢复 Dream 前版本",
+        "restoring": "正在恢复…",
+        "view": "查看整理结果",
+        "success": "{time} 完成：{before} → {after} 字符，合并 {merged} 条，筛除 {forgotten} 条。",
+        "failed": "Dream 整理失败，原记忆未改动"
+      },
       "sections": {
         "today": "今天",
         "week": "本周早些时候",

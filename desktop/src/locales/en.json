@@ -1861,6 +1861,19 @@
       "longtermSaved": "Long-term context saved",
       "saveDay": "Save this day",
       "daySaved": "Day saved",
+      "dream": {
+        "title": "Dream cleanup",
+        "hint": "Deduplicate, filter, and compress current memory using measured evidence",
+        "autoLabel": "Daily automatic Dream (experimental)",
+        "autoHint": "Applies only to this Agent; off by default and runs at most once per logical day",
+        "run": "Organize current memory",
+        "running": "Organizing…",
+        "restore": "Restore pre-Dream version",
+        "restoring": "Restoring…",
+        "view": "View result",
+        "success": "Completed {time}: {before} → {after} characters, {merged} merged, {forgotten} removed.",
+        "failed": "Dream failed; the original memory was not changed"
+      },
       "sections": {
         "today": "Today",
         "week": "Earlier this week",

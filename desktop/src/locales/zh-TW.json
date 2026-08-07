@@ -1791,6 +1791,19 @@
       "longtermSaved": "長期情況已儲存",
       "saveDay": "儲存這一天",
       "daySaved": "這一天已儲存",
+      "dream": {
+        "title": "Dream 整理",
+        "hint": "按客觀證據去重、篩選並壓縮當下記憶",
+        "autoLabel": "每日自動 Dream（實驗）",
+        "autoHint": "僅對目前 Agent 生效；預設關閉，每個邏輯日最多執行一次",
+        "run": "整理當下記憶",
+        "running": "正在整理…",
+        "restore": "恢復 Dream 前版本",
+        "restoring": "正在恢復…",
+        "view": "查看整理結果",
+        "success": "{time} 完成：{before} → {after} 字元，合併 {merged} 條，篩除 {forgotten} 條。",
+        "failed": "Dream 整理失敗，原記憶未改動"
+      },
       "sections": {
         "today": "今天",
         "week": "本週早些時候",

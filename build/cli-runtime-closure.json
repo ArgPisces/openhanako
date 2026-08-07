@@ -936,6 +936,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/memory/dream/model-runner.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/tools/install-skill.ts",
           "kind": "import-statement"
         },
@@ -975,7 +980,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/vision-bridge.ts (import-statement); core/llm-utils.ts (import-statement); lib/memory/session-summary.ts (import-statement); +10 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/vision-bridge.ts (import-statement); core/llm-utils.ts (import-statement); lib/memory/session-summary.ts (import-statement); +11 more importer(s)."
     },
     {
       "path": "core/llm-request-policy.ts",
@@ -1507,6 +1512,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/memory/dream/model-runner.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/tools/install-skill.ts",
           "kind": "import-statement"
         },
@@ -1536,7 +1546,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/approval-gateway.ts (import-statement); core/execution-router.ts (import-statement); core/model-manager.ts (import-statement); +11 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/approval-gateway.ts (import-statement); core/execution-router.ts (import-statement); core/model-manager.ts (import-statement); +12 more importer(s)."
     },
     {
       "path": "core/model-image-preprocess.ts",
@@ -5845,6 +5855,11 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/memory/dream/model-runner.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/memory/memory-search.ts",
           "kind": "import-statement"
         },
@@ -6154,7 +6169,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/llm/provider-client.ts (import-statement); core/execution-router.ts (import-statement); core/model-manager.ts (import-statement); +70 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/llm/provider-client.ts (import-statement); core/execution-router.ts (import-statement); core/model-manager.ts (import-statement); +71 more importer(s)."
     },
     {
       "path": "lib/identity-templates",
@@ -6348,9 +6363,14 @@
           "root": "server-bootstrap",
           "from": "lib/memory/deep-memory.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/model-runner.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/memory/session-summary.ts (import-statement); lib/memory/compile.ts (import-statement); lib/memory/deep-memory.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/session-summary.ts (import-statement); lib/memory/compile.ts (import-statement); lib/memory/deep-memory.ts (import-statement); +1 more importer(s)."
     },
     {
       "path": "lib/llm/provider-cache-affinity.ts",
@@ -6557,6 +6577,16 @@
       "provenance": [
         {
           "root": "server-bootstrap",
+          "from": "lib/memory/dream/revision-store.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/runner.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/memory/memory-ticker.ts",
           "kind": "import-statement"
         },
@@ -6576,7 +6606,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/memory/memory-ticker.ts (import-statement); lib/tools/update-settings-tool.ts (import-statement); lib/memory/compiled-memory-snapshot.ts (import-statement); +1 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/revision-store.ts (import-statement); lib/memory/dream/runner.ts (import-statement); lib/memory/memory-ticker.ts (import-statement); +3 more importer(s)."
     },
     {
       "path": "lib/memory/compiled-memory-snapshot.ts",
@@ -6707,6 +6737,93 @@
       "reason": "Reached via esbuild source module graph, imported by lib/memory/memory-ticker.ts (import-statement)."
     },
     {
+      "path": "lib/memory/dream/evidence.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/policy.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/model-runner.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/runner.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/policy.ts (import-statement); lib/memory/dream/model-runner.ts (import-statement); lib/memory/dream/runner.ts (import-statement)."
+    },
+    {
+      "path": "lib/memory/dream/model-runner.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/runner.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/runner.ts (import-statement)."
+    },
+    {
+      "path": "lib/memory/dream/policy.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/runner.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/runner.ts (import-statement)."
+    },
+    {
+      "path": "lib/memory/dream/revision-store.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/runner.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/runner.ts (import-statement)."
+    },
+    {
+      "path": "lib/memory/dream/runner.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/memory-ticker.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/memory-ticker.ts (import-statement)."
+    },
+    {
+      "path": "lib/memory/dream/state-store.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/revision-store.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/runner.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/revision-store.ts (import-statement); lib/memory/dream/runner.ts (import-statement)."
+    },
+    {
       "path": "lib/memory/fact-store.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -6741,9 +6858,14 @@
           "root": "server-bootstrap",
           "from": "lib/memory/compile.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/model-runner.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/memory/session-summary.ts (import-statement); lib/memory/compile.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/session-summary.ts (import-statement); lib/memory/compile.ts (import-statement); lib/memory/dream/model-runner.ts (import-statement)."
     },
     {
       "path": "lib/memory/memory-reflection-runner.ts",
@@ -6814,6 +6936,18 @@
         }
       ],
       "reason": "Reached via esbuild source module graph, imported by lib/memory/compile.ts (import-statement)."
+    },
+    {
+      "path": "lib/memory/prompts/dream.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/model-runner.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/model-runner.ts (import-statement)."
     },
     {
       "path": "lib/memory/prompts/fact-extraction.ts",
@@ -109660,9 +109794,14 @@
           "root": "server-bootstrap",
           "from": "server/routes/speech-recognition.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "server/routes/memory-dream.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by server/http/security-audit.ts (import-statement); server/routes/config.ts (import-statement); server/routes/providers.ts (import-statement); +11 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by server/http/security-audit.ts (import-statement); server/routes/config.ts (import-statement); server/routes/providers.ts (import-statement); +12 more importer(s)."
     },
     {
       "path": "server/http/cors-policy.ts",
@@ -110201,6 +110340,18 @@
       "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
     },
     {
+      "path": "server/routes/memory-dream.ts",
+      "inputType": "source-graph",
+      "provenance": [
+        {
+          "root": "server-bootstrap",
+          "from": "server/composition/open-root.ts",
+          "kind": "import-statement"
+        }
+      ],
+      "reason": "Reached via esbuild source module graph, imported by server/composition/open-root.ts (import-statement)."
+    },
+    {
       "path": "server/routes/mobile-static.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -110584,9 +110735,14 @@
           "root": "server-bootstrap",
           "from": "server/routes/bridge.ts",
           "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "server/routes/memory-dream.ts",
+          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by server/routes/config.ts (import-statement); server/routes/channels.ts (import-statement); server/routes/dm.ts (import-statement); +1 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by server/routes/config.ts (import-statement); server/routes/channels.ts (import-statement); server/routes/dm.ts (import-statement); +2 more importer(s)."
     },
     {
       "path": "server/utils/uploaded-skill-package.ts",
@@ -112203,6 +112359,16 @@
         },
         {
           "root": "server-bootstrap",
+          "from": "lib/memory/dream/state-store.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
+          "from": "lib/memory/dream/revision-store.ts",
+          "kind": "import-statement"
+        },
+        {
+          "root": "server-bootstrap",
           "from": "lib/memory/memory-ticker.ts",
           "kind": "import-statement"
         },
@@ -112322,7 +112488,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/provider-media-config.ts (import-statement); core/execution-lease-registry.ts (import-statement); core/grant-registry.ts (import-statement); +44 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/provider-media-config.ts (import-statement); core/execution-lease-registry.ts (import-statement); core/grant-registry.ts (import-statement); +46 more importer(s)."
     },
     {
       "path": "shared/safe-parse.ts",
@@ -112881,9 +113047,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9644,
+    "totalFiles": 9652,
     "byInputType": {
-      "source-graph": 663,
+      "source-graph": 671,
       "runtime-asset": 11,
       "nft-runtime-trace": 8970
     }

@@ -593,6 +593,10 @@ export function createAgentsRoute(engine) {
       if (partial.experience?.enabled !== undefined && typeof partial.experience.enabled !== "boolean") {
         return c.json({ error: "experience.enabled must be a boolean" }, 400);
       }
+      if (partial.memory?.dream?.auto_enabled !== undefined
+        && typeof partial.memory.dream.auto_enabled !== "boolean") {
+        return c.json({ error: "memory.dream.auto_enabled must be a boolean" }, 400);
+      }
       const workspaceSkillPolicyError = validateWorkspaceSkillPolicyPatch(partial.workspace_context);
       if (workspaceSkillPolicyError) {
         return c.json({ error: workspaceSkillPolicyError }, 400);

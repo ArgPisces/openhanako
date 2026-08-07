@@ -141,6 +141,9 @@
         "agents/{agentId}/memory/pinned-memory.json",
         "agents/{agentId}/memory/summaries/{sessionId}.json",
         "agents/{agentId}/memory/daily/{date}.md",
+        "agents/{agentId}/memory/dream/state.json",
+        "agents/{agentId}/memory/dream/pending-apply.json",
+        "agents/{agentId}/memory/dream/revisions/{revisionId}.json",
         "agents/{agentId}/memory/memories.db",
         "agents/{agentId}/memory/.v2-migrated"
       ],
@@ -6484,7 +6487,7 @@
       "sourceFile": "lib/memory/cache-snapshot-observation.ts",
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, JSON.stringify(normalized, null, 2) + \"\\n\")",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6493,7 +6496,7 @@
       "sourceFile": "lib/memory/cache-snapshot-observation.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6502,7 +6505,7 @@
       "sourceFile": "lib/memory/cache-snapshot-observation.ts",
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(cacheSnapshotObservationPath(agentDir))",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6511,7 +6514,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, content)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6520,7 +6523,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(dailyDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6529,7 +6532,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(dailyDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 1
@@ -6538,7 +6541,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(memoryDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6547,7 +6550,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(memoryDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 1
@@ -6556,7 +6559,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(longtermPath), { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6565,7 +6568,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(outputPath), { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6574,7 +6577,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(statePath), { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6583,7 +6586,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6592,7 +6595,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(fpPath)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6601,7 +6604,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(fpPath, fp)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6610,7 +6613,7 @@
       "sourceFile": "lib/memory/compile.ts",
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(fpPath, fp)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 1
@@ -6619,7 +6622,7 @@
       "sourceFile": "lib/memory/compiled-memory-snapshot.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(memoryDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6628,7 +6631,7 @@
       "sourceFile": "lib/memory/compiled-memory-snapshot.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(summariesDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6637,7 +6640,7 @@
       "sourceFile": "lib/memory/compiled-memory-snapshot.ts",
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(path.join(memoryDir, fileName), normalized[key] || \"\", \"utf-8\")",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6646,7 +6649,7 @@
       "sourceFile": "lib/memory/compiled-memory-snapshot.ts",
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(path.join(summariesDir, `${sessionId}.json`), JSON.stringify(payload, null, 2) + \"\\n\", \"utf-8\")",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6655,7 +6658,7 @@
       "sourceFile": "lib/memory/compiled-memory-state.ts",
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(filePath, content)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6664,7 +6667,7 @@
       "sourceFile": "lib/memory/compiled-memory-state.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(memoryDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6673,7 +6676,7 @@
       "sourceFile": "lib/memory/compiled-memory-state.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(memoryDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 1
@@ -6682,7 +6685,7 @@
       "sourceFile": "lib/memory/compiled-memory-state.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(filePath), { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6691,7 +6694,7 @@
       "sourceFile": "lib/memory/compiled-memory-state.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(summariesDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6700,7 +6703,7 @@
       "sourceFile": "lib/memory/compiled-memory-state.ts",
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(filePath)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6709,7 +6712,7 @@
       "sourceFile": "lib/memory/compiled-memory-state.ts",
       "kind": "write-file",
       "excerpt": "fs.writeFileSync(filePath, \"\", \"utf-8\")",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6718,7 +6721,151 @@
       "sourceFile": "lib/memory/config-loader.ts",
       "kind": "secret-write",
       "excerpt": "writeSecretFileSync(configPath, yamlStr)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "atomic-write",
+      "excerpt": "atomicWriteSync(filePath, body ? `${body}\\n` : \"\")",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "atomic-write",
+      "excerpt": "atomicWriteSync(pendingPath(memoryDir), `${JSON.stringify({ schemaVersion: 1, revisionId: options.revision.revisionId, startedAt: new Date().toISOString(), }, null, 2)}\\n`)",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "atomic-write",
+      "excerpt": "atomicWriteSync(pendingPath(memoryDir), `${JSON.stringify({ schemaVersion: 1, revisionId: revision.revisionId, startedAt: new Date().toISOString(), operation: \"restore\", }, null, 2)}\\n`)",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "atomic-write",
+      "excerpt": "atomicWriteSync(revisionPath(memoryDir, revisionId), `${JSON.stringify(revision, null, 2)}\\n`)",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(dailyDir, { recursive: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(dreamDir(memoryDir), { recursive: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(dreamDir(memoryDir), { recursive: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 1
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(revisionsDir(memoryDir), { recursive: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(path.join(dir, file.name), { force: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(pendingPath(memoryDir), { force: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(pendingPath(memoryDir), { force: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 1
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(pendingPath(memoryDir), { force: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 2
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(pendingPath(memoryDir), { force: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 3
+    },
+    {
+      "sourceFile": "lib/memory/dream/revision-store.ts",
+      "kind": "remove-path",
+      "excerpt": "fs.rmSync(pendingPath(memoryDir), { force: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 4
+    },
+    {
+      "sourceFile": "lib/memory/dream/state-store.ts",
+      "kind": "atomic-write",
+      "excerpt": "atomicWriteSync(dreamStatePath(memoryDir), `${JSON.stringify(next, null, 2)}\\n`)",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
+      "storeId": "agent-memory",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/memory/dream/state-store.ts",
+      "kind": "mkdir",
+      "excerpt": "fs.mkdirSync(dreamDir(memoryDir), { recursive: true })",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6736,7 +6883,7 @@
       "sourceFile": "lib/memory/memory-ticker.ts",
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(_dailyStatePath(), JSON.stringify(state, null, 2) + \"\\n\")",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6745,7 +6892,7 @@
       "sourceFile": "lib/memory/memory-ticker.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(memoryDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6754,7 +6901,7 @@
       "sourceFile": "lib/memory/pinned-memory-store.ts",
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(pinnedPath(agentDir), renderPinnedMarkdown(data.items))",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6763,7 +6910,7 @@
       "sourceFile": "lib/memory/pinned-memory-store.ts",
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(storePath(agentDir), `${JSON.stringify(data, null, 2)}\\n`)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6772,7 +6919,7 @@
       "sourceFile": "lib/memory/pinned-memory-store.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(agentDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6781,7 +6928,7 @@
       "sourceFile": "lib/memory/session-summary.ts",
       "kind": "atomic-write",
       "excerpt": "atomicWriteSync(fp, JSON.stringify(data, null, 2) + \"\\n\")",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6790,7 +6937,7 @@
       "sourceFile": "lib/memory/session-summary.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(fp), { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6799,7 +6946,7 @@
       "sourceFile": "lib/memory/session-summary.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(summariesDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6808,7 +6955,7 @@
       "sourceFile": "lib/memory/session-summary.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this.summariesDir, { recursive: true })",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6817,7 +6964,7 @@
       "sourceFile": "lib/memory/session-summary.ts",
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(file)",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0
@@ -6826,7 +6973,7 @@
       "sourceFile": "lib/memory/session-summary.ts",
       "kind": "remove-path",
       "excerpt": "fs.unlinkSync(this._filePath(normalized))",
-      "reason": "Writes a named per-agent memory protocol file.",
+      "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
       "ordinal": 0

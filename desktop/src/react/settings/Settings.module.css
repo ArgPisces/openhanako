@@ -6277,6 +6277,45 @@ a.about-link:hover {
     transform: translateY(-1px);
 }
 
+.memory-action-btn:disabled {
+    opacity: 0.55;
+    transform: none;
+}
+
+.memory-dream-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin-bottom: var(--space-24);
+}
+
+.memory-dream-status,
+.memory-dream-error {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    font-size: var(--fs-hint);
+    line-height: 1.5;
+}
+
+.memory-dream-status {
+    color: var(--text-muted);
+}
+
+.memory-dream-error {
+    color: var(--danger);
+}
+
+.memory-dream-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    cursor: default;
+}
+
 .memory-action-btn.danger {
     color: var(--coral);
     border-color: rgba(var(--coral-rgb), 0.3);

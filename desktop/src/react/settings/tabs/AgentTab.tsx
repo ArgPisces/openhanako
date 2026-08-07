@@ -99,6 +99,7 @@ export function AgentTab() {
   const currentModelUnavailable = !!currentModel && !availableModels.some(m => `${m.provider}/${m.id}` === currentModel);
 
   const memoryEnabled = readConfigBoolean(settingsConfig, cfg => cfg.memory?.enabled, true);
+  const autoDreamEnabled = readConfigBoolean(settingsConfig, cfg => cfg.memory?.dream?.auto_enabled, false);
   const experienceEnabled = readConfigBoolean(settingsConfig, cfg => cfg.experience?.enabled, false);
   const hasAvailableToolsField = !!settingsConfig && Object.prototype.hasOwnProperty.call(settingsConfig, 'availableTools');
   const availableTools = hasAvailableToolsField ? settingsConfig?.availableTools : undefined;
@@ -396,6 +397,7 @@ export function AgentTab() {
         agentId={selectedSettingsAgentId}
         hasUtilityModel={hasUtilityModel}
         memoryEnabled={memoryEnabled}
+        autoDreamEnabled={autoDreamEnabled === true}
         currentPins={currentPins}
       />
 

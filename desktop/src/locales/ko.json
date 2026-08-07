@@ -1791,6 +1791,19 @@
       "longtermSaved": "장기 상황이 저장됐어요",
       "saveDay": "이 날 저장",
       "daySaved": "이 날이 저장됐어요",
+      "dream": {
+        "title": "Dream 정리",
+        "hint": "측정 가능한 근거로 현재 기억의 중복을 제거하고 선별·압축해요",
+        "autoLabel": "매일 자동 Dream(실험)",
+        "autoHint": "이 Agent에만 적용돼요. 기본값은 꺼짐이며 논리일마다 최대 한 번 실행해요",
+        "run": "현재 기억 정리",
+        "running": "정리 중…",
+        "restore": "Dream 이전 버전 복원",
+        "restoring": "복원 중…",
+        "view": "정리 결과 보기",
+        "success": "{time} 완료: {before} → {after}자, {merged}개 병합, {forgotten}개 제외.",
+        "failed": "Dream에 실패했어요. 기존 기억은 변경되지 않았어요"
+      },
       "sections": {
         "today": "오늘",
         "week": "이번 주 초",
