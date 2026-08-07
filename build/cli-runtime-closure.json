@@ -1063,14 +1063,9 @@
           "root": "server-bootstrap",
           "from": "core/session-compactor.ts",
           "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "lib/extensions/compaction-guard-ext.ts",
-          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); lib/extensions/compaction-guard-ext.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement)."
     },
     {
       "path": "core/mcp/clients/http-client.ts",
@@ -110939,17 +110934,7 @@
         },
         {
           "root": "server-bootstrap",
-          "from": "core/session-compaction-runtime.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
           "from": "lib/experiments/registry.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "core/engine.ts",
           "kind": "import-statement"
         },
         {
@@ -110968,7 +110953,7 @@
           "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); core/session-compaction-runtime.ts (import-statement); lib/experiments/registry.ts (import-statement); +4 more importer(s)."
+      "reason": "Reached via esbuild source module graph, imported by core/session-compactor.ts (import-statement); lib/experiments/registry.ts (import-statement); server/routes/chat.ts (import-statement); +2 more importer(s)."
     },
     {
       "path": "shared/config-schema.ts",

@@ -7,6 +7,7 @@ import {
   CACHE_SNAPSHOT_EXPERIMENT_ID,
   COMPACTION_MODE_EXPERIMENT_ID,
   DEEPSEEK_ROLEPLAY_REASONING_PATCH_EXPERIMENT_ID,
+  INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID,
   getExperimentDefinitions,
   getResolvedExperimentValue,
   listResolvedExperiments,
@@ -38,9 +39,10 @@ describe("experiment registry", () => {
     });
   });
 
-  it("defines compaction mode as a four-option select defaulting to auto", () => {
+  it("keeps compaction mode as a three-option select and defines instant compaction as a separate toggle", () => {
     const defs = getExperimentDefinitions();
     const entry = defs.find((def) => def.id === COMPACTION_MODE_EXPERIMENT_ID);
+    const instant = defs.find((def) => def.id === INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID);
 
     expect(entry).toMatchObject({
       id: COMPACTION_MODE_EXPERIMENT_ID,
@@ -56,8 +58,17 @@ describe("experiment registry", () => {
       "auto",
       "cache_preserving",
       "pi_compatible",
-      "lossy_local",
     ]);
+    expect(instant).toMatchObject({
+      id: INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID,
+      owner: "session",
+      scope: "global",
+      defaultValue: false,
+      valueSchema: {
+        type: "boolean",
+        presentation: { type: "toggle" },
+      },
+    });
   });
 
   it("defines the DeepSeek roleplay reasoning patch as a boolean toggle defaulting to off", () => {
@@ -136,6 +147,20 @@ describe("experiment registry", () => {
     expect(prefs.getPreferences().experiments[DEEPSEEK_ROLEPLAY_REASONING_PATCH_EXPERIMENT_ID]).toBe(true);
     expect(setExperimentValue(prefs, DEEPSEEK_ROLEPLAY_REASONING_PATCH_EXPERIMENT_ID, false)).toBe(false);
     expect(getResolvedExperimentValue(prefs, DEEPSEEK_ROLEPLAY_REASONING_PATCH_EXPERIMENT_ID)).toBe(false);
+  });
+
+  it("migrates the briefly persisted lossy mode into Auto plus an enabled one-shot entry", () => {
+    const { prefs } = makePrefs({
+      experiments: {
+        [COMPACTION_MODE_EXPERIMENT_ID]: "lossy_local",
+      },
+    });
+
+    expect(getResolvedExperimentValue(prefs, COMPACTION_MODE_EXPERIMENT_ID)).toBe("auto");
+    expect(getResolvedExperimentValue(prefs, INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID)).toBe(true);
+
+    expect(setExperimentValue(prefs, INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID, false)).toBe(false);
+    expect(getResolvedExperimentValue(prefs, INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID)).toBe(false);
   });
 
   it("rejects invalid enum values", () => {

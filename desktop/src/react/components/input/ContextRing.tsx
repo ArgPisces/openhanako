@@ -4,9 +4,14 @@ import { getSessionCompactionMode, isSessionCompacting } from '../../stores/cont
 import { sessionScopedListIncludes, sessionScopedValue } from '../../stores/session-slice';
 import { useI18n } from '../../hooks/use-i18n';
 import { getWebSocket } from '../../services/websocket';
+import { hanaFetch } from '../../hooks/use-hana-fetch';
 import { refreshSessionCapabilities } from '../../stores/session-actions';
 import { AnchoredPortal, Tooltip } from '../../ui';
 import { shouldShowContextRingTokenLabel } from './context-ring-visibility';
+import {
+  INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID,
+  INSTANT_SIMPLE_COMPACTION_METHOD,
+} from '../../../../../shared/compaction-mode.ts';
 import styles from './InputArea.module.css';
 
 export function ContextRing() {
@@ -17,6 +22,7 @@ export function ContextRing() {
   const [percent, setPercent] = useState<number | null>(null);
   const [compacting, setCompacting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [instantSimpleEnabled, setInstantSimpleEnabled] = useState(false);
   const anchorRef = useRef<HTMLElement | null>(null);
 
   // 从 Zustand store 同步 context 数据（keyed store 优先，compat global 兜底）
@@ -48,6 +54,41 @@ export function ContextRing() {
     setMenuOpen(false);
   }, [currentSessionPath]);
 
+  useEffect(() => {
+    let disposed = false;
+    const applyExperimentValue = (value: unknown) => {
+      if (!disposed) setInstantSimpleEnabled(value === true);
+    };
+    const onSettings = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (
+        detail?.type === 'experiment-changed'
+        && detail.id === INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID
+      ) {
+        applyExperimentValue(detail.value);
+      }
+    };
+
+    window.addEventListener('hana-settings', onSettings);
+    void hanaFetch('/api/experiments')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.error) throw new Error(data.error);
+        const experiment = Array.isArray(data?.experiments)
+          ? data.experiments.find((item: any) => item?.id === INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID)
+          : null;
+        applyExperimentValue(experiment?.value);
+      })
+      .catch((error) => {
+        console.warn('[context-ring] failed to load instant compaction experiment:', error);
+      });
+
+    return () => {
+      disposed = true;
+      window.removeEventListener('hana-settings', onSettings);
+    };
+  }, []);
+
   const handleClick = useCallback(() => {
     if (busy) return;
     setMenuOpen(open => !open);
@@ -59,7 +100,7 @@ export function ContextRing() {
     void refreshSessionCapabilities(currentSessionPath);
   }, [busy, currentSessionPath]);
 
-  const handleCompact = useCallback(() => {
+  const requestCompaction = useCallback((method?: string) => {
     if (!currentSessionPath || busy) return;
     setMenuOpen(false);
     if (!currentSessionId) {
@@ -71,8 +112,20 @@ export function ContextRing() {
       addToast(t('status.disconnected'), 'error', 6000);
       return;
     }
-    ws.send(JSON.stringify({ type: 'compact', sessionId: currentSessionId }));
+    ws.send(JSON.stringify({
+      type: 'compact',
+      sessionId: currentSessionId,
+      ...(method ? { method } : {}),
+    }));
   }, [addToast, busy, currentSessionId, currentSessionPath, t]);
+
+  const handleCompact = useCallback(() => {
+    requestCompaction();
+  }, [requestCompaction]);
+
+  const handleInstantSimpleCompact = useCallback(() => {
+    requestCompaction(INSTANT_SIMPLE_COMPACTION_METHOD);
+  }, [requestCompaction]);
 
   if (!currentSessionPath) return null;
   const displayTokens = tokens ?? 0;
@@ -183,6 +236,17 @@ export function ContextRing() {
         >
           {t('input.compact')}
         </button>
+        {instantSimpleEnabled && (
+          <button
+            type="button"
+            className={styles['context-ring-menu-item']}
+            role="menuitem"
+            onClick={handleInstantSimpleCompact}
+            disabled={busy}
+          >
+            {t('chat.instantSimpleCompaction')}
+          </button>
+        )}
       </AnchoredPortal>
     </>
   );

@@ -2310,7 +2310,7 @@
     "experiments": {
       "title": "実験機能",
       "compactionTitle": "コンテキストコンパクション",
-      "compactionSectionDescription": "コンパクション時にプロンプトキャッシュ保持、幅広い履歴互換性、または瞬時のローカル処理のどれを優先するか選択します。",
+      "compactionSectionDescription": "自動コンパクションの既定戦略と、チャットのコンテキストリングに実験的な一回限りの操作を表示するかを設定します。",
       "modelPersonaTitle": "モデルとペルソナ",
       "modelPersonaDescription": "各プロバイダーが Hana のペルソナ、ムード、出力契約にどう適応するかを観察します。",
       "memoryTitle": "メモリ実験",
@@ -2357,11 +2357,14 @@
       },
       "compaction": {
         "title": "コンパクションモード",
-        "description": "Auto はキャッシュ保持型コンパクションを優先します。通常コンパクションは Pi SDK のネイティブ要約を使用します。瞬時簡易コンパクションは品質を抑えてローカルで要約を再構築し、追加のモデルリクエストは行いません。",
+        "description": "Auto はキャッシュ保持型コンパクションを優先します。通常コンパクションは Pi SDK のネイティブ要約を使用します。",
         "auto": "自動",
         "cachePreserving": "キャッシュ保持型コンパクション",
-        "piCompatible": "通常コンパクション",
-        "lossyLocal": "瞬時簡易コンパクション（低品質）"
+        "piCompatible": "通常コンパクション"
+      },
+      "instantSimpleCompaction": {
+        "title": "瞬時簡易コンパクション",
+        "description": "有効にすると、チャット入力欄のコンテキストリングメニューに「瞬時簡易コンパクション」が追加されます。明示的に開始した一回だけに作用し、自動または通常コンパクションの動作は変更しません。"
       },
       "deepseekRoleplay": {
         "title": "DeepSeek ペルソナ没入パッチ",

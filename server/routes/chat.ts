@@ -20,10 +20,16 @@ import {
 import { debugLog, createModuleLogger } from "../../lib/debug-log.ts";
 import { t } from "../../lib/i18n.ts";
 import { getLastAssistantUsage } from "../../lib/pi-sdk/index.ts";
-import { compactSessionWithCachePreservationRecoveringRuntime } from "../../core/session-compactor.ts";
+import {
+  compactSessionWithCachePreservationRecoveringRuntime,
+  runLossyLocalCompactionForSession,
+} from "../../core/session-compactor.ts";
 import {
   getResolvedCompactionMode,
-  normalizeCompactionMode,
+  getResolvedInstantSimpleCompactionEnabled,
+  INSTANT_SIMPLE_COMPACTION_METHOD,
+  INSTANT_SIMPLE_COMPACTION_RUNTIME_MODE,
+  normalizeCompactionLifecycleMode,
 } from "../../shared/compaction-mode.ts";
 import { submitDesktopSessionInterjection, submitDesktopSessionMessage } from "../../core/desktop-session-submit.ts";
 import {
@@ -199,7 +205,7 @@ export function toCompactionLifecycleWsMessage(
   if (!sessionPath) return null;
   const sessionId = getSessionIdForPath?.(sessionPath) ?? null;
   const rawMode = event?.mode ?? getCompactionMode?.();
-  const mode = rawMode == null ? null : normalizeCompactionMode(rawMode);
+  const mode = rawMode == null ? null : normalizeCompactionLifecycleMode(rawMode);
   if (event.type === "compaction_start") {
     return {
       type: "compaction_start",
@@ -313,7 +319,10 @@ export function resolveTurnStallAbortMs(value = process.env.HANA_TURN_STALL_ABOR
   return Math.floor(parsed);
 }
 
-export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any) {
+export function createChatRoute(engine: any, hub: any, {
+  upgradeWebSocket,
+  runInstantSimpleCompaction = runLossyLocalCompactionForSession,
+}: any) {
   const restRoute = new Hono();
   const wsRoute = new Hono();
 
@@ -1931,7 +1940,21 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 return;
               }
               const { sessionId: compactSessionId, sessionPath: compactPath } = compactTarget;
-              const compactionMode = getResolvedCompactionMode(engine.preferences);
+              const requestedMethod = msg.method == null ? null : String(msg.method);
+              if (requestedMethod !== null && requestedMethod !== INSTANT_SIMPLE_COMPACTION_METHOD) {
+                wsSend(ws, {
+                  type: "error",
+                  code: "invalid_compaction_method",
+                  message: "unsupported compaction method",
+                  sessionId: compactSessionId,
+                  sessionPath: compactPath,
+                });
+                return;
+              }
+              const instantSimple = requestedMethod === INSTANT_SIMPLE_COMPACTION_METHOD;
+              const compactionMode = instantSimple
+                ? INSTANT_SIMPLE_COMPACTION_RUNTIME_MODE
+                : getResolvedCompactionMode(engine.preferences);
               const compactResult = (status, details: Record<string, any> = {}) => wsSend(ws, {
                 type: "compaction_result",
                 sessionId: compactSessionId,
@@ -1940,6 +1963,16 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 status,
                 ...details,
               });
+              if (
+                instantSimple
+                && getResolvedInstantSimpleCompactionEnabled(engine.preferences) !== true
+              ) {
+                compactResult("failed", {
+                  reason: "experiment_disabled",
+                  message: "Instant simple compaction is disabled in Experiments",
+                });
+                return;
+              }
               if (isDeletedAgentSessionPath(compactPath)) {
                 compactResult("failed", { reason: "agent_deleted", message: "agent_deleted" });
                 return;
@@ -1965,13 +1998,23 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 mode: compactionMode,
               });
               try {
-                const compacted = await compactSessionWithCachePreservationRecoveringRuntime({
-                  session,
-                  sessionPath: compactPath,
-                  customInstructions: undefined,
-                  reloadSessionRuntime: (path) => engine.reloadSessionRuntime?.(path),
-                });
-                session = compacted.session;
+                if (instantSimple) {
+                  if (typeof engine.getLossyLocalCompactionSummarySource !== "function") {
+                    throw new Error("Instant simple compaction summary resolver is unavailable");
+                  }
+                  await runInstantSimpleCompaction(session, {
+                    getSummarySource: () => engine.getLossyLocalCompactionSummarySource(compactPath),
+                    lifecycleReason: "manual",
+                  });
+                } else {
+                  const compacted = await compactSessionWithCachePreservationRecoveringRuntime({
+                    session,
+                    sessionPath: compactPath,
+                    customInstructions: undefined,
+                    reloadSessionRuntime: (path) => engine.reloadSessionRuntime?.(path),
+                  });
+                  session = compacted.session;
+                }
                 compactResult("succeeded");
               } catch (err) {
                 const errMsg = err.message || "";

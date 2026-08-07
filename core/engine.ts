@@ -58,7 +58,6 @@ import { loadLocale } from "../lib/i18n.ts";
 import { createApprovalGateway, createModelApprovalReviewer } from "../lib/approval-gateway.ts";
 import { callText } from "./llm-client.ts";
 import { SESSION_APPROVAL_POLICIES } from "./session-permission-mode.ts";
-import { getResolvedCompactionMode } from "../shared/compaction-mode.ts";
 import { readCompiledResetAt } from "../lib/memory/compiled-memory-state.ts";
 
 /** 已知的外部 AI 工具技能目录（相对 $HOME） */
@@ -531,10 +530,6 @@ export class HanaEngine {
       forkSessionDeferredTasks: (options) => this.forkSessionDeferredTasks(options),
       discardForkedSessionDeferredTasks: (options) => this.discardForkedSessionDeferredTasks(options),
       getSessionIdForPath: (sessionPath) => this.getSessionIdForPath(sessionPath),
-      getCompactionMode: () => getResolvedCompactionMode(this._prefs),
-      getLossyLocalCompactionSummarySource: (sessionPath) => (
-        this.getLossyLocalCompactionSummarySource(sessionPath)
-      ),
       forkSessionFiles: (options) => this.forkSessionFiles(options),
       discardForkedSessionFiles: (options) => this.discardForkedSessionFiles(options),
       forkSessionVisionNotes: (options) => this.forkSessionVisionNotes(options),

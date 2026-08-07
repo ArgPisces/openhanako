@@ -2547,17 +2547,6 @@ export class SessionCoordinator {
     installMidRunCompaction(session, {
       usageLedger: this._d.getUsageLedger?.() || null,
       buildUsageContext: (s: any) => this._buildMidRunCompactionUsageContext(s),
-      getCompactionMode: () => this._d.getCompactionMode?.(),
-      getLossyLocalSummarySource: (s: any) => {
-        const sessionPath = s?.sessionManager?.getSessionFile?.() || null;
-        if (!sessionPath) {
-          throw new Error("mid-run instant compaction requires a session path");
-        }
-        if (typeof this._d.getLossyLocalCompactionSummarySource !== "function") {
-          throw new Error("mid-run instant compaction summary resolver is unavailable");
-        }
-        return this._d.getLossyLocalCompactionSummarySource(sessionPath);
-      },
     });
 
     // Persist fresh snapshots and repair/establish restored snapshots. Restored

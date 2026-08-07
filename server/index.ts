@@ -495,9 +495,6 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
   await engine.registerExtensionFactory(createCompactionGuardExtension({
     usageLedger: engine.usageLedger,
     getCompactionMode: () => getResolvedCompactionMode(engine.preferences),
-    getLossyLocalSummarySource: (sessionPath) => (
-      engine.getLossyLocalCompactionSummarySource(sessionPath)
-    ),
     buildSessionCacheSnapshot: (sessionPath, options) => engine.buildSessionCacheSnapshot(sessionPath, options),
     getSessionProviderCacheAffinityKey: (sessionPath) => (
       engine.getSessionProviderCacheAffinityKey(sessionPath)

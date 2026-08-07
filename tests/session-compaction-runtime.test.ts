@@ -224,48 +224,6 @@ describe("installMidRunCompaction", () => {
     expect(snapshot.context.messages).toEqual(rebuiltMessages);
   });
 
-  it("routes lossy-local mode to the local runner with the session-owned summary source", async () => {
-    const { session } = createFakeSession({ contextWindow: 200_000 });
-    const runCacheCompaction = vi.fn(async () => ({}));
-    const runLossyCompaction = vi.fn(async (_session: any, options: any) => {
-      expect(await options.getSummarySource()).toEqual({ summary: "rolling" });
-      return {};
-    });
-    const getLossyLocalSummarySource = vi.fn(async () => ({ summary: "rolling" }));
-
-    installMidRunCompaction(session, {
-      getCompactionMode: () => "lossy_local",
-      getLossyLocalSummarySource,
-      runCacheCompaction,
-      runLossyCompaction,
-    });
-    await session.agent.prepareNextTurnWithContext(createAssistantTurn(190_000), undefined);
-
-    expect(runLossyCompaction).toHaveBeenCalledWith(session, expect.objectContaining({
-      emitLifecycle: true,
-      lifecycleReason: "threshold",
-      getSummarySource: expect.any(Function),
-    }));
-    expect(getLossyLocalSummarySource).toHaveBeenCalledWith(session);
-    expect(runCacheCompaction).not.toHaveBeenCalled();
-  });
-
-  it("keeps existing modes on the cache-preserving mid-run runner", async () => {
-    const { session } = createFakeSession({ contextWindow: 200_000 });
-    const runCacheCompaction = vi.fn(async () => ({}));
-    const runLossyCompaction = vi.fn(async () => ({}));
-
-    installMidRunCompaction(session, {
-      getCompactionMode: () => "auto",
-      runCacheCompaction,
-      runLossyCompaction,
-    });
-    await session.agent.prepareNextTurnWithContext(createAssistantTurn(190_000), undefined);
-
-    expect(runCacheCompaction).toHaveBeenCalledOnce();
-    expect(runLossyCompaction).not.toHaveBeenCalled();
-  });
-
   it("is idempotent", async () => {
     const { session } = createFakeSession({ contextWindow: 200_000 });
     const runCompaction = vi.fn(async (_session: any, _options: any) => ({}));

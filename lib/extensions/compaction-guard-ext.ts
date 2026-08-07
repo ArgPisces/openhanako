@@ -63,7 +63,6 @@ import {
 import { convertAgentMessagesToLlm } from "../pi-sdk/index.ts";
 import { createModuleLogger } from "../debug-log.ts";
 import { normalizeRequestThinkingLevel } from "../../core/session-thinking-level.ts";
-import { createLossyLocalCompactionResult } from "../../core/lossy-local-compaction.ts";
 
 const log = createModuleLogger("compaction-guard");
 
@@ -143,9 +142,6 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
   const getCompactionMode = typeof opts.getCompactionMode === "function"
     ? opts.getCompactionMode
     : () => COMPACTION_MODES.AUTO;
-  const getLossyLocalSummarySource = typeof opts.getLossyLocalSummarySource === "function"
-    ? opts.getLossyLocalSummarySource
-    : null;
   const buildSessionCacheSnapshot = typeof opts.buildSessionCacheSnapshot === "function"
     ? opts.buildSessionCacheSnapshot
     : null;
@@ -247,33 +243,6 @@ export function createCompactionGuardExtension(opts: Record<string, any> = {}) {
         if (compactionMode === COMPACTION_MODES.PI_COMPATIBLE) {
           log.log("[L3] pi-compatible compaction selected; falling through to Pi SDK native summarizer");
           return undefined;
-        }
-        if (compactionMode === COMPACTION_MODES.LOSSY_LOCAL) {
-          if (event.signal?.aborted) return { cancel: true };
-          const sessionPath = ctx.sessionManager?.getSessionFile?.() || null;
-          if (!sessionPath) {
-            throw new CompactionSessionOwnershipError(
-              "Instant local compaction requires an explicit session path",
-            );
-          }
-          if (!getLossyLocalSummarySource) {
-            throw new CompactionSessionOwnershipError(
-              "Instant local compaction requires a keyed rolling-summary resolver",
-              sessionPath,
-            );
-          }
-          const branchEntries = event.branchEntries || ctx.sessionManager?.getBranch?.() || [];
-          const summarySource = await getLossyLocalSummarySource(sessionPath, { event, ctx });
-          const compaction = createLossyLocalCompactionResult({
-            branchEntries,
-            preparation: rawPreparation,
-            summarySource,
-          });
-          log.log(
-            `[L3] instant local compaction: tokensBefore=${compaction.tokensBefore} `
-            + `firstKept=${compaction.firstKeptEntryId} source=${compaction.details.source}`,
-          );
-          return { compaction };
         }
         allowNativeFallback = compactionMode === COMPACTION_MODES.AUTO;
 

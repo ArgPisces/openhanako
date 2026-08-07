@@ -11,6 +11,7 @@ import { ComputerUseSection } from './ComputerUseSection';
 import {
   COMPACTION_MODE_EXPERIMENT_ID,
   COMPACTION_MODES,
+  INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID,
   normalizeCompactionMode,
 } from '../../../../../shared/compaction-mode.ts';
 import styles from '../Settings.module.css';
@@ -20,7 +21,7 @@ const DEEPSEEK_ROLEPLAY_REASONING_PATCH_EXPERIMENT_ID = 'provider.deepseek_rolep
 const PROACTIVE_SUBAGENT_EXPERIMENT_ID = 'subagent.proactive_delegation';
 
 type CacheSnapshotMode = 'off' | 'shadow' | 'write';
-type CompactionMode = 'auto' | 'cache_preserving' | 'pi_compatible' | 'lossy_local';
+type CompactionMode = 'auto' | 'cache_preserving' | 'pi_compatible';
 
 type ExperimentDefinition = {
   id: string;
@@ -280,7 +281,6 @@ function compactionModeOptions(experiment: ExperimentDefinition): SelectOption[]
     { value: COMPACTION_MODES.AUTO, label: t('settings.experiments.compaction.auto') },
     { value: COMPACTION_MODES.CACHE_PRESERVING, label: t('settings.experiments.compaction.cachePreserving') },
     { value: COMPACTION_MODES.PI_COMPATIBLE, label: t('settings.experiments.compaction.piCompatible') },
-    { value: COMPACTION_MODES.LOSSY_LOCAL, label: t('settings.experiments.compaction.lossyLocal') },
   ];
 }
 
@@ -408,6 +408,11 @@ export function ExperimentsTab() {
         experiments: applyNextValue(snapshot.preferences.experiments as ExperimentDefinition[]),
       },
     }));
+    const change = { id, value: nextValue };
+    window.dispatchEvent(new CustomEvent('hana-settings', {
+      detail: { type: 'experiment-changed', ...change },
+    }));
+    window.platform?.settingsChanged?.('experiment-changed', change);
     showToast(t('settings.autoSaved'), 'success');
   };
 
@@ -422,6 +427,12 @@ export function ExperimentsTab() {
           {sessionExperiments.map((experiment) => (
             experiment.id === COMPACTION_MODE_EXPERIMENT_ID ? (
               <CompactionModeExperiment
+                key={experiment.id}
+                experiment={experiment}
+                onValueChange={updateExperimentValue}
+              />
+            ) : experiment.id === INSTANT_SIMPLE_COMPACTION_EXPERIMENT_ID ? (
+              <BooleanExperiment
                 key={experiment.id}
                 experiment={experiment}
                 onValueChange={updateExperimentValue}

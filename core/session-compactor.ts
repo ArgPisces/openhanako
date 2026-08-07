@@ -32,7 +32,7 @@ import {
 import { normalizeRequestThinkingLevel } from "./session-thinking-level.ts";
 import { resolveRequestReasoningLevel } from "./request-reasoning-level.ts";
 import { createLossyLocalCompactionResult } from "./lossy-local-compaction.ts";
-import { COMPACTION_MODES } from "../shared/compaction-mode.ts";
+import { INSTANT_SIMPLE_COMPACTION_RUNTIME_MODE } from "../shared/compaction-mode.ts";
 
 const DEFAULT_HARD_TRUNCATE_THRESHOLD = 0.85;
 
@@ -1929,7 +1929,7 @@ export async function runLossyLocalCompactionForSession(session: any, {
     emitCompactionProgress(session, {
       type: "compaction_start",
       reason: lifecycleReason,
-      mode: COMPACTION_MODES.LOSSY_LOCAL,
+      mode: INSTANT_SIMPLE_COMPACTION_RUNTIME_MODE,
     });
   }
 
@@ -1961,7 +1961,7 @@ export async function runLossyLocalCompactionForSession(session: any, {
       emitCompactionProgress(session, {
         type: "compaction_end",
         reason: lifecycleReason,
-        mode: COMPACTION_MODES.LOSSY_LOCAL,
+        mode: INSTANT_SIMPLE_COMPACTION_RUNTIME_MODE,
         result: saved,
         aborted: false,
         willRetry: false,
@@ -1975,7 +1975,7 @@ export async function runLossyLocalCompactionForSession(session: any, {
       emitCompactionProgress(session, {
         type: "compaction_end",
         reason: lifecycleReason,
-        mode: COMPACTION_MODES.LOSSY_LOCAL,
+        mode: INSTANT_SIMPLE_COMPACTION_RUNTIME_MODE,
         result: undefined,
         aborted,
         willRetry: false,
