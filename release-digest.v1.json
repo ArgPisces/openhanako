@@ -1,143 +1,139 @@
 {
   "schemaVersion": 1,
-  "tag": "v0.443.54",
-  "version": "0.443.54",
-  "previousTag": "v0.443.46",
-  "generatedAt": "2026-08-06T08:59:44.000Z",
+  "tag": "v0.444.1",
+  "version": "0.444.1",
+  "previousTag": "v0.443.54",
+  "generatedAt": "2026-08-07T18:38:31.000Z",
   "noUserFacingChanges": false,
   "summary": {
-    "zh": "这一版全是修复。最该知道的一条：输入框里打 @ 找工作区文件，上一版起候选列表是空的，怎么打都出不来——这是上个版本做音频附件时把输入框的搜索生命周期一起删掉了，现在恢复了，输入关键词也会照常异步搜。Bridge 那边修了两个：一是外部渠道（Telegram、微信这些）收到的回复里，如果助手说完一段话去调了个你看不见的工具再接着说，两段话以前会被直接粘成一句，现在中间会留出段落分隔；二是定时任务通过 Bridge 给你发主动消息失败时，以前不管什么原因都只报一句笼统的「没有可用的投递目标」，现在会分清是微信当下没有可回复的上下文、目标本身缺失、连接断了，还是发送本身失败了，排查时不用再靠猜。会话这边，带 UTF-8 BOM 的老会话元数据文件以前会被当成损坏的 JSON 跳过，而且这个判决还被记进账本、重启后继续沿用，等于永久丢掉那些会话的置顶、权限这类旧属性；现在 BOM 会被正确剥掉，并且升级后会把旧账本里这类误判重新验一次，真正损坏的文件才会继续跳过。最后有一处视觉取舍需要留意：会话列表里「运行中」「排队中」的小圆点不再持续呼吸闪烁，改成固定亮度区分状态——那个无限循环的透明度动画会让合成器一直忙着，在走软件渲染的机器上尤其明显。",
-    "en": "This release is all fixes. The one most worth knowing: typing @ in the input box to find workspace files returned an empty list since the previous release, no matter what you typed. The audio-attachment work had removed the input box's search lifecycle along with it; that is restored, and typing a query searches asynchronously again. Two Bridge fixes: first, in replies delivered to external channels such as Telegram and WeChat, when the assistant finished a paragraph, called a tool you cannot see, then kept writing, the two paragraphs used to be glued into one sentence, and now a paragraph break is kept between them; second, when a scheduled task failed to reach you through Bridge, every cause used to surface as one vague \"no delivery target available\", and it now tells apart a WeChat session with no reply context available right now, a genuinely missing target, a disconnected bridge, and a send that itself failed, so diagnosis no longer runs on guesswork. On the session side, legacy session metadata files carrying a UTF-8 BOM were treated as corrupt JSON and skipped, and that verdict was written into a ledger and reused across restarts, permanently losing those sessions' pinned state, permissions and other legacy attributes. The BOM is now stripped correctly, and upgrading revalidates those cached verdicts once so that only genuinely corrupt files stay skipped. Finally, one visual trade-off to note: the running and pending dots in the session list no longer pulse continuously and use a fixed brightness to tell the two states apart, because that infinite opacity animation kept the compositor busy, most noticeably on machines falling back to software rendering."
+    "zh": "这一版新增了瞬时简易压缩：一个你主动点才会发生的压缩方式，完全在本地重建检查点，不额外发一次模型请求，所以点下去几乎瞬间完成，也不为这次压缩花钱。代价写在名字里——被重建的那段历史只保留文字，工具调用、工具结果、隐藏的思考过程和图片之类的非文本内容会被整体丢掉；最近的那一段对话仍然逐字保留、不受影响。它默认不出现：要先在设置的实验页里打开「瞬时简易压缩」开关，聊天输入框的上下文圆圈菜单里才会多出这个入口。它只影响你点的这一次，自动压缩和普通压缩的行为完全不变。另外三条是修复。一是聊天里带尖括号的心境标签：以前只要文字里出现这种形状的标签，哪怕是写在代码块里当例子讲解，也会被当成内部标记吞掉，现在只有出现在回复最开头且成对闭合的才算内部标记，写在代码块里、行内反引号里、或者正文中途的都会原样显示。二是用量统计的缓存口径：不同供应商对「输入 token」的定义不一样，有的把缓存部分算进去、有的不算，程序以前一律按前一种算，导致在 Pi SDK 和 Anthropic 这类供应商上，未命中缓存的 token 被压成 0、缓存命中率经常算出大于 1 的荒唐值，按模型费率折算的成本也漏掉了整个输入部分。现在按各家真实口径读，这些数字会回到正确值——注意成本会因此上升，那是它本来就该有的数额，此前是少算了；这一版之前已经写进账本的记录保持原样，不会被改写。三是点击切换会话时，那一行左边闪一道竖线、状态圆点跟着亮起的效果去掉了：切换本来就是几十毫秒的本地操作，每点一次都闪一下更像噪音；而且圆点被借去表示「正在加载」，会让一个你只是点了一下的会话看起来像在输出内容。现在圆点只表示两件事：正在输出，或者后台跑完了还没读。",
+    "en": "This release adds instant simple compaction: a compaction you start yourself that rebuilds the checkpoint entirely on your machine with no extra model request, so it finishes almost immediately and costs nothing to run. The trade-off is in the name. Across the rebuilt stretch of history only prose survives; tool calls, tool results, hidden reasoning and non-text payloads such as images are dropped wholesale, while the recent tail is kept verbatim and is unaffected. It does not appear by default: turn on the Instant simple compaction switch in the Experiments settings page and the context-ring menu above the chat input gains the action. It affects only the run you explicitly start, and automatic and ordinary compaction behave exactly as before. The other three changes are fixes. First, angle-bracket mood tags in chat: any text of that shape used to be swallowed as an internal marker, including when it was written inside a code block as an example. Only a correctly paired block at the very start of a reply counts as an internal marker now, so tags inside fenced code, inline backticks, or partway through the prose stay visible. Second, cache accounting in usage figures: providers disagree on what the input token count covers, some folding the cached part in and some not, and the app read every provider the first way. On providers like Pi SDK and Anthropic that pinned uncached tokens to zero and produced cache hit ratios above 1, and cost derived from model rates dropped the input term entirely. Each provider is now read on its own terms and these numbers return to their true values. Note that cost figures will rise as a result: that is the amount that was always owed and was previously undercounted. Ledger entries written before this release keep their old values and are not rewritten. Third, clicking a session row no longer flashes a rule down its left edge and lights up its status dot while it loads. Switching is a local operation that finishes in tens of milliseconds, so flashing on every click read as noise, and borrowing the dot for loading made a session you merely clicked look like one producing output. The dot now means exactly two things: streaming, or finished in the background and unread."
   },
   "counts": {
-    "feature": 0,
-    "fix": 4,
-    "improvement": 1,
+    "feature": 1,
+    "fix": 3,
+    "improvement": 0,
     "migration": 0
   },
   "source": {
     "owner": "liliMozi",
     "repo": "openhanako",
-    "commitRange": "v0.443.46..v0.443.54",
-    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.443.54",
+    "commitRange": "v0.443.54..v0.444.1",
+    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.444.1",
     "releaseNotes": ""
   },
   "items": [
     {
-      "id": "workspace-mention-search-restored",
+      "id": "instant-simple-compaction",
+      "kind": "feature",
+      "importance": "high",
+      "title": {
+        "zh": "新增瞬时简易压缩：不请求模型，本地立刻压完",
+        "en": "New instant simple compaction: no model request, done locally on the spot"
+      },
+      "summary": {
+        "zh": "压缩上下文时，原有的自动和普通压缩都要再发一次模型请求去写摘要，得等，也要花钱。新增的瞬时简易压缩不请求模型，直接在本地把检查点重建出来：能接上已有的滚动摘要就接着写，接不上就把那段历史的文字原样铺开。代价写在名字里——被重建的那段历史只保留文字，工具调用、工具结果、隐藏的思考过程和图片之类的非文本内容会被整体丢掉。最近那一段对话不参与重建，仍然逐字保留。它是一次性动作，不是默认策略：只影响你主动点的这一次，适合赶时间、或者不想为一次压缩再付一次模型费用的场景。",
+        "en": "Compacting the context used to require another model request to write the summary, which costs both time and money in the existing Auto and Normal modes. The new instant simple compaction makes no model request and rebuilds the checkpoint locally instead: it continues from the existing rolling summary when that summary lines up, and otherwise lays out the prose of that stretch of history as it stands. The cost is in the name. Across the rebuilt region only prose survives; tool calls, tool results, hidden reasoning and non-text payloads such as images are dropped wholesale. The recent tail is excluded from the rebuild and stays verbatim. It is a one-shot action rather than a default strategy: it affects only the run you start yourself, which suits moments when you are in a hurry or do not want to pay for another model call just to compact."
+      },
+      "details": [
+        {
+          "zh": "默认看不到这个入口。先在设置的实验页打开「瞬时简易压缩」开关，聊天输入框的上下文圆圈菜单里才会多出这一项，关掉开关就收回去。它不进入压缩模式选择器，自动压缩和普通压缩该怎么走还怎么走，不会因为开了这个开关而改变。",
+          "en": "The entry point is hidden by default. Turn on the Instant simple compaction switch in the Experiments settings page and the context-ring menu above the chat input gains the action; turning the switch off removes it again. It never joins the compaction mode selector, and automatic and ordinary compaction keep doing exactly what they did whether or not the switch is on."
+        },
+        {
+          "zh": "压缩进行中把鼠标停在输入框的上下文圆圈上，提示会写明这一次用的是瞬时简易压缩，不用猜。",
+          "en": "While it runs, hovering the context ring above the input box states that this run is using instant simple compaction, so you do not have to guess."
+        },
+        {
+          "zh": "工具调用和它的结果一定成对丢弃，不会只留下一半，避免给模型留下一个没有回应的工具请求。",
+          "en": "A tool call and its result are always dropped as a pair rather than leaving one half behind, so the model is never handed a tool request with no answer."
+        },
+        {
+          "zh": "如果无法确认保留区的边界在哪里，这次压缩会直接报错停下，不会拿一个不可靠的边界去截断历史。",
+          "en": "If the boundary of the retained tail cannot be proven, the run stops with an error instead of cutting history at an unreliable point."
+        }
+      ],
+      "sources": [
+        { "type": "commit", "ref": "83e2e34d9", "title": "feat(compaction): add instant local lossy mode" },
+        { "type": "commit", "ref": "44d5ec283", "title": "fix(compaction): gate instant action separately" }
+      ]
+    },
+    {
+      "id": "literal-mood-tags-preserved",
       "kind": "fix",
       "importance": "high",
       "title": {
-        "zh": "输入框 @ 提及工作区文件恢复可用",
-        "en": "The @ mention menu finds workspace files again"
+        "zh": "写在代码块里的心境标签不再被吞掉",
+        "en": "Mood tags written inside code blocks no longer disappear"
       },
       "summary": {
-        "zh": "在输入框打 @ 想引用工作区里的文件时，候选列表一直是空的，输入关键词也搜不出任何东西。原因是上一轮做音频附件时，连带把输入框里负责发起和收尾这次搜索的那段逻辑删掉了，搜索结果永远停在空数组。现在这段生命周期回来了，打开菜单能看到工作区候选，继续输入会照常异步搜索。",
-        "en": "Typing @ in the input box to reference a workspace file left the candidate list empty, and typing a query surfaced nothing either. The audio-attachment work had removed the part of the input box that starts and finishes that search, so the result list stayed permanently empty. That lifecycle is back: opening the menu shows workspace candidates, and typing keeps searching asynchronously."
+        "zh": "助手回复开头可以带一小段尖括号标记来传递心境，这段标记本身不显示给你看。问题是判断条件太宽：只要正文里出现这种形状的文字，哪怕是在讲解时写进代码块当例子，也会被当成内部标记直接吞掉，于是那段代码在你眼前凭空少了一截。现在只有出现在回复最开头、并且成对闭合的才算内部标记；写在围栏代码块里、行内反引号里、正文中途出现的、或者没有正确闭合的，全部原样显示。实时输出和重新打开历史记录两条路径都一致。",
+        "en": "An assistant reply may open with a short angle-bracket marker carrying its mood, and that marker is not shown to you. The trouble was that the rule was too loose: any text of that shape anywhere in the message was swallowed as an internal marker, including a code block written to explain the syntax, so a chunk of that code simply vanished in front of you. Only a correctly paired block at the very start of a reply counts as an internal marker now. Tags inside fenced code, inline backticks, partway through the prose, or without a proper closing tag all stay visible. Live streaming and reloaded history behave identically."
       },
       "details": [
         {
-          "zh": "只影响输入框的 @ 文件提及菜单，工作区本身的文件索引没有变化。",
-          "en": "Only the input box's @ file-mention menu was affected; the workspace file index itself never changed."
+          "zh": "受影响的还有活动历史的渲染和开源导出，这几条路径现在共用同一套判断，不会各自解释一套。",
+          "en": "Activity history rendering and the open-source export are affected too; these paths now share one rule instead of each interpreting the text their own way."
         }
       ],
       "sources": [
-        { "type": "commit", "ref": "2850ed8ee", "title": "fix(desktop): restore workspace @-mention async search" },
-        { "type": "commit", "ref": "061dcf313", "title": "fix(desktop): align the desk search mock with the real searchDeskFiles signature" }
+        { "type": "commit", "ref": "61d21dd31", "title": "fix(chat): preserve literal internal tags (#2365)" }
       ]
     },
     {
-      "id": "bridge-paragraph-breaks",
+      "id": "usage-cache-semantics",
       "kind": "fix",
       "importance": "medium",
       "title": {
-        "zh": "外部渠道的回复不再把隐藏工具前后的段落粘成一句",
-        "en": "External replies keep paragraph breaks around hidden tool calls"
+        "zh": "用量统计按各家供应商的真实缓存口径计算",
+        "en": "Usage figures read each provider's own cache accounting"
       },
       "summary": {
-        "zh": "助手在回答中途调用工具时，工具本身对外部渠道是隐藏的。以前只把工具前后的文字直接首尾相接，于是 Telegram、微信这类渠道收到的就是两段话被硬拼成一句、中间没有任何断开。现在两段散文之间会补上段落边界，读起来和桌面端一致。",
-        "en": "When the assistant calls a tool mid-answer, the tool itself is hidden from external channels. The text before and after it used to be concatenated end to end, so Telegram, WeChat and similar channels received two paragraphs welded into one sentence with no break at all. A paragraph boundary is now inserted between the two prose segments, matching how it reads on the desktop."
+        "zh": "各家供应商对「输入 token」的定义并不一致：OpenAI 把缓存命中的部分算进输入里，Pi SDK 和 Anthropic 则把缓存读写单独计费、输入只剩全价处理的那部分。程序以前一律按 OpenAI 那种算法去减缓存，在后一类供应商上等于从一个本来就不含缓存的数字里再减一次，于是「未命中缓存的 token」被压到 0，缓存命中率拿一个很小的余数当分母，经常算出远大于 1 的荒唐比例。按模型费率折算成本时也因此把整个输入部分漏掉了。现在三处计算共用同一套口径判断，数字回到正确值。",
+        "en": "Providers do not agree on what the input token count covers. OpenAI folds the cached portion into it, while Pi SDK and Anthropic bill cache reads and writes separately and report input as only the remainder processed at full price. The app subtracted the cache the OpenAI way for everyone, which on the latter group meant subtracting from a number the cache was never in: uncached tokens floored at zero, and the cache hit ratio divided by that small remainder instead of the whole prompt, routinely producing ratios well above 1. Cost derived from model rates dropped the input term entirely for the same reason. All three calculations now share one accounting rule and the numbers return to their true values."
       },
       "details": [
         {
-          "zh": "受影响的是所有走 Bridge 外发的文本：外部消息回复、遥控镜像、以及从外部触发的桌面会话所捕获的文本。",
-          "en": "This covers every text path going out through Bridge: external message replies, the remote-control mirror, and text captured from desktop sessions triggered externally."
-        }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "ee3227bd2", "title": "fix(bridge): keep paragraph breaks across hidden tool calls" }
-      ]
-    },
-    {
-      "id": "bridge-proactive-failure-reasons",
-      "kind": "fix",
-      "importance": "medium",
-      "title": {
-        "zh": "主动消息发送失败会说清楚是哪一种失败",
-        "en": "Proactive delivery failures name the actual reason"
-      },
-      "summary": {
-        "zh": "定时任务通过 Bridge 主动给你发消息时，只要没发出去，以前一律报「没有可用的投递目标」这一句，把完全不同的原因压成同一个说法——最常见的其实是微信这类渠道当下没有可回复的上下文，跟真的没配目标是两回事。现在会区分「当下没有可回复的上下文」「目标缺失」「连接已断开」「发送本身失败」四种情况，并把具体渠道的投递结果一并带出来。",
-        "en": "When a scheduled task pushed a message to you through Bridge and it did not go out, every cause used to collapse into the single sentence \"no delivery target available\", which hid genuinely different problems. The most common one is that a channel like WeChat has no reply context available at that moment, which is not the same as having no target configured. Failures now distinguish reply-context-unavailable, target-missing, disconnected and send-failed, and carry the per-channel delivery results along with them."
-      },
-      "details": [
-        {
-          "zh": "同时修正了发送接口的文档：失败时返回的是带原因的结构化结果，而不是文档里写的空值。",
-          "en": "The send API's documentation was corrected at the same time: a failure returns a structured result carrying the reason, not the null value the docs claimed."
-        }
-      ],
-      "sources": [
-        { "type": "commit", "ref": "0ef9a77a2", "title": "fix(bridge): distinguish proactive delivery failure reasons" },
-        { "type": "commit", "ref": "4c0900a2d", "title": "fix(bridge): document and test send_failed proactive results" }
-      ]
-    },
-    {
-      "id": "legacy-session-bom-meta",
-      "kind": "fix",
-      "importance": "medium",
-      "title": {
-        "zh": "带 BOM 的老会话元数据不再被误判为损坏并永久跳过",
-        "en": "Legacy session metadata with a BOM is no longer written off as corrupt"
-      },
-      "summary": {
-        "zh": "旧版本的会话元数据文件如果带 UTF-8 BOM（某些编辑器保存时会加上这个不可见标记），读取时会被当成 JSON 解析失败而跳过。更麻烦的是这个「判损坏」的结论会被记进跳过账本，重启后直接沿用、不再重读，等于这些会话的置顶、权限、执行器等旧属性被永久丢掉，而且过程是静默的。现在读取会先剥掉 BOM；升级到这一版后，账本里由旧读取逻辑留下的这类判决会被重新验一次，真正损坏的文件重验失败后才会继续跳过。",
-        "en": "Legacy session metadata files carrying a UTF-8 BOM, an invisible marker some editors add when saving, failed JSON parsing and were skipped. Worse, that corrupt verdict was recorded in a skip ledger and reused after every restart without rereading, so those sessions' pinned state, permissions, executor and other legacy attributes were lost for good, and silently. Reads now strip the BOM first, and upgrading to this version revalidates the verdicts the old reader left behind, so only files that genuinely fail on the second read stay skipped."
-      },
-      "details": [
-        {
-          "zh": "重验只针对「解析失败」这一类判决，文件过大的跳过判决不参与，行为不变。",
-          "en": "Only parse-failure verdicts are revalidated; skips caused by an oversized file are untouched and behave as before."
+          "zh": "这些供应商的成本数字会因此上升。那是它本来就该有的数额，此前是少算了，不是这一版让你多花钱。",
+          "en": "Cost figures for those providers rise as a result. That is the amount that was always owed and was previously undercounted, not a new charge introduced by this release."
         },
         {
-          "zh": "受影响的还有恢复提示：以前被误判跳过的文件会出现在提示里，现在这类误报会随重验消失。",
-          "en": "Recovery notices are affected too: files that had been falsely skipped used to show up there, and those false reports clear as the revalidation runs."
+          "zh": "这一版之前已经写进用量账本的记录保持原样，不会被回溯改写。",
+          "en": "Ledger entries written before this release keep their old values; nothing rewrites history."
+        },
+        {
+          "zh": "同样受影响的还有暴露给插件的用量数据，以及记忆滚动条上的 token 计数。",
+          "en": "The usage shape exposed to plugins and the memory ticker's token counts are affected in the same way."
         }
       ],
       "sources": [
-        { "type": "commit", "ref": "677d8a6db", "title": "fix(session): accept BOM JSON and revalidate parse_error ledger" },
-        { "type": "commit", "ref": "afa54cbe7", "title": "chore(build): refresh receipts for the bridge accumulator and ledger reader changes" }
+        { "type": "commit", "ref": "720fa7d56", "title": "fix(usage): read provider input tokens with the right cache semantics" }
       ]
     },
     {
-      "id": "session-list-dot-static-cue",
-      "kind": "improvement",
+      "id": "session-row-switch-decoration",
+      "kind": "fix",
       "importance": "low",
       "title": {
-        "zh": "会话列表状态圆点改为固定亮度，不再持续闪烁",
-        "en": "Session list status dots use a fixed brightness instead of pulsing"
+        "zh": "点击切换会话不再闪一道竖线和状态圆点",
+        "en": "Clicking a session row no longer flashes a rule and a status dot"
       },
       "summary": {
-        "zh": "会话列表里标记「运行中」和「排队中」的小圆点原来各跑一个无限循环的透明度动画。这个动画只要有会话在跑就一直不停，会让界面合成器持续处于忙碌状态，在显卡加速不可用、退回软件渲染的机器上尤其吃资源。现在改成用固定亮度区分：运行中是全亮，排队中是半透明，状态仍然一眼可辨，但不再有呼吸闪烁的动效。",
-        "en": "The dots marking running and pending sessions each ran an infinite opacity animation. It never stopped while a session was active, keeping the UI compositor permanently busy, which is especially costly on machines where GPU acceleration is unavailable and rendering falls back to software. The two states are now told apart by a fixed brightness, fully opaque for running and semi-transparent for pending: still distinguishable at a glance, but without the pulsing motion."
+        "zh": "切换会话时，那一行左边会画出一道 2 像素的竖线、状态圆点也跟着亮起，一直持续到加载完成。可切换本来就是几十毫秒的本地操作，实际效果是每点一次都闪一下，读起来更像噪音而不是反馈。这个用法还模糊了圆点的含义：圆点本来是会话自己的信号——正在输出，或者后台跑完了还没读——借去表示「应用正在加载」，会让一个你只是点了一下的会话看起来像在产出内容。两个装饰都去掉了。",
+        "en": "Switching sessions painted a 2px rule down the row's left edge and lit up its status dot for the whole loading window. Switching is a local operation that usually finishes in tens of milliseconds, so in practice every click flashed both, which read as noise rather than feedback. It also blurred what the dot means: the dot is the session's own signal, either streaming or finished in the background and unread, and borrowing it for \"the app is loading this\" made a session you merely clicked look like one producing output. Both cues are gone."
       },
       "details": [
         {
-          "zh": "只影响会话列表的运行中/排队中指示点，其他位置的动效没有改动。",
-          "en": "Only the session list's running and pending indicators change; motion elsewhere in the app is untouched."
+          "zh": "输入框在切换期间照旧锁定，被点中的那一行也照旧立刻高亮，这两处反馈没有变化。",
+          "en": "The input box still locks during the switch and the clicked row still highlights immediately; neither piece of feedback changed."
+        },
+        {
+          "zh": "一个既在加载又在输出的会话，圆点仍然亮着，因为那是它真的在输出。",
+          "en": "A session that is both loading and streaming keeps its dot lit, because in that case it really is producing output."
         }
       ],
       "sources": [
-        { "type": "commit", "ref": "5b17ae686", "title": "fix(desktop): stop infinite pulse on session streaming dots" }
+        { "type": "commit", "ref": "30eb4ab94", "title": "fix(session-list): drop the switch-loading decoration from session rows" }
       ]
     }
   ]

@@ -3,6 +3,166 @@
   "entries": [
     {
       "schemaVersion": 1,
+      "tag": "v0.444.1",
+      "version": "0.444.1",
+      "previousTag": "v0.443.54",
+      "generatedAt": "2026-08-07T18:38:31.000Z",
+      "noUserFacingChanges": false,
+      "summary": {
+        "zh": "这一版新增了瞬时简易压缩：一个你主动点才会发生的压缩方式，完全在本地重建检查点，不额外发一次模型请求，所以点下去几乎瞬间完成，也不为这次压缩花钱。代价写在名字里——被重建的那段历史只保留文字，工具调用、工具结果、隐藏的思考过程和图片之类的非文本内容会被整体丢掉；最近的那一段对话仍然逐字保留、不受影响。它默认不出现：要先在设置的实验页里打开「瞬时简易压缩」开关，聊天输入框的上下文圆圈菜单里才会多出这个入口。它只影响你点的这一次，自动压缩和普通压缩的行为完全不变。另外三条是修复。一是聊天里带尖括号的心境标签：以前只要文字里出现这种形状的标签，哪怕是写在代码块里当例子讲解，也会被当成内部标记吞掉，现在只有出现在回复最开头且成对闭合的才算内部标记，写在代码块里、行内反引号里、或者正文中途的都会原样显示。二是用量统计的缓存口径：不同供应商对「输入 token」的定义不一样，有的把缓存部分算进去、有的不算，程序以前一律按前一种算，导致在 Pi SDK 和 Anthropic 这类供应商上，未命中缓存的 token 被压成 0、缓存命中率经常算出大于 1 的荒唐值，按模型费率折算的成本也漏掉了整个输入部分。现在按各家真实口径读，这些数字会回到正确值——注意成本会因此上升，那是它本来就该有的数额，此前是少算了；这一版之前已经写进账本的记录保持原样，不会被改写。三是点击切换会话时，那一行左边闪一道竖线、状态圆点跟着亮起的效果去掉了：切换本来就是几十毫秒的本地操作，每点一次都闪一下更像噪音；而且圆点被借去表示「正在加载」，会让一个你只是点了一下的会话看起来像在输出内容。现在圆点只表示两件事：正在输出，或者后台跑完了还没读。",
+        "en": "This release adds instant simple compaction: a compaction you start yourself that rebuilds the checkpoint entirely on your machine with no extra model request, so it finishes almost immediately and costs nothing to run. The trade-off is in the name. Across the rebuilt stretch of history only prose survives; tool calls, tool results, hidden reasoning and non-text payloads such as images are dropped wholesale, while the recent tail is kept verbatim and is unaffected. It does not appear by default: turn on the Instant simple compaction switch in the Experiments settings page and the context-ring menu above the chat input gains the action. It affects only the run you explicitly start, and automatic and ordinary compaction behave exactly as before. The other three changes are fixes. First, angle-bracket mood tags in chat: any text of that shape used to be swallowed as an internal marker, including when it was written inside a code block as an example. Only a correctly paired block at the very start of a reply counts as an internal marker now, so tags inside fenced code, inline backticks, or partway through the prose stay visible. Second, cache accounting in usage figures: providers disagree on what the input token count covers, some folding the cached part in and some not, and the app read every provider the first way. On providers like Pi SDK and Anthropic that pinned uncached tokens to zero and produced cache hit ratios above 1, and cost derived from model rates dropped the input term entirely. Each provider is now read on its own terms and these numbers return to their true values. Note that cost figures will rise as a result: that is the amount that was always owed and was previously undercounted. Ledger entries written before this release keep their old values and are not rewritten. Third, clicking a session row no longer flashes a rule down its left edge and lights up its status dot while it loads. Switching is a local operation that finishes in tens of milliseconds, so flashing on every click read as noise, and borrowing the dot for loading made a session you merely clicked look like one producing output. The dot now means exactly two things: streaming, or finished in the background and unread."
+      },
+      "counts": {
+        "feature": 1,
+        "fix": 3,
+        "improvement": 0,
+        "migration": 0
+      },
+      "source": {
+        "owner": "liliMozi",
+        "repo": "openhanako",
+        "commitRange": "v0.443.54..v0.444.1",
+        "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.444.1",
+        "releaseNotes": ""
+      },
+      "items": [
+        {
+          "id": "instant-simple-compaction",
+          "kind": "feature",
+          "importance": "high",
+          "title": {
+            "zh": "新增瞬时简易压缩：不请求模型，本地立刻压完",
+            "en": "New instant simple compaction: no model request, done locally on the spot"
+          },
+          "summary": {
+            "zh": "压缩上下文时，原有的自动和普通压缩都要再发一次模型请求去写摘要，得等，也要花钱。新增的瞬时简易压缩不请求模型，直接在本地把检查点重建出来：能接上已有的滚动摘要就接着写，接不上就把那段历史的文字原样铺开。代价写在名字里——被重建的那段历史只保留文字，工具调用、工具结果、隐藏的思考过程和图片之类的非文本内容会被整体丢掉。最近那一段对话不参与重建，仍然逐字保留。它是一次性动作，不是默认策略：只影响你主动点的这一次，适合赶时间、或者不想为一次压缩再付一次模型费用的场景。",
+            "en": "Compacting the context used to require another model request to write the summary, which costs both time and money in the existing Auto and Normal modes. The new instant simple compaction makes no model request and rebuilds the checkpoint locally instead: it continues from the existing rolling summary when that summary lines up, and otherwise lays out the prose of that stretch of history as it stands. The cost is in the name. Across the rebuilt region only prose survives; tool calls, tool results, hidden reasoning and non-text payloads such as images are dropped wholesale. The recent tail is excluded from the rebuild and stays verbatim. It is a one-shot action rather than a default strategy: it affects only the run you start yourself, which suits moments when you are in a hurry or do not want to pay for another model call just to compact."
+          },
+          "details": [
+            {
+              "zh": "默认看不到这个入口。先在设置的实验页打开「瞬时简易压缩」开关，聊天输入框的上下文圆圈菜单里才会多出这一项，关掉开关就收回去。它不进入压缩模式选择器，自动压缩和普通压缩该怎么走还怎么走，不会因为开了这个开关而改变。",
+              "en": "The entry point is hidden by default. Turn on the Instant simple compaction switch in the Experiments settings page and the context-ring menu above the chat input gains the action; turning the switch off removes it again. It never joins the compaction mode selector, and automatic and ordinary compaction keep doing exactly what they did whether or not the switch is on."
+            },
+            {
+              "zh": "压缩进行中把鼠标停在输入框的上下文圆圈上，提示会写明这一次用的是瞬时简易压缩，不用猜。",
+              "en": "While it runs, hovering the context ring above the input box states that this run is using instant simple compaction, so you do not have to guess."
+            },
+            {
+              "zh": "工具调用和它的结果一定成对丢弃，不会只留下一半，避免给模型留下一个没有回应的工具请求。",
+              "en": "A tool call and its result are always dropped as a pair rather than leaving one half behind, so the model is never handed a tool request with no answer."
+            },
+            {
+              "zh": "如果无法确认保留区的边界在哪里，这次压缩会直接报错停下，不会拿一个不可靠的边界去截断历史。",
+              "en": "If the boundary of the retained tail cannot be proven, the run stops with an error instead of cutting history at an unreliable point."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "83e2e34d9",
+              "title": "feat(compaction): add instant local lossy mode"
+            },
+            {
+              "type": "commit",
+              "ref": "44d5ec283",
+              "title": "fix(compaction): gate instant action separately"
+            }
+          ]
+        },
+        {
+          "id": "literal-mood-tags-preserved",
+          "kind": "fix",
+          "importance": "high",
+          "title": {
+            "zh": "写在代码块里的心境标签不再被吞掉",
+            "en": "Mood tags written inside code blocks no longer disappear"
+          },
+          "summary": {
+            "zh": "助手回复开头可以带一小段尖括号标记来传递心境，这段标记本身不显示给你看。问题是判断条件太宽：只要正文里出现这种形状的文字，哪怕是在讲解时写进代码块当例子，也会被当成内部标记直接吞掉，于是那段代码在你眼前凭空少了一截。现在只有出现在回复最开头、并且成对闭合的才算内部标记；写在围栏代码块里、行内反引号里、正文中途出现的、或者没有正确闭合的，全部原样显示。实时输出和重新打开历史记录两条路径都一致。",
+            "en": "An assistant reply may open with a short angle-bracket marker carrying its mood, and that marker is not shown to you. The trouble was that the rule was too loose: any text of that shape anywhere in the message was swallowed as an internal marker, including a code block written to explain the syntax, so a chunk of that code simply vanished in front of you. Only a correctly paired block at the very start of a reply counts as an internal marker now. Tags inside fenced code, inline backticks, partway through the prose, or without a proper closing tag all stay visible. Live streaming and reloaded history behave identically."
+          },
+          "details": [
+            {
+              "zh": "受影响的还有活动历史的渲染和开源导出，这几条路径现在共用同一套判断，不会各自解释一套。",
+              "en": "Activity history rendering and the open-source export are affected too; these paths now share one rule instead of each interpreting the text their own way."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "61d21dd31",
+              "title": "fix(chat): preserve literal internal tags (#2365)"
+            }
+          ]
+        },
+        {
+          "id": "usage-cache-semantics",
+          "kind": "fix",
+          "importance": "medium",
+          "title": {
+            "zh": "用量统计按各家供应商的真实缓存口径计算",
+            "en": "Usage figures read each provider's own cache accounting"
+          },
+          "summary": {
+            "zh": "各家供应商对「输入 token」的定义并不一致：OpenAI 把缓存命中的部分算进输入里，Pi SDK 和 Anthropic 则把缓存读写单独计费、输入只剩全价处理的那部分。程序以前一律按 OpenAI 那种算法去减缓存，在后一类供应商上等于从一个本来就不含缓存的数字里再减一次，于是「未命中缓存的 token」被压到 0，缓存命中率拿一个很小的余数当分母，经常算出远大于 1 的荒唐比例。按模型费率折算成本时也因此把整个输入部分漏掉了。现在三处计算共用同一套口径判断，数字回到正确值。",
+            "en": "Providers do not agree on what the input token count covers. OpenAI folds the cached portion into it, while Pi SDK and Anthropic bill cache reads and writes separately and report input as only the remainder processed at full price. The app subtracted the cache the OpenAI way for everyone, which on the latter group meant subtracting from a number the cache was never in: uncached tokens floored at zero, and the cache hit ratio divided by that small remainder instead of the whole prompt, routinely producing ratios well above 1. Cost derived from model rates dropped the input term entirely for the same reason. All three calculations now share one accounting rule and the numbers return to their true values."
+          },
+          "details": [
+            {
+              "zh": "这些供应商的成本数字会因此上升。那是它本来就该有的数额，此前是少算了，不是这一版让你多花钱。",
+              "en": "Cost figures for those providers rise as a result. That is the amount that was always owed and was previously undercounted, not a new charge introduced by this release."
+            },
+            {
+              "zh": "这一版之前已经写进用量账本的记录保持原样，不会被回溯改写。",
+              "en": "Ledger entries written before this release keep their old values; nothing rewrites history."
+            },
+            {
+              "zh": "同样受影响的还有暴露给插件的用量数据，以及记忆滚动条上的 token 计数。",
+              "en": "The usage shape exposed to plugins and the memory ticker's token counts are affected in the same way."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "720fa7d56",
+              "title": "fix(usage): read provider input tokens with the right cache semantics"
+            }
+          ]
+        },
+        {
+          "id": "session-row-switch-decoration",
+          "kind": "fix",
+          "importance": "low",
+          "title": {
+            "zh": "点击切换会话不再闪一道竖线和状态圆点",
+            "en": "Clicking a session row no longer flashes a rule and a status dot"
+          },
+          "summary": {
+            "zh": "切换会话时，那一行左边会画出一道 2 像素的竖线、状态圆点也跟着亮起，一直持续到加载完成。可切换本来就是几十毫秒的本地操作，实际效果是每点一次都闪一下，读起来更像噪音而不是反馈。这个用法还模糊了圆点的含义：圆点本来是会话自己的信号——正在输出，或者后台跑完了还没读——借去表示「应用正在加载」，会让一个你只是点了一下的会话看起来像在产出内容。两个装饰都去掉了。",
+            "en": "Switching sessions painted a 2px rule down the row's left edge and lit up its status dot for the whole loading window. Switching is a local operation that usually finishes in tens of milliseconds, so in practice every click flashed both, which read as noise rather than feedback. It also blurred what the dot means: the dot is the session's own signal, either streaming or finished in the background and unread, and borrowing it for \"the app is loading this\" made a session you merely clicked look like one producing output. Both cues are gone."
+          },
+          "details": [
+            {
+              "zh": "输入框在切换期间照旧锁定，被点中的那一行也照旧立刻高亮，这两处反馈没有变化。",
+              "en": "The input box still locks during the switch and the clicked row still highlights immediately; neither piece of feedback changed."
+            },
+            {
+              "zh": "一个既在加载又在输出的会话，圆点仍然亮着，因为那是它真的在输出。",
+              "en": "A session that is both loading and streaming keeps its dot lit, because in that case it really is producing output."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "30eb4ab94",
+              "title": "fix(session-list): drop the switch-loading decoration from session rows"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
       "tag": "v0.443.54",
       "version": "0.443.54",
       "previousTag": "v0.443.46",
