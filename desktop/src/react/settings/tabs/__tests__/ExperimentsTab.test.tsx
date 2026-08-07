@@ -44,6 +44,7 @@ const hanaFetchMock = vi.fn(async (url: string, init?: RequestInit) => {
               { value: 'auto', labelKey: 'settings.experiments.compaction.auto' },
               { value: 'cache_preserving', labelKey: 'settings.experiments.compaction.cachePreserving' },
               { value: 'pi_compatible', labelKey: 'settings.experiments.compaction.piCompatible' },
+              { value: 'lossy_local', labelKey: 'settings.experiments.compaction.lossyLocal' },
             ],
           },
         },
@@ -99,7 +100,7 @@ describe('ExperimentsTab', () => {
     expect(screen.queryByText('settings.experiments.cacheSnapshot.observeOnly')).toBeNull();
   });
 
-  it('renders the three-mode compaction selector in experiments', async () => {
+  it('renders the four-mode compaction selector in experiments', async () => {
     render(React.createElement(ExperimentsTab));
 
     await waitFor(() => {
@@ -111,14 +112,14 @@ describe('ExperimentsTab', () => {
     expect(screen.getByTitle('settings.experiments.compaction.auto')).toBeTruthy();
 
     fireEvent.click(screen.getByTitle('settings.experiments.compaction.auto'));
-    fireEvent.click(screen.getByRole('option', { name: 'settings.experiments.compaction.piCompatible' }));
+    fireEvent.click(screen.getByRole('option', { name: 'settings.experiments.compaction.lossyLocal' }));
 
     await waitFor(() => {
       expect(hanaFetchMock).toHaveBeenCalledWith(
         '/api/experiments/session.compaction_mode',
         expect.objectContaining({
           method: 'PATCH',
-          body: JSON.stringify({ value: 'pi_compatible' }),
+          body: JSON.stringify({ value: 'lossy_local' }),
         }),
       );
     });

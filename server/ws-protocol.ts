@@ -25,8 +25,8 @@
  *   { type: "status", sessionId?: string, sessionPath: "...", isStreaming: bool, streamId?: string|null, turnId?: string|null }
  *   { type: "abort_rejected", reason: "stale_stream", sessionId?: string|null, sessionPath: "...", streamId?: string|null }
  *   { type: "abort_result", status: "accepted"|"already_stopped"|"rejected", reason?: "stale_stream", sessionId?: string|null, sessionPath: "...", streamId?: string|null }  (Stop 的显式结果；streamId 是服务端收到请求时的权威当前流)
- *   { type: "compaction_accepted", sessionId: "...", sessionPath?: "..." }  (sessionPath 仅 locator metadata，不参与身份或状态归属)
- *   { type: "compaction_result", sessionId: "...", sessionPath?: "...", status: "succeeded"|"noop"|"failed", reason?: "...", message?: "..." }  (sessionPath 仅 locator metadata)
+ *   { type: "compaction_accepted", sessionId: "...", sessionPath?: "...", mode?: "auto"|"cache_preserving"|"pi_compatible"|"lossy_local" }  (sessionPath 仅 locator metadata，不参与身份或状态归属)
+ *   { type: "compaction_result", sessionId: "...", sessionPath?: "...", mode?: "auto"|"cache_preserving"|"pi_compatible"|"lossy_local", status: "succeeded"|"noop"|"failed", reason?: "...", message?: "..." }  (sessionPath 仅 locator metadata)
  *   { type: "session_title", title: "...", path: "..." }
  *   { type: "jian_update", content: "..." }
  *   { type: "devlog", text: "...", level: "info"|"heartbeat"|"error" }

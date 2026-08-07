@@ -40,6 +40,7 @@ import {
   isDirectCompactionInProgress,
   projectMessagesToLatestCompactionUsageEpoch,
   runCachePreservingCompactionForSession,
+  runLossyLocalCompactionForSession,
   shouldHardTruncateCachePreservingCompaction,
 } from "../core/session-compactor.ts";
 import * as sessionCompactorModule from "../core/session-compactor.ts";
@@ -2509,5 +2510,62 @@ describe("direct compaction mutual exclusion", () => {
     // one gets to fail on its own merits, not on a stale lock.
     await expect(runCachePreservingCompactionForSession(session, { model, settings }))
       .rejects.not.toThrow(/compaction already in progress/);
+  });
+});
+
+describe("runLossyLocalCompactionForSession", () => {
+  it("persists a local checkpoint, replaces live messages, and emits a mode-aware lifecycle", async () => {
+    const branchEntries = [
+      { id: "u1", parentId: null, type: "message", message: piUser("old", 1), timestamp: 1 },
+      { id: "a1", parentId: "u1", type: "message", message: piAssistant("answer", 2), timestamp: 2 },
+      { id: "u2", parentId: "a1", type: "message", message: piUser("retained", 3), timestamp: 3 },
+    ];
+    prepareCompactionMock.mockReturnValueOnce({
+      firstKeptEntryId: "u2",
+      tokensBefore: 500,
+      fileOps: { read: new Set(), written: new Set(), edited: new Set() },
+    });
+    const rebuiltMessages = [{ role: "compactionSummary", summary: "rebuilt" }];
+    const appendCompaction = vi.fn(() => "compaction-1");
+    const replaceMessages = vi.fn();
+    const emit = vi.fn();
+    const getSummarySource = vi.fn(async () => null);
+    const session: any = {
+      isCompacting: false,
+      agent: { replaceMessages },
+      settingsManager: { getCompactionSettings: () => REAL_COMPACTION_SETTINGS },
+      sessionManager: {
+        getBranch: () => branchEntries,
+        appendCompaction,
+        buildSessionContext: () => ({ messages: rebuiltMessages }),
+      },
+      _emit: emit,
+    };
+
+    const result = await runLossyLocalCompactionForSession(session, {
+      getSummarySource,
+      emitLifecycle: true,
+      lifecycleReason: "threshold",
+    });
+
+    expect(result).toMatchObject({
+      firstKeptEntryId: "u2",
+      tokensBefore: 500,
+      details: { strategy: "lossy_local", zeroModelRequest: true },
+    });
+    expect(getSummarySource).toHaveBeenCalledWith(session);
+    expect(appendCompaction).toHaveBeenCalledWith(
+      expect.stringContaining("### User\nold"),
+      "u2",
+      500,
+      expect.objectContaining({ strategy: "lossy_local" }),
+      true,
+    );
+    expect(replaceMessages).toHaveBeenCalledWith(rebuiltMessages);
+    expect(emit.mock.calls.map(([event]) => event)).toEqual([
+      expect.objectContaining({ type: "compaction_start", mode: "lossy_local" }),
+      expect.objectContaining({ type: "compaction_end", mode: "lossy_local", aborted: false }),
+    ]);
+    expect(isDirectCompactionInProgress(session)).toBe(false);
   });
 });

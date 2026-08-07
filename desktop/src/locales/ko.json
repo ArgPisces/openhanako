@@ -300,6 +300,7 @@
     "stop": "중지",
     "browserScreenshot": "브라우저 스크린샷",
     "compacting": "컨텍스트 압축 중",
+    "instantSimpleCompaction": "즉시 간이 압축",
     "visionAuxiliary": "보조 시각",
     "fileExpired": "파일 만료됨",
     "fileActions": {
@@ -2309,7 +2310,7 @@
     "experiments": {
       "title": "실험 기능",
       "compactionTitle": "컨텍스트 압축",
-      "compactionSectionDescription": "압축 시 프롬프트 캐시 보존과 넓은 기록 호환성 중 무엇을 우선할지 선택해요.",
+      "compactionSectionDescription": "압축할 때 프롬프트 캐시 보존, 폭넓은 기록 호환성, 즉시 로컬 처리 중 무엇을 우선할지 선택해요.",
       "modelPersonaTitle": "모델 & 페르소나",
       "modelPersonaDescription": "프로바이더가 Hana의 페르소나, 분위기, 출력 계약에 어떻게 적응하는지 관찰해요.",
       "memoryTitle": "메모리 실험",
@@ -2356,10 +2357,11 @@
       },
       "compaction": {
         "title": "압축 모드",
-        "description": "자동은 캐시 보존 압축을 우선해요. 일반 압축은 Pi SDK 기본 요약기를 사용해 불안정한 기록 형식에 더 적합해요.",
+        "description": "자동은 캐시 보존 압축을 우선해요. 일반 압축은 Pi SDK 기본 요약기를 사용해요. 즉시 간이 압축은 품질을 낮춰 로컬에서 요약을 재구성하며 모델을 추가로 요청하지 않아요.",
         "auto": "자동",
         "cachePreserving": "캐시 보존 압축",
-        "piCompatible": "일반 압축"
+        "piCompatible": "일반 압축",
+        "lossyLocal": "즉시 간이 압축(저품질)"
       },
       "deepseekRoleplay": {
         "title": "DeepSeek 페르소나 몰입 패치",

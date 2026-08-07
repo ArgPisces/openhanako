@@ -300,6 +300,7 @@
     "stop": "停止",
     "browserScreenshot": "ブラウザスクリーンショット",
     "compacting": "コンテキスト圧縮中",
+    "instantSimpleCompaction": "瞬時簡易コンパクション",
     "visionAuxiliary": "補助ビジョン",
     "fileExpired": "ファイル期限切れ",
     "fileActions": {
@@ -2309,7 +2310,7 @@
     "experiments": {
       "title": "実験機能",
       "compactionTitle": "コンテキストコンパクション",
-      "compactionSectionDescription": "コンパクト時にプロンプトキャッシュの保持と広範な履歴互換性のどちらを優先するかを選択します。",
+      "compactionSectionDescription": "コンパクション時にプロンプトキャッシュ保持、幅広い履歴互換性、または瞬時のローカル処理のどれを優先するか選択します。",
       "modelPersonaTitle": "モデルとペルソナ",
       "modelPersonaDescription": "各プロバイダーが Hana のペルソナ、ムード、出力契約にどう適応するかを観察します。",
       "memoryTitle": "メモリ実験",
@@ -2356,10 +2357,11 @@
       },
       "compaction": {
         "title": "コンパクションモード",
-        "description": "Auto はキャッシュ保持型コンパクションを優先します。通常コンパクションは Pi SDK のネイティブ要約を実行し、不安定な履歴形式に適しています。",
+        "description": "Auto はキャッシュ保持型コンパクションを優先します。通常コンパクションは Pi SDK のネイティブ要約を使用します。瞬時簡易コンパクションは品質を抑えてローカルで要約を再構築し、追加のモデルリクエストは行いません。",
         "auto": "自動",
         "cachePreserving": "キャッシュ保持型コンパクション",
-        "piCompatible": "通常コンパクション"
+        "piCompatible": "通常コンパクション",
+        "lossyLocal": "瞬時簡易コンパクション（低品質）"
       },
       "deepseekRoleplay": {
         "title": "DeepSeek ペルソナ没入パッチ",

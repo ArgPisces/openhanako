@@ -31,7 +31,12 @@ import { createModuleLogger } from "../lib/debug-log.ts";
 import {
   isDirectCompactionInProgress,
   runCachePreservingCompactionForSession,
+  runLossyLocalCompactionForSession,
 } from "./session-compactor.ts";
+import {
+  COMPACTION_MODES,
+  normalizeCompactionMode,
+} from "../shared/compaction-mode.ts";
 
 const log = createModuleLogger("midrun-compaction");
 
@@ -91,15 +96,33 @@ export function installMidRunCompaction(session: any, deps: {
   usageLedger?: any;
   buildUsageContext?: ((session: any) => any) | null;
   runCompaction?: (session: any, options: any) => Promise<any>;
+  runCacheCompaction?: (session: any, options: any) => Promise<any>;
+  runLossyCompaction?: (session: any, options: any) => Promise<any>;
+  getCompactionMode?: ((session: any) => any) | null;
+  getLossyLocalSummarySource?: ((session: any) => any | Promise<any>) | null;
 } = {}): void {
   const agent = session?.agent;
   if (!agent) return;
   if (agent[MIDRUN_COMPACTION_INSTALLED]) return;
 
+  const runCacheCompaction = deps.runCacheCompaction ?? runCachePreservingCompactionForSession;
+  const runLossyCompaction = deps.runLossyCompaction ?? runLossyLocalCompactionForSession;
+  const runConfiguredCompaction = async (targetSession: any, options: any) => {
+    const mode = normalizeCompactionMode(deps.getCompactionMode?.(targetSession));
+    if (mode === COMPACTION_MODES.LOSSY_LOCAL) {
+      return await runLossyCompaction(targetSession, {
+        ...options,
+        getSummarySource: deps.getLossyLocalSummarySource
+          ? () => deps.getLossyLocalSummarySource?.(targetSession)
+          : null,
+      });
+    }
+    return await runCacheCompaction(targetSession, options);
+  };
   const resolved = {
     usageLedger: deps.usageLedger ?? null,
     buildUsageContext: deps.buildUsageContext ?? null,
-    runCompaction: deps.runCompaction ?? runCachePreservingCompactionForSession,
+    runCompaction: deps.runCompaction ?? runConfiguredCompaction,
   };
 
   const previous = agent.prepareNextTurnWithContext

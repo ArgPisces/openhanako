@@ -21,6 +21,10 @@ import { debugLog, createModuleLogger } from "../../lib/debug-log.ts";
 import { t } from "../../lib/i18n.ts";
 import { getLastAssistantUsage } from "../../lib/pi-sdk/index.ts";
 import { compactSessionWithCachePreservationRecoveringRuntime } from "../../core/session-compactor.ts";
+import {
+  getResolvedCompactionMode,
+  normalizeCompactionMode,
+} from "../../shared/compaction-mode.ts";
 import { submitDesktopSessionInterjection, submitDesktopSessionMessage } from "../../core/desktop-session-submit.ts";
 import {
   AgentReviewTurnCoordinator,
@@ -190,15 +194,19 @@ export function toCompactionLifecycleWsMessage(
   sessionPath: any,
   getSessionByPath: any,
   getSessionIdForPath: any,
+  getCompactionMode?: any,
 ) {
   if (!sessionPath) return null;
   const sessionId = getSessionIdForPath?.(sessionPath) ?? null;
+  const rawMode = event?.mode ?? getCompactionMode?.();
+  const mode = rawMode == null ? null : normalizeCompactionMode(rawMode);
   if (event.type === "compaction_start") {
     return {
       type: "compaction_start",
       sessionId,
       sessionPath,
       reason: event.reason ?? null,
+      ...(mode ? { mode } : {}),
     };
   }
   if (event.type !== "compaction_end") return null;
@@ -211,6 +219,7 @@ export function toCompactionLifecycleWsMessage(
     reason: event.reason ?? null,
     aborted: event.aborted ?? false,
     willRetry: event.willRetry ?? false,
+    ...(mode ? { mode } : {}),
     tokens: usage?.tokens ?? null,
     contextWindow: usage?.contextWindow ?? null,
     percent: usage?.percent ?? null,
@@ -1054,6 +1063,7 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
       sessionPath,
       (sp) => engine.getSessionByPath(sp),
       (sp) => sessionIdForPath(sp),
+      () => getResolvedCompactionMode(engine.preferences),
     );
     if (compactionMessage) {
       broadcast(compactionMessage);
@@ -1921,10 +1931,12 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 return;
               }
               const { sessionId: compactSessionId, sessionPath: compactPath } = compactTarget;
+              const compactionMode = getResolvedCompactionMode(engine.preferences);
               const compactResult = (status, details: Record<string, any> = {}) => wsSend(ws, {
                 type: "compaction_result",
                 sessionId: compactSessionId,
                 sessionPath: compactPath,
+                mode: compactionMode,
                 status,
                 ...details,
               });
@@ -1950,6 +1962,7 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
                 type: "compaction_accepted",
                 sessionId: compactSessionId,
                 sessionPath: compactPath,
+                mode: compactionMode,
               });
               try {
                 const compacted = await compactSessionWithCachePreservationRecoveringRuntime({

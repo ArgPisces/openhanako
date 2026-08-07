@@ -4,12 +4,14 @@ export const COMPACTION_MODES = Object.freeze({
   AUTO: "auto",
   CACHE_PRESERVING: "cache_preserving",
   PI_COMPATIBLE: "pi_compatible",
+  LOSSY_LOCAL: "lossy_local",
 } as const);
 
 export type CompactionMode =
   | typeof COMPACTION_MODES.AUTO
   | typeof COMPACTION_MODES.CACHE_PRESERVING
-  | typeof COMPACTION_MODES.PI_COMPATIBLE;
+  | typeof COMPACTION_MODES.PI_COMPATIBLE
+  | typeof COMPACTION_MODES.LOSSY_LOCAL;
 
 const KNOWN_COMPACTION_MODES = new Set<string>(Object.values(COMPACTION_MODES));
 

@@ -38,7 +38,7 @@ describe("experiment registry", () => {
     });
   });
 
-  it("defines compaction mode as a three-option select defaulting to auto", () => {
+  it("defines compaction mode as a four-option select defaulting to auto", () => {
     const defs = getExperimentDefinitions();
     const entry = defs.find((def) => def.id === COMPACTION_MODE_EXPERIMENT_ID);
 
@@ -56,6 +56,7 @@ describe("experiment registry", () => {
       "auto",
       "cache_preserving",
       "pi_compatible",
+      "lossy_local",
     ]);
   });
 

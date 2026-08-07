@@ -34,6 +34,7 @@ const DEFINITIONS = [
         { value: COMPACTION_MODES.AUTO, labelKey: "settings.experiments.compaction.auto" },
         { value: COMPACTION_MODES.CACHE_PRESERVING, labelKey: "settings.experiments.compaction.cachePreserving" },
         { value: COMPACTION_MODES.PI_COMPATIBLE, labelKey: "settings.experiments.compaction.piCompatible" },
+        { value: COMPACTION_MODES.LOSSY_LOCAL, labelKey: "settings.experiments.compaction.lossyLocal" },
       ],
     },
     status: "beta",

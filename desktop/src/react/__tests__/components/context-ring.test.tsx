@@ -34,6 +34,7 @@ describe('ContextRing', () => {
       contextPercent: null,
       contextBySession: {},
       compactingSessions: ['/session/a.jsonl'],
+      compactionModeBySession: {},
     } as never);
   });
 
@@ -47,6 +48,7 @@ describe('ContextRing', () => {
       contextPercent: null,
       contextBySession: {},
       compactingSessions: [],
+      compactionModeBySession: {},
     } as never);
   });
 
@@ -57,6 +59,19 @@ describe('ContextRing', () => {
       const button = container.querySelector('button');
       expect(button).toBeTruthy();
       expect((button as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
+
+  it('identifies instant simple compaction in the ring tooltip', async () => {
+    useStore.setState({
+      compactionModeBySession: { sess_a: 'lossy_local' },
+    } as never);
+    const { container } = render(<ContextRing />);
+
+    fireEvent.mouseEnter(container.querySelector('button') as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(screen.getByText('chat.instantSimpleCompaction')).toBeInTheDocument();
     });
   });
 

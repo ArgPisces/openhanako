@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:ae1d8edbac64c96d7fc0d74cf1e5e4f05d579211a907b5d5b1d57247208dcb29",
+  "payloadFingerprint": "sha256:8548f00fa1f75cb39d506124bc4ee5f322caa1b97a3428a85766409f6df8e077",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3118,8 +3118,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "The legacy session-meta ledger reader now strips a UTF-8 BOM before JSON.parse and revalidates cached parse_error verdicts lacking the current verdict schema, so previously misjudged BOM files are re-read once; stored shapes and paths are unchanged and older ledgers remain readable",
-    "payloadFingerprint": "sha256:ae1d8edbac64c96d7fc0d74cf1e5e4f05d579211a907b5d5b1d57247208dcb29"
+    "compatibilityReason": "Instant local compaction adds read-only rolling-summary resolution and mode-aware runtime wiring; persisted schemas, paths, identity keys, and existing readers are unchanged.",
+    "payloadFingerprint": "sha256:8548f00fa1f75cb39d506124bc4ee5f322caa1b97a3428a85766409f6df8e077"
   },
   "schemas": [
     {
@@ -3518,7 +3518,7 @@
       "contract": "server-info writer and desktop bootstrap reader",
       "kind": "runtime-contract",
       "module": "server/index.ts",
-      "sourceHash": "sha256:a63a67ce8d4f09cb70a3aaab7728146cae2dab7c32a6efa4e24bdf7efe7e36db",
+      "sourceHash": "sha256:c1c6bc7e23dacbfa1554b7f0444211325bce3f348bdc02ae77e4b80eb0e12c4b",
       "storeId": "server-runtime-info"
     },
     {
@@ -3540,7 +3540,7 @@
         {
           "contract": "core/session-coordinator.ts Hana metadata extensions",
           "module": "core/session-coordinator.ts",
-          "sourceHash": "sha256:9291ba90a08340f0b4071d0935e4d4abf55103bf9257296f7acedd32ae14b83e"
+          "sourceHash": "sha256:e4128262cc9ff31eb16e3ad775f6e5e91e03c55804001e5705ab80de482e3ba0"
         },
         {
           "contract": "core/session-jsonl-file.ts repair contract",

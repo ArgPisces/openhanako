@@ -300,6 +300,7 @@
     "stop": "Stop",
     "browserScreenshot": "Browser screenshot",
     "compacting": "Compacting context",
+    "instantSimpleCompaction": "Instant simple compaction",
     "visionAuxiliary": "Vision auxiliary",
     "fileExpired": "File expired",
     "fileActions": {
@@ -1095,7 +1096,7 @@
     "experiments": {
       "title": "Experiments",
       "compactionTitle": "Context Compaction",
-      "compactionSectionDescription": "Choose whether compact prioritizes prompt-cache preservation or broad history compatibility.",
+      "compactionSectionDescription": "Choose whether compaction prioritizes prompt-cache preservation, broad history compatibility, or an instant local shortcut.",
       "modelPersonaTitle": "Models & Persona",
       "modelPersonaDescription": "Observe how providers adapt to Hana's persona, mood, and output contracts.",
       "memoryTitle": "Memory Experiments",
@@ -1142,10 +1143,11 @@
       },
       "compaction": {
         "title": "Compaction mode",
-        "description": "Auto prefers cache-preserving compaction. Normal compaction lets Pi SDK run its native summarizer, which is better for unstable history formats.",
+        "description": "Auto prefers cache-preserving compaction. Normal compaction uses Pi SDK's native summarizer. Instant simple compaction rebuilds the summary locally with lower quality and no additional model request.",
         "auto": "Auto",
         "cachePreserving": "Cache-preserving compaction",
-        "piCompatible": "Normal compaction"
+        "piCompatible": "Normal compaction",
+        "lossyLocal": "Instant simple compaction (low quality)"
       },
       "deepseekRoleplay": {
         "title": "DeepSeek persona immersion patch",

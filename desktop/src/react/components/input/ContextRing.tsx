@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '../../stores';
-import { isSessionCompacting } from '../../stores/context-slice';
+import { getSessionCompactionMode, isSessionCompacting } from '../../stores/context-slice';
 import { sessionScopedListIncludes, sessionScopedValue } from '../../stores/session-slice';
 import { useI18n } from '../../hooks/use-i18n';
 import { getWebSocket } from '../../services/websocket';
@@ -33,6 +33,7 @@ export function ContextRing() {
   const storeContextWindow = contextEntry?.window ?? globalContextWindow;
   const storeContextPercent = contextEntry?.percent ?? globalContextPercent;
   const storeCompacting = useStore(s => isSessionCompacting(s, currentSessionPath));
+  const compactionMode = useStore(s => getSessionCompactionMode(s, currentSessionPath));
   const refreshing = useStore(s => sessionScopedListIncludes(s, s.capabilityRefreshingSessions, currentSessionPath));
   const busy = compacting || refreshing;
 
@@ -93,6 +94,9 @@ export function ContextRing() {
 
   const tooltipContent = (
     <>
+      {compacting && compactionMode === 'lossy_local' && (
+        <div>{t('chat.instantSimpleCompaction')}</div>
+      )}
       <div>{t('input.contextWindow', { windowK })}</div>
       {tokens != null && (
         <div>{t('input.tokensUsed', { tokensK, pct: Math.round(pct) })}</div>

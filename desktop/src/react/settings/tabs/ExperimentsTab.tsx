@@ -20,7 +20,7 @@ const DEEPSEEK_ROLEPLAY_REASONING_PATCH_EXPERIMENT_ID = 'provider.deepseek_rolep
 const PROACTIVE_SUBAGENT_EXPERIMENT_ID = 'subagent.proactive_delegation';
 
 type CacheSnapshotMode = 'off' | 'shadow' | 'write';
-type CompactionMode = 'auto' | 'cache_preserving' | 'pi_compatible';
+type CompactionMode = 'auto' | 'cache_preserving' | 'pi_compatible' | 'lossy_local';
 
 type ExperimentDefinition = {
   id: string;
@@ -280,6 +280,7 @@ function compactionModeOptions(experiment: ExperimentDefinition): SelectOption[]
     { value: COMPACTION_MODES.AUTO, label: t('settings.experiments.compaction.auto') },
     { value: COMPACTION_MODES.CACHE_PRESERVING, label: t('settings.experiments.compaction.cachePreserving') },
     { value: COMPACTION_MODES.PI_COMPATIBLE, label: t('settings.experiments.compaction.piCompatible') },
+    { value: COMPACTION_MODES.LOSSY_LOCAL, label: t('settings.experiments.compaction.lossyLocal') },
   ];
 }
 
