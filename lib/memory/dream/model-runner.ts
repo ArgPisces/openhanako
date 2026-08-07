@@ -12,6 +12,7 @@ const ANALYSIS_BATCH_SIZE = 70;
 const SUBJECTS = new Set(["user", "third_party", "fiction", "project", "unknown"]);
 const TEMPORAL = new Set(["stable", "active", "closed", "obsolete", "unknown"]);
 const ACTIONS = new Set(["keep", "merge", "forget", "review"]);
+export const DREAM_MEMORY_HARD_MAX_CHARS = 5_000;
 
 export type DreamAnalyzerInput = {
   groupId: string;
@@ -31,14 +32,6 @@ export type DreamSemanticDecision = {
   temporal: "stable" | "active" | "closed" | "obsolete" | "unknown";
   canonicalFact: string;
   reasonCodes: string[];
-};
-
-export type DreamSectionBudgets = {
-  facts: number;
-  today: number;
-  week: number;
-  longterm: number;
-  hardTotal: number;
 };
 
 type DreamWriterResult = {
@@ -222,7 +215,6 @@ function normalizeWeekDays(value: unknown) {
 function validateWriterResult(raw: Record<string, unknown>, options: {
   requiredGroupIds: string[];
   currentWeekDates: string[];
-  budgets: DreamSectionBudgets;
 }) {
   const sections = raw.sections as Record<string, unknown> | null;
   if (!sections || typeof sections !== "object" || Array.isArray(sections)) {
@@ -240,14 +232,12 @@ function validateWriterResult(raw: Record<string, unknown>, options: {
     throw new Error("Dream writer changed the set of week dates");
   }
   const weekChars = next.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
-  if (next.facts.length > options.budgets.facts
-    || next.today.length > options.budgets.today
-    || weekChars > options.budgets.week
-    || next.longterm.length > options.budgets.longterm) {
-    throw new Error("Dream writer exceeded a section character budget");
-  }
   const total = next.facts.length + next.today.length + weekChars + next.longterm.length;
-  if (total > options.budgets.hardTotal) throw new Error("Dream writer exceeded the hard character budget");
+  if (total > DREAM_MEMORY_HARD_MAX_CHARS) {
+    throw new Error(
+      `Dream writer output is ${total} characters; the safety limit is ${DREAM_MEMORY_HARD_MAX_CHARS}; no changes were applied`,
+    );
+  }
 
   const coverage = Array.isArray(raw.coverage)
     ? raw.coverage.filter((value): value is string => typeof value === "string")
@@ -265,22 +255,28 @@ function validateWriterResult(raw: Record<string, unknown>, options: {
   } satisfies DreamWriterResult;
 }
 
+function requiredResidentGroupIds(decisions: DreamSemanticDecision[]) {
+  return decisions
+    .filter((decision) => decision.action === "keep" || decision.action === "merge")
+    .map((decision) => decision.groupId);
+}
+
 export async function writeDreamSections(options: {
   current: DreamSections;
   decisions: DreamSemanticDecision[];
   evidence: DreamAnalyzerInput[];
-  budgets: DreamSectionBudgets;
   resolvedModel: any;
   trigger: DreamRunTrigger;
   signal?: AbortSignal;
 }) {
-  const requiredGroupIds = options.decisions
-    .filter((decision) => decision.action !== "forget")
-    .map((decision) => decision.groupId);
+  const requiredGroupIds = requiredResidentGroupIds(options.decisions);
   const promptSpec = buildDreamWriterPrompt(getLocale());
   const payload = {
     currentSections: options.current,
-    budgets: options.budgets,
+    safetyLimit: {
+      maxTotalBodyChars: DREAM_MEMORY_HARD_MAX_CHARS,
+      role: "safety_ceiling_not_target",
+    },
     candidates: options.decisions.map((decision) => ({
       ...decision,
       measured: options.evidence.find((entry) => entry.groupId === decision.groupId)?.evidence || {},
@@ -301,12 +297,11 @@ export async function writeDreamSections(options: {
     return validateWriterResult(raw, {
       requiredGroupIds,
       currentWeekDates: options.current.weekDays.map((entry) => entry.date),
-      budgets: options.budgets,
     });
   } catch (err: any) {
     const repairRaw = await callStructured({
       promptSpec,
-      userContent: `${JSON.stringify(payload)}\n\nValidation error: ${err?.message || err}. Return a corrected object that obeys every ID, date, and character budget constraint.`,
+      userContent: `${JSON.stringify(payload)}\n\nValidation error: ${err?.message || err}. Return a corrected object that obeys every required ID, preserves the date set, and stays below the single total-body safety ceiling. The ceiling is not a target.`,
       resolvedModel: options.resolvedModel,
       operation: "memory.dream.write_validation_repair",
       trigger: options.trigger,
@@ -316,7 +311,6 @@ export async function writeDreamSections(options: {
     return validateWriterResult(repairRaw, {
       requiredGroupIds,
       currentWeekDates: options.current.weekDays.map((entry) => entry.date),
-      budgets: options.budgets,
     });
   }
 }
@@ -330,9 +324,7 @@ export async function verifyDreamSections(options: {
   trigger: DreamRunTrigger;
   signal?: AbortSignal;
 }) {
-  const requiredGroupIds = options.decisions
-    .filter((decision) => decision.action !== "forget")
-    .map((decision) => decision.groupId);
+  const requiredGroupIds = requiredResidentGroupIds(options.decisions);
   const promptSpec = buildDreamVerifierPrompt(getLocale());
   const raw = await callStructured({
     promptSpec,

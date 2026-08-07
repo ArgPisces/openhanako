@@ -98,6 +98,7 @@ describe("Memory Dream runner", () => {
     const status = await waitForCompletion(runner);
 
     expect(status.status).toBe("succeeded");
+    expect(writeMock.mock.calls[0]?.[0]?.budgets).toBeUndefined();
     expect(status.lastRun?.revisionId).toEqual(expect.any(String));
     expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8"))
       .toContain("dense technical reports");

@@ -96,12 +96,12 @@ describe("Memory Dream structured model boundary", () => {
     expect(callTextMock).toHaveBeenCalledTimes(2);
   });
 
-  it("repairs writer coverage while preserving the exact week date set and budgets", async () => {
+  it("repairs writer coverage while preserving exact week dates and uneven sections below the safety ceiling", async () => {
     const sections = {
       facts: "Concise answers are preferred.",
       today: "Working on memory quality.",
       weekDays: [{ date: "2026-08-07", body: "Reviewed memory design." }],
-      longterm: "Hana is the user's personal agent.",
+      longterm: "L".repeat(1_251),
     };
     callTextMock
       .mockResolvedValueOnce(JSON.stringify({ sections, coverage: [], notes: [] }))
@@ -122,7 +122,6 @@ describe("Memory Dream structured model boundary", () => {
         reasonCodes: [],
       }],
       evidence: [group()],
-      budgets: { facts: 200, today: 200, week: 200, longterm: 200, hardTotal: 800 },
       resolvedModel,
       trigger: "manual",
     });
@@ -130,6 +129,92 @@ describe("Memory Dream structured model boundary", () => {
     expect(result.sections.weekDays).toEqual(sections.weekDays);
     expect(result.coverage).toEqual(["fact:number:1"]);
     expect(callTextMock).toHaveBeenCalledTimes(2);
+    const writerPayload = JSON.parse(callTextMock.mock.calls[0]?.[0]?.messages?.[0]?.content);
+    expect(writerPayload.safetyLimit).toEqual({
+      maxTotalBodyChars: 5_000,
+      role: "safety_ceiling_not_target",
+    });
+    expect(writerPayload).not.toHaveProperty("budgets");
+  });
+
+  it("does not force review candidates into resident memory or verifier coverage", async () => {
+    const sections = {
+      facts: "Concise answers are preferred.",
+      today: "",
+      weekDays: [],
+      longterm: "",
+    };
+    callTextMock.mockResolvedValueOnce(JSON.stringify({ sections, coverage: [], notes: [] }));
+
+    const result = await writeDreamSections({
+      current: sections,
+      decisions: [{
+        groupId: "fact:number:1",
+        action: "review",
+        subject: "unknown",
+        temporal: "unknown",
+        canonicalFact: "A single uncertain observation",
+        reasonCodes: [],
+      }],
+      evidence: [group()],
+      resolvedModel,
+      trigger: "manual",
+    });
+
+    expect(result.coverage).toEqual([]);
+    callTextMock.mockResolvedValueOnce(JSON.stringify({
+      ok: true,
+      missingGroupIds: [],
+      unsupportedClaims: [],
+      subjectLeaks: [],
+      lostStableClaims: [],
+      duplicateClaims: [],
+    }));
+    await expect(verifyDreamSections({
+      current: sections,
+      proposed: result.sections,
+      decisions: [{
+        groupId: "fact:number:1",
+        action: "review",
+        subject: "unknown",
+        temporal: "unknown",
+        canonicalFact: "A single uncertain observation",
+        reasonCodes: [],
+      }],
+      evidence: [group()],
+      resolvedModel,
+      trigger: "manual",
+    })).resolves.toEqual({ ok: true });
+
+    const verifierPayload = JSON.parse(callTextMock.mock.calls[1]?.[0]?.messages?.[0]?.content);
+    expect(verifierPayload.requiredGroupIds).toEqual([]);
+    expect(callTextMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("repairs output only when the combined body exceeds the 5000 character safety ceiling", async () => {
+    const oversized = {
+      facts: "F".repeat(5_001),
+      today: "",
+      weekDays: [],
+      longterm: "",
+    };
+    const repaired = { ...oversized, facts: "F".repeat(4_900) };
+    callTextMock
+      .mockResolvedValueOnce(JSON.stringify({ sections: oversized, coverage: [], notes: [] }))
+      .mockResolvedValueOnce(JSON.stringify({ sections: repaired, coverage: [], notes: [] }));
+
+    const result = await writeDreamSections({
+      current: { facts: "short", today: "", weekDays: [], longterm: "" },
+      decisions: [],
+      evidence: [],
+      resolvedModel,
+      trigger: "manual",
+    });
+
+    expect(result.sections.facts).toHaveLength(4_900);
+    expect(callTextMock).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("5001");
+    expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("5000");
   });
 
   it("uses an independent verifier to reject unsupported rewrites", async () => {

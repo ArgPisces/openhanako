@@ -10,7 +10,6 @@ import {
   verifyDreamSections,
   writeDreamSections,
   type DreamAnalyzerInput,
-  type DreamSectionBudgets,
 } from "./model-runner.ts";
 import {
   applyDreamSections,
@@ -155,15 +154,6 @@ function analyzerInput(decision: FactDecision, factById: Map<string, FactRecord>
   };
 }
 
-function budgetsFor(current: DreamSections): DreamSectionBudgets {
-  const target = Math.max(3_000, Math.min(5_000, sectionBodyChars(current)));
-  const facts = Math.floor(target * 0.30);
-  const today = Math.floor(target * 0.18);
-  const week = Math.min(1_200, Math.floor(target * 0.24));
-  const longterm = target - facts - today - week;
-  return { facts, today, week, longterm, hardTotal: target + 400 };
-}
-
 export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions) {
   let running: Promise<DreamRunReport> | null = null;
   let abortController: AbortController | null = null;
@@ -243,7 +233,6 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         current: before,
         decisions: semanticDecisions,
         evidence: analyzerInputs,
-        budgets: budgetsFor(before),
         resolvedModel,
         trigger,
         signal,

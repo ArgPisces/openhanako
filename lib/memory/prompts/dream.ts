@@ -1,5 +1,5 @@
 export const DREAM_ANALYZER_PROMPT_VERSION = "memory-dream-analyzer.v1";
-export const DREAM_WRITER_PROMPT_VERSION = "memory-dream-writer.v1";
+export const DREAM_WRITER_PROMPT_VERSION = "memory-dream-writer.v2";
 export const DREAM_VERIFIER_PROMPT_VERSION = "memory-dream-verifier.v1";
 
 export function buildDreamAnalyzerPrompt(locale = "en") {
@@ -50,27 +50,29 @@ export function buildDreamWriterPrompt(locale = "en") {
   return {
     cacheGroup: "memory.dream.write",
     templateVersion: DREAM_WRITER_PROMPT_VERSION,
-    systemPrompt: zh ? `你是常驻记忆编辑器。你收到四段当前可编辑记忆、带客观证据的候选、程序批准的动作和每段字符预算。
+    systemPrompt: zh ? `你是常驻记忆编辑器。你收到四段当前可编辑记忆、带客观证据的候选、程序批准的动作和一个总正文安全上限。
 
 写作规则：
-- 在预算内提高信息密度，合并同义重复，删除已经明确 closed/obsolete 且允许 forget 的边缘流水账。
+- 整理目标是提高信息密度、合并同义重复，并删除已经明确 closed/obsolete 且允许 forget 的边缘流水账；没有目标长度，也没有章节比例。
 - 保留用户身份、稳定偏好、长期边界、持续关系、仍未完成的事项，以及跨 session/跨日期复现的领域规律。
 - Facts 写稳定且跨时间有效的内容；Today 写当前逻辑日；Week 只能改写输入中已有的日期；Longterm 写跨周背景。
 - 不把 third_party、fiction 或 project 属性改写成用户身份。
 - 不使用“可能很重要”等主观重要度措辞；依据输入证据和 action。
 - 不创造事实，不提及记忆系统、Dream、sourceId、groupId 或评分。
-- requiredGroupIds 中每项都必须由至少一句输出内容覆盖；coverage 只列真正有内容承载的 groupId。
+- safetyLimit.maxTotalBodyChars 是防止异常膨胀的宽松总上限，不是需要接近或填满的目标；不要为利用剩余额度而扩写。
+- requiredGroupIds 只包含 keep/merge 项，每项都必须由至少一句输出内容覆盖；review 项不要求写入。coverage 只列真正有内容承载的 groupId。
 
 只输出 JSON，不要 Markdown 代码块：
-{"sections":{"facts":"正文","today":"正文","weekDays":[{"date":"YYYY-MM-DD","body":"正文"}],"longterm":"正文"},"coverage":["g:..."],"notes":["简短的客观整理说明"]}` : `You edit a resident memory dossier. You receive the four current editable sections, evidence-backed candidates, code-approved actions, and per-section character budgets.
+{"sections":{"facts":"正文","today":"正文","weekDays":[{"date":"YYYY-MM-DD","body":"正文"}],"longterm":"正文"},"coverage":["g:..."],"notes":["简短的客观整理说明"]}` : `You edit a resident memory dossier. You receive the four current editable sections, evidence-backed candidates, code-approved actions, and one total-body safety ceiling.
 
 Writing rules:
-- Increase information density within budget, merge semantic duplicates, and remove peripheral logs explicitly classified closed/obsolete where forgetting is allowed.
+- Organize for information density, merge semantic duplicates, and remove peripheral logs explicitly classified closed/obsolete where forgetting is allowed. There is no target length and no section ratio.
 - Preserve user identity, stable preferences, durable boundaries, continuing relationships, unfinished commitments, and domain patterns recurring across sessions or dates.
 - Facts contains stable cross-time information; Today contains the current logical day; Week may rewrite only supplied dates; Longterm contains cross-week context.
 - Never turn third-party, fictional, or project attributes into user identity.
 - Do not invent facts or mention memory, Dream, source IDs, group IDs, or scoring.
-- Every requiredGroupId must be covered by at least one output statement; coverage lists only IDs actually represented in the output.
+- safetyLimit.maxTotalBodyChars is a loose emergency ceiling against abnormal growth, not a target to approach or fill. Never expand merely to use available room.
+- requiredGroupIds contains only keep/merge items. Each must be covered by at least one output statement; review items need not enter resident memory. Coverage lists only IDs actually represented in the output.
 
 Return JSON only, without a Markdown fence:
 {"sections":{"facts":"body","today":"body","weekDays":[{"date":"YYYY-MM-DD","body":"body"}],"longterm":"body"},"coverage":["g:..."],"notes":["short objective edit note"]}`,
