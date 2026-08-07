@@ -49,23 +49,46 @@ describe("Memory Dream routes", () => {
     expect(startDream).toHaveBeenCalledWith({ trigger: "manual" });
   });
 
-  it("returns shared server status and restores an explicit revision", async () => {
+  it("returns status, lists and reads revisions, and restores only the selected revision", async () => {
     const getDreamStatus = vi.fn(() => ({
       status: "succeeded",
       runId: null,
       startedAt: null,
       lastRun: { revisionId: "rev-1" },
     }));
+    const listDreamRevisions = vi.fn(() => [{ revisionId: "rev-1", bodyChars: 3200 }]);
+    const getDreamRevision = vi.fn(() => ({
+      revisionId: "rev-1",
+      before: { facts: "- fact", today: "", weekDays: [], longterm: "" },
+    }));
     const restoreDreamRevision = vi.fn(async () => ({ revisionId: "rev-1", restoredChars: 3200 }));
     const { app } = mount({
       id: "hana",
       memoryMasterEnabled: true,
-      memoryTicker: { getDreamStatus, restoreDreamRevision },
+      memoryTicker: {
+        getDreamStatus,
+        listDreamRevisions,
+        getDreamRevision,
+        restoreDreamRevision,
+      },
     });
 
     const statusResponse = await app.request("/api/memories/dream/status?agentId=hana");
     expect(statusResponse.status).toBe(200);
     expect(await statusResponse.json()).toMatchObject({ agentId: "hana", status: "succeeded" });
+
+    const listResponse = await app.request("/api/memories/dream/revisions?agentId=hana");
+    expect(listResponse.status).toBe(200);
+    expect(await listResponse.json()).toMatchObject({
+      agentId: "hana",
+      revisions: [{ revisionId: "rev-1", bodyChars: 3200 }],
+    });
+
+    const detailResponse = await app.request("/api/memories/dream/revisions/rev-1?agentId=hana");
+    expect(detailResponse.status).toBe(200);
+    expect(await detailResponse.json()).toMatchObject({
+      revision: { revisionId: "rev-1", before: { facts: "- fact" } },
+    });
 
     const restoreResponse = await app.request(
       "/api/memories/dream/revisions/rev-1/restore?agentId=hana",
@@ -74,6 +97,8 @@ describe("Memory Dream routes", () => {
     expect(restoreResponse.status).toBe(200);
     expect(await restoreResponse.json()).toMatchObject({ ok: true, revisionId: "rev-1" });
     expect(restoreDreamRevision).toHaveBeenCalledWith("rev-1");
+    expect(listDreamRevisions).toHaveBeenCalledOnce();
+    expect(getDreamRevision).toHaveBeenCalledWith("rev-1");
   });
 
   it("refuses concurrent starts with a conflict", async () => {

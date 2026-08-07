@@ -4,11 +4,11 @@ import { t } from '../../helpers';
 import { SettingsRow } from '../../components/SettingsRow';
 import {
   loadDreamStatus,
-  restoreDream,
   saveDreamAutoEnabled,
   startDream,
   type DreamStatus,
 } from './agent-memory-dream-actions';
+import { DreamRevisionBrowser } from './DreamRevisionBrowser';
 import styles from '../../Settings.module.css';
 
 function formatTime(value: string | null | undefined) {
@@ -26,8 +26,8 @@ export function AgentMemoryDream({
 }) {
   const [status, setStatus] = useState<DreamStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState(false);
   const [savingAuto, setSavingAuto] = useState(false);
+  const [revisionsOpen, setRevisionsOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,21 +86,6 @@ export function AgentMemoryDream({
     }
   };
 
-  const restore = async () => {
-    const revisionId = status?.lastRun?.revisionId;
-    if (!revisionId) return;
-    setRestoring(true);
-    try {
-      await restoreDream(agentId, revisionId);
-      window.dispatchEvent(new Event('hana-view-compiled-memory'));
-      setError(null);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRestoring(false);
-    }
-  };
-
   const saveAuto = async (enabled: boolean) => {
     setSavingAuto(true);
     try {
@@ -138,31 +123,37 @@ export function AgentMemoryDream({
       <div className={styles['memory-actions-row']}>
         <button
           className={styles['memory-action-btn']}
-          disabled={running || restoring}
+          disabled={running}
           onClick={() => { void run(); }}
         >
           {running ? t('settings.memory.dream.running') : t('settings.memory.dream.run')}
         </button>
-        {report?.revisionId && (
-          <button
-            className={styles['memory-action-btn']}
-            disabled={running || restoring}
-            onClick={() => { void restore(); }}
-          >
-            {restoring ? t('settings.memory.dream.restoring') : t('settings.memory.dream.restore')}
-          </button>
-        )}
+        <button
+          className={styles['memory-action-btn']}
+          disabled={running}
+          onClick={() => setRevisionsOpen(true)}
+        >
+          {t('settings.memory.dream.restore')}
+        </button>
       </div>
 
       {report?.status === 'succeeded' && (
         <div className={styles['memory-dream-status']} role="status">
-          {t('settings.memory.dream.success', {
-            time: formatTime(report.finishedAt),
-            before: report.beforeChars,
-            after: report.afterChars,
-            merged: report.mergedCount,
-            forgotten: report.forgottenCount,
-          })}
+          {report.changed === false
+            ? t('settings.memory.dream.unchanged', { time: formatTime(report.finishedAt) })
+            : report.changed === true
+              ? t('settings.memory.dream.success', {
+                time: formatTime(report.finishedAt),
+                before: report.beforeChars,
+                after: report.afterChars,
+                merged: report.mergedCount,
+                forgotten: report.forgottenCount,
+              })
+              : t('settings.memory.dream.legacySuccess', {
+                time: formatTime(report.finishedAt),
+                before: report.beforeChars,
+                after: report.afterChars,
+              })}
           <button
             className={styles['memory-dream-link']}
             onClick={() => window.dispatchEvent(new Event('hana-view-compiled-memory'))}
@@ -176,6 +167,11 @@ export function AgentMemoryDream({
           {error || report?.error || t('settings.memory.dream.failed')}
         </div>
       )}
+      <DreamRevisionBrowser
+        agentId={agentId}
+        open={revisionsOpen}
+        onClose={() => setRevisionsOpen(false)}
+      />
     </div>
   );
 }

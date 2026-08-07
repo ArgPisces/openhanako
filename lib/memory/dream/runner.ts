@@ -1,7 +1,13 @@
 import crypto from "crypto";
 import type { FactStore } from "../fact-store.ts";
 import { buildCompiledMemoryMarkdown } from "../compile.ts";
-import { buildFactEvidence, normalizeFactText } from "./evidence.ts";
+import {
+  buildFactEvidence,
+  jaccardSimilarity,
+  normalizeFactText,
+  tokenizeFactText,
+} from "./evidence.ts";
+import { atomizeDreamSections } from "./memory-units.ts";
 import { aggregateFactDecisionsByGroup, decideFactActions } from "./policy.ts";
 import type { FactDecision, FactRecord } from "./types.ts";
 import {
@@ -29,6 +35,7 @@ import {
 } from "./state-store.ts";
 
 const MAX_MODEL_CANDIDATES = 48;
+const MAX_MATCHING_FORGET_CANDIDATES = 12;
 const DOMAIN_WINDOW_DAYS = 180;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -74,6 +81,13 @@ function compiledChars(sections: DreamSections) {
 
 function inputHash(sections: DreamSections) {
   return crypto.createHash("sha256").update(JSON.stringify(sections)).digest("hex");
+}
+
+function changedEditableSections(before: DreamSections, after: DreamSections) {
+  const changed: Array<"facts" | "longterm"> = [];
+  if (before.facts !== after.facts) changed.push("facts");
+  if (before.longterm !== after.longterm) changed.push("longterm");
+  return changed;
 }
 
 function timeMs(fact: FactRecord) {
@@ -126,6 +140,36 @@ function compareStrength(left: FactDecision, right: FactDecision) {
   return left.groupId.localeCompare(right.groupId, "en");
 }
 
+function selectAnalyzerDecisions(decisions: FactDecision[], current: DreamSections) {
+  const residentTokenSets = atomizeDreamSections(current)
+    .map((unit) => tokenizeFactText(unit.text))
+    .filter((tokens) => tokens.length > 0);
+  const matchingForget = decisions
+    .filter((decision) => decision.action === "forget")
+    .map((decision) => ({
+      decision,
+      similarity: residentTokenSets.reduce(
+        (highest, tokens) => Math.max(
+          highest,
+          jaccardSimilarity(tokenizeFactText(decision.canonicalFact), tokens),
+        ),
+        0,
+      ),
+    }))
+    .filter((entry) => entry.similarity >= 0.45)
+    .sort((left, right) => right.similarity - left.similarity
+      || (right.decision.evidence.ageDays ?? -1) - (left.decision.evidence.ageDays ?? -1)
+      || left.decision.groupId.localeCompare(right.decision.groupId, "en"))
+    .slice(0, MAX_MATCHING_FORGET_CANDIDATES)
+    .map((entry) => entry.decision);
+  const retainedLimit = Math.max(0, MAX_MODEL_CANDIDATES - matchingForget.length);
+  const retained = decisions
+    .filter((decision) => decision.action !== "forget")
+    .sort(compareStrength)
+    .slice(0, retainedLimit);
+  return [...retained, ...matchingForget];
+}
+
 function analyzerInput(decision: FactDecision, factById: Map<string, FactRecord>): DreamAnalyzerInput {
   const sourceFacts = decision.sourceFactIds
     .map((id) => factById.get(String(id))?.fact)
@@ -137,6 +181,7 @@ function analyzerInput(decision: FactDecision, factById: Map<string, FactRecord>
     groupId: decision.groupId,
     canonicalFact: decision.canonicalFact,
     sourceFacts,
+    sourceFactIds: decision.sourceFactIds.map(String),
     allowedActions,
     protected: decision.evidence.isProtected || decision.evidence.isPinned,
     ruleAction: decision.action,
@@ -212,10 +257,7 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         domainTags: activeDomainTags(facts),
       });
       const grouped = aggregateFactDecisionsByGroup(decideFactActions(evidence.facts));
-      const eligible = grouped
-        .filter((decision) => decision.action !== "forget")
-        .sort(compareStrength)
-        .slice(0, MAX_MODEL_CANDIDATES);
+      const eligible = selectAnalyzerDecisions(grouped, before);
       const factById = new Map(facts.map((fact) => [String(fact.id), fact]));
       const analyzerInputs = eligible.map((decision) => analyzerInput(decision, factById));
 
@@ -242,6 +284,7 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         proposed: writerResult.sections,
         decisions: semanticDecisions,
         evidence: analyzerInputs,
+        unitPlan: writerResult,
         resolvedModel,
         trigger,
         signal,
@@ -253,6 +296,37 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         throw new Error("Memory changed while Dream was running; no changes were applied");
       }
 
+      const proposedHash = inputHash(writerResult.sections);
+      if (proposedHash === beforeHash) {
+        const finishedAt = new Date().toISOString();
+        const report: DreamRunReport = {
+          runId,
+          trigger,
+          status: "succeeded",
+          startedAt,
+          finishedAt,
+          logicalDate,
+          beforeChars: compiledChars(before),
+          afterChars: compiledChars(before),
+          mergedCount: 0,
+          forgottenCount: 0,
+          reviewedCount: 0,
+          model,
+          revisionId: null,
+          notes: [],
+          changed: false,
+          changedSections: [],
+          appliedOperationCount: 0,
+        };
+        const currentState = ensureState();
+        persist({
+          ...currentState,
+          lastSuccessfulManualDate: trigger === "manual" ? logicalDate : currentState.lastSuccessfulManualDate,
+          lastRun: report,
+        });
+        return report;
+      }
+
       const revision = createDreamRevision(options.memoryDir, { runId, trigger, before });
       const applied = applyDreamSections(options.memoryDir, {
         revision,
@@ -262,7 +336,7 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
       options.onCompiled?.();
 
       const finishedAt = new Date().toISOString();
-      const semanticForgotten = semanticDecisions.filter((decision) => decision.action === "forget").length;
+      const changedSections = changedEditableSections(before, applied);
       const report: DreamRunReport = {
         runId,
         trigger,
@@ -272,12 +346,15 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         logicalDate,
         beforeChars: compiledChars(before),
         afterChars: compiledChars(applied),
-        mergedCount: evidence.duplicateGroups.reduce((sum, group) => sum + group.members.length - 1, 0),
-        forgottenCount: grouped.filter((decision) => decision.action === "forget").length + semanticForgotten,
-        reviewedCount: semanticDecisions.filter((decision) => decision.action === "review").length,
+        mergedCount: writerResult.mergedCount,
+        forgottenCount: writerResult.forgottenCount,
+        reviewedCount: 0,
         model,
         revisionId: revision.revisionId,
-        notes: writerResult.notes,
+        notes: [],
+        changed: true,
+        changedSections,
+        appliedOperationCount: writerResult.operations.length,
       };
       const currentState = ensureState();
       persist({
@@ -303,6 +380,9 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         model,
         revisionId: null,
         notes: [],
+        changed: false,
+        changedSections: [],
+        appliedOperationCount: 0,
         error: err?.message || String(err),
       };
       const currentState = ensureState();

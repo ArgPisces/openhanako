@@ -6738,7 +6738,7 @@
     {
       "sourceFile": "lib/memory/dream/revision-store.ts",
       "kind": "atomic-write",
-      "excerpt": "atomicWriteSync(pendingPath(memoryDir), `${JSON.stringify({ schemaVersion: 1, revisionId: options.revision.revisionId, startedAt: new Date().toISOString(), }, null, 2)}\\n`)",
+      "excerpt": "atomicWriteSync(pendingPath(memoryDir), `${JSON.stringify({ schemaVersion: 1, revisionId: options.revision.revisionId, startedAt: new Date().toISOString(), operation: \"dream\", }, null, 2)}\\n`)",
       "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,
@@ -6747,7 +6747,7 @@
     {
       "sourceFile": "lib/memory/dream/revision-store.ts",
       "kind": "atomic-write",
-      "excerpt": "atomicWriteSync(pendingPath(memoryDir), `${JSON.stringify({ schemaVersion: 1, revisionId: revision.revisionId, startedAt: new Date().toISOString(), operation: \"restore\", }, null, 2)}\\n`)",
+      "excerpt": "atomicWriteSync(pendingPath(memoryDir), `${JSON.stringify({ schemaVersion: 1, revisionId: safetyRevision.revisionId, targetRevisionId: revision.revisionId, startedAt: new Date().toISOString(), operation: \"restore\", }, null, 2)}\\n`)",
       "reason": "Writes a named per-agent memory or Dream revision protocol file.",
       "storeId": "agent-memory",
       "exemptionId": null,

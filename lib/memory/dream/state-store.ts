@@ -21,6 +21,12 @@ export type DreamRunReport = {
   model: string;
   revisionId: string | null;
   notes: string[];
+  /** Added in a backward-compatible state extension. Absent in schema-v1 historical reports. */
+  changed?: boolean;
+  /** Deterministically derived from the applied section diff; never supplied by the model. */
+  changedSections?: Array<"facts" | "longterm">;
+  /** Number of structured unit operations whose result was actually applied. */
+  appliedOperationCount?: number;
   error?: string;
 };
 

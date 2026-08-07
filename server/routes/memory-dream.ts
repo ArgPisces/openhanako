@@ -42,6 +42,31 @@ export function createMemoryDreamRoute(engine: any) {
     }
   });
 
+  route.get("/memories/dream/revisions", async (c) => {
+    try {
+      const agent = resolveAgentStrict(engine, c);
+      const ticker = agent.memoryTicker;
+      if (!ticker?.listDreamRevisions) return unavailable(c);
+      return c.json({ agentId: agent.id, revisions: ticker.listDreamRevisions() });
+    } catch (err: any) {
+      if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
+      return c.json({ error: err?.message || String(err) }, 500);
+    }
+  });
+
+  route.get("/memories/dream/revisions/:revisionId", async (c) => {
+    try {
+      const agent = resolveAgentStrict(engine, c);
+      const ticker = agent.memoryTicker;
+      if (!ticker?.getDreamRevision) return unavailable(c);
+      return c.json({ agentId: agent.id, revision: ticker.getDreamRevision(c.req.param("revisionId")) });
+    } catch (err: any) {
+      if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404);
+      if (/not found/i.test(err?.message || "")) return c.json({ error: err.message }, 404);
+      return c.json({ error: err?.message || String(err) }, 500);
+    }
+  });
+
   route.post("/memories/dream/revisions/:revisionId/restore", async (c) => {
     try {
       const denied = denyWithoutScope(c, "settings.write");

@@ -19,13 +19,27 @@ export type DreamSections = {
   longterm: string;
 };
 
+export type DreamRevisionKind = "dream" | "pre_restore";
+
 export type DreamRevision = {
   schemaVersion: 1;
   revisionId: string;
   runId: string;
   trigger: DreamRunTrigger;
   createdAt: string;
+  kind: DreamRevisionKind;
+  restoresRevisionId: string | null;
   before: DreamSections;
+};
+
+export type DreamRevisionSummary = Omit<DreamRevision, "before"> & {
+  bodyChars: number;
+  sectionChars: {
+    facts: number;
+    today: number;
+    week: number;
+    longterm: number;
+  };
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,6 +58,23 @@ function revisionPath(memoryDir: string, revisionId: string) {
   return path.join(revisionsDir(memoryDir), `${revisionId}.json`);
 }
 
+function dreamSectionsHash(sections: DreamSections) {
+  return crypto.createHash("sha256").update(JSON.stringify(sections)).digest("hex");
+}
+
+function sectionCharSummary(sections: DreamSections) {
+  const sectionChars = {
+    facts: sections.facts.length,
+    today: sections.today.length,
+    week: sections.weekDays.reduce((sum, entry) => sum + entry.body.length, 0),
+    longterm: sections.longterm.length,
+  };
+  return {
+    bodyChars: Object.values(sectionChars).reduce((sum, value) => sum + value, 0),
+    sectionChars,
+  };
+}
+
 export function snapshotDreamSections(memoryDir: string): DreamSections {
   const sections = readCompiledMemorySections(memoryDir);
   return {
@@ -58,6 +89,9 @@ export function createDreamRevision(memoryDir: string, options: {
   runId: string;
   trigger: DreamRunTrigger;
   before: DreamSections;
+  kind?: DreamRevisionKind;
+  restoresRevisionId?: string | null;
+  retainRevisionIds?: string[];
 }) {
   const revisionId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
   const revision: DreamRevision = {
@@ -66,11 +100,13 @@ export function createDreamRevision(memoryDir: string, options: {
     runId: options.runId,
     trigger: options.trigger,
     createdAt: new Date().toISOString(),
+    kind: options.kind || "dream",
+    restoresRevisionId: options.restoresRevisionId || null,
     before: options.before,
   };
   fs.mkdirSync(revisionsDir(memoryDir), { recursive: true });
   atomicWriteSync(revisionPath(memoryDir, revisionId), `${JSON.stringify(revision, null, 2)}\n`);
-  pruneDreamRevisions(memoryDir);
+  pruneDreamRevisions(memoryDir, new Set([revisionId, ...(options.retainRevisionIds || [])]));
   return revision;
 }
 
@@ -85,7 +121,34 @@ export function readDreamRevision(memoryDir: string, revisionId: string): DreamR
   if (raw?.schemaVersion !== 1 || raw?.revisionId !== revisionId || !raw?.before) {
     throw new Error("Dream revision has an invalid format");
   }
-  return raw as DreamRevision;
+  const kind: DreamRevisionKind = raw.kind === "pre_restore" ? "pre_restore" : "dream";
+  return {
+    ...raw,
+    kind,
+    restoresRevisionId: typeof raw.restoresRevisionId === "string" ? raw.restoresRevisionId : null,
+  } as DreamRevision;
+}
+
+export function listDreamRevisions(memoryDir: string): DreamRevisionSummary[] {
+  const dir = revisionsDir(memoryDir);
+  let files: string[];
+  try {
+    files = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => entry.name.slice(0, -".json".length));
+  } catch (err: any) {
+    if (err?.code === "ENOENT") return [];
+    throw err;
+  }
+
+  return files
+    .map((revisionId) => readDreamRevision(memoryDir, revisionId))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt)
+      || right.revisionId.localeCompare(left.revisionId, "en"))
+    .map(({ before, ...revision }) => ({
+      ...revision,
+      ...sectionCharSummary(before),
+    }));
 }
 
 function normalizeSections(sections: DreamSections) {
@@ -109,7 +172,17 @@ function writeSectionFile(filePath: string, body: string) {
   atomicWriteSync(filePath, body ? `${body}\n` : "");
 }
 
-function applyFiles(memoryDir: string, sections: DreamSections, memoryMdPath: string) {
+function assembleMemory(memoryDir: string, memoryMdPath: string) {
+  assemble(
+    path.join(memoryDir, "facts.md"),
+    path.join(memoryDir, "today.md"),
+    path.join(memoryDir, "week.md"),
+    path.join(memoryDir, "longterm.md"),
+    memoryMdPath,
+  );
+}
+
+function applyAllFiles(memoryDir: string, sections: DreamSections, memoryMdPath: string) {
   const normalized = normalizeSections(sections);
   const dailyDir = path.join(memoryDir, "daily");
   fs.mkdirSync(dailyDir, { recursive: true });
@@ -121,14 +194,16 @@ function applyFiles(memoryDir: string, sections: DreamSections, memoryMdPath: st
     writeDailyEntryBody(dailyDir, entry.date, entry.body);
   }
   assembleWeekFromDaily(dailyDir, path.join(memoryDir, "week.md"));
-  assemble(
-    path.join(memoryDir, "facts.md"),
-    path.join(memoryDir, "today.md"),
-    path.join(memoryDir, "week.md"),
-    path.join(memoryDir, "longterm.md"),
-    memoryMdPath,
-  );
+  assembleMemory(memoryDir, memoryMdPath);
   return normalized;
+}
+
+function applyDreamFiles(memoryDir: string, sections: DreamSections, memoryMdPath: string) {
+  const normalized = normalizeSections(sections);
+  writeSectionFile(path.join(memoryDir, "facts.md"), normalized.facts);
+  writeSectionFile(path.join(memoryDir, "longterm.md"), normalized.longterm);
+  assembleMemory(memoryDir, memoryMdPath);
+  return snapshotDreamSections(memoryDir);
 }
 
 export function applyDreamSections(memoryDir: string, options: {
@@ -137,10 +212,9 @@ export function applyDreamSections(memoryDir: string, options: {
   memoryMdPath?: string;
 }) {
   const memoryMdPath = options.memoryMdPath || path.join(memoryDir, "memory.md");
-  const currentDates = options.revision.before.weekDays.map((entry) => entry.date).sort();
-  const nextDates = options.next.weekDays.map((entry) => entry.date).sort();
-  if (JSON.stringify(currentDates) !== JSON.stringify(nextDates)) {
-    throw new Error("Dream may only rewrite existing week dates");
+  if (options.next.today !== options.revision.before.today
+    || JSON.stringify(options.next.weekDays) !== JSON.stringify(options.revision.before.weekDays)) {
+    throw new Error("Dream may not rewrite Today or Week");
   }
 
   fs.mkdirSync(dreamDir(memoryDir), { recursive: true });
@@ -148,15 +222,16 @@ export function applyDreamSections(memoryDir: string, options: {
     schemaVersion: 1,
     revisionId: options.revision.revisionId,
     startedAt: new Date().toISOString(),
+    operation: "dream",
   }, null, 2)}\n`);
 
   try {
-    const normalized = applyFiles(memoryDir, options.next, memoryMdPath);
+    const normalized = applyDreamFiles(memoryDir, options.next, memoryMdPath);
     fs.rmSync(pendingPath(memoryDir), { force: true });
     return normalized;
   } catch (err) {
     try {
-      applyFiles(memoryDir, options.revision.before, memoryMdPath);
+      applyDreamFiles(memoryDir, options.revision.before, memoryMdPath);
       fs.rmSync(pendingPath(memoryDir), { force: true });
     } catch (rollbackErr: any) {
       throw new Error(`Dream apply failed and rollback also failed: ${rollbackErr?.message || rollbackErr}`, { cause: err });
@@ -168,22 +243,33 @@ export function applyDreamSections(memoryDir: string, options: {
 export function restoreDreamRevision(memoryDir: string, revisionId: string, memoryMdPath?: string) {
   const revision = readDreamRevision(memoryDir, revisionId);
   const current = snapshotDreamSections(memoryDir);
+  if (dreamSectionsHash(current) === dreamSectionsHash(revision.before)) return current;
+
+  const safetyRevision = createDreamRevision(memoryDir, {
+    runId: `restore-${crypto.randomUUID()}`,
+    trigger: "manual",
+    before: current,
+    kind: "pre_restore",
+    restoresRevisionId: revision.revisionId,
+    retainRevisionIds: [revision.revisionId],
+  });
   const resolvedMemoryMdPath = memoryMdPath || path.join(memoryDir, "memory.md");
   fs.mkdirSync(dreamDir(memoryDir), { recursive: true });
   atomicWriteSync(pendingPath(memoryDir), `${JSON.stringify({
     schemaVersion: 1,
-    revisionId: revision.revisionId,
+    revisionId: safetyRevision.revisionId,
+    targetRevisionId: revision.revisionId,
     startedAt: new Date().toISOString(),
     operation: "restore",
   }, null, 2)}\n`);
 
   try {
-    const restored = applyFiles(memoryDir, revision.before, resolvedMemoryMdPath);
+    const restored = applyAllFiles(memoryDir, revision.before, resolvedMemoryMdPath);
     fs.rmSync(pendingPath(memoryDir), { force: true });
     return restored;
   } catch (err) {
     try {
-      applyFiles(memoryDir, current, resolvedMemoryMdPath);
+      applyAllFiles(memoryDir, current, resolvedMemoryMdPath);
       fs.rmSync(pendingPath(memoryDir), { force: true });
     } catch (rollbackErr: any) {
       throw new Error(`Dream restore failed and rollback also failed: ${rollbackErr?.message || rollbackErr}`, { cause: err });
@@ -201,18 +287,30 @@ export function recoverPendingDreamApply(memoryDir: string, memoryMdPath?: strin
     throw new Error(`Dream pending journal is unreadable: ${err?.message || err}`);
   }
   const revision = readDreamRevision(memoryDir, pending?.revisionId);
-  applyFiles(memoryDir, revision.before, memoryMdPath || path.join(memoryDir, "memory.md"));
+  const resolvedMemoryMdPath = memoryMdPath || path.join(memoryDir, "memory.md");
+  if (pending?.operation === "dream") {
+    applyDreamFiles(memoryDir, revision.before, resolvedMemoryMdPath);
+  } else {
+    // Older journals had no operation field and could have partially rewritten
+    // any section, so their recovery must restore the complete snapshot.
+    applyAllFiles(memoryDir, revision.before, resolvedMemoryMdPath);
+  }
   fs.rmSync(pendingPath(memoryDir), { force: true });
   return true;
 }
 
-function pruneDreamRevisions(memoryDir: string) {
+function pruneDreamRevisions(memoryDir: string, retainedRevisionIds = new Set<string>()) {
   const dir = revisionsDir(memoryDir);
   const files = fs.readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
     .map((entry) => ({ name: entry.name, stat: fs.statSync(path.join(dir, entry.name)) }))
     .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
-  for (const file of files.slice(MAX_REVISIONS)) {
+  let remaining = files.length;
+  for (const file of [...files].reverse()) {
+    if (remaining <= MAX_REVISIONS) break;
+    const revisionId = file.name.slice(0, -".json".length);
+    if (retainedRevisionIds.has(revisionId)) continue;
     fs.rmSync(path.join(dir, file.name), { force: true });
+    remaining -= 1;
   }
 }

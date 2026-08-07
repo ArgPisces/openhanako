@@ -1,6 +1,6 @@
 export const DREAM_ANALYZER_PROMPT_VERSION = "memory-dream-analyzer.v1";
-export const DREAM_WRITER_PROMPT_VERSION = "memory-dream-writer.v2";
-export const DREAM_VERIFIER_PROMPT_VERSION = "memory-dream-verifier.v1";
+export const DREAM_WRITER_PROMPT_VERSION = "memory-dream-writer.v3";
+export const DREAM_VERIFIER_PROMPT_VERSION = "memory-dream-verifier.v2";
 
 export function buildDreamAnalyzerPrompt(locale = "en") {
   const zh = String(locale).toLowerCase().startsWith("zh");
@@ -18,7 +18,7 @@ export function buildDreamAnalyzerPrompt(locale = "en") {
 客观约束：
 - protected=true 的候选不得 forget。
 - 多 session、多日期重复出现是稳定性证据；同一 session 内重复不增加独立证据。
-- 只出现一次、年代久远、领域低相关且不在当前可编辑记忆中的内容才可 forget。
+- 只有同时满足只出现一次、年代久远、领域低相关的候选才可 forget；forget 只表示候选不应进入常驻记忆，不自动授权删除已有正文。
 - 一次性执行细节、工具输出、已结束流水账通常属于 closed；虚构设定不能写成用户身份。
 - 当前可编辑记忆是权威草稿；事实库只是证据档案。
 
@@ -35,7 +35,7 @@ Make only these qualitative judgments:
 Objective constraints:
 - protected candidates may never be forgotten.
 - recurrence across distinct sessions and dates is stability evidence; repetition inside one session is not independent evidence.
-- forgetting is allowed only for old, single-source, low-domain-relevance content absent from the editable memory.
+- forgetting is allowed only for candidates that are simultaneously old, single-source, and low-domain-relevance. Forgetting a candidate does not by itself authorize deletion of resident text.
 - one-off execution details, tool output, and finished logs are usually closed; fictional attributes must not become user identity.
 - editable memory is the authoritative draft; the fact database is supporting evidence.
 
@@ -50,32 +50,37 @@ export function buildDreamWriterPrompt(locale = "en") {
   return {
     cacheGroup: "memory.dream.write",
     templateVersion: DREAM_WRITER_PROMPT_VERSION,
-    systemPrompt: zh ? `你是常驻记忆编辑器。你收到四段当前可编辑记忆、带客观证据的候选、程序批准的动作和一个总正文安全上限。
+    systemPrompt: zh ? `你是常驻记忆单元编辑器。程序已经把 Facts 与 Longterm 拆成带 ID 的 residentUnits，并把事实档案候选拆成 candidateUnits。Today 与 Week 不属于你的编辑范围。你只提交带来源的单元操作；程序负责确定性渲染 Markdown 列表。
 
-写作规则：
-- 整理目标是提高信息密度、合并同义重复，并删除已经明确 closed/obsolete 且允许 forget 的边缘流水账；没有目标长度，也没有章节比例。
-- 保留用户身份、稳定偏好、长期边界、持续关系、仍未完成的事项，以及跨 session/跨日期复现的领域规律。
-- Facts 写稳定且跨时间有效的内容；Today 写当前逻辑日；Week 只能改写输入中已有的日期；Longterm 写跨周背景。
-- 不把 third_party、fiction 或 project 属性改写成用户身份。
-- 不使用“可能很重要”等主观重要度措辞；依据输入证据和 action。
-- 不创造事实，不提及记忆系统、Dream、sourceId、groupId 或评分。
-- safetyLimit.maxTotalBodyChars 是防止异常膨胀的宽松总上限，不是需要接近或填满的目标；不要为利用剩余额度而扩写。
-- requiredGroupIds 只包含 keep/merge 项，每项都必须由至少一句输出内容覆盖；review 项不要求写入。coverage 只列真正有内容承载的 groupId。
+单元规则：
+- 每个输出 unit 只表达一个可以独立保留或删除的事实、偏好、约束或事件；若输入一行包含多个独立断言，用多个 relation=split 的 unit 表达。
+- 每个 unit 必须列出真实 sourceUnitIds。不得创造 ID，不得加入来源没有支持的细节。
+- 完全重复已由程序处理。你只判断 same_meaning、subsumes、related_but_distinct、conflict；只有 same_meaning/subsumes 可以把多个来源写成一个单元。相关但不同或冲突的断言必须分开保留。
+- 每个 requiredResidentUnitId 必须被至少一个输出 unit 引用，除非进入 removedUnits。每个 requiredCandidateUnitId 必须被输出 unit 引用。
+- removedUnits 只允许删除有 forget candidate 直接支持、且确属 closed 或 obsolete 的 resident unit；supportingCandidateUnitIds 必须列出这些候选。证据不足就保留。不要按比例或固定条数删除。
+- 同一个稳定断言同时存在于 Facts 与 Longterm 时，合并结果必须放 Facts。Longterm 只保留其独有的跨周历史、阶段变化和里程碑；若一行兼有稳定断言与独有历史，拆成 Facts 与 Longterm 两条。
+- 不得输出 Today 或 Week unit，也不得改变其内容。
+- 保留用户身份、稳定偏好、长期边界、持续关系和未完成事项。不得把 third_party、fiction 或 project 属性改写成用户身份。
+- text 必须是纯文本单行，不含 Markdown 列表符、标题或换行。不得在正文提及记忆系统、Dream、source ID、group ID 或评分。
+- safetyLimit.maxTotalBodyChars 是异常膨胀的宽松总上限，不是目标；不得为接近上限而扩写。
 
 只输出 JSON，不要 Markdown 代码块：
-{"sections":{"facts":"正文","today":"正文","weekDays":[{"date":"YYYY-MM-DD","body":"正文"}],"longterm":"正文"},"coverage":["g:..."],"notes":["简短的客观整理说明"]}` : `You edit a resident memory dossier. You receive the four current editable sections, evidence-backed candidates, code-approved actions, and one total-body safety ceiling.
+{"units":[{"sourceUnitIds":["resident:...","candidate:..."],"text":"单一事实","section":"facts|longterm","relation":"unchanged|split|same_meaning|subsumes|related_but_distinct|conflict"}],"removedUnits":[{"sourceUnitId":"resident:...","supportingCandidateUnitIds":["candidate:..."],"reason":"closed|obsolete"}]}` : `You edit resident memory units. Code has atomized Facts and Longterm into ID-bearing residentUnits and fact archive evidence into candidateUnits. Today and Week are outside your editing scope. Return only source-grounded unit operations; code deterministically renders Markdown lists.
 
-Writing rules:
-- Organize for information density, merge semantic duplicates, and remove peripheral logs explicitly classified closed/obsolete where forgetting is allowed. There is no target length and no section ratio.
-- Preserve user identity, stable preferences, durable boundaries, continuing relationships, unfinished commitments, and domain patterns recurring across sessions or dates.
-- Facts contains stable cross-time information; Today contains the current logical day; Week may rewrite only supplied dates; Longterm contains cross-week context.
-- Never turn third-party, fictional, or project attributes into user identity.
-- Do not invent facts or mention memory, Dream, source IDs, group IDs, or scoring.
-- safetyLimit.maxTotalBodyChars is a loose emergency ceiling against abnormal growth, not a target to approach or fill. Never expand merely to use available room.
-- requiredGroupIds contains only keep/merge items. Each must be covered by at least one output statement; review items need not enter resident memory. Coverage lists only IDs actually represented in the output.
+Unit rules:
+- Each output unit expresses one independently retainable/removable fact, preference, constraint, or event. Split an input line containing independent assertions into relation=split units.
+- Every unit lists genuine sourceUnitIds. Never invent an ID or add details unsupported by those sources.
+- Exact duplicates are already handled by code. Classify only same_meaning, subsumes, related_but_distinct, or conflict. Only same_meaning/subsumes may combine multiple sources; related or conflicting assertions stay separate.
+- Every requiredResidentUnitId must be referenced by output unless it appears in removedUnits. Every requiredCandidateUnitId must be referenced by output.
+- removedUnits may remove a resident only when a directly supporting forget candidate classifies it closed or obsolete. List those supportingCandidateUnitIds. Preserve when uncertain. Never remove a ratio or fixed count.
+- When the same stable assertion occurs in Facts and Longterm, the canonical unit belongs in Facts. Longterm retains unique cross-week history, transitions, and milestones. Split a line that mixes a stable assertion with unique history.
+- Never output Today or Week units or alter their contents.
+- Preserve user identity, stable preferences, durable boundaries, continuing relationships, and unfinished commitments. Never turn third-party, fictional, or project attributes into user identity.
+- text is plain one-line content without Markdown list markers, headings, or newlines. Do not mention memory, Dream, source IDs, group IDs, or scoring in text.
+- safetyLimit.maxTotalBodyChars is a loose emergency ceiling, not a target. Never expand to approach it.
 
 Return JSON only, without a Markdown fence:
-{"sections":{"facts":"body","today":"body","weekDays":[{"date":"YYYY-MM-DD","body":"body"}],"longterm":"body"},"coverage":["g:..."],"notes":["short objective edit note"]}`,
+{"units":[{"sourceUnitIds":["resident:...","candidate:..."],"text":"one assertion","section":"facts|longterm","relation":"unchanged|split|same_meaning|subsumes|related_but_distinct|conflict"}],"removedUnits":[{"sourceUnitId":"resident:...","supportingCandidateUnitIds":["candidate:..."],"reason":"closed|obsolete"}]}`,
   };
 }
 
@@ -84,26 +89,26 @@ export function buildDreamVerifierPrompt(locale = "en") {
   return {
     cacheGroup: "memory.dream.verify",
     templateVersion: DREAM_VERIFIER_PROMPT_VERSION,
-    systemPrompt: zh ? `你是记忆改写的独立复核器，只做核验，不重新评重要度，也不改写正文。
+    systemPrompt: zh ? `你是记忆单元操作的独立复核器，只做核验，不重新评重要度，也不改写正文。程序已经校验 ID、区块、来源覆盖和长度；你负责检查语义是否忠实。
 
-检查四件事：
-1. requiredGroupIds 是否都被拟议正文实际表达，不能只相信 writer 自报 coverage。
-2. 拟议正文是否加入当前记忆或候选事实都不支持的新断言。
+检查五件事：
+1. requiredCandidateUnitIds 是否被 proposedUnits 的实际文本忠实表达。
+2. proposedUnits 是否加入其 sourceUnitIds 不支持的新断言。
 3. 是否把 third_party、fiction、project 的属性错误写成用户本人属性。
-4. 当前记忆中的用户身份、明确边界、稳定偏好或未完成事项，是否在没有 obsolete/closed 证据时被删掉。
-5. Facts、Today、Week、Longterm 是否仍有明显同义重复。
+4. removedUnits 是否真的由 supporting candidate 证明 closed/obsolete；稳定身份、明确边界、稳定偏好、未完成事项不得无证删除。
+5. 同义项是否正确归并，相关但不同的事实是否被误合并；相同稳定断言不得同时留在 Facts 与 Longterm。Today 与 Week 必须与 currentSections 完全一致。
 
 只输出 JSON：{"ok":true,"missingGroupIds":[],"unsupportedClaims":[],"subjectLeaks":[],"lostStableClaims":[],"duplicateClaims":[]}
-missingGroupIds 只能使用输入中的 requiredGroupIds。其他数组填写简短原文摘录。` : `You independently verify a memory rewrite. Do not rescore importance and do not rewrite the text.
+missingGroupIds 只能使用输入中的 requiredCandidateUnitIds。其他数组填写简短原文摘录。` : `You independently verify structured memory unit operations. Do not rescore importance or rewrite text. Code already validates IDs, sections, source coverage, and length; verify semantic faithfulness.
 
 Check only:
-1. whether every requiredGroupId is actually represented in the proposed text rather than merely claimed in writer coverage;
-2. whether proposed text adds assertions unsupported by either current memory or candidate facts;
+1. whether every requiredCandidateUnitId is faithfully represented by proposedUnits text;
+2. whether proposedUnits add assertions unsupported by their sourceUnitIds;
 3. whether third-party, fictional, or project attributes were turned into user attributes;
-4. whether user identity, explicit boundaries, stable preferences, or unfinished commitments from current memory were removed without obsolete/closed evidence;
-5. whether obvious semantic duplicates remain across Facts, Today, Week, and Longterm.
+4. whether removedUnits are genuinely supported as closed/obsolete, and whether identity, boundaries, stable preferences, or unfinished commitments were removed without evidence;
+5. whether same assertions were consolidated without merging merely related/distinct facts, whether the same stable assertion remains in both Facts and Longterm, and whether Today and Week exactly match currentSections.
 
 Return JSON only: {"ok":true,"missingGroupIds":[],"unsupportedClaims":[],"subjectLeaks":[],"lostStableClaims":[],"duplicateClaims":[]}
-missingGroupIds may only contain supplied requiredGroupIds. Other arrays contain short excerpts.`,
+missingGroupIds may only contain supplied requiredCandidateUnitIds. Other arrays contain short excerpts.`,
   };
 }

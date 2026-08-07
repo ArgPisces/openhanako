@@ -4,6 +4,11 @@ import { getLocale } from "../../i18n.ts";
 import { attachPromptLayoutMetadata, buildUtilityPromptLayout } from "../../llm/prompt-layout.ts";
 import { withMemoryReasoningBuffer } from "../llm-budget.ts";
 import { buildDreamAnalyzerPrompt, buildDreamVerifierPrompt, buildDreamWriterPrompt } from "../prompts/dream.ts";
+import {
+  prepareDreamUnits,
+  validateAndRenderDreamUnitPlan,
+  type DreamUnitPlan,
+} from "./memory-units.ts";
 import type { DreamSections } from "./revision-store.ts";
 import type { DreamRunTrigger } from "./state-store.ts";
 import { jaccardSimilarity, normalizeFactText, tokenizeFactText } from "./evidence.ts";
@@ -18,6 +23,7 @@ export type DreamAnalyzerInput = {
   groupId: string;
   canonicalFact: string;
   sourceFacts: string[];
+  sourceFactIds?: string[];
   allowedActions: string[];
   protected: boolean;
   ruleAction: "keep" | "merge" | "forget" | "review";
@@ -32,12 +38,6 @@ export type DreamSemanticDecision = {
   temporal: "stable" | "active" | "closed" | "obsolete" | "unknown";
   canonicalFact: string;
   reasonCodes: string[];
-};
-
-type DreamWriterResult = {
-  sections: DreamSections;
-  coverage: string[];
-  notes: string[];
 };
 
 function stripJsonFence(raw: string) {
@@ -204,61 +204,41 @@ export async function analyzeDreamCandidates(options: {
   return all;
 }
 
-function normalizeWeekDays(value: unknown) {
-  if (!Array.isArray(value)) throw new Error("Dream writer weekDays must be an array");
-  return value.map((entry: any) => ({
-    date: typeof entry?.date === "string" ? entry.date : "",
-    body: typeof entry?.body === "string" ? entry.body.trim() : "",
-  }));
+function unitPlanBodyChars(plan: DreamUnitPlan) {
+  return plan.sections.facts.length
+    + plan.sections.today.length
+    + plan.sections.longterm.length
+    + plan.sections.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
 }
 
-function validateWriterResult(raw: Record<string, unknown>, options: {
-  requiredGroupIds: string[];
-  currentWeekDates: string[];
-}) {
-  const sections = raw.sections as Record<string, unknown> | null;
-  if (!sections || typeof sections !== "object" || Array.isArray(sections)) {
-    throw new Error("Dream writer omitted sections");
-  }
-  const next: DreamSections = {
-    facts: typeof sections.facts === "string" ? sections.facts.trim() : "",
-    today: typeof sections.today === "string" ? sections.today.trim() : "",
-    weekDays: normalizeWeekDays(sections.weekDays),
-    longterm: typeof sections.longterm === "string" ? sections.longterm.trim() : "",
+function writerSafetyLimit(current: DreamSections) {
+  const preservedBodyChars = current.today.length
+    + current.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
+  const currentTotalBodyChars = current.facts.length
+    + current.longterm.length
+    + preservedBodyChars;
+  const maxTotalBodyChars = Math.max(DREAM_MEMORY_HARD_MAX_CHARS, currentTotalBodyChars);
+  return {
+    maxTotalBodyChars,
+    maxEditableBodyChars: Math.max(0, maxTotalBodyChars - preservedBodyChars),
+    preservedBodyChars,
+    role: "safety_ceiling_not_target" as const,
   };
-  const expectedDates = [...options.currentWeekDates].sort();
-  const actualDates = next.weekDays.map((entry) => entry.date).sort();
-  if (JSON.stringify(expectedDates) !== JSON.stringify(actualDates)) {
-    throw new Error("Dream writer changed the set of week dates");
-  }
-  const weekChars = next.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
-  const total = next.facts.length + next.today.length + weekChars + next.longterm.length;
-  if (total > DREAM_MEMORY_HARD_MAX_CHARS) {
+}
+
+function validateWriterResult(
+  raw: Record<string, unknown>,
+  prepared: ReturnType<typeof prepareDreamUnits>,
+  maxTotalBodyChars: number,
+) {
+  const plan = validateAndRenderDreamUnitPlan(raw, prepared);
+  const total = unitPlanBodyChars(plan);
+  if (total > maxTotalBodyChars) {
     throw new Error(
-      `Dream writer output is ${total} characters; the safety limit is ${DREAM_MEMORY_HARD_MAX_CHARS}; no changes were applied`,
+      `Dream writer output is ${total} characters; the safety limit is ${maxTotalBodyChars}; no changes were applied`,
     );
   }
-
-  const coverage = Array.isArray(raw.coverage)
-    ? raw.coverage.filter((value): value is string => typeof value === "string")
-    : [];
-  const coverageSet = new Set(coverage);
-  const missing = options.requiredGroupIds.filter((id) => !coverageSet.has(id));
-  if (missing.length > 0) throw new Error(`Dream writer omitted ${missing.length} required candidates`);
-
-  return {
-    sections: next,
-    coverage,
-    notes: Array.isArray(raw.notes)
-      ? raw.notes.filter((value): value is string => typeof value === "string").slice(0, 12)
-      : [],
-  } satisfies DreamWriterResult;
-}
-
-function requiredResidentGroupIds(decisions: DreamSemanticDecision[]) {
-  return decisions
-    .filter((decision) => decision.action === "keep" || decision.action === "merge")
-    .map((decision) => decision.groupId);
+  return plan;
 }
 
 export async function writeDreamSections(options: {
@@ -269,19 +249,22 @@ export async function writeDreamSections(options: {
   trigger: DreamRunTrigger;
   signal?: AbortSignal;
 }) {
-  const requiredGroupIds = requiredResidentGroupIds(options.decisions);
+  const prepared = prepareDreamUnits(options);
   const promptSpec = buildDreamWriterPrompt(getLocale());
+  const safetyLimit = writerSafetyLimit(options.current);
   const payload = {
-    currentSections: options.current,
-    safetyLimit: {
-      maxTotalBodyChars: DREAM_MEMORY_HARD_MAX_CHARS,
-      role: "safety_ceiling_not_target",
+    residentUnits: prepared.residentUnits,
+    candidateUnits: prepared.candidateUnits,
+    exactDuplicateOperations: prepared.exactDuplicateOperations,
+    safetyLimit,
+    constraints: {
+      requiredResidentUnitIds: prepared.residentUnits.map((unit) => unit.id),
+      requiredCandidateUnitIds: prepared.candidateUnits
+        .filter((unit) => unit.action === "keep" || unit.action === "merge")
+        .map((unit) => unit.id),
+      factsPreferredOverLongtermForStableDuplicates: true,
+      outputFormat: "plain_one_line_units",
     },
-    candidates: options.decisions.map((decision) => ({
-      ...decision,
-      measured: options.evidence.find((entry) => entry.groupId === decision.groupId)?.evidence || {},
-    })),
-    requiredGroupIds,
   };
 
   const raw = await callStructured({
@@ -294,24 +277,18 @@ export async function writeDreamSections(options: {
     signal: options.signal,
   });
   try {
-    return validateWriterResult(raw, {
-      requiredGroupIds,
-      currentWeekDates: options.current.weekDays.map((entry) => entry.date),
-    });
+    return validateWriterResult(raw, prepared, safetyLimit.maxTotalBodyChars);
   } catch (err: any) {
     const repairRaw = await callStructured({
       promptSpec,
-      userContent: `${JSON.stringify(payload)}\n\nValidation error: ${err?.message || err}. Return a corrected object that obeys every required ID, preserves the date set, and stays below the single total-body safety ceiling. The ceiling is not a target.`,
+      userContent: `${JSON.stringify(payload)}\n\nValidation error: ${err?.message || err}. Return corrected structured Facts/Longterm units grounded in source unit IDs, preserve every resident source, and stay below the single total-body safety ceiling. Today and Week are preserved by code and are not part of your output. The ceiling is not a target.`,
       resolvedModel: options.resolvedModel,
       operation: "memory.dream.write_validation_repair",
       trigger: options.trigger,
       maxTokens: 8192,
       signal: options.signal,
     });
-    return validateWriterResult(repairRaw, {
-      requiredGroupIds,
-      currentWeekDates: options.current.weekDays.map((entry) => entry.date),
-    });
+    return validateWriterResult(repairRaw, prepared, safetyLimit.maxTotalBodyChars);
   }
 }
 
@@ -322,17 +299,23 @@ export async function verifyDreamSections(options: {
   evidence: DreamAnalyzerInput[];
   resolvedModel: any;
   trigger: DreamRunTrigger;
+  unitPlan?: DreamUnitPlan;
   signal?: AbortSignal;
 }) {
-  const requiredGroupIds = requiredResidentGroupIds(options.decisions);
   const promptSpec = buildDreamVerifierPrompt(getLocale());
   const raw = await callStructured({
     promptSpec,
     userContent: JSON.stringify({
       currentSections: options.current,
+      currentUnits: options.unitPlan?.originalResidentUnits,
       candidateDecisions: options.decisions,
       measuredEvidence: options.evidence,
-      requiredGroupIds,
+      requiredCandidateUnitIds: options.unitPlan?.candidateUnits
+        .filter((unit) => unit.action === "keep" || unit.action === "merge")
+        .map((unit) => unit.id) || [],
+      exactDuplicateOperations: options.unitPlan?.exactDuplicateOperations,
+      proposedUnits: options.unitPlan?.proposedUnits,
+      removedUnits: options.unitPlan?.removedUnits,
       proposedSections: options.proposed,
     }),
     resolvedModel: options.resolvedModel,
@@ -344,8 +327,11 @@ export async function verifyDreamSections(options: {
   const missing = Array.isArray(raw.missingGroupIds)
     ? raw.missingGroupIds.filter((value): value is string => typeof value === "string")
     : [];
-  if (missing.some((id) => !requiredGroupIds.includes(id))) {
-    throw new Error("Dream verifier returned an unknown required group id");
+  const requiredCandidateUnitIds = options.unitPlan?.candidateUnits
+    .filter((unit) => unit.action === "keep" || unit.action === "merge")
+    .map((unit) => unit.id) || [];
+  if (missing.some((id) => !requiredCandidateUnitIds.includes(id))) {
+    throw new Error("Dream verifier returned an unknown required candidate unit id");
   }
   const unsupported = Array.isArray(raw.unsupportedClaims) ? raw.unsupportedClaims : [];
   const subjectLeaks = Array.isArray(raw.subjectLeaks) ? raw.subjectLeaks : [];

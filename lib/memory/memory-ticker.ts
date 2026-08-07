@@ -55,6 +55,10 @@ import { CACHE_STRATEGIES } from "../llm/cache-strategy-contract.ts";
 import { atomicWriteSync } from "../../shared/safe-fs.ts";
 import { invalidateSessionDerivedStateSync } from "./session-derived-state.ts";
 import { createMemoryDreamRunner } from "./dream/runner.ts";
+import {
+  listDreamRevisions as listDreamRevisionFiles,
+  readDreamRevision as readDreamRevisionFile,
+} from "./dream/revision-store.ts";
 
 const log = createModuleLogger("memory-ticker");
 
@@ -1326,6 +1330,14 @@ export function createMemoryTicker(opts) {
     return _dreamRunner.getStatus();
   }
 
+  function listDreamRevisions() {
+    return listDreamRevisionFiles(memoryDir);
+  }
+
+  function getDreamRevision(revisionId) {
+    return readDreamRevisionFile(memoryDir, revisionId);
+  }
+
   async function restoreDreamRevision(revisionId) {
     if (_stopped) throw new Error("Memory ticker is stopped");
     if (_dailyRunning || _aggregateCompileInFlight > 0) {
@@ -1353,6 +1365,8 @@ export function createMemoryTicker(opts) {
     getHealthStatus,
     startDream,
     getDreamStatus,
+    listDreamRevisions,
+    getDreamRevision,
     restoreDreamRevision,
   };
 }
