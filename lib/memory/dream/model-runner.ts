@@ -30,6 +30,7 @@ import type { DreamSections } from "./revision-store.ts";
 import type { DreamRunTrigger } from "./state-store.ts";
 
 export const DREAM_MEMORY_HARD_MAX_CHARS = 5_000;
+export const DREAM_COMPOSE_SOFT_TARGETS = Object.freeze({ facts: 400, longterm: 800 });
 
 function stripJsonFence(raw: string) {
   const text = String(raw || "").trim();
@@ -257,18 +258,15 @@ export async function optimizeDreamMemory(options: {
 }
 
 function composerSafetyLimit(current: DreamSections) {
-  const currentEditableBodyChars = current.facts.length + current.longterm.length;
   const preservedBodyChars = current.today.length
     + current.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
-  const currentTotalBodyChars = currentEditableBodyChars + preservedBodyChars;
+  const currentTotalBodyChars = current.facts.length + current.longterm.length + preservedBodyChars;
   return {
     maxParagraphChars: DREAM_COMPOSE_PARAGRAPH_MAX_CHARS,
     maxTopicChars: DREAM_COMPOSE_TOPIC_MAX_CHARS,
-    maxEditableBodyChars: currentEditableBodyChars,
     maxTotalBodyChars: Math.max(DREAM_MEMORY_HARD_MAX_CHARS, currentTotalBodyChars),
-    currentTotalBodyChars,
-    preservedBodyChars,
-    role: "non_growth_ceiling" as const,
+    softTargets: DREAM_COMPOSE_SOFT_TARGETS,
+    role: "global_safety_ceiling_with_soft_section_targets" as const,
   };
 }
 
@@ -277,6 +275,10 @@ export async function composeDreamMemory(options: {
   optimization: DreamOptimizationPlan;
   resolvedModel: any;
   trigger: DreamRunTrigger;
+  compressionRepair?: {
+    previousParagraphs: DreamUnitPlan["paragraphs"];
+    feedback: string[];
+  };
   signal?: AbortSignal;
 }) {
   const safetyLimit = composerSafetyLimit(options.current);
@@ -287,12 +289,6 @@ export async function composeDreamMemory(options: {
   }));
   const validate = (raw: Record<string, unknown>) => {
     const plan = validateAndRenderDreamComposition(raw, options.optimization, options.current);
-    const editableChars = plan.sections.facts.length + plan.sections.longterm.length;
-    if (editableChars > safetyLimit.maxEditableBodyChars) {
-      throw new Error(
-        `Dream composer output is ${editableChars} editable characters; it may not exceed the ${safetyLimit.maxEditableBodyChars} characters present at run start`,
-      );
-    }
     const total = totalBodyChars(plan.sections);
     if (total > safetyLimit.maxTotalBodyChars) {
       throw new Error(
@@ -304,25 +300,45 @@ export async function composeDreamMemory(options: {
   if (retainedUnits.length === 0) {
     return validate({ paragraphs: [] });
   }
+  const payload = {
+    units: retainedUnits,
+    constraints: {
+      requiredSourceUnitIds: retainedUnits.map((unit) => unit.id),
+      maxParagraphChars: safetyLimit.maxParagraphChars,
+      maxTopicChars: safetyLimit.maxTopicChars,
+      maxTotalBodyChars: safetyLimit.maxTotalBodyChars,
+      softTargets: safetyLimit.softTargets,
+      outputFormat: "natural_paragraphs_separated_by_blank_lines",
+      externalMemorySources: "forbidden",
+    },
+    ...(options.compressionRepair ? {
+      compressionRepair: {
+        previousParagraphs: options.compressionRepair.previousParagraphs,
+        verifierFeedback: options.compressionRepair.feedback,
+        directive: "Compress phrasing and compose naturally related units more tightly without dropping any unique information. Soft targets may be exceeded when faithful coverage requires it.",
+      },
+    } : {}),
+  };
+  if (options.compressionRepair) {
+    const raw = await callStructured({
+      promptSpec: buildDreamComposerPrompt(getLocale()),
+      userContent: JSON.stringify(payload),
+      resolvedModel: options.resolvedModel,
+      operation: "memory.dream.compose_compression_repair",
+      trigger: options.trigger,
+      maxTokens: 8192,
+      signal: options.signal,
+    });
+    return validate(raw);
+  }
   return runValidatedStage({
     promptSpec: buildDreamComposerPrompt(getLocale()),
-    payload: {
-      units: retainedUnits,
-      constraints: {
-        requiredSourceUnitIds: retainedUnits.map((unit) => unit.id),
-        maxParagraphChars: safetyLimit.maxParagraphChars,
-        maxTopicChars: safetyLimit.maxTopicChars,
-        maxEditableBodyChars: safetyLimit.maxEditableBodyChars,
-        maxTotalBodyChars: safetyLimit.maxTotalBodyChars,
-        outputFormat: "natural_paragraphs_separated_by_blank_lines",
-        externalMemorySources: "forbidden",
-      },
-    },
+    payload,
     validate,
     resolvedModel: options.resolvedModel,
     trigger: options.trigger,
     operation: "memory.dream.compose",
-    repairInstruction: "Cover every retained unit exactly once, preserve its section, add no unsupported information, keep each paragraph within its limit, and do not exceed the run-start editable character count.",
+    repairInstruction: "Cover every retained unit exactly once, preserve its section, add no unsupported information, respect paragraph/topic hard limits, and stay below the global safety ceiling. Treat section targets as soft and preserve unique information first.",
     signal: options.signal,
   });
 }
@@ -369,11 +385,16 @@ export async function verifyDreamSections(options: {
     "incoherentParagraphs",
   ] as const;
   const failures = Object.fromEntries(fields.map((field) => [field, stringArray(raw[field])])) as Record<typeof fields[number], string[]>;
-  const ok = raw.ok === true && fields.every((field) => failures[field].length === 0);
-  if (!ok) {
+  const semanticOk = raw.ok === true && fields.every((field) => failures[field].length === 0);
+  if (!semanticOk) {
     throw new Error(`Dream verification failed: ${fields.map((field) => `${field}=${failures[field].length}`).join(", ")}`);
   }
-  return { ok: true as const };
+  const compressionFeedback = stringArray(raw.insufficientCompression);
+  return {
+    ok: true as const,
+    insufficientCompression: compressionFeedback.length > 0,
+    compressionFeedback,
+  };
 }
 
 export function dreamModelId(resolvedModel: any) {

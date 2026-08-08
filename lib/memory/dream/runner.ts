@@ -147,20 +147,42 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         trigger,
         signal,
       });
-      const writerResult = await composeDreamMemory({
+      let writerResult = await composeDreamMemory({
         current: before,
         optimization,
         resolvedModel,
         trigger,
         signal,
       });
-      await verifyDreamSections({
+      const firstVerification = await verifyDreamSections({
         current: before,
         plan: writerResult,
         resolvedModel,
         trigger,
         signal,
       });
+      if (firstVerification.insufficientCompression) {
+        writerResult = await composeDreamMemory({
+          current: before,
+          optimization,
+          resolvedModel,
+          trigger,
+          compressionRepair: {
+            previousParagraphs: writerResult.paragraphs,
+            feedback: firstVerification.compressionFeedback,
+          },
+          signal,
+        });
+        // Compression is a soft objective. A second advisory is accepted, while
+        // verifyDreamSections still throws for every semantic/provenance failure.
+        await verifyDreamSections({
+          current: before,
+          plan: writerResult,
+          resolvedModel,
+          trigger,
+          signal,
+        });
+      }
 
       if (signal.aborted) throw new DOMException("Dream aborted", "AbortError");
       const current = snapshotDreamSections(options.memoryDir);

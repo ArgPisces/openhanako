@@ -289,27 +289,25 @@ describe("Memory Dream five-stage model boundary", () => {
     expect(JSON.stringify(payload)).not.toContain("Today stays outside Dream");
     expect(JSON.stringify(payload)).not.toContain("Week stays outside Dream");
     expect(JSON.stringify(payload)).not.toContain("facts.db");
+    expect(payload.constraints.softTargets).toEqual({ facts: 400, longterm: 800 });
+    expect(payload.constraints).not.toHaveProperty("maxEditableBodyChars");
   });
 
-  it("repairs Compose output that grows beyond the run-start editable character count", async () => {
-    const compactCurrent = { facts: "Known fact.", today: "Untouched.", weekDays: [], longterm: "" };
+  it("accepts Compose output above the run-start editable count when below the global ceiling", async () => {
+    const compactCurrent = { facts: "Known.", today: "Untouched.", weekDays: [], longterm: "" };
     const optimization: any = {
       sourceBlocks: [], atomicUnits: [],
       dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
       optimizedUnits: [{
         id: "result:0", groupId: "group:0", sourceUnitIds: ["atom:0"], sourceBlockIds: ["source:facts:0"],
-        section: "facts", text: "Known fact.", order: 0,
+        section: "facts", text: "Known fact with necessary details.", order: 0,
       }],
       removedGroups: [], operations: [], sections: compactCurrent, mergedCount: 0, forgottenCount: 0,
     };
-    callTextMock
-      .mockResolvedValueOnce(JSON.stringify({ paragraphs: [{
-        section: "facts", topic: "Known", sourceUnitIds: ["result:0"],
-        text: "Known fact with unsupported expansion.",
-      }] }))
-      .mockResolvedValueOnce(JSON.stringify({ paragraphs: [{
-        section: "facts", topic: "Known", sourceUnitIds: ["result:0"], text: "Known fact.",
-      }] }));
+    callTextMock.mockResolvedValueOnce(JSON.stringify({ paragraphs: [{
+      section: "facts", topic: "Known", sourceUnitIds: ["result:0"],
+      text: "Known fact with necessary details.",
+    }] }));
 
     const result = await composeDreamMemory({
       current: compactCurrent,
@@ -318,9 +316,9 @@ describe("Memory Dream five-stage model boundary", () => {
       trigger: "manual",
     });
 
-    expect(result.sections.facts).toBe("Known fact.");
-    expect(callTextMock).toHaveBeenCalledTimes(2);
-    expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("may not exceed the 11 characters present at run start");
+    expect(result.sections.facts).toBe("Known fact with necessary details.");
+    expect(result.sections.facts.length).toBeGreaterThan(compactCurrent.facts.length);
+    expect(callTextMock).toHaveBeenCalledTimes(1);
   });
 
   it("renders an empty retained set deterministically without calling the Compose model", async () => {
@@ -378,5 +376,50 @@ describe("Memory Dream five-stage model boundary", () => {
       resolvedModel,
       trigger: "manual",
     })).rejects.toThrow("fragmentedTopics=1");
+  });
+
+  it("returns compression feedback as advisory while accepting an information-complete over-target result", async () => {
+    const overTarget = "x".repeat(410);
+    const plan: any = {
+      sourceBlocks: [], atomicUnits: [], dedupePlan: { exactDuplicateOperations: [], groups: [] },
+      optimizedUnits: [{ id: "result:0", section: "facts", text: overTarget }],
+      removedGroups: [],
+      paragraphs: [{ id: "paragraph:0", section: "facts", topic: "Dense facts", sourceUnitIds: ["result:0"], text: overTarget }],
+      sections: { ...current, facts: overTarget },
+    };
+    callTextMock
+      .mockResolvedValueOnce(JSON.stringify({
+        ok: true,
+        missingClaims: [], compoundUnits: [], incorrectMerges: [], unsupportedClaims: [],
+        subjectLeaks: [], unsafeRemovals: [], duplicateClaims: [], fragmentedTopics: [],
+        incoherentParagraphs: [], insufficientCompression: [],
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        ok: true,
+        missingClaims: [], compoundUnits: [], incorrectMerges: [], unsupportedClaims: [],
+        subjectLeaks: [], unsafeRemovals: [], duplicateClaims: [], fragmentedTopics: [],
+        incoherentParagraphs: [], insufficientCompression: ["Share the repeated subject across sentences."],
+      }));
+
+    await expect(verifyDreamSections({
+      current,
+      plan,
+      resolvedModel,
+      trigger: "manual",
+    })).resolves.toEqual({
+      ok: true,
+      insufficientCompression: false,
+      compressionFeedback: [],
+    });
+    await expect(verifyDreamSections({
+      current,
+      plan,
+      resolvedModel,
+      trigger: "manual",
+    })).resolves.toEqual({
+      ok: true,
+      insufficientCompression: true,
+      compressionFeedback: ["Share the repeated subject across sentences."],
+    });
   });
 });

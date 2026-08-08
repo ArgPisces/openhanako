@@ -1,8 +1,8 @@
 export const DREAM_ATOMIZER_PROMPT_VERSION = "memory-dream-atomizer.v1";
 export const DREAM_DEDUPER_PROMPT_VERSION = "memory-dream-deduper.v1";
 export const DREAM_OPTIMIZER_PROMPT_VERSION = "memory-dream-optimizer.v1";
-export const DREAM_COMPOSER_PROMPT_VERSION = "memory-dream-composer.v1";
-export const DREAM_VERIFIER_PROMPT_VERSION = "memory-dream-verifier.v4";
+export const DREAM_COMPOSER_PROMPT_VERSION = "memory-dream-composer.v2";
+export const DREAM_VERIFIER_PROMPT_VERSION = "memory-dream-verifier.v5";
 
 export function buildDreamAtomizerPrompt(locale = "en") {
   const zh = String(locale).toLowerCase().startsWith("zh");
@@ -124,7 +124,9 @@ export function buildDreamComposerPrompt(locale = "en") {
 - 主题编排不是语义去重。每个来源的独立断言都要保留；不得为了成段而吞掉信息，也不得把无关事实硬塞在一起。
 - 不设段落数量或合并比例。依据自然主题边界判断。
 - 每段不超过 500 字符，topic 不超过 80 字符。text 是不含 Markdown 列表符、标题或换行的纯文本；程序会用空行分隔自然段。
-- 最终 Facts+Longterm 不得超过输入约束中的本轮起始字符数。上限是硬约束，不是扩写目标。
+- 去重后继续压缩冗长措辞、共享主语和可自然合段的上下文。Facts 以 400 字符以内为软目标，Longterm 以 800 字符以内为软目标。
+- 信息完整优先于软目标。不得为了达标删除或模糊任何独有事实；确实需要时可以超过软目标。不得为使用剩余额度而扩写。
+- 若输入含 compressionRepair，依据 verifierFeedback 对 previousParagraphs 做一次更紧凑的重编排，同时仍须完整覆盖全部来源。反馈不是删除授权。
 
 只输出 JSON：
 {"paragraphs":[{"section":"facts|longterm","topic":"主题","sourceUnitIds":["result:0","result:1"],"text":"忠实、连贯的自然段"}]}` : `You compose resident-memory paragraphs. Input contains only Facts/Longterm units explicitly retained by the optimizer, never a fact database, Today, Week, removed groups, or external material. You may compose, but may not deduplicate again or forget.
@@ -137,7 +139,9 @@ Composition rules:
 - Topic composition is not semantic deduplication. Preserve every independent assertion; never swallow information to form a paragraph, and never force unrelated facts together.
 - Do not target a fixed paragraph count or merge ratio. Follow natural topic boundaries.
 - Each paragraph is at most 500 characters and topic is at most 80 characters. text is plain text without Markdown bullets, headings, or line breaks; code separates paragraphs with blank lines.
-- Final Facts+Longterm must not exceed the run-start character ceiling in the input constraints. The ceiling is a hard guard, not an expansion target.
+- After deduplication, compress wordy phrasing, shared subjects, and naturally composable context. Aim softly for Facts at or below 400 characters and Longterm at or below 800 characters.
+- Complete information takes priority over soft targets. Never delete or blur a unique fact to meet them; exceed a target when faithful coverage requires it. Never expand to use spare capacity.
+- When compressionRepair is present, use verifierFeedback to recompose previousParagraphs once more tightly while still covering every source. Feedback is not permission to delete.
 
 Return JSON only:
 {"paragraphs":[{"section":"facts|longterm","topic":"topic","sourceUnitIds":["result:0","result:1"],"text":"faithful coherent paragraph"}]}`,
@@ -159,9 +163,12 @@ export function buildDreamVerifierPrompt(locale = "en") {
 5. composedParagraphs 是否恰好承载 optimizedUnits 的全部信息，没有新增断言、丢失含义或跨 section。
 6. 同 section 内可自然合段的同主题事实是否仍碎成多个单句段（fragmentedTopics）；同段内是否硬塞无关事实（incoherentParagraphs）。不得用固定段落数或比例判断。
 7. 最终是否仍有语义重复；Today 与 Week 是否与 currentSections 完全一致。
+8. 若在不丢失独有信息的前提下，仍存在明显可压缩的赘述、重复主语、松散表达或可更紧凑编排的上下文，在 insufficientCompression 写出具体建议。仅仅超过 Facts 400 / Longterm 800 软目标不能单独构成问题；信息完整且已经紧凑的超目标结果应通过。
+
+ok 只表示 1-7 的语义、来源与安全检查通过。只有 insufficientCompression 非空时，ok 仍然必须为 true；该字段只是一次性压缩重试建议，不是硬失败。
 
 只输出 JSON：
-{"ok":true,"missingClaims":[],"compoundUnits":[],"incorrectMerges":[],"unsupportedClaims":[],"subjectLeaks":[],"unsafeRemovals":[],"duplicateClaims":[],"fragmentedTopics":[],"incoherentParagraphs":[]}` : `You independently verify a five-stage resident-memory cleanup. Verify only; do not rewrite or regroup.
+{"ok":true,"missingClaims":[],"compoundUnits":[],"incorrectMerges":[],"unsupportedClaims":[],"subjectLeaks":[],"unsafeRemovals":[],"duplicateClaims":[],"fragmentedTopics":[],"incoherentParagraphs":[],"insufficientCompression":[]}` : `You independently verify a five-stage resident-memory cleanup. Verify only; do not rewrite or regroup.
 
 Check:
 1. atomization fully covers sourceBlocks and does not pack independent assertions into one unit;
@@ -171,8 +178,11 @@ Check:
 5. composedParagraphs carry all optimizedUnits information exactly, without unsupported claims, lost meaning, or cross-section composition;
 6. naturally composable same-topic facts in a section are not left as fragmented singleton paragraphs (fragmentedTopics), and unrelated facts are not forced together (incoherentParagraphs). Never judge by a fixed paragraph count or ratio;
 7. no semantic duplicates remain, and Today and Week exactly equal currentSections.
+8. If obvious verbosity, repeated subjects, loose phrasing, or context could still be compressed meaningfully without losing unique information, put specific advice in insufficientCompression. Exceeding the Facts 400 / Longterm 800 soft targets alone is not a problem; an information-complete result that is already compact must pass even when over target.
+
+ok reports only whether checks 1-7 pass. When insufficientCompression is the only non-empty field, ok must remain true; it is advisory for one compression retry, not a hard failure.
 
 Return JSON only:
-{"ok":true,"missingClaims":[],"compoundUnits":[],"incorrectMerges":[],"unsupportedClaims":[],"subjectLeaks":[],"unsafeRemovals":[],"duplicateClaims":[],"fragmentedTopics":[],"incoherentParagraphs":[]}`,
+{"ok":true,"missingClaims":[],"compoundUnits":[],"incorrectMerges":[],"unsupportedClaims":[],"subjectLeaks":[],"unsafeRemovals":[],"duplicateClaims":[],"fragmentedTopics":[],"incoherentParagraphs":[],"insufficientCompression":[]}`,
   };
 }

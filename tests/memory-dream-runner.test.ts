@@ -59,7 +59,7 @@ describe("Memory Dream runner", () => {
       groups: [],
       exactDuplicateOperations: [],
     });
-    verifyMock.mockResolvedValue({ ok: true });
+    verifyMock.mockResolvedValue({ ok: true, insufficientCompression: false, compressionFeedback: [] });
     composeMock.mockImplementation(async ({ current, optimization }: any) => ({
       ...optimization,
       paragraphs: [],
@@ -185,6 +185,55 @@ describe("Memory Dream runner", () => {
       appliedOperationCount: 0,
     }));
     expect(fs.existsSync(path.join(memoryDir, "dream", "revisions"))).toBe(false);
+  });
+
+  it("runs one targeted Compose repair for advisory compression feedback and accepts a second advisory", async () => {
+    optimizeMock.mockImplementation(async ({ current, dedupePlan }: any) => ({
+      sourceBlocks: [], atomicUnits: [], dedupePlan,
+      optimizedUnits: [{ id: "result:0", section: "facts", text: "User prefers concise answers.", order: 0 }],
+      removedGroups: [], sections: current, operations: [], mergedCount: 0, forgottenCount: 0,
+    }));
+    composeMock
+      .mockImplementationOnce(async ({ current, optimization }: any) => ({
+        ...optimization,
+        paragraphs: [{
+          id: "paragraph:0", section: "facts", topic: "Preference", sourceUnitIds: ["result:0"],
+          text: "User has a preference for answers that are concise.", order: 0,
+        }],
+        sections: { ...current, facts: "User has a preference for answers that are concise." },
+        operations: [{ kind: "compose", sourceUnitIds: ["result:0"], resultUnitIds: ["paragraph:0"] }],
+      }))
+      .mockImplementationOnce(async ({ current, optimization, compressionRepair }: any) => {
+        expect(compressionRepair).toEqual({
+          previousParagraphs: [expect.objectContaining({ id: "paragraph:0" })],
+          feedback: ["Use a shorter predicate."],
+        });
+        return {
+          ...optimization,
+          paragraphs: [{
+            id: "paragraph:0", section: "facts", topic: "Preference", sourceUnitIds: ["result:0"],
+            text: "User prefers concise replies.", order: 0,
+          }],
+          sections: { ...current, facts: "User prefers concise replies." },
+          operations: [{ kind: "compose", sourceUnitIds: ["result:0"], resultUnitIds: ["paragraph:0"] }],
+        };
+      });
+    const advisory = {
+      ok: true,
+      insufficientCompression: true,
+      compressionFeedback: ["Use a shorter predicate."],
+    };
+    verifyMock.mockResolvedValueOnce(advisory).mockResolvedValueOnce(advisory);
+    const runner = makeRunner();
+
+    runner.start({ trigger: "manual" });
+    const status = await waitForCompletion(runner);
+
+    expect(status.status).toBe("succeeded");
+    expect(composeMock).toHaveBeenCalledTimes(2);
+    expect(verifyMock).toHaveBeenCalledTimes(2);
+    expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8"))
+      .toBe("User prefers concise replies.\n");
   });
 
   it("leaves every memory section unchanged when any stage fails", async () => {
