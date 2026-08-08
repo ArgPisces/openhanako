@@ -6,12 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const atomizeMock = vi.fn();
 const dedupeMock = vi.fn();
 const optimizeMock = vi.fn();
+const composeMock = vi.fn();
 const verifyMock = vi.fn();
 
 vi.mock("../lib/memory/dream/model-runner.ts", () => ({
   atomizeDreamMemory: (...args: any[]) => atomizeMock(...args),
   dedupeDreamMemory: (...args: any[]) => dedupeMock(...args),
   optimizeDreamMemory: (...args: any[]) => optimizeMock(...args),
+  composeDreamMemory: (...args: any[]) => composeMock(...args),
   verifyDreamSections: (...args: any[]) => verifyMock(...args),
   dreamModelId: () => "utility-test",
 }));
@@ -41,6 +43,7 @@ describe("Memory Dream runner", () => {
     atomizeMock.mockReset();
     dedupeMock.mockReset();
     optimizeMock.mockReset();
+    composeMock.mockReset();
     verifyMock.mockReset();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-dream-runner-"));
     memoryDir = path.join(tmpDir, "memory");
@@ -57,6 +60,11 @@ describe("Memory Dream runner", () => {
       exactDuplicateOperations: [],
     });
     verifyMock.mockResolvedValue({ ok: true });
+    composeMock.mockImplementation(async ({ current, optimization }: any) => ({
+      ...optimization,
+      paragraphs: [],
+      sections: current,
+    }));
   });
 
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -89,9 +97,10 @@ describe("Memory Dream runner", () => {
     expect(atomizeMock).not.toHaveBeenCalled();
     expect(dedupeMock).not.toHaveBeenCalled();
     expect(optimizeMock).not.toHaveBeenCalled();
+    expect(composeMock).not.toHaveBeenCalled();
   });
 
-  it("runs atomize, dedupe, optimize, and verify in order using resident memory only", async () => {
+  it("runs atomize, dedupe, optimize, compose, and verify in order using resident memory only", async () => {
     const order: string[] = [];
     atomizeMock.mockImplementation(async ({ current }: any) => {
       order.push("atomize");
@@ -116,9 +125,20 @@ describe("Memory Dream runner", () => {
       order.push("optimize");
       return {
         sourceBlocks: [], atomicUnits: [], dedupePlan, optimizedUnits: [], removedGroups: [],
-        sections: { ...current, facts: "- User prefers concise answers.", longterm: "- Hana is the user's personal agent." },
+        sections: current,
         operations: [{ kind: "rewrite", sourceUnitIds: ["atom:0"], resultUnitIds: ["result:0"] }],
         mergedCount: 0, forgottenCount: 0,
+      };
+    });
+    composeMock.mockImplementation(async ({ current, optimization }: any) => {
+      order.push("compose");
+      return {
+        ...optimization,
+        paragraphs: [
+          { id: "paragraph:0", section: "facts", topic: "Preference", sourceUnitIds: ["result:0"], text: "User prefers concise replies.", order: 0 },
+        ],
+        sections: { ...current, facts: "User prefers concise replies.", longterm: "Hana is user's personal agent." },
+        operations: [...optimization.operations, { kind: "compose", sourceUnitIds: ["result:0"], resultUnitIds: ["paragraph:0"] }],
       };
     });
     verifyMock.mockImplementation(async () => { order.push("verify"); return { ok: true }; });
@@ -128,25 +148,28 @@ describe("Memory Dream runner", () => {
     const status = await waitForCompletion(runner);
 
     expect(status.status).toBe("succeeded");
-    expect(order).toEqual(["atomize", "dedupe", "optimize", "verify"]);
+    expect(order).toEqual(["atomize", "dedupe", "optimize", "compose", "verify"]);
     expect(status.lastRun).toEqual(expect.objectContaining({
       changed: true,
       changedSections: ["facts", "longterm"],
       mergedCount: 0,
       forgottenCount: 0,
-      appliedOperationCount: 1,
+      appliedOperationCount: 2,
     }));
     expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8"))
-      .toBe("- User prefers concise answers.\n");
+      .toBe("User prefers concise replies.\n");
   });
 
   it("treats an exact no-op as successful without creating a revision", async () => {
     optimizeMock.mockImplementation(async ({ current, dedupePlan }: any) => ({
       sourceBlocks: [], atomicUnits: [], dedupePlan, optimizedUnits: [], removedGroups: [],
+      sections: current, operations: [], mergedCount: 99, forgottenCount: 99,
+    }));
+    composeMock.mockImplementation(async ({ current, optimization }: any) => ({
+      ...optimization,
+      paragraphs: [],
       sections: current,
-      operations: [{ kind: "rewrite", sourceUnitIds: ["invented"], resultUnitIds: ["invented"] }],
-      mergedCount: 99,
-      forgottenCount: 99,
+      operations: [{ kind: "compose", sourceUnitIds: ["invented"], resultUnitIds: ["invented"] }],
     }));
     const runner = makeRunner();
 
@@ -175,6 +198,7 @@ describe("Memory Dream runner", () => {
     expect(status.status).toBe("failed");
     expect(status.lastRun?.error).toContain("deduper invalid");
     expect(optimizeMock).not.toHaveBeenCalled();
+    expect(composeMock).not.toHaveBeenCalled();
     expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8")).toBe(before);
     expect(fs.existsSync(path.join(memoryDir, "dream", "revisions"))).toBe(false);
   });

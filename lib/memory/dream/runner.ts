@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { buildCompiledMemoryMarkdown } from "../compile.ts";
 import {
   atomizeDreamMemory,
+  composeDreamMemory,
   dedupeDreamMemory,
   dreamModelId,
   optimizeDreamMemory,
@@ -137,11 +138,18 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         trigger,
         signal,
       });
-      const writerResult = await optimizeDreamMemory({
+      const optimization = await optimizeDreamMemory({
         current: before,
         sourceBlocks: atomized.sourceBlocks,
         atomicUnits: atomized.units,
         dedupePlan: deduped,
+        resolvedModel,
+        trigger,
+        signal,
+      });
+      const writerResult = await composeDreamMemory({
+        current: before,
+        optimization,
         resolvedModel,
         trigger,
         signal,

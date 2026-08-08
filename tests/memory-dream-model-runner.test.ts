@@ -8,6 +8,7 @@ vi.mock("../core/llm-client.ts", () => ({
 
 import {
   atomizeDreamMemory,
+  composeDreamMemory,
   dedupeDreamMemory,
   optimizeDreamMemory,
   verifyDreamSections,
@@ -28,7 +29,7 @@ const current = {
   longterm: "User likes concise answers.",
 };
 
-describe("Memory Dream three-stage model boundary", () => {
+describe("Memory Dream five-stage model boundary", () => {
   beforeEach(() => callTextMock.mockReset());
 
   it("repairs non-atomic output and sends only resident Facts/Longterm blocks", async () => {
@@ -228,20 +229,147 @@ describe("Memory Dream three-stage model boundary", () => {
     expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("safety limit is 5000");
   });
 
-  it("uses an independent verifier to reject compound or unsupported output", async () => {
+  it("composes related retained units into natural paragraphs from a closed payload", async () => {
+    const optimization: any = {
+      sourceBlocks: [],
+      atomicUnits: [],
+      dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
+      optimizedUnits: [
+        { id: "result:0", groupId: "group:0", sourceUnitIds: ["atom:0"], sourceBlockIds: ["source:facts:0"], section: "facts", text: "User writes videos.", order: 0 },
+        { id: "result:1", groupId: "group:1", sourceUnitIds: ["atom:1"], sourceBlockIds: ["source:facts:0"], section: "facts", text: "User maintains HanaAgent.", order: 1 },
+        { id: "result:2", groupId: "group:2", sourceUnitIds: ["atom:2"], sourceBlockIds: ["source:longterm:0"], section: "longterm", text: "User likes concise answers.", order: 2 },
+      ],
+      removedGroups: [],
+      operations: [],
+      sections: current,
+      mergedCount: 0,
+      forgottenCount: 0,
+    };
+    callTextMock.mockResolvedValueOnce(JSON.stringify({
+      paragraphs: [
+        {
+          section: "facts",
+          topic: "User projects",
+          sourceUnitIds: ["result:0", "result:1"],
+          text: "User writes videos and maintains HanaAgent.",
+        },
+        {
+          section: "longterm",
+          topic: "Communication preference",
+          sourceUnitIds: ["result:2"],
+          text: "User likes concise answers.",
+        },
+      ],
+    }));
+
+    const result = await composeDreamMemory({
+      current,
+      optimization,
+      resolvedModel,
+      trigger: "manual",
+    });
+
+    expect(result.paragraphs[0]).toEqual(expect.objectContaining({
+      sourceUnitIds: ["result:0", "result:1"],
+      topic: "User projects",
+    }));
+    expect(result.sections).toEqual(current);
+    expect(result.mergedCount).toBe(0);
+    expect(result.operations).toContainEqual({
+      kind: "compose",
+      sourceUnitIds: ["result:0", "result:1"],
+      resultUnitIds: ["paragraph:0"],
+    });
+
+    const payload = JSON.parse(callTextMock.mock.calls[0]?.[0]?.messages?.[0]?.content);
+    expect(Object.keys(payload).sort()).toEqual(["constraints", "units"]);
+    expect(payload.units).toEqual(optimization.optimizedUnits.map(({ id, section, text }: any) => ({ id, section, text })));
+    expect(JSON.stringify(payload)).not.toContain("source:facts");
+    expect(JSON.stringify(payload)).not.toContain("atom:");
+    expect(JSON.stringify(payload)).not.toContain("Today stays outside Dream");
+    expect(JSON.stringify(payload)).not.toContain("Week stays outside Dream");
+    expect(JSON.stringify(payload)).not.toContain("facts.db");
+  });
+
+  it("repairs Compose output that grows beyond the run-start editable character count", async () => {
+    const compactCurrent = { facts: "Known fact.", today: "Untouched.", weekDays: [], longterm: "" };
+    const optimization: any = {
+      sourceBlocks: [], atomicUnits: [],
+      dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
+      optimizedUnits: [{
+        id: "result:0", groupId: "group:0", sourceUnitIds: ["atom:0"], sourceBlockIds: ["source:facts:0"],
+        section: "facts", text: "Known fact.", order: 0,
+      }],
+      removedGroups: [], operations: [], sections: compactCurrent, mergedCount: 0, forgottenCount: 0,
+    };
+    callTextMock
+      .mockResolvedValueOnce(JSON.stringify({ paragraphs: [{
+        section: "facts", topic: "Known", sourceUnitIds: ["result:0"],
+        text: "Known fact with unsupported expansion.",
+      }] }))
+      .mockResolvedValueOnce(JSON.stringify({ paragraphs: [{
+        section: "facts", topic: "Known", sourceUnitIds: ["result:0"], text: "Known fact.",
+      }] }));
+
+    const result = await composeDreamMemory({
+      current: compactCurrent,
+      optimization,
+      resolvedModel,
+      trigger: "manual",
+    });
+
+    expect(result.sections.facts).toBe("Known fact.");
+    expect(callTextMock).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("may not exceed the 11 characters present at run start");
+  });
+
+  it("renders an empty retained set deterministically without calling the Compose model", async () => {
+    const optimization: any = {
+      sourceBlocks: [], atomicUnits: [],
+      dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
+      optimizedUnits: [],
+      removedGroups: [{ groupId: "group:0", sourceUnitIds: ["atom:0"], sourceBlockIds: ["source:facts:0"], reason: "obsolete" }],
+      operations: [{ kind: "forget", sourceUnitIds: ["atom:0"], resultUnitIds: [] }],
+      sections: current,
+      mergedCount: 0,
+      forgottenCount: 1,
+    };
+
+    const result = await composeDreamMemory({
+      current,
+      optimization,
+      resolvedModel,
+      trigger: "manual",
+    });
+
+    expect(callTextMock).not.toHaveBeenCalled();
+    expect(result.paragraphs).toEqual([]);
+    expect(result.sections).toEqual({
+      facts: "",
+      today: current.today,
+      weekDays: current.weekDays,
+      longterm: "",
+    });
+    expect(result.forgottenCount).toBe(1);
+    expect(result.operations).toEqual(optimization.operations);
+  });
+
+  it("uses an independent verifier to reject fragmented topic paragraphs", async () => {
     callTextMock.mockResolvedValueOnce(JSON.stringify({
       ok: false,
       missingClaims: [],
-      compoundUnits: ["result:0"],
+      compoundUnits: [],
       incorrectMerges: [],
       unsupportedClaims: [],
       subjectLeaks: [],
       unsafeRemovals: [],
       duplicateClaims: [],
+      fragmentedTopics: ["User projects"],
+      incoherentParagraphs: [],
     }));
     const plan: any = {
       sourceBlocks: [], atomicUnits: [], dedupePlan: { exactDuplicateOperations: [], groups: [] },
-      optimizedUnits: [], removedGroups: [], sections: current,
+      optimizedUnits: [], removedGroups: [], paragraphs: [], sections: current,
     };
 
     await expect(verifyDreamSections({
@@ -249,6 +377,6 @@ describe("Memory Dream three-stage model boundary", () => {
       plan,
       resolvedModel,
       trigger: "manual",
-    })).rejects.toThrow("compoundUnits=1");
+    })).rejects.toThrow("fragmentedTopics=1");
   });
 });

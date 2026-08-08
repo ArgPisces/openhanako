@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDreamSourceBlocks,
   prepareDreamDedupe,
+  validateAndRenderDreamComposition,
   validateAndRenderDreamOptimization,
   validateDreamAtomization,
   validateDreamDedupe,
@@ -143,5 +144,95 @@ describe("Memory Dream closed unit pipeline", () => {
     expect(() => validateDreamAtomization({
       units: [{ sourceBlockId: "facts.db:9", section: "facts", text: "Database fact." }],
     }, sourceBlocks)).toThrow("unknown source block");
+  });
+
+  it("composes related retained facts into natural paragraphs without changing merge statistics", () => {
+    const optimization: any = {
+      sourceBlocks: [], atomicUnits: [],
+      dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
+      optimizedUnits: [
+        { id: "result:0", section: "facts", text: "User writes videos.", order: 0 },
+        { id: "result:1", section: "facts", text: "User maintains HanaAgent.", order: 1 },
+        { id: "result:2", section: "facts", text: "User prefers tea.", order: 2 },
+        { id: "result:3", section: "longterm", text: "Hana shipped a local build.", order: 3 },
+      ],
+      removedGroups: [], operations: [], sections: current, mergedCount: 2, forgottenCount: 1,
+    };
+    const plan = validateAndRenderDreamComposition({ paragraphs: [
+      {
+        section: "facts", topic: "User projects", sourceUnitIds: ["result:0", "result:1"],
+        text: "User writes videos and maintains HanaAgent.",
+      },
+      {
+        section: "facts", topic: "Drink preference", sourceUnitIds: ["result:2"],
+        text: "User prefers tea.",
+      },
+      {
+        section: "longterm", topic: "Milestone", sourceUnitIds: ["result:3"],
+        text: "Hana shipped a local build.",
+      },
+    ] }, optimization, current);
+
+    expect(plan.sections.facts).toBe("User writes videos and maintains HanaAgent.\n\nUser prefers tea.");
+    expect(plan.sections.longterm).toBe("Hana shipped a local build.");
+    expect(plan.sections.today).toBe(current.today);
+    expect(plan.sections.weekDays).toEqual(current.weekDays);
+    expect(plan.sections.facts).not.toContain("- ");
+    expect(plan.mergedCount).toBe(2);
+    expect(plan.forgottenCount).toBe(1);
+    expect(plan.operations.filter((operation: any) => operation.kind === "compose")).toHaveLength(3);
+  });
+
+  it("rejects Compose coverage gaps, repeats, unknown IDs, and cross-section paragraphs", () => {
+    const optimization: any = {
+      sourceBlocks: [], atomicUnits: [],
+      dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
+      optimizedUnits: [
+        { id: "result:0", section: "facts", text: "Known fact.", order: 0 },
+        { id: "result:1", section: "longterm", text: "Known history.", order: 1 },
+      ],
+      removedGroups: [], operations: [], sections: current, mergedCount: 0, forgottenCount: 0,
+    };
+    const facts = {
+      section: "facts", topic: "Known", sourceUnitIds: ["result:0"], text: "Known fact.",
+    };
+    const longterm = {
+      section: "longterm", topic: "History", sourceUnitIds: ["result:1"], text: "Known history.",
+    };
+
+    expect(() => validateAndRenderDreamComposition({ paragraphs: [facts] }, optimization, current))
+      .toThrow("omitted retained source unit result:1");
+    expect(() => validateAndRenderDreamComposition({ paragraphs: [facts, { ...facts }, longterm] }, optimization, current))
+      .toThrow("repeated source unit result:0");
+    expect(() => validateAndRenderDreamComposition({ paragraphs: [
+      { ...facts, sourceUnitIds: ["result:999"] }, longterm,
+    ] }, optimization, current)).toThrow("unknown source unit result:999");
+    expect(() => validateAndRenderDreamComposition({ paragraphs: [{
+      section: "facts", topic: "Mixed", sourceUnitIds: ["result:0", "result:1"], text: "Mixed.",
+    }] }, optimization, current)).toThrow("across sections");
+  });
+
+  it("rejects a Compose paragraph above the loose 500-character per-paragraph ceiling", () => {
+    const optimization: any = {
+      sourceBlocks: [], atomicUnits: [],
+      dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
+      optimizedUnits: [{ id: "result:0", section: "facts", text: "Known fact.", order: 0 }],
+      removedGroups: [], operations: [], sections: current, mergedCount: 0, forgottenCount: 0,
+    };
+    expect(() => validateAndRenderDreamComposition({ paragraphs: [{
+      section: "facts", topic: "Known", sourceUnitIds: ["result:0"], text: "x".repeat(501),
+    }] }, optimization, current)).toThrow("500-character limit");
+  });
+
+  it("rejects Compose topic metadata above the loose 80-character ceiling", () => {
+    const optimization: any = {
+      sourceBlocks: [], atomicUnits: [],
+      dedupePlan: { inputUnits: [], units: [], groups: [], exactDuplicateOperations: [] },
+      optimizedUnits: [{ id: "result:0", section: "facts", text: "Known fact.", order: 0 }],
+      removedGroups: [], operations: [], sections: current, mergedCount: 0, forgottenCount: 0,
+    };
+    expect(() => validateAndRenderDreamComposition({ paragraphs: [{
+      section: "facts", topic: "x".repeat(81), sourceUnitIds: ["result:0"], text: "Known fact.",
+    }] }, optimization, current)).toThrow("80-character limit");
   });
 });

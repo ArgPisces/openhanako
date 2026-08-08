@@ -58,12 +58,21 @@ export type DreamRemovedGroup = {
   reason: DreamRemovalReason;
 };
 
+export type DreamComposedParagraph = {
+  id: string;
+  section: DreamEditableSection;
+  topic: string;
+  sourceUnitIds: string[];
+  text: string;
+  order: number;
+};
+
 export type DreamUnitOperation =
   | ExactDuplicateOperation
-  | { kind: "split" | "merge" | "rewrite"; sourceUnitIds: string[]; resultUnitIds: string[] }
+  | { kind: "split" | "merge" | "rewrite" | "compose"; sourceUnitIds: string[]; resultUnitIds: string[] }
   | { kind: "forget"; sourceUnitIds: string[]; resultUnitIds: [] };
 
-export type DreamUnitPlan = {
+export type DreamOptimizationPlan = {
   sourceBlocks: DreamSourceBlock[];
   atomicUnits: DreamAtomicUnit[];
   dedupePlan: DreamDedupePlan;
@@ -75,7 +84,13 @@ export type DreamUnitPlan = {
   forgottenCount: number;
 };
 
+export type DreamUnitPlan = DreamOptimizationPlan & {
+  paragraphs: DreamComposedParagraph[];
+};
+
 export const DREAM_ATOMIC_UNIT_MAX_CHARS = 240;
+export const DREAM_COMPOSE_PARAGRAPH_MAX_CHARS = 500;
+export const DREAM_COMPOSE_TOPIC_MAX_CHARS = 80;
 
 const LIST_PREFIX_RE = /^\s*(?:[-*+]\s+|\d+[.)、]\s*)/;
 const HEADING_PREFIX_RE = /^\s*#{1,6}\s+/;
@@ -303,7 +318,7 @@ export function validateAndRenderDreamOptimization(
   atomicUnits: DreamAtomicUnit[],
   dedupePlan: DreamDedupePlan,
   current: DreamSections,
-): DreamUnitPlan {
+): DreamOptimizationPlan {
   if (!Array.isArray(raw.units)) throw new Error("Dream optimizer omitted units[]");
   const rawRemoved = raw.removedGroups === undefined ? [] : raw.removedGroups;
   if (!Array.isArray(rawRemoved)) throw new Error("Dream optimizer removedGroups must be an array");
@@ -401,5 +416,108 @@ export function validateAndRenderDreamOptimization(
     sections: renderOptimizedUnits(optimizedUnits, current),
     mergedCount,
     forgottenCount: removedGroups.length,
+  };
+}
+
+function validateComposeTopic(value: unknown) {
+  const topic = typeof value === "string" ? value.trim() : "";
+  if (!topic) throw new Error("Dream composer returned an empty topic");
+  if (/\r|\n/.test(topic) || LIST_PREFIX_RE.test(topic) || HEADING_PREFIX_RE.test(topic)) {
+    throw new Error("Dream composer topic must be plain one-line text");
+  }
+  if (topic.length > DREAM_COMPOSE_TOPIC_MAX_CHARS) {
+    throw new Error(`Dream composer topic exceeds the ${DREAM_COMPOSE_TOPIC_MAX_CHARS}-character limit`);
+  }
+  return topic;
+}
+
+function validateComposeText(value: unknown) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) throw new Error("Dream composer returned an empty paragraph");
+  if (/\r|\n/.test(text) || LIST_PREFIX_RE.test(text) || HEADING_PREFIX_RE.test(text)) {
+    throw new Error("Dream composer paragraph must be plain text without Markdown markers or line breaks");
+  }
+  if (text.length > DREAM_COMPOSE_PARAGRAPH_MAX_CHARS) {
+    throw new Error(`Dream composer paragraph exceeds the ${DREAM_COMPOSE_PARAGRAPH_MAX_CHARS}-character limit`);
+  }
+  return text;
+}
+
+function strictComposeSourceIds(value: unknown) {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new Error("Dream composer sourceUnitIds must be a string array");
+  }
+  const ids = value.map((entry) => entry.trim()).filter(Boolean);
+  if (ids.length === 0) throw new Error("Dream composer returned a paragraph without sources");
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Dream composer repeated a source unit inside one paragraph");
+  }
+  return ids;
+}
+
+function renderComposedParagraphs(
+  paragraphs: DreamComposedParagraph[],
+  current: DreamSections,
+): DreamSections {
+  const ordered = [...paragraphs].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id, "en"));
+  const render = (section: DreamEditableSection) => ordered
+    .filter((paragraph) => paragraph.section === section)
+    .map((paragraph) => paragraph.text)
+    .join("\n\n");
+  return {
+    facts: render("facts"),
+    today: current.today,
+    weekDays: current.weekDays.map((entry) => ({ ...entry })),
+    longterm: render("longterm"),
+  };
+}
+
+export function validateAndRenderDreamComposition(
+  raw: Record<string, unknown>,
+  optimization: DreamOptimizationPlan,
+  current: DreamSections,
+): DreamUnitPlan {
+  if (!Array.isArray(raw.paragraphs)) throw new Error("Dream composer omitted paragraphs[]");
+  const known = new Map(optimization.optimizedUnits.map((unit) => [unit.id, unit]));
+  const covered = new Set<string>();
+  const paragraphs: DreamComposedParagraph[] = [];
+
+  for (const item of raw.paragraphs as Record<string, unknown>[]) {
+    const sourceUnitIds = strictComposeSourceIds(item?.sourceUnitIds);
+    const sources = sourceUnitIds.map((id) => {
+      const source = known.get(id);
+      if (!source) throw new Error(`Dream composer referenced unknown source unit ${id}`);
+      if (covered.has(id)) throw new Error(`Dream composer repeated source unit ${id}`);
+      return source;
+    });
+    const section = item?.section === "facts" || item?.section === "longterm" ? item.section : null;
+    if (!section || sources.some((source) => source.section !== section)) {
+      throw new Error("Dream composer moved or combined source units across sections");
+    }
+    sourceUnitIds.forEach((id) => covered.add(id));
+    paragraphs.push({
+      id: `paragraph:${paragraphs.length}`,
+      section,
+      topic: validateComposeTopic(item?.topic),
+      sourceUnitIds,
+      text: validateComposeText(item?.text),
+      order: Math.min(...sources.map((source) => source.order)),
+    });
+  }
+
+  for (const unit of optimization.optimizedUnits) {
+    if (!covered.has(unit.id)) throw new Error(`Dream composer omitted retained source unit ${unit.id}`);
+  }
+
+  const composeOperations: DreamUnitOperation[] = paragraphs.map((paragraph) => ({
+    kind: "compose",
+    sourceUnitIds: [...paragraph.sourceUnitIds],
+    resultUnitIds: [paragraph.id],
+  }));
+  return {
+    ...optimization,
+    paragraphs,
+    operations: [...optimization.operations, ...composeOperations],
+    sections: renderComposedParagraphs(paragraphs, current),
   };
 }
