@@ -3,42 +3,28 @@ import { callTextConfigFromResolvedModel } from "../../../core/model-execution-c
 import { getLocale } from "../../i18n.ts";
 import { attachPromptLayoutMetadata, buildUtilityPromptLayout } from "../../llm/prompt-layout.ts";
 import { withMemoryReasoningBuffer } from "../llm-budget.ts";
-import { buildDreamAnalyzerPrompt, buildDreamVerifierPrompt, buildDreamWriterPrompt } from "../prompts/dream.ts";
 import {
-  prepareDreamUnits,
-  validateAndRenderDreamUnitPlan,
+  buildDreamAtomizerPrompt,
+  buildDreamDeduperPrompt,
+  buildDreamOptimizerPrompt,
+  buildDreamVerifierPrompt,
+} from "../prompts/dream.ts";
+import {
+  DREAM_ATOMIC_UNIT_MAX_CHARS,
+  buildDreamSourceBlocks,
+  prepareDreamDedupe,
+  validateAndRenderDreamOptimization,
+  validateDreamAtomization,
+  validateDreamDedupe,
+  type DreamAtomicUnit,
+  type DreamDedupePlan,
+  type DreamSourceBlock,
   type DreamUnitPlan,
 } from "./memory-units.ts";
 import type { DreamSections } from "./revision-store.ts";
 import type { DreamRunTrigger } from "./state-store.ts";
-import { jaccardSimilarity, normalizeFactText, tokenizeFactText } from "./evidence.ts";
 
-const ANALYSIS_BATCH_SIZE = 70;
-const SUBJECTS = new Set(["user", "third_party", "fiction", "project", "unknown"]);
-const TEMPORAL = new Set(["stable", "active", "closed", "obsolete", "unknown"]);
-const ACTIONS = new Set(["keep", "merge", "forget", "review"]);
 export const DREAM_MEMORY_HARD_MAX_CHARS = 5_000;
-
-export type DreamAnalyzerInput = {
-  groupId: string;
-  canonicalFact: string;
-  sourceFacts: string[];
-  sourceFactIds?: string[];
-  allowedActions: string[];
-  protected: boolean;
-  ruleAction: "keep" | "merge" | "forget" | "review";
-  evidence: Record<string, unknown>;
-  ruleReasons: string[];
-};
-
-export type DreamSemanticDecision = {
-  groupId: string;
-  action: "keep" | "merge" | "forget" | "review";
-  subject: "user" | "third_party" | "fiction" | "project" | "unknown";
-  temporal: "stable" | "active" | "closed" | "obsolete" | "unknown";
-  canonicalFact: string;
-  reasonCodes: string[];
-};
 
 function stripJsonFence(raw: string) {
   const text = String(raw || "").trim();
@@ -54,24 +40,10 @@ function parseObject(raw: string) {
   return parsed as Record<string, unknown>;
 }
 
-function chunk<T>(items: T[], size: number) {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
 function usageContext(operation: string, trigger: DreamRunTrigger, resolvedModel: any, layout: any) {
   return attachPromptLayoutMetadata({
-    source: {
-      subsystem: "memory",
-      operation,
-      surface: "system",
-      trigger,
-    },
-    attribution: {
-      kind: "memory",
-      agentId: resolvedModel?.usageAgentId || null,
-    },
+    source: { subsystem: "memory", operation, surface: "system", trigger },
+    attribution: { kind: "memory", agentId: resolvedModel?.usageAgentId || null },
   }, layout.usageMetadata);
 }
 
@@ -109,214 +81,198 @@ async function callStructured(options: {
     return parseObject(raw);
   } catch (err: any) {
     const repairInput = `${options.userContent}\n\nThe previous response was invalid JSON (${err?.message || err}). Return one corrected JSON object only. Previous response:\n${String(raw).slice(0, 12_000)}`;
-    const repaired = await run(repairInput, `${options.operation}_repair`);
-    return parseObject(repaired);
+    return parseObject(await run(repairInput, `${options.operation}_repair`));
   }
 }
 
-function validateAnalysis(raw: Record<string, unknown>, batch: DreamAnalyzerInput[]) {
-  if (!Array.isArray(raw.decisions)) throw new Error("Dream analyzer omitted decisions[]");
-  const expected = new Map(batch.map((group) => [group.groupId, group]));
-  const seen = new Set<string>();
-  const decisions: DreamSemanticDecision[] = [];
-
-  for (const item of raw.decisions as Record<string, unknown>[]) {
-    const groupId = typeof item?.groupId === "string" ? item.groupId : "";
-    const source = expected.get(groupId);
-    if (!source || seen.has(groupId)) throw new Error("Dream analyzer returned an unknown or duplicate groupId");
-    const action = typeof item.action === "string" ? item.action : "";
-    const subject = typeof item.subject === "string" ? item.subject : "";
-    const temporal = typeof item.temporal === "string" ? item.temporal : "";
-    const canonicalFact = typeof item.canonicalFact === "string" ? item.canonicalFact.trim() : "";
-    if (!ACTIONS.has(action) || !source.allowedActions.includes(action)) {
-      throw new Error(`Dream analyzer chose a forbidden action for ${groupId}`);
-    }
-    if (source.protected && action === "forget") {
-      throw new Error(`Dream analyzer attempted to forget protected candidate ${groupId}`);
-    }
-    if (!SUBJECTS.has(subject) || !TEMPORAL.has(temporal) || !canonicalFact) {
-      throw new Error(`Dream analyzer returned invalid semantics for ${groupId}`);
-    }
-    const canonicalNormalized = normalizeFactText(canonicalFact);
-    const sourceTexts = [source.canonicalFact, ...source.sourceFacts];
-    const supportedCanonical = sourceTexts.some((text) => {
-      const normalized = normalizeFactText(text);
-      return normalized === canonicalNormalized
-        || jaccardSimilarity(tokenizeFactText(normalized), tokenizeFactText(canonicalNormalized)) >= 0.45;
+async function runValidatedStage<T>(options: {
+  promptSpec: { cacheGroup: string; templateVersion: string; systemPrompt: string };
+  payload: Record<string, unknown>;
+  validate: (raw: Record<string, unknown>) => T;
+  resolvedModel: any;
+  trigger: DreamRunTrigger;
+  operation: string;
+  repairInstruction: string;
+  maxTokens?: number;
+  signal?: AbortSignal;
+}) {
+  const userContent = JSON.stringify(options.payload);
+  const raw = await callStructured({
+    promptSpec: options.promptSpec,
+    userContent,
+    resolvedModel: options.resolvedModel,
+    operation: options.operation,
+    trigger: options.trigger,
+    maxTokens: options.maxTokens || 8192,
+    signal: options.signal,
+  });
+  try {
+    return options.validate(raw);
+  } catch (err: any) {
+    const repaired = await callStructured({
+      promptSpec: options.promptSpec,
+      userContent: `${userContent}\n\nValidation error: ${err?.message || err}. ${options.repairInstruction}`,
+      resolvedModel: options.resolvedModel,
+      operation: `${options.operation}_validation_repair`,
+      trigger: options.trigger,
+      maxTokens: options.maxTokens || 8192,
+      signal: options.signal,
     });
-    if (!supportedCanonical) {
-      throw new Error(`Dream analyzer returned an unsupported canonical fact for ${groupId}`);
-    }
-    if (source.ruleAction === "keep" && action === "forget"
-      && subject === "user" && !["closed", "obsolete"].includes(temporal)) {
-      throw new Error(`Dream analyzer attempted to forget stable user evidence ${groupId}`);
-    }
-    seen.add(groupId);
-    decisions.push({
-      groupId,
-      action: action as DreamSemanticDecision["action"],
-      subject: subject as DreamSemanticDecision["subject"],
-      temporal: temporal as DreamSemanticDecision["temporal"],
-      canonicalFact,
-      reasonCodes: Array.isArray(item.reasonCodes)
-        ? item.reasonCodes.filter((value): value is string => typeof value === "string").slice(0, 8)
-        : [],
-    });
+    return options.validate(repaired);
   }
-  if (seen.size !== expected.size) throw new Error("Dream analyzer did not cover every candidate exactly once");
-  return decisions;
 }
 
-export async function analyzeDreamCandidates(options: {
-  groups: DreamAnalyzerInput[];
+export async function atomizeDreamMemory(options: {
+  current: DreamSections;
   resolvedModel: any;
   trigger: DreamRunTrigger;
   signal?: AbortSignal;
 }) {
-  const promptSpec = buildDreamAnalyzerPrompt(getLocale());
-  const all: DreamSemanticDecision[] = [];
-  for (const batch of chunk(options.groups, ANALYSIS_BATCH_SIZE)) {
-    const userContent = JSON.stringify({ groups: batch });
-    const raw = await callStructured({
-      promptSpec,
-      userContent,
-      resolvedModel: options.resolvedModel,
-      operation: "memory.dream.analyze",
-      trigger: options.trigger,
-      maxTokens: 8192,
-      signal: options.signal,
-    });
-    try {
-      all.push(...validateAnalysis(raw, batch));
-    } catch (err: any) {
-      const repaired = await callStructured({
-        promptSpec,
-        userContent: `${userContent}\n\nValidation error: ${err?.message || err}. Return corrected decisions covering each input groupId exactly once.`,
-        resolvedModel: options.resolvedModel,
-        operation: "memory.dream.analyze_validation_repair",
-        trigger: options.trigger,
-        maxTokens: 8192,
-        signal: options.signal,
-      });
-      all.push(...validateAnalysis(repaired, batch));
-    }
-  }
-  return all;
+  const sourceBlocks = buildDreamSourceBlocks(options.current);
+  if (sourceBlocks.length === 0) return { sourceBlocks, units: [] as DreamAtomicUnit[] };
+  const units = await runValidatedStage({
+    promptSpec: buildDreamAtomizerPrompt(getLocale()),
+    payload: {
+      sourceBlocks,
+      constraints: {
+        requiredSourceBlockIds: sourceBlocks.map((block) => block.id),
+        maxUnitChars: DREAM_ATOMIC_UNIT_MAX_CHARS,
+        editableSections: ["facts", "longterm"],
+        externalMemorySources: "forbidden",
+      },
+    },
+    validate: (raw) => validateDreamAtomization(raw, sourceBlocks),
+    resolvedModel: options.resolvedModel,
+    trigger: options.trigger,
+    operation: "memory.dream.atomize",
+    repairInstruction: "Return atomic units that cover every sourceBlockId, preserve its section, and add no outside information.",
+    signal: options.signal,
+  });
+  return { sourceBlocks, units };
 }
 
-function unitPlanBodyChars(plan: DreamUnitPlan) {
-  return plan.sections.facts.length
-    + plan.sections.today.length
-    + plan.sections.longterm.length
-    + plan.sections.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
+export async function dedupeDreamMemory(options: {
+  units: DreamAtomicUnit[];
+  resolvedModel: any;
+  trigger: DreamRunTrigger;
+  signal?: AbortSignal;
+}) {
+  const prepared = prepareDreamDedupe(options.units);
+  if (prepared.units.length === 0) return { ...prepared, groups: [] } satisfies DreamDedupePlan;
+  return runValidatedStage({
+    promptSpec: buildDreamDeduperPrompt(getLocale()),
+    payload: {
+      units: prepared.units,
+      exactDuplicateOperations: prepared.exactDuplicateOperations,
+      constraints: {
+        requiredUnitIds: prepared.units.map((unit) => unit.id),
+        allowedRelations: ["distinct", "same_meaning", "subsumes"],
+        factsPreferredOverLongterm: true,
+      },
+    },
+    validate: (raw) => validateDreamDedupe(raw, prepared),
+    resolvedModel: options.resolvedModel,
+    trigger: options.trigger,
+    operation: "memory.dream.dedupe",
+    repairInstruction: "Cover each known unit exactly once. Keep related, different, or conflicting assertions in separate distinct groups.",
+    signal: options.signal,
+  });
 }
 
-function writerSafetyLimit(current: DreamSections) {
+function totalBodyChars(sections: DreamSections) {
+  return sections.facts.length
+    + sections.today.length
+    + sections.longterm.length
+    + sections.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
+}
+
+function optimizerSafetyLimit(current: DreamSections) {
   const preservedBodyChars = current.today.length
     + current.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
-  const currentTotalBodyChars = current.facts.length
-    + current.longterm.length
-    + preservedBodyChars;
+  const currentTotalBodyChars = totalBodyChars(current);
   const maxTotalBodyChars = Math.max(DREAM_MEMORY_HARD_MAX_CHARS, currentTotalBodyChars);
   return {
     maxTotalBodyChars,
     maxEditableBodyChars: Math.max(0, maxTotalBodyChars - preservedBodyChars),
+    currentEditableBodyChars: current.facts.length + current.longterm.length,
     preservedBodyChars,
     role: "safety_ceiling_not_target" as const,
   };
 }
 
-function validateWriterResult(
-  raw: Record<string, unknown>,
-  prepared: ReturnType<typeof prepareDreamUnits>,
-  maxTotalBodyChars: number,
-) {
-  const plan = validateAndRenderDreamUnitPlan(raw, prepared);
-  const total = unitPlanBodyChars(plan);
-  if (total > maxTotalBodyChars) {
-    throw new Error(
-      `Dream writer output is ${total} characters; the safety limit is ${maxTotalBodyChars}; no changes were applied`,
-    );
-  }
-  return plan;
-}
-
-export async function writeDreamSections(options: {
+export async function optimizeDreamMemory(options: {
   current: DreamSections;
-  decisions: DreamSemanticDecision[];
-  evidence: DreamAnalyzerInput[];
+  sourceBlocks: DreamSourceBlock[];
+  atomicUnits: DreamAtomicUnit[];
+  dedupePlan: DreamDedupePlan;
   resolvedModel: any;
   trigger: DreamRunTrigger;
   signal?: AbortSignal;
 }) {
-  const prepared = prepareDreamUnits(options);
-  const promptSpec = buildDreamWriterPrompt(getLocale());
-  const safetyLimit = writerSafetyLimit(options.current);
-  const payload = {
-    residentUnits: prepared.residentUnits,
-    candidateUnits: prepared.candidateUnits,
-    exactDuplicateOperations: prepared.exactDuplicateOperations,
-    safetyLimit,
-    constraints: {
-      requiredResidentUnitIds: prepared.residentUnits.map((unit) => unit.id),
-      requiredCandidateUnitIds: prepared.candidateUnits
-        .filter((unit) => unit.action === "keep" || unit.action === "merge")
-        .map((unit) => unit.id),
-      factsPreferredOverLongtermForStableDuplicates: true,
-      outputFormat: "plain_one_line_units",
-    },
+  const safetyLimit = optimizerSafetyLimit(options.current);
+  const unitById = new Map(options.dedupePlan.units.map((unit) => [unit.id, unit]));
+  const groups = options.dedupePlan.groups.map((group) => ({
+    ...group,
+    sources: group.sourceUnitIds.map((id) => unitById.get(id)),
+  }));
+  const validate = (raw: Record<string, unknown>) => {
+    const plan = validateAndRenderDreamOptimization(
+      raw,
+      options.sourceBlocks,
+      options.atomicUnits,
+      options.dedupePlan,
+      options.current,
+    );
+    const total = totalBodyChars(plan.sections);
+    if (total > safetyLimit.maxTotalBodyChars) {
+      throw new Error(`Dream optimizer output is ${total} characters; the safety limit is ${safetyLimit.maxTotalBodyChars}; no changes were applied`);
+    }
+    return plan;
   };
-
-  const raw = await callStructured({
-    promptSpec,
-    userContent: JSON.stringify(payload),
+  return runValidatedStage({
+    promptSpec: buildDreamOptimizerPrompt(getLocale()),
+    payload: {
+      groups,
+      safetyLimit,
+      constraints: {
+        requiredGroupIds: groups.map((group) => group.id),
+        allowedRemovalReasons: ["completed_transient", "obsolete", "operational_noise"],
+        maxUnitChars: DREAM_ATOMIC_UNIT_MAX_CHARS,
+        outputFormat: "plain_one_line_units",
+        externalMemorySources: "forbidden",
+      },
+    },
+    validate,
     resolvedModel: options.resolvedModel,
-    operation: "memory.dream.write",
     trigger: options.trigger,
-    maxTokens: 8192,
+    operation: "memory.dream.optimize",
+    repairInstruction: "Cover every group exactly once, preserve source meaning, keep assigned sections, remove only objectively transient/obsolete/noise groups, and stay below the safety ceiling.",
     signal: options.signal,
   });
-  try {
-    return validateWriterResult(raw, prepared, safetyLimit.maxTotalBodyChars);
-  } catch (err: any) {
-    const repairRaw = await callStructured({
-      promptSpec,
-      userContent: `${JSON.stringify(payload)}\n\nValidation error: ${err?.message || err}. Return corrected structured Facts/Longterm units grounded in source unit IDs, preserve every resident source, and stay below the single total-body safety ceiling. Today and Week are preserved by code and are not part of your output. The ceiling is not a target.`,
-      resolvedModel: options.resolvedModel,
-      operation: "memory.dream.write_validation_repair",
-      trigger: options.trigger,
-      maxTokens: 8192,
-      signal: options.signal,
-    });
-    return validateWriterResult(repairRaw, prepared, safetyLimit.maxTotalBodyChars);
-  }
+}
+
+function stringArray(raw: unknown) {
+  return Array.isArray(raw) ? raw.filter((value): value is string => typeof value === "string") : [];
 }
 
 export async function verifyDreamSections(options: {
   current: DreamSections;
-  proposed: DreamSections;
-  decisions: DreamSemanticDecision[];
-  evidence: DreamAnalyzerInput[];
+  plan: DreamUnitPlan;
   resolvedModel: any;
   trigger: DreamRunTrigger;
-  unitPlan?: DreamUnitPlan;
   signal?: AbortSignal;
 }) {
-  const promptSpec = buildDreamVerifierPrompt(getLocale());
   const raw = await callStructured({
-    promptSpec,
+    promptSpec: buildDreamVerifierPrompt(getLocale()),
     userContent: JSON.stringify({
       currentSections: options.current,
-      currentUnits: options.unitPlan?.originalResidentUnits,
-      candidateDecisions: options.decisions,
-      measuredEvidence: options.evidence,
-      requiredCandidateUnitIds: options.unitPlan?.candidateUnits
-        .filter((unit) => unit.action === "keep" || unit.action === "merge")
-        .map((unit) => unit.id) || [],
-      exactDuplicateOperations: options.unitPlan?.exactDuplicateOperations,
-      proposedUnits: options.unitPlan?.proposedUnits,
-      removedUnits: options.unitPlan?.removedUnits,
-      proposedSections: options.proposed,
+      sourceBlocks: options.plan.sourceBlocks,
+      atomicUnits: options.plan.atomicUnits,
+      exactDuplicateOperations: options.plan.dedupePlan.exactDuplicateOperations,
+      dedupeGroups: options.plan.dedupePlan.groups,
+      optimizedUnits: options.plan.optimizedUnits,
+      removedGroups: options.plan.removedGroups,
+      proposedSections: options.plan.sections,
     }),
     resolvedModel: options.resolvedModel,
     operation: "memory.dream.verify",
@@ -324,29 +280,19 @@ export async function verifyDreamSections(options: {
     maxTokens: 4096,
     signal: options.signal,
   });
-  const missing = Array.isArray(raw.missingGroupIds)
-    ? raw.missingGroupIds.filter((value): value is string => typeof value === "string")
-    : [];
-  const requiredCandidateUnitIds = options.unitPlan?.candidateUnits
-    .filter((unit) => unit.action === "keep" || unit.action === "merge")
-    .map((unit) => unit.id) || [];
-  if (missing.some((id) => !requiredCandidateUnitIds.includes(id))) {
-    throw new Error("Dream verifier returned an unknown required candidate unit id");
-  }
-  const unsupported = Array.isArray(raw.unsupportedClaims) ? raw.unsupportedClaims : [];
-  const subjectLeaks = Array.isArray(raw.subjectLeaks) ? raw.subjectLeaks : [];
-  const lostStable = Array.isArray(raw.lostStableClaims) ? raw.lostStableClaims : [];
-  const duplicates = Array.isArray(raw.duplicateClaims) ? raw.duplicateClaims : [];
-  const ok = raw.ok === true
-    && missing.length === 0
-    && unsupported.length === 0
-    && subjectLeaks.length === 0
-    && lostStable.length === 0
-    && duplicates.length === 0;
+  const fields = [
+    "missingClaims",
+    "compoundUnits",
+    "incorrectMerges",
+    "unsupportedClaims",
+    "subjectLeaks",
+    "unsafeRemovals",
+    "duplicateClaims",
+  ] as const;
+  const failures = Object.fromEntries(fields.map((field) => [field, stringArray(raw[field])])) as Record<typeof fields[number], string[]>;
+  const ok = raw.ok === true && fields.every((field) => failures[field].length === 0);
   if (!ok) {
-    throw new Error(
-      `Dream verification failed: missing=${missing.length}, unsupported=${unsupported.length}, subjectLeaks=${subjectLeaks.length}, lostStable=${lostStable.length}, duplicates=${duplicates.length}`,
-    );
+    throw new Error(`Dream verification failed: ${fields.map((field) => `${field}=${failures[field].length}`).join(", ")}`);
   }
   return { ok: true as const };
 }

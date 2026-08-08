@@ -43,6 +43,7 @@ vi.mock("../lib/debug-log.ts", () => ({
 
 import { createMemoryTicker } from "../lib/memory/memory-ticker.ts";
 import { compileDaily } from "../lib/memory/compile.ts";
+import { createMemoryDreamRunner } from "../lib/memory/dream/runner.ts";
 
 function makeTicker(tmpDir: string, getDreamAutoEnabled?: () => boolean) {
   fs.mkdirSync(path.join(tmpDir, "sessions"), { recursive: true });
@@ -81,6 +82,7 @@ describe("MemoryTicker Dream opt-in boundary", () => {
     const ticker = makeTicker(tmpDir);
     await ticker.tick();
 
+    expect(vi.mocked(createMemoryDreamRunner).mock.calls[0]?.[0]).not.toHaveProperty("factStore");
     expect(dreamInstances[0].startAutomaticIfEligible).not.toHaveBeenCalled();
     expect(dreamInstances[0].start).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(tmpDir, "dream"))).toBe(false);

@@ -1,21 +1,11 @@
 import crypto from "crypto";
-import type { FactStore } from "../fact-store.ts";
 import { buildCompiledMemoryMarkdown } from "../compile.ts";
 import {
-  buildFactEvidence,
-  jaccardSimilarity,
-  normalizeFactText,
-  tokenizeFactText,
-} from "./evidence.ts";
-import { atomizeDreamSections } from "./memory-units.ts";
-import { aggregateFactDecisionsByGroup, decideFactActions } from "./policy.ts";
-import type { FactDecision, FactRecord } from "./types.ts";
-import {
-  analyzeDreamCandidates,
+  atomizeDreamMemory,
+  dedupeDreamMemory,
   dreamModelId,
+  optimizeDreamMemory,
   verifyDreamSections,
-  writeDreamSections,
-  type DreamAnalyzerInput,
 } from "./model-runner.ts";
 import {
   applyDreamSections,
@@ -33,11 +23,6 @@ import {
   type DreamRunReport,
   type DreamRunTrigger,
 } from "./state-store.ts";
-
-const MAX_MODEL_CANDIDATES = 48;
-const MAX_MATCHING_FORGET_CANDIDATES = 12;
-const DOMAIN_WINDOW_DAYS = 180;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export class DreamAlreadyRunningError extends Error {
   code = "DREAM_ALREADY_RUNNING";
@@ -57,17 +42,13 @@ type DreamRuntimeStatus = {
 type CreateMemoryDreamRunnerOptions = {
   memoryDir: string;
   memoryMdPath: string;
-  factStore: FactStore;
   getResolvedMemoryModel: () => Promise<any>;
   getLogicalDate: () => string;
   onCompiled?: () => void;
 };
 
-function sectionBodyChars(sections: DreamSections) {
-  return sections.facts.length
-    + sections.today.length
-    + sections.longterm.length
-    + sections.weekDays.reduce((sum, entry) => sum + entry.body.length, 0);
+function editableBodyChars(sections: DreamSections) {
+  return sections.facts.length + sections.longterm.length;
 }
 
 function compiledChars(sections: DreamSections) {
@@ -88,115 +69,6 @@ function changedEditableSections(before: DreamSections, after: DreamSections) {
   if (before.facts !== after.facts) changed.push("facts");
   if (before.longterm !== after.longterm) changed.push("longterm");
   return changed;
-}
-
-function timeMs(fact: FactRecord) {
-  for (const value of [fact.time, fact.created_at]) {
-    const parsed = value ? Date.parse(value) : NaN;
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function activeDomainTags(facts: FactRecord[], now = Date.now()) {
-  const counts = new Map<string, Set<string>>();
-  const cutoff = now - DOMAIN_WINDOW_DAYS * DAY_MS;
-  for (const fact of facts) {
-    const timestamp = timeMs(fact);
-    if (timestamp !== null && timestamp < cutoff) continue;
-    const sessionKey = fact.session_id?.trim() || `fact:${String(fact.id)}`;
-    for (const rawTag of fact.tags || []) {
-      const tag = normalizeFactText(rawTag);
-      if (!tag) continue;
-      const sessions = counts.get(tag) || new Set<string>();
-      sessions.add(sessionKey);
-      counts.set(tag, sessions);
-    }
-  }
-  return [...counts.entries()]
-    .sort((left, right) => right[1].size - left[1].size || left[0].localeCompare(right[0]))
-    .slice(0, 12)
-    .map(([tag]) => tag);
-}
-
-function decisionStrength(decision: FactDecision) {
-  const evidence = decision.evidence;
-  return [
-    evidence.isProtected || evidence.isPinned ? 1 : 0,
-    evidence.distinctSessionCount,
-    evidence.distinctDayCount,
-    evidence.domainTagOverlapCount,
-    evidence.occurrenceCount,
-    evidence.ageDays === null ? -1_000_000 : -evidence.ageDays,
-  ];
-}
-
-function compareStrength(left: FactDecision, right: FactDecision) {
-  const leftStrength = decisionStrength(left);
-  const rightStrength = decisionStrength(right);
-  for (let index = 0; index < leftStrength.length; index += 1) {
-    if (leftStrength[index] !== rightStrength[index]) return rightStrength[index] - leftStrength[index];
-  }
-  return left.groupId.localeCompare(right.groupId, "en");
-}
-
-function selectAnalyzerDecisions(decisions: FactDecision[], current: DreamSections) {
-  const residentTokenSets = atomizeDreamSections(current)
-    .map((unit) => tokenizeFactText(unit.text))
-    .filter((tokens) => tokens.length > 0);
-  const matchingForget = decisions
-    .filter((decision) => decision.action === "forget")
-    .map((decision) => ({
-      decision,
-      similarity: residentTokenSets.reduce(
-        (highest, tokens) => Math.max(
-          highest,
-          jaccardSimilarity(tokenizeFactText(decision.canonicalFact), tokens),
-        ),
-        0,
-      ),
-    }))
-    .filter((entry) => entry.similarity >= 0.45)
-    .sort((left, right) => right.similarity - left.similarity
-      || (right.decision.evidence.ageDays ?? -1) - (left.decision.evidence.ageDays ?? -1)
-      || left.decision.groupId.localeCompare(right.decision.groupId, "en"))
-    .slice(0, MAX_MATCHING_FORGET_CANDIDATES)
-    .map((entry) => entry.decision);
-  const retainedLimit = Math.max(0, MAX_MODEL_CANDIDATES - matchingForget.length);
-  const retained = decisions
-    .filter((decision) => decision.action !== "forget")
-    .sort(compareStrength)
-    .slice(0, retainedLimit);
-  return [...retained, ...matchingForget];
-}
-
-function analyzerInput(decision: FactDecision, factById: Map<string, FactRecord>): DreamAnalyzerInput {
-  const sourceFacts = decision.sourceFactIds
-    .map((id) => factById.get(String(id))?.fact)
-    .filter((fact): fact is string => typeof fact === "string" && fact.trim().length > 0);
-  const allowedActions = decision.action === "keep" && !decision.evidence.isProtected && !decision.evidence.isPinned
-    ? ["keep", "merge", "forget", "review"]
-    : [...decision.allowedActions];
-  return {
-    groupId: decision.groupId,
-    canonicalFact: decision.canonicalFact,
-    sourceFacts,
-    sourceFactIds: decision.sourceFactIds.map(String),
-    allowedActions,
-    protected: decision.evidence.isProtected || decision.evidence.isPinned,
-    ruleAction: decision.action,
-    evidence: {
-      occurrenceCount: decision.evidence.occurrenceCount,
-      distinctSessionCount: decision.evidence.distinctSessionCount,
-      distinctDayCount: decision.evidence.distinctDayCount,
-      ageDays: decision.evidence.ageDays,
-      mostRecentAt: decision.evidence.mostRecentAt,
-      observedTags: decision.evidence.observedTags,
-      domainTagOverlap: decision.evidence.domainTagOverlap,
-      duplicateKind: decision.evidence.duplicateKind,
-    },
-    ruleReasons: decision.reasons.map((reason) => reason.code),
-  };
 }
 
 export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions) {
@@ -247,44 +119,36 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
       }
       before = snapshotDreamSections(options.memoryDir);
       const beforeHash = inputHash(before);
-      const facts = options.factStore.getAll() as FactRecord[];
-      if (sectionBodyChars(before) === 0 && facts.length === 0) {
+      if (editableBodyChars(before) === 0) {
         throw new Error("There is no memory to organize yet");
       }
 
-      const evidence = buildFactEvidence(facts, {
-        now: Date.now(),
-        domainTags: activeDomainTags(facts),
-      });
-      const grouped = aggregateFactDecisionsByGroup(decideFactActions(evidence.facts));
-      const eligible = selectAnalyzerDecisions(grouped, before);
-      const factById = new Map(facts.map((fact) => [String(fact.id), fact]));
-      const analyzerInputs = eligible.map((decision) => analyzerInput(decision, factById));
-
       const resolvedModel = await options.getResolvedMemoryModel();
       model = dreamModelId(resolvedModel);
-      const semanticDecisions = analyzerInputs.length > 0
-        ? await analyzeDreamCandidates({
-            groups: analyzerInputs,
-            resolvedModel,
-            trigger,
-            signal,
-          })
-        : [];
-      const writerResult = await writeDreamSections({
+      const atomized = await atomizeDreamMemory({
         current: before,
-        decisions: semanticDecisions,
-        evidence: analyzerInputs,
+        resolvedModel,
+        trigger,
+        signal,
+      });
+      const deduped = await dedupeDreamMemory({
+        units: atomized.units,
+        resolvedModel,
+        trigger,
+        signal,
+      });
+      const writerResult = await optimizeDreamMemory({
+        current: before,
+        sourceBlocks: atomized.sourceBlocks,
+        atomicUnits: atomized.units,
+        dedupePlan: deduped,
         resolvedModel,
         trigger,
         signal,
       });
       await verifyDreamSections({
         current: before,
-        proposed: writerResult.sections,
-        decisions: semanticDecisions,
-        evidence: analyzerInputs,
-        unitPlan: writerResult,
+        plan: writerResult,
         resolvedModel,
         trigger,
         signal,

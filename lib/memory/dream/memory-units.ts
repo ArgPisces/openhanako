@@ -1,29 +1,22 @@
-import { jaccardSimilarity, normalizeFactText, tokenizeFactText } from "./evidence.ts";
-import type { DreamAnalyzerInput, DreamSemanticDecision } from "./model-runner.ts";
 import type { DreamSections } from "./revision-store.ts";
 
-export type MemoryUnitSection = "facts" | "today" | "week" | "longterm";
-export type MemoryUnitOrigin = "resident" | "fact_candidate";
-export type DreamUnitRelation =
-  | "unchanged"
-  | "split"
-  | "same_meaning"
-  | "subsumes"
-  | "related_but_distinct"
-  | "conflict";
+export type DreamEditableSection = "facts" | "longterm";
+export type DreamDedupeRelation = "distinct" | "same_meaning" | "subsumes";
+export type DreamRemovalReason = "completed_transient" | "obsolete" | "operational_noise";
 
-export type DreamMemoryUnit = {
+export type DreamSourceBlock = {
   id: string;
-  origin: MemoryUnitOrigin;
-  section: MemoryUnitSection;
-  date?: string;
+  section: DreamEditableSection;
   text: string;
-  sourceRefs: string[];
   order: number;
-  groupId?: string;
-  action?: DreamSemanticDecision["action"];
-  subject?: DreamSemanticDecision["subject"];
-  temporal?: DreamSemanticDecision["temporal"];
+};
+
+export type DreamAtomicUnit = {
+  id: string;
+  sourceBlockIds: string[];
+  section: DreamEditableSection;
+  text: string;
+  order: number;
 };
 
 export type ExactDuplicateOperation = {
@@ -32,83 +25,91 @@ export type ExactDuplicateOperation = {
   removedUnitIds: string[];
 };
 
-export type DreamProposedUnit = {
+export type DreamDedupeGroup = {
   id: string;
   sourceUnitIds: string[];
-  text: string;
-  section: MemoryUnitSection;
-  date?: string;
-  relation: DreamUnitRelation;
+  sourceBlockIds: string[];
+  section: DreamEditableSection;
+  relation: DreamDedupeRelation;
   order: number;
 };
 
-export type DreamRemovedUnit = {
-  sourceUnitId: string;
-  supportingCandidateUnitIds: string[];
-  reason: "closed" | "obsolete";
+export type DreamDedupePlan = {
+  inputUnits: DreamAtomicUnit[];
+  units: DreamAtomicUnit[];
+  groups: DreamDedupeGroup[];
+  exactDuplicateOperations: ExactDuplicateOperation[];
+};
+
+export type DreamOptimizedUnit = {
+  id: string;
+  groupId: string;
+  sourceUnitIds: string[];
+  sourceBlockIds: string[];
+  section: DreamEditableSection;
+  text: string;
+  order: number;
+};
+
+export type DreamRemovedGroup = {
+  groupId: string;
+  sourceUnitIds: string[];
+  sourceBlockIds: string[];
+  reason: DreamRemovalReason;
 };
 
 export type DreamUnitOperation =
   | ExactDuplicateOperation
-  | {
-      kind: "merge" | "split" | "rewrite";
-      sourceUnitIds: string[];
-      resultUnitIds: string[];
-    }
-  | {
-      kind: "forget";
-      sourceUnitIds: string[];
-      resultUnitIds: [];
-    };
+  | { kind: "split" | "merge" | "rewrite"; sourceUnitIds: string[]; resultUnitIds: string[] }
+  | { kind: "forget"; sourceUnitIds: string[]; resultUnitIds: [] };
 
-export type PreparedDreamUnits = {
-  originalResidentUnits: DreamMemoryUnit[];
-  residentUnits: DreamMemoryUnit[];
-  candidateUnits: DreamMemoryUnit[];
-  exactDuplicateOperations: ExactDuplicateOperation[];
-  weekDates: string[];
-  preservedToday: string;
-  preservedWeekDays: DreamSections["weekDays"];
-};
-
-export type DreamUnitPlan = PreparedDreamUnits & {
-  proposedUnits: DreamProposedUnit[];
-  removedUnits: DreamRemovedUnit[];
+export type DreamUnitPlan = {
+  sourceBlocks: DreamSourceBlock[];
+  atomicUnits: DreamAtomicUnit[];
+  dedupePlan: DreamDedupePlan;
+  optimizedUnits: DreamOptimizedUnit[];
+  removedGroups: DreamRemovedGroup[];
   operations: DreamUnitOperation[];
   sections: DreamSections;
   mergedCount: number;
   forgottenCount: number;
 };
 
+export const DREAM_ATOMIC_UNIT_MAX_CHARS = 240;
+
 const LIST_PREFIX_RE = /^\s*(?:[-*+]\s+|\d+[.)、]\s*)/;
 const HEADING_PREFIX_RE = /^\s*#{1,6}\s+/;
 const EMPTY_PLACEHOLDERS = new Set(["（暂无）", "(none)", "none"]);
-const RELATIONS = new Set<DreamUnitRelation>([
-  "unchanged",
-  "split",
-  "same_meaning",
-  "subsumes",
-  "related_but_distinct",
-  "conflict",
+const DEDUPE_RELATIONS = new Set<DreamDedupeRelation>(["distinct", "same_meaning", "subsumes"]);
+const REMOVAL_REASONS = new Set<DreamRemovalReason>([
+  "completed_transient",
+  "obsolete",
+  "operational_noise",
 ]);
-const SECTIONS = new Set<MemoryUnitSection>(["facts", "today", "week", "longterm"]);
+
+export function normalizeDreamText(value: string) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "")
+    .trim();
+}
 
 function cleanInputLine(line: string) {
-  const value = line
-    .replace(LIST_PREFIX_RE, "")
-    .replace(HEADING_PREFIX_RE, "")
-    .trim();
+  const value = line.replace(LIST_PREFIX_RE, "").replace(HEADING_PREFIX_RE, "").trim();
   return EMPTY_PLACEHOLDERS.has(value.toLowerCase()) ? "" : value;
 }
 
-function bodyLines(body: string) {
-  const units: string[] = [];
-  let heading = "";
-  const contextualize = (text: string) => {
-    if (!heading || normalizeFactText(text).startsWith(normalizeFactText(heading))) return text;
-    return `${heading}: ${text}`;
-  };
+function splitSourceClauses(text: string) {
+  return text
+    .split(/(?<=[。！？!?；;])\s*|(?<=\.)\s+(?=[A-Z0-9])/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
 
+function bodySourceTexts(body: string) {
+  const texts: string[] = [];
+  let heading = "";
   for (const rawLine of String(body || "").split(/\r?\n/)) {
     const trimmed = rawLine.trim();
     if (!trimmed) continue;
@@ -116,49 +117,96 @@ function bodyLines(body: string) {
       heading = cleanInputLine(rawLine);
       continue;
     }
-    const text = cleanInputLine(rawLine);
-    if (text) units.push(contextualize(text));
+    const line = cleanInputLine(rawLine);
+    if (!line) continue;
+    for (const clause of splitSourceClauses(line)) {
+      const contextualized = heading && !normalizeDreamText(clause).startsWith(normalizeDreamText(heading))
+        ? `${heading}: ${clause}`
+        : clause;
+      texts.push(contextualized);
+    }
+  }
+  return texts;
+}
+
+export function buildDreamSourceBlocks(sections: DreamSections) {
+  const blocks: DreamSourceBlock[] = [];
+  let order = 0;
+  const add = (body: string, section: DreamEditableSection) => {
+    bodySourceTexts(body).forEach((text, index) => {
+      blocks.push({ id: `source:${section}:${index}`, section, text, order: order++ });
+    });
+  };
+  add(sections.facts, "facts");
+  add(sections.longterm, "longterm");
+  return blocks;
+}
+
+function parseStringArray(value: unknown, field: string) {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new Error(`Dream ${field} must be a string array`);
+  }
+  return [...new Set(value.map((entry) => entry.trim()).filter(Boolean))];
+}
+
+function validatePlainAtomicText(value: unknown, stage: string) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) throw new Error(`Dream ${stage} returned an empty unit`);
+  if (/\r|\n/.test(text) || LIST_PREFIX_RE.test(text) || HEADING_PREFIX_RE.test(text)) {
+    throw new Error(`Dream ${stage} must return plain one-line unit text without Markdown markers`);
+  }
+  if (text.length > DREAM_ATOMIC_UNIT_MAX_CHARS) {
+    throw new Error(`Dream ${stage} unit exceeds the ${DREAM_ATOMIC_UNIT_MAX_CHARS}-character atomic limit`);
+  }
+  const withoutTerminal = text.replace(/[。！？!?；;]+$/u, "");
+  if (/[。！？!?；;]/u.test(withoutTerminal)) {
+    throw new Error(`Dream ${stage} returned a compound multi-sentence unit`);
+  }
+  return text;
+}
+
+export function validateDreamAtomization(raw: Record<string, unknown>, sourceBlocks: DreamSourceBlock[]) {
+  if (!Array.isArray(raw.units)) throw new Error("Dream atomizer omitted units[]");
+  const known = new Map(sourceBlocks.map((block) => [block.id, block]));
+  const covered = new Set<string>();
+  const perBlockOrder = new Map<string, number>();
+  const units: DreamAtomicUnit[] = [];
+
+  for (const item of raw.units as Record<string, unknown>[]) {
+    const sourceBlockId = typeof item?.sourceBlockId === "string" ? item.sourceBlockId : "";
+    const source = known.get(sourceBlockId);
+    if (!source) throw new Error("Dream atomizer referenced an unknown source block");
+    const section = item?.section === "facts" || item?.section === "longterm" ? item.section : null;
+    if (section !== source.section) throw new Error("Dream atomizer moved a source block to another section");
+    const localOrder = perBlockOrder.get(sourceBlockId) || 0;
+    perBlockOrder.set(sourceBlockId, localOrder + 1);
+    covered.add(sourceBlockId);
+    units.push({
+      id: `atom:${units.length}`,
+      sourceBlockIds: [sourceBlockId],
+      section,
+      text: validatePlainAtomicText(item?.text, "atomizer"),
+      order: source.order * 1_000 + localOrder,
+    });
+  }
+
+  for (const block of sourceBlocks) {
+    if (!covered.has(block.id)) throw new Error(`Dream atomizer omitted source block ${block.id}`);
   }
   return units;
 }
 
-function residentId(section: MemoryUnitSection, index: number, date?: string) {
-  return date ? `resident:${section}:${date}:${index}` : `resident:${section}:${index}`;
-}
-
-export function atomizeDreamSections(sections: DreamSections) {
-  const units: DreamMemoryUnit[] = [];
-  let order = 0;
-  const addBody = (body: string, section: MemoryUnitSection, date?: string) => {
-    bodyLines(body).forEach((text, index) => {
-      const id = residentId(section, index, date);
-      units.push({
-        id,
-        origin: "resident",
-        section,
-        ...(date ? { date } : {}),
-        text,
-        sourceRefs: [`memory:${section}${date ? `:${date}` : ""}:${index}`],
-        order: order++,
-      });
-    });
-  };
-  addBody(sections.facts, "facts");
-  addBody(sections.longterm, "longterm");
-  return units;
-}
-
-function canonicalResident(left: DreamMemoryUnit, right: DreamMemoryUnit) {
+function canonicalAtomicUnit(left: DreamAtomicUnit, right: DreamAtomicUnit) {
   if (left.section === "facts" && right.section === "longterm") return left;
   if (right.section === "facts" && left.section === "longterm") return right;
   return left.order <= right.order ? left : right;
 }
 
-export function removeExactResidentDuplicates(units: DreamMemoryUnit[]) {
-  const groups = new Map<string, DreamMemoryUnit[]>();
+export function removeExactDreamDuplicates(inputUnits: DreamAtomicUnit[]) {
+  const units = inputUnits.map((unit) => ({ ...unit, sourceBlockIds: [...unit.sourceBlockIds] }));
+  const groups = new Map<string, DreamAtomicUnit[]>();
   for (const unit of units) {
-    const normalized = normalizeFactText(unit.text);
-    if (!normalized) continue;
+    const normalized = normalizeDreamText(unit.text);
     const group = groups.get(normalized) || [];
     group.push(unit);
     groups.set(normalized, group);
@@ -168,322 +216,190 @@ export function removeExactResidentDuplicates(units: DreamMemoryUnit[]) {
   const operations: ExactDuplicateOperation[] = [];
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    const canonical = group.reduce(canonicalResident);
-    const removed = group
-      .filter((unit) => unit.id !== canonical.id)
-      .sort((left, right) => left.order - right.order);
-    for (const unit of removed) removedIds.add(unit.id);
+    const canonical = group.reduce(canonicalAtomicUnit);
+    const removed = group.filter((unit) => unit.id !== canonical.id).sort((a, b) => a.order - b.order);
+    removed.forEach((unit) => removedIds.add(unit.id));
+    canonical.sourceBlockIds = [...new Set(group.flatMap((unit) => unit.sourceBlockIds))];
     operations.push({
       kind: "remove_exact_duplicate",
       canonicalUnitId: canonical.id,
       removedUnitIds: removed.map((unit) => unit.id),
     });
-    canonical.sourceRefs = [...new Set([
-      ...canonical.sourceRefs,
-      ...removed.flatMap((unit) => unit.sourceRefs),
-    ])];
   }
+  return { units: units.filter((unit) => !removedIds.has(unit.id)), operations };
+}
+
+export function prepareDreamDedupe(inputUnits: DreamAtomicUnit[]) {
+  const exact = removeExactDreamDuplicates(inputUnits);
   return {
-    units: units.filter((unit) => !removedIds.has(unit.id)),
-    operations,
+    inputUnits: inputUnits.map((unit) => ({ ...unit, sourceBlockIds: [...unit.sourceBlockIds] })),
+    units: exact.units,
+    exactDuplicateOperations: exact.operations,
   };
 }
 
-export function buildCandidateMemoryUnits(
-  decisions: DreamSemanticDecision[],
-  evidence: DreamAnalyzerInput[],
-  startOrder: number,
-) {
-  const evidenceByGroup = new Map(evidence.map((entry) => [entry.groupId, entry]));
-  return decisions.map((decision, index): DreamMemoryUnit => {
-    const measured = evidenceByGroup.get(decision.groupId);
-    const sourceFactIds = measured?.sourceFactIds?.length
-      ? measured.sourceFactIds
-      : [decision.groupId];
-    return {
-      id: `candidate:${decision.groupId}`,
-      origin: "fact_candidate",
-      section: decision.temporal === "closed" || decision.temporal === "obsolete" ? "longterm" : "facts",
-      text: decision.canonicalFact.trim(),
-      sourceRefs: sourceFactIds.map((id) => `facts.db:${String(id)}`),
-      order: startOrder + index,
-      groupId: decision.groupId,
-      action: decision.action,
-      subject: decision.subject,
-      temporal: decision.temporal,
-    };
-  });
-}
+export function validateDreamDedupe(
+  raw: Record<string, unknown>,
+  prepared: ReturnType<typeof prepareDreamDedupe>,
+): DreamDedupePlan {
+  if (!Array.isArray(raw.groups)) throw new Error("Dream deduper omitted groups[]");
+  const known = new Map(prepared.units.map((unit) => [unit.id, unit]));
+  const covered = new Set<string>();
+  const groups: DreamDedupeGroup[] = [];
 
-export function prepareDreamUnits(options: {
-  current: DreamSections;
-  decisions: DreamSemanticDecision[];
-  evidence: DreamAnalyzerInput[];
-}): PreparedDreamUnits {
-  const originalResidentUnits = atomizeDreamSections(options.current);
-  const deduped = removeExactResidentDuplicates(originalResidentUnits.map((unit) => ({ ...unit })));
-  return {
-    originalResidentUnits,
-    residentUnits: deduped.units,
-    candidateUnits: buildCandidateMemoryUnits(
-      options.decisions,
-      options.evidence,
-      originalResidentUnits.length,
-    ),
-    exactDuplicateOperations: deduped.operations,
-    weekDates: options.current.weekDays.map((entry) => entry.date),
-    preservedToday: options.current.today,
-    preservedWeekDays: options.current.weekDays.map((entry) => ({ ...entry })),
-  };
-}
-
-function parseStringArray(value: unknown, field: string) {
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
-    throw new Error(`Dream unit writer ${field} must be a string array`);
-  }
-  return [...new Set(value.map((entry) => entry.trim()).filter(Boolean))];
-}
-
-function validatePlainUnitText(value: unknown) {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!text) throw new Error("Dream unit writer returned an empty unit");
-  if (/\r|\n/.test(text) || LIST_PREFIX_RE.test(text) || HEADING_PREFIX_RE.test(text)) {
-    throw new Error("Dream unit writer must return plain one-line unit text without list markers");
-  }
-  return text;
-}
-
-function validateSectionPlacement(unit: DreamProposedUnit, sources: DreamMemoryUnit[]) {
-  const resident = sources.filter((source) => source.origin === "resident");
-  const residentSections = new Set(resident.map((source) => source.section));
-  const candidates = sources.filter((source) => source.origin === "fact_candidate");
-  const hasStableCandidate = candidates.some((source) => source.temporal === "stable" || source.temporal === "active");
-
-  if (unit.section === "week") {
-    if (!unit.date) throw new Error("Dream week unit omitted its date");
-  } else if (unit.date) {
-    throw new Error("Dream non-week unit unexpectedly included a date");
-  }
-
-  if (residentSections.size === 1) {
-    const only = [...residentSections][0];
-    if (only === "week") {
-      const dates = new Set(resident.map((source) => source.date));
-      if (dates.size !== 1 || unit.section !== "week" || unit.date !== [...dates][0]) {
-        throw new Error("Dream writer moved a week unit outside its source date");
-      }
-      return;
-    }
-    if (only === "longterm" && hasStableCandidate
-      && (unit.relation === "same_meaning" || unit.relation === "subsumes")) {
-      if (unit.section !== "facts") {
-        throw new Error("Stable facts must be canonicalized into Facts instead of Longterm");
-      }
-      return;
-    }
-    if (unit.section !== only) {
-      throw new Error(`Dream writer moved a ${only} unit without a cross-section duplicate source`);
-    }
-    return;
-  }
-
-  if (residentSections.has("facts") && residentSections.has("longterm")
-    && (unit.relation === "same_meaning" || unit.relation === "subsumes")) {
-    if (unit.section !== "facts") {
-      throw new Error("Facts must win over Longterm for the same stable assertion");
-    }
-    return;
-  }
-
-  if (resident.length === 0 && candidates.length > 0) {
-    const preferred = hasStableCandidate ? "facts" : candidates[0].section;
-    if (unit.section !== preferred) {
-      throw new Error(`Dream candidate was placed in ${unit.section} instead of ${preferred}`);
-    }
-    return;
-  }
-
-  if (resident.length > 0 && !residentSections.has(unit.section)) {
-    throw new Error("Dream writer moved a unit to a section absent from its resident sources");
-  }
-}
-
-function renderUnits(units: DreamProposedUnit[], prepared: PreparedDreamUnits): DreamSections {
-  const ordered = [...units].sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
-  const render = (items: DreamProposedUnit[]) => items.map((unit) => `- ${unit.text}`).join("\n");
-  return {
-    facts: render(ordered.filter((unit) => unit.section === "facts")),
-    today: prepared.preservedToday,
-    weekDays: prepared.preservedWeekDays.map((entry) => ({ ...entry })),
-    longterm: render(ordered.filter((unit) => unit.section === "longterm")),
-  };
-}
-
-function similarity(left: string, right: string) {
-  const a = normalizeFactText(left);
-  const b = normalizeFactText(right);
-  if (a === b) return 1;
-  return jaccardSimilarity(tokenizeFactText(a), tokenizeFactText(b));
-}
-
-function hasDatedOrHistoricalContext(text: string) {
-  return /(?:\b(?:19|20)\d{2}(?:-\d{2}-\d{2})?\b|完成|结束|发布|迁移|里程碑|曾经|当时|此前|completed|finished|released|migrated|milestone|previously)/i.test(text);
-}
-
-export function validateAndRenderDreamUnitPlan(raw: Record<string, unknown>, prepared: PreparedDreamUnits) {
-  if (!Array.isArray(raw.units)) throw new Error("Dream unit writer omitted units[]");
-  const known = new Map([...prepared.residentUnits, ...prepared.candidateUnits].map((unit) => [unit.id, unit]));
-  const proposedUnits: DreamProposedUnit[] = [];
-
-  for (const [index, item] of (raw.units as Record<string, unknown>[]).entries()) {
-    const sourceUnitIds = parseStringArray(item?.sourceUnitIds, "sourceUnitIds");
-    if (sourceUnitIds.length === 0) throw new Error("Dream unit writer returned an ungrounded unit");
+  for (const item of raw.groups as Record<string, unknown>[]) {
+    const sourceUnitIds = parseStringArray(item?.sourceUnitIds, "deduper sourceUnitIds");
+    if (sourceUnitIds.length === 0) throw new Error("Dream deduper returned an empty group");
     const sources = sourceUnitIds.map((id) => {
       const source = known.get(id);
-      if (!source) throw new Error(`Dream unit writer referenced unknown source ${id}`);
-      if (source.origin === "fact_candidate" && !["keep", "merge"].includes(source.action || "")) {
-        throw new Error(`Dream unit writer used non-resident candidate ${id}`);
-      }
+      if (!source || covered.has(id)) throw new Error("Dream deduper referenced an unknown or repeated unit");
+      covered.add(id);
       return source;
     });
-    const section = typeof item?.section === "string" ? item.section as MemoryUnitSection : "" as MemoryUnitSection;
-    const relation = typeof item?.relation === "string" ? item.relation as DreamUnitRelation : "" as DreamUnitRelation;
-    if (!SECTIONS.has(section) || !RELATIONS.has(relation)) {
-      throw new Error("Dream unit writer returned an invalid section or relation");
+    const relation = typeof item?.relation === "string" ? item.relation as DreamDedupeRelation : null;
+    if (!relation || !DEDUPE_RELATIONS.has(relation)) throw new Error("Dream deduper returned an invalid relation");
+    if (relation === "distinct" && sources.length !== 1) {
+      throw new Error("Dream deduper may not group related or conflicting units as distinct");
     }
-    if (section === "today" || section === "week") {
-      throw new Error("Dream writer may only edit Facts and Longterm");
+    if (relation !== "distinct" && sources.length < 2) {
+      throw new Error(`Dream ${relation} group requires at least two units`);
     }
-    if (["same_meaning", "subsumes"].includes(relation) && sourceUnitIds.length < 2) {
-      throw new Error(`Dream ${relation} relation requires at least two sources`);
-    }
-    if (["unchanged", "split", "related_but_distinct", "conflict"].includes(relation)
-      && sourceUnitIds.length !== 1) {
-      throw new Error(`Dream ${relation} sources must remain separate units`);
-    }
-    const date = typeof item?.date === "string" ? item.date : undefined;
-    if (date) throw new Error("Dream Facts/Longterm unit unexpectedly included a date");
-    const proposed: DreamProposedUnit = {
-      id: `result:${index}`,
+    const section: DreamEditableSection = sources.some((unit) => unit.section === "facts")
+      ? "facts"
+      : "longterm";
+    groups.push({
+      id: `group:${groups.length}`,
       sourceUnitIds,
-      text: validatePlainUnitText(item?.text),
+      sourceBlockIds: [...new Set(sources.flatMap((unit) => unit.sourceBlockIds))],
       section,
-      ...(date ? { date } : {}),
       relation,
-      order: Math.min(...sources.map((source) => source.order), prepared.originalResidentUnits.length + index),
-    };
-    validateSectionPlacement(proposed, sources);
-    proposedUnits.push(proposed);
+      order: Math.min(...sources.map((unit) => unit.order)),
+    });
   }
 
-  const rawRemoved = raw.removedUnits === undefined ? [] : raw.removedUnits;
-  if (!Array.isArray(rawRemoved)) throw new Error("Dream unit writer removedUnits must be an array");
-  const removedUnits: DreamRemovedUnit[] = [];
-  const removedIds = new Set<string>();
-  for (const item of rawRemoved as Record<string, unknown>[]) {
-    const sourceUnitId = typeof item?.sourceUnitId === "string" ? item.sourceUnitId : "";
-    const source = known.get(sourceUnitId);
-    if (!source || source.origin !== "resident" || removedIds.has(sourceUnitId)) {
-      throw new Error("Dream unit writer returned an unknown or duplicate removed source");
-    }
-    const reason = item?.reason === "closed" || item?.reason === "obsolete" ? item.reason : null;
-    if (!reason) throw new Error("Dream unit writer returned an invalid removal reason");
-    const supportingCandidateUnitIds = parseStringArray(
-      item?.supportingCandidateUnitIds,
-      "supportingCandidateUnitIds",
-    );
-    if (supportingCandidateUnitIds.length === 0) {
-      throw new Error("Dream removal requires an evidence-backed candidate");
-    }
-    for (const id of supportingCandidateUnitIds) {
-      const candidate = known.get(id);
-      if (!candidate || candidate.origin !== "fact_candidate" || candidate.action !== "forget") {
-        throw new Error("Dream removal requires a candidate classified forget");
-      }
-      if (candidate.temporal !== "closed" && candidate.temporal !== "obsolete") {
-        throw new Error("Dream removal requires a closed or obsolete candidate");
-      }
-      if (candidate.temporal !== reason) {
-        throw new Error("Dream removal reason must match its supporting candidate");
-      }
-      if (similarity(source.text, candidate.text) < 0.45) {
-        throw new Error("Dream removal evidence does not support the resident unit");
-      }
-    }
-    removedIds.add(sourceUnitId);
-    removedUnits.push({ sourceUnitId, supportingCandidateUnitIds, reason });
+  for (const unit of prepared.units) {
+    if (!covered.has(unit.id)) throw new Error(`Dream deduper omitted unit ${unit.id}`);
   }
+  return { ...prepared, groups };
+}
 
-  const coveredResident = new Set(proposedUnits.flatMap((unit) => unit.sourceUnitIds));
-  for (const source of prepared.residentUnits) {
-    if (!coveredResident.has(source.id) && !removedIds.has(source.id)) {
-      throw new Error(`Dream unit writer omitted resident source ${source.id}`);
-    }
-    if (coveredResident.has(source.id) && removedIds.has(source.id)) {
-      throw new Error(`Dream unit writer both retained and removed source ${source.id}`);
-    }
-  }
-  for (const source of prepared.residentUnits) {
-    if (source.section !== "longterm" || !hasDatedOrHistoricalContext(source.text)) continue;
-    const uses = proposedUnits.filter((unit) => unit.sourceUnitIds.includes(source.id));
-    if (uses.some((unit) => unit.section === "facts")
-      && !uses.some((unit) => unit.section === "longterm")) {
-      throw new Error("Dream writer moved unique dated or historical Longterm context into Facts");
-    }
-  }
-  const requiredCandidates = prepared.candidateUnits.filter((unit) => unit.action === "keep" || unit.action === "merge");
-  for (const candidate of requiredCandidates) {
-    if (!proposedUnits.some((unit) => unit.sourceUnitIds.includes(candidate.id))) {
-      throw new Error(`Dream unit writer omitted required candidate ${candidate.id}`);
-    }
-  }
-
-  const outputUses = new Map<string, DreamProposedUnit[]>();
-  for (const unit of proposedUnits) {
-    for (const sourceId of unit.sourceUnitIds) {
-      const uses = outputUses.get(sourceId) || [];
-      uses.push(unit);
-      outputUses.set(sourceId, uses);
-    }
-  }
-  for (const uses of outputUses.values()) {
-    if (uses.length > 1 && !uses.some((unit) => unit.relation === "split")) {
-      throw new Error("Dream unit writer duplicated a source without declaring a split");
-    }
-  }
-
-  const operations: DreamUnitOperation[] = [...prepared.exactDuplicateOperations];
-  for (const unit of proposedUnits) {
-    if (unit.relation === "same_meaning" || unit.relation === "subsumes") {
-      operations.push({ kind: "merge", sourceUnitIds: unit.sourceUnitIds, resultUnitIds: [unit.id] });
-    } else if (unit.relation === "split") {
-      operations.push({ kind: "split", sourceUnitIds: unit.sourceUnitIds, resultUnitIds: [unit.id] });
-    } else if (unit.relation === "unchanged") {
-      const source = known.get(unit.sourceUnitIds[0]);
-      if (unit.sourceUnitIds.length !== 1 || !source || normalizeFactText(source.text) !== normalizeFactText(unit.text)) {
-        operations.push({ kind: "rewrite", sourceUnitIds: unit.sourceUnitIds, resultUnitIds: [unit.id] });
-      }
-    }
-  }
-  if (removedUnits.length > 0) {
-    operations.push({ kind: "forget", sourceUnitIds: removedUnits.map((unit) => unit.sourceUnitId), resultUnitIds: [] });
-  }
-
-  const sections = renderUnits(proposedUnits, prepared);
-  let mergedCount = prepared.exactDuplicateOperations
-    .reduce((sum, operation) => sum + operation.removedUnitIds.length, 0);
-  for (const operation of operations) {
-    if (operation.kind === "merge") {
-      mergedCount += Math.max(0, operation.sourceUnitIds.length - 1);
-    }
-  }
+function renderOptimizedUnits(units: DreamOptimizedUnit[], current: DreamSections): DreamSections {
+  const ordered = [...units].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id, "en"));
+  const render = (section: DreamEditableSection) => ordered
+    .filter((unit) => unit.section === section)
+    .map((unit) => `- ${unit.text}`)
+    .join("\n");
   return {
-    ...prepared,
-    proposedUnits,
-    removedUnits,
+    facts: render("facts"),
+    today: current.today,
+    weekDays: current.weekDays.map((entry) => ({ ...entry })),
+    longterm: render("longterm"),
+  };
+}
+
+export function validateAndRenderDreamOptimization(
+  raw: Record<string, unknown>,
+  sourceBlocks: DreamSourceBlock[],
+  atomicUnits: DreamAtomicUnit[],
+  dedupePlan: DreamDedupePlan,
+  current: DreamSections,
+): DreamUnitPlan {
+  if (!Array.isArray(raw.units)) throw new Error("Dream optimizer omitted units[]");
+  const rawRemoved = raw.removedGroups === undefined ? [] : raw.removedGroups;
+  if (!Array.isArray(rawRemoved)) throw new Error("Dream optimizer removedGroups must be an array");
+  const knownGroups = new Map(dedupePlan.groups.map((group) => [group.id, group]));
+  const covered = new Set<string>();
+  const optimizedUnits: DreamOptimizedUnit[] = [];
+
+  for (const item of raw.units as Record<string, unknown>[]) {
+    const groupId = typeof item?.groupId === "string" ? item.groupId : "";
+    const group = knownGroups.get(groupId);
+    if (!group || covered.has(groupId)) throw new Error("Dream optimizer referenced an unknown or repeated group");
+    const section = item?.section === "facts" || item?.section === "longterm" ? item.section : null;
+    if (section !== group.section) throw new Error("Dream optimizer moved a dedupe group to another section");
+    covered.add(groupId);
+    optimizedUnits.push({
+      id: `result:${optimizedUnits.length}`,
+      groupId,
+      sourceUnitIds: [...group.sourceUnitIds],
+      sourceBlockIds: [...group.sourceBlockIds],
+      section,
+      text: validatePlainAtomicText(item?.text, "optimizer"),
+      order: group.order,
+    });
+  }
+
+  const removedGroups: DreamRemovedGroup[] = [];
+  for (const item of rawRemoved as Record<string, unknown>[]) {
+    const groupId = typeof item?.groupId === "string" ? item.groupId : "";
+    const group = knownGroups.get(groupId);
+    if (!group || covered.has(groupId)) throw new Error("Dream optimizer removed an unknown or repeated group");
+    const reason = typeof item?.reason === "string" ? item.reason as DreamRemovalReason : null;
+    if (!reason || !REMOVAL_REASONS.has(reason)) throw new Error("Dream optimizer returned an invalid removal reason");
+    covered.add(groupId);
+    removedGroups.push({
+      groupId,
+      sourceUnitIds: [...group.sourceUnitIds],
+      sourceBlockIds: [...group.sourceBlockIds],
+      reason,
+    });
+  }
+
+  for (const group of dedupePlan.groups) {
+    if (!covered.has(group.id)) throw new Error(`Dream optimizer omitted group ${group.id}`);
+  }
+
+  const operations: DreamUnitOperation[] = [...dedupePlan.exactDuplicateOperations];
+  const atomsBySource = new Map<string, DreamAtomicUnit[]>();
+  for (const atom of atomicUnits) {
+    for (const sourceBlockId of atom.sourceBlockIds) {
+      const values = atomsBySource.get(sourceBlockId) || [];
+      values.push(atom);
+      atomsBySource.set(sourceBlockId, values);
+    }
+  }
+  for (const [sourceBlockId, atoms] of atomsBySource) {
+    if (atoms.length > 1) {
+      operations.push({ kind: "split", sourceUnitIds: [sourceBlockId], resultUnitIds: atoms.map((atom) => atom.id) });
+    }
+  }
+  for (const group of dedupePlan.groups) {
+    if (group.relation !== "distinct") {
+      const result = optimizedUnits.find((unit) => unit.groupId === group.id);
+      operations.push({ kind: "merge", sourceUnitIds: group.sourceUnitIds, resultUnitIds: result ? [result.id] : [] });
+    }
+  }
+  const unitById = new Map(dedupePlan.units.map((unit) => [unit.id, unit]));
+  for (const unit of optimizedUnits) {
+    if (unit.sourceUnitIds.length !== 1) continue;
+    const source = unitById.get(unit.sourceUnitIds[0]);
+    if (source && normalizeDreamText(source.text) !== normalizeDreamText(unit.text)) {
+      operations.push({ kind: "rewrite", sourceUnitIds: unit.sourceUnitIds, resultUnitIds: [unit.id] });
+    }
+  }
+  if (removedGroups.length > 0) {
+    operations.push({
+      kind: "forget",
+      sourceUnitIds: removedGroups.flatMap((group) => group.sourceUnitIds),
+      resultUnitIds: [],
+    });
+  }
+
+  const mergedCount = dedupePlan.exactDuplicateOperations
+    .reduce((sum, operation) => sum + operation.removedUnitIds.length, 0)
+    + dedupePlan.groups.reduce(
+      (sum, group) => sum + (group.relation === "distinct" ? 0 : Math.max(0, group.sourceUnitIds.length - 1)),
+      0,
+    );
+  return {
+    sourceBlocks,
+    atomicUnits,
+    dedupePlan,
+    optimizedUnits,
+    removedGroups,
     operations,
-    sections,
+    sections: renderOptimizedUnits(optimizedUnits, current),
     mergedCount,
-    forgottenCount: removedUnits.length,
-  } satisfies DreamUnitPlan;
+    forgottenCount: removedGroups.length,
+  };
 }

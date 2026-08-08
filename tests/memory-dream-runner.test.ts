@@ -3,13 +3,15 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const analyzeMock = vi.fn();
-const writeMock = vi.fn();
+const atomizeMock = vi.fn();
+const dedupeMock = vi.fn();
+const optimizeMock = vi.fn();
 const verifyMock = vi.fn();
 
 vi.mock("../lib/memory/dream/model-runner.ts", () => ({
-  analyzeDreamCandidates: (...args: any[]) => analyzeMock(...args),
-  writeDreamSections: (...args: any[]) => writeMock(...args),
+  atomizeDreamMemory: (...args: any[]) => atomizeMock(...args),
+  dedupeDreamMemory: (...args: any[]) => dedupeMock(...args),
+  optimizeDreamMemory: (...args: any[]) => optimizeMock(...args),
   verifyDreamSections: (...args: any[]) => verifyMock(...args),
   dreamModelId: () => "utility-test",
 }));
@@ -36,33 +38,33 @@ describe("Memory Dream runner", () => {
   let memoryDir: string;
 
   beforeEach(() => {
-    analyzeMock.mockReset();
-    writeMock.mockReset();
+    atomizeMock.mockReset();
+    dedupeMock.mockReset();
+    optimizeMock.mockReset();
     verifyMock.mockReset();
-    verifyMock.mockResolvedValue({ ok: true });
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hana-dream-runner-"));
     memoryDir = path.join(tmpDir, "memory");
     seedMemory(memoryDir);
+
+    atomizeMock.mockResolvedValue({
+      sourceBlocks: [{ id: "source:facts:0", section: "facts", text: "User prefers concise answers.", order: 0 }],
+      units: [{ id: "atom:0", sourceBlockIds: ["source:facts:0"], section: "facts", text: "User prefers concise answers.", order: 0 }],
+    });
+    dedupeMock.mockResolvedValue({
+      inputUnits: [],
+      units: [],
+      groups: [],
+      exactDuplicateOperations: [],
+    });
+    verifyMock.mockResolvedValue({ ok: true });
   });
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
   function makeRunner() {
     return createMemoryDreamRunner({
       memoryDir,
       memoryMdPath: path.join(memoryDir, "memory.md"),
-      factStore: {
-        getAll: () => [{
-          id: 1,
-          fact: "User prefers concise answers",
-          tags: ["communication"],
-          time: "2026-08-01T10:00:00.000Z",
-          session_id: "session-a",
-          created_at: "2026-08-01T10:00:00.000Z",
-        }],
-      } as any,
       getResolvedMemoryModel: async () => ({ model: { id: "utility-test" } }),
       getLogicalDate: () => "2026-08-08",
       onCompiled: vi.fn(),
@@ -74,60 +76,77 @@ describe("Memory Dream runner", () => {
     expect(fs.existsSync(path.join(memoryDir, "dream"))).toBe(false);
   });
 
-  it("applies a validated rewrite, keeps a revision, and can restore it", async () => {
-    analyzeMock.mockResolvedValue([{
-      groupId: "fact:number:1",
-      action: "keep",
-      subject: "user",
-      temporal: "stable",
-      canonicalFact: "User prefers concise answers",
-      reasonCodes: ["recent"],
-    }]);
-    writeMock.mockImplementation(async ({ current }: any) => ({
-      sections: {
-        ...current,
-        facts: "- User prefers concise answers and dense technical reports.",
-        longterm: "- Hana is the user's personal agent.",
-      },
-      mergedCount: 1,
-      forgottenCount: 0,
-      operations: [{ kind: "merge", sourceUnitIds: ["resident:facts:0", "candidate:fact:number:1"], resultUnitIds: ["result:0"] }],
-      modelNotes: ["Claimed 42 merges."],
-    }));
+  it("does not run models when only Today or Week has content", async () => {
+    fs.writeFileSync(path.join(memoryDir, "facts.md"), "");
+    fs.writeFileSync(path.join(memoryDir, "longterm.md"), "");
     const runner = makeRunner();
 
-    const started = runner.start({ trigger: "manual" });
-    expect(started.status).toBe("running");
+    runner.start({ trigger: "manual" });
+    const status = await waitForCompletion(runner);
+
+    expect(status.status).toBe("failed");
+    expect(status.lastRun?.error).toContain("no memory to organize");
+    expect(atomizeMock).not.toHaveBeenCalled();
+    expect(dedupeMock).not.toHaveBeenCalled();
+    expect(optimizeMock).not.toHaveBeenCalled();
+  });
+
+  it("runs atomize, dedupe, optimize, and verify in order using resident memory only", async () => {
+    const order: string[] = [];
+    atomizeMock.mockImplementation(async ({ current }: any) => {
+      order.push("atomize");
+      expect(current.facts).toBe("User prefers concise answers.");
+      expect(current.longterm).toBe("Hana is the user's personal agent.");
+      expect(current).not.toHaveProperty("factStore");
+      return {
+        sourceBlocks: [{ id: "source:facts:0", section: "facts", text: current.facts, order: 0 }],
+        units: [{ id: "atom:0", sourceBlockIds: ["source:facts:0"], section: "facts", text: current.facts, order: 0 }],
+      };
+    });
+    dedupeMock.mockImplementation(async ({ units }: any) => {
+      order.push("dedupe");
+      return {
+        inputUnits: units,
+        units,
+        groups: [{ id: "group:0", sourceUnitIds: ["atom:0"], sourceBlockIds: ["source:facts:0"], section: "facts", relation: "distinct", order: 0 }],
+        exactDuplicateOperations: [],
+      };
+    });
+    optimizeMock.mockImplementation(async ({ current, dedupePlan }: any) => {
+      order.push("optimize");
+      return {
+        sourceBlocks: [], atomicUnits: [], dedupePlan, optimizedUnits: [], removedGroups: [],
+        sections: { ...current, facts: "- User prefers concise answers.", longterm: "- Hana is the user's personal agent." },
+        operations: [{ kind: "rewrite", sourceUnitIds: ["atom:0"], resultUnitIds: ["result:0"] }],
+        mergedCount: 0, forgottenCount: 0,
+      };
+    });
+    verifyMock.mockImplementation(async () => { order.push("verify"); return { ok: true }; });
+
+    const runner = makeRunner();
+    runner.start({ trigger: "manual" });
     const status = await waitForCompletion(runner);
 
     expect(status.status).toBe("succeeded");
-    expect(writeMock.mock.calls[0]?.[0]?.budgets).toBeUndefined();
-    expect(status.lastRun?.revisionId).toEqual(expect.any(String));
+    expect(order).toEqual(["atomize", "dedupe", "optimize", "verify"]);
     expect(status.lastRun).toEqual(expect.objectContaining({
       changed: true,
       changedSections: ["facts", "longterm"],
-      mergedCount: 1,
+      mergedCount: 0,
       forgottenCount: 0,
-      reviewedCount: 0,
       appliedOperationCount: 1,
     }));
-    expect(status.lastRun?.notes.join(" ")).not.toContain("42");
     expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8"))
-      .toContain("dense technical reports");
-    expect(fs.existsSync(path.join(memoryDir, "dream", "state.json"))).toBe(true);
-
-    await runner.restoreRevision(status.lastRun!.revisionId!);
-    expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8"))
-      .toBe("User prefers concise answers.\n");
+      .toBe("- User prefers concise answers.\n");
   });
 
-  it("treats an exact no-op as a successful check without creating a revision", async () => {
-    analyzeMock.mockResolvedValue([]);
-    writeMock.mockImplementation(async ({ current }: any) => ({
+  it("treats an exact no-op as successful without creating a revision", async () => {
+    optimizeMock.mockImplementation(async ({ current, dedupePlan }: any) => ({
+      sourceBlocks: [], atomicUnits: [], dedupePlan, optimizedUnits: [], removedGroups: [],
       sections: current,
+      operations: [{ kind: "rewrite", sourceUnitIds: ["invented"], resultUnitIds: ["invented"] }],
       mergedCount: 99,
       forgottenCount: 99,
-      operations: [{ kind: "merge", sourceUnitIds: ["invented"], resultUnitIds: ["invented"] }],
     }));
     const runner = makeRunner();
 
@@ -137,21 +156,16 @@ describe("Memory Dream runner", () => {
     expect(status.status).toBe("succeeded");
     expect(status.lastRun).toEqual(expect.objectContaining({
       changed: false,
-      changedSections: [],
       revisionId: null,
       mergedCount: 0,
       forgottenCount: 0,
-      reviewedCount: 0,
       appliedOperationCount: 0,
     }));
     expect(fs.existsSync(path.join(memoryDir, "dream", "revisions"))).toBe(false);
-    const state = JSON.parse(fs.readFileSync(path.join(memoryDir, "dream", "state.json"), "utf-8"));
-    expect(state.lastSuccessfulManualDate).toBe("2026-08-08");
   });
 
-  it("leaves every memory section unchanged when model writing fails", async () => {
-    analyzeMock.mockResolvedValue([]);
-    writeMock.mockRejectedValue(new Error("writer invalid"));
+  it("leaves every memory section unchanged when any stage fails", async () => {
+    dedupeMock.mockRejectedValue(new Error("deduper invalid"));
     const before = fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8");
     const runner = makeRunner();
 
@@ -159,67 +173,14 @@ describe("Memory Dream runner", () => {
     const status = await waitForCompletion(runner);
 
     expect(status.status).toBe("failed");
-    expect(status.lastRun?.error).toContain("writer invalid");
+    expect(status.lastRun?.error).toContain("deduper invalid");
+    expect(optimizeMock).not.toHaveBeenCalled();
     expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8")).toBe(before);
     expect(fs.existsSync(path.join(memoryDir, "dream", "revisions"))).toBe(false);
   });
 
-  it("sends an old matching forget candidate to the semantic reviewer", async () => {
-    fs.writeFileSync(path.join(memoryDir, "longterm.md"), "The obsolete launch checklist is closed.\n");
-    analyzeMock.mockImplementation(async ({ groups }: any) => {
-      expect(groups).toEqual([
-        expect.objectContaining({
-          canonicalFact: "The obsolete launch checklist is closed.",
-          ruleAction: "forget",
-          allowedActions: ["forget"],
-        }),
-      ]);
-      return [{
-        groupId: groups[0].groupId,
-        action: "forget",
-        subject: "project",
-        temporal: "closed",
-        canonicalFact: groups[0].canonicalFact,
-        reasonCodes: ["closed"],
-      }];
-    });
-    writeMock.mockImplementation(async ({ current, decisions }: any) => {
-      expect(decisions).toEqual([
-        expect.objectContaining({ action: "forget", temporal: "closed" }),
-      ]);
-      return {
-        sections: current,
-        mergedCount: 0,
-        forgottenCount: 0,
-        operations: [],
-      };
-    });
-    const runner = createMemoryDreamRunner({
-      memoryDir,
-      memoryMdPath: path.join(memoryDir, "memory.md"),
-      factStore: {
-        getAll: () => [{
-          id: 7,
-          fact: "The obsolete launch checklist is closed.",
-          tags: [],
-          time: "2025-01-01T00:00:00.000Z",
-          session_id: "old-session",
-          created_at: "2025-01-01T00:00:00.000Z",
-        }],
-      } as any,
-      getResolvedMemoryModel: async () => ({ model: { id: "utility-test" } }),
-      getLogicalDate: () => "2026-08-08",
-    });
-
-    runner.start({ trigger: "manual" });
-    const status = await waitForCompletion(runner);
-
-    expect(status.status).toBe("succeeded");
-    expect(analyzeMock).toHaveBeenCalledOnce();
-  });
-
-  it("records one automatic attempt per logical day before running the model", async () => {
-    analyzeMock.mockRejectedValue(new Error("stop after eligibility check"));
+  it("records one automatic attempt per logical day before running models", async () => {
+    atomizeMock.mockRejectedValue(new Error("stop after eligibility check"));
     const runner = makeRunner();
 
     expect(runner.startAutomaticIfEligible("2026-08-08")?.status).toBe("running");

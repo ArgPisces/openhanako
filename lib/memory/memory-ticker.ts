@@ -139,7 +139,6 @@ export function createMemoryTicker(opts) {
   const _dreamRunner = createMemoryDreamRunner({
     memoryDir,
     memoryMdPath,
-    factStore,
     getResolvedMemoryModel,
     getLogicalDate: () => getLogicalDay().logicalDate,
     onCompiled,

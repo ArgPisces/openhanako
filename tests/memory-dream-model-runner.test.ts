@@ -7,10 +7,10 @@ vi.mock("../core/llm-client.ts", () => ({
 }));
 
 import {
-  analyzeDreamCandidates,
+  atomizeDreamMemory,
+  dedupeDreamMemory,
+  optimizeDreamMemory,
   verifyDreamSections,
-  writeDreamSections,
-  type DreamAnalyzerInput,
 } from "../lib/memory/dream/model-runner.ts";
 
 const resolvedModel = {
@@ -21,291 +21,234 @@ const resolvedModel = {
   base_url: "http://localhost",
 };
 
-function group(overrides: Partial<DreamAnalyzerInput> = {}): DreamAnalyzerInput {
-  return {
-    groupId: "fact:number:1",
-    canonicalFact: "User prefers concise answers",
-    sourceFacts: ["User prefers concise answers"],
-    allowedActions: ["keep", "forget", "review"],
-    protected: false,
-    ruleAction: "keep",
-    evidence: { distinctSessionCount: 2, distinctDayCount: 2 },
-    ruleReasons: ["multi_session", "multi_day"],
-    ...overrides,
-  };
-}
+const current = {
+  facts: "User writes videos and maintains HanaAgent.",
+  today: "Today stays outside Dream.",
+  weekDays: [{ date: "2026-08-07", body: "Week stays outside Dream." }],
+  longterm: "User likes concise answers.",
+};
 
-describe("Memory Dream structured model boundary", () => {
+describe("Memory Dream three-stage model boundary", () => {
   beforeEach(() => callTextMock.mockReset());
 
-  it("repairs analyzer coverage once and accepts only known IDs", async () => {
+  it("repairs non-atomic output and sends only resident Facts/Longterm blocks", async () => {
     callTextMock
       .mockResolvedValueOnce(JSON.stringify({
-        decisions: [{
-          groupId: "invented",
-          action: "keep",
-          subject: "user",
-          temporal: "stable",
-          canonicalFact: "invented",
-          reasonCodes: [],
+        units: [{
+          sourceBlockId: "source:facts:0",
+          section: "facts",
+          text: "First fact。Second fact。",
         }],
       }))
       .mockResolvedValueOnce(JSON.stringify({
-        decisions: [{
-          groupId: "fact:number:1",
-          action: "keep",
-          subject: "user",
-          temporal: "stable",
-          canonicalFact: "User prefers concise answers",
-          reasonCodes: ["multi_session"],
-        }],
-      }));
-
-    const result = await analyzeDreamCandidates({
-      groups: [group()],
-      resolvedModel,
-      trigger: "manual",
-    });
-
-    expect(result).toEqual([expect.objectContaining({
-      groupId: "fact:number:1",
-      action: "keep",
-      subject: "user",
-    })]);
-    expect(callTextMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("rejects forgetting stable recurring user evidence after one repair", async () => {
-    const invalid = JSON.stringify({
-      decisions: [{
-        groupId: "fact:number:1",
-        action: "forget",
-        subject: "user",
-        temporal: "stable",
-        canonicalFact: "User prefers concise answers",
-        reasonCodes: [],
-      }],
-    });
-    callTextMock.mockResolvedValue(invalid);
-
-    await expect(analyzeDreamCandidates({
-      groups: [group()],
-      resolvedModel,
-      trigger: "manual",
-    })).rejects.toThrow("stable user evidence");
-    expect(callTextMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("repairs structured source coverage while preserving Today and Week exactly", async () => {
-    const sections = {
-      facts: "Concise answers are preferred.",
-      today: "Working on memory quality.",
-      weekDays: [{ date: "2026-08-07", body: "Reviewed memory design." }],
-      longterm: "L".repeat(1_251),
-    };
-    const residentOnly = {
-      units: [
-        {
-          sourceUnitIds: ["resident:facts:0"],
-          text: "Concise answers are preferred.",
-          section: "facts",
-          relation: "unchanged",
-        },
-        {
-          sourceUnitIds: ["resident:longterm:0"],
-          text: "L".repeat(1_251),
-          section: "longterm",
-          relation: "unchanged",
-        },
-      ],
-      removedUnits: [],
-    };
-    callTextMock
-      .mockResolvedValueOnce(JSON.stringify(residentOnly))
-      .mockResolvedValueOnce(JSON.stringify({
         units: [
-          {
-            sourceUnitIds: ["resident:facts:0", "candidate:fact:number:1"],
-            text: "Concise answers are preferred.",
-            section: "facts",
-            relation: "same_meaning",
-          },
-          residentOnly.units[1],
+          { sourceBlockId: "source:facts:0", section: "facts", text: "User writes videos." },
+          { sourceBlockId: "source:facts:0", section: "facts", text: "User maintains HanaAgent." },
+          { sourceBlockId: "source:longterm:0", section: "longterm", text: "User likes concise answers." },
         ],
-        removedUnits: [],
       }));
 
-    const result = await writeDreamSections({
-      current: sections,
-      decisions: [{
-        groupId: "fact:number:1",
-        action: "keep",
-        subject: "user",
-        temporal: "stable",
-        canonicalFact: "User prefers concise answers",
-        reasonCodes: [],
-      }],
-      evidence: [group()],
+    const result = await atomizeDreamMemory({ current, resolvedModel, trigger: "manual" });
+
+    expect(result.units.map((unit) => unit.text)).toEqual([
+      "User writes videos.",
+      "User maintains HanaAgent.",
+      "User likes concise answers.",
+    ]);
+    expect(callTextMock).toHaveBeenCalledTimes(2);
+    const payload = JSON.parse(callTextMock.mock.calls[0]?.[0]?.messages?.[0]?.content);
+    expect(payload.sourceBlocks.map((block: any) => block.section)).toEqual(["facts", "longterm"]);
+    expect(JSON.stringify(payload)).not.toContain("Today stays outside Dream");
+    expect(JSON.stringify(payload)).not.toContain("Week stays outside Dream");
+    expect(JSON.stringify(payload)).not.toContain("facts.db");
+    expect(payload.constraints.externalMemorySources).toBe("forbidden");
+  });
+
+  it("deduplicates only the supplied atomic units and keeps related units distinct", async () => {
+    const units = [
+      { id: "atom:0", sourceBlockIds: ["source:facts:0"], section: "facts" as const, text: "User prefers concise answers.", order: 0 },
+      { id: "atom:1", sourceBlockIds: ["source:longterm:0"], section: "longterm" as const, text: "User likes concise responses.", order: 1 },
+      { id: "atom:2", sourceBlockIds: ["source:longterm:1"], section: "longterm" as const, text: "User writes videos.", order: 2 },
+    ];
+    callTextMock.mockResolvedValueOnce(JSON.stringify({ groups: [
+      { sourceUnitIds: ["atom:0", "atom:1"], relation: "same_meaning" },
+      { sourceUnitIds: ["atom:2"], relation: "distinct" },
+    ] }));
+
+    const result = await dedupeDreamMemory({ units, resolvedModel, trigger: "manual" });
+
+    expect(result.groups).toEqual([
+      expect.objectContaining({ relation: "same_meaning", section: "facts" }),
+      expect.objectContaining({ relation: "distinct", section: "longterm" }),
+    ]);
+    const payload = JSON.parse(callTextMock.mock.calls[0]?.[0]?.messages?.[0]?.content);
+    expect(payload).not.toHaveProperty("candidateUnits");
+    expect(JSON.stringify(payload)).not.toContain("facts.db");
+  });
+
+  it("optimizes every dedupe group while preserving Today and Week exactly", async () => {
+    const atomized = {
+      sourceBlocks: [
+        { id: "source:facts:0", section: "facts" as const, text: "User writes videos.", order: 0 },
+        { id: "source:longterm:0", section: "longterm" as const, text: "User likes concise answers.", order: 1 },
+      ],
+      units: [
+        { id: "atom:0", sourceBlockIds: ["source:facts:0"], section: "facts" as const, text: "User writes videos.", order: 0 },
+        { id: "atom:1", sourceBlockIds: ["source:longterm:0"], section: "longterm" as const, text: "User likes concise answers.", order: 1 },
+      ],
+    };
+    const dedupePlan = {
+      inputUnits: atomized.units,
+      units: atomized.units,
+      exactDuplicateOperations: [],
+      groups: [
+        { id: "group:0", sourceUnitIds: ["atom:0"], sourceBlockIds: ["source:facts:0"], section: "facts" as const, relation: "distinct" as const, order: 0 },
+        { id: "group:1", sourceUnitIds: ["atom:1"], sourceBlockIds: ["source:longterm:0"], section: "longterm" as const, relation: "distinct" as const, order: 1 },
+      ],
+    };
+    callTextMock.mockResolvedValueOnce(JSON.stringify({
+      units: [
+        { groupId: "group:0", section: "facts", text: "User writes videos." },
+        { groupId: "group:1", section: "longterm", text: "User prefers concise answers." },
+      ],
+      removedGroups: [],
+    }));
+
+    const result = await optimizeDreamMemory({
+      current,
+      sourceBlocks: atomized.sourceBlocks,
+      atomicUnits: atomized.units,
+      dedupePlan,
       resolvedModel,
       trigger: "manual",
     });
 
-    expect(result.sections.today).toBe(sections.today);
-    expect(result.sections.weekDays).toEqual(sections.weekDays);
-    expect(result.sections.facts).toBe("- Concise answers are preferred.");
-    expect(result.mergedCount).toBe(1);
-    expect(callTextMock).toHaveBeenCalledTimes(2);
-    const writerPayload = JSON.parse(callTextMock.mock.calls[0]?.[0]?.messages?.[0]?.content);
-    expect(writerPayload.safetyLimit).toEqual({
+    expect(result.sections).toEqual({
+      facts: "- User writes videos.",
+      today: current.today,
+      weekDays: current.weekDays,
+      longterm: "- User prefers concise answers.",
+    });
+    const payload = JSON.parse(callTextMock.mock.calls[0]?.[0]?.messages?.[0]?.content);
+    expect(payload.safetyLimit).toEqual({
       maxTotalBodyChars: 5_000,
-      maxEditableBodyChars: 4_951,
-      preservedBodyChars: 49,
+      maxEditableBodyChars: 4_949,
+      currentEditableBodyChars: 70,
+      preservedBodyChars: 51,
       role: "safety_ceiling_not_target",
     });
-    expect(writerPayload).not.toHaveProperty("budgets");
-    expect(writerPayload.residentUnits.map((unit: any) => unit.section)).toEqual(["facts", "longterm"]);
-    expect(JSON.stringify(writerPayload)).not.toContain("Working on memory quality");
-    expect(JSON.stringify(writerPayload)).not.toContain("Reviewed memory design");
+    expect(JSON.stringify(payload)).not.toContain("Today stays outside Dream");
+    expect(JSON.stringify(payload)).not.toContain("Week stays outside Dream");
   });
 
-  it("does not force review candidates into resident memory or verifier coverage", async () => {
-    const sections = {
-      facts: "Concise answers are preferred.",
-      today: "",
-      weekDays: [],
-      longterm: "",
+  it("repairs optimizer output that violates the atomic unit contract", async () => {
+    const sourceBlocks = [{ id: "source:facts:0", section: "facts" as const, text: "Known fact.", order: 0 }];
+    const atomicUnits = [{ id: "atom:0", sourceBlockIds: ["source:facts:0"], section: "facts" as const, text: "Known fact.", order: 0 }];
+    const dedupePlan = {
+      inputUnits: atomicUnits,
+      units: atomicUnits,
+      exactDuplicateOperations: [],
+      groups: [{ id: "group:0", sourceUnitIds: ["atom:0"], sourceBlockIds: ["source:facts:0"], section: "facts" as const, relation: "distinct" as const, order: 0 }],
     };
-    callTextMock.mockResolvedValueOnce(JSON.stringify({
-      units: [{
-        sourceUnitIds: ["resident:facts:0"],
-        text: "Concise answers are preferred.",
-        section: "facts",
-        relation: "unchanged",
-      }],
-      removedUnits: [],
-    }));
-
-    const result = await writeDreamSections({
-      current: sections,
-      decisions: [{
-        groupId: "fact:number:1",
-        action: "review",
-        subject: "unknown",
-        temporal: "unknown",
-        canonicalFact: "A single uncertain observation",
-        reasonCodes: [],
-      }],
-      evidence: [group()],
-      resolvedModel,
-      trigger: "manual",
-    });
-
-    expect(result.candidateUnits[0]?.action).toBe("review");
-    expect(result.proposedUnits.flatMap((unit) => unit.sourceUnitIds))
-      .not.toContain("candidate:fact:number:1");
-    callTextMock.mockResolvedValueOnce(JSON.stringify({
-      ok: true,
-      missingGroupIds: [],
-      unsupportedClaims: [],
-      subjectLeaks: [],
-      lostStableClaims: [],
-      duplicateClaims: [],
-    }));
-    await expect(verifyDreamSections({
-      current: sections,
-      proposed: result.sections,
-      decisions: [{
-        groupId: "fact:number:1",
-        action: "review",
-        subject: "unknown",
-        temporal: "unknown",
-        canonicalFact: "A single uncertain observation",
-        reasonCodes: [],
-      }],
-      evidence: [group()],
-      resolvedModel,
-      trigger: "manual",
-      unitPlan: result,
-    })).resolves.toEqual({ ok: true });
-
-    const verifierPayload = JSON.parse(callTextMock.mock.calls[1]?.[0]?.messages?.[0]?.content);
-    expect(verifierPayload.requiredCandidateUnitIds).toEqual([]);
-    expect(callTextMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("repairs output only when the combined body exceeds the 5000 character safety ceiling", async () => {
-    const resultFor = (text: string) => ({
-      units: [{
-        sourceUnitIds: ["resident:facts:0"],
-        text,
-        section: "facts",
-        relation: "unchanged",
-      }],
-      removedUnits: [],
-    });
     callTextMock
-      .mockResolvedValueOnce(JSON.stringify(resultFor("F".repeat(5_001))))
-      .mockResolvedValueOnce(JSON.stringify(resultFor("F".repeat(4_900))));
+      .mockResolvedValueOnce(JSON.stringify({
+        units: [{ groupId: "group:0", section: "facts", text: "x".repeat(241) }],
+        removedGroups: [],
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        units: [{ groupId: "group:0", section: "facts", text: "Known fact." }],
+        removedGroups: [],
+      }));
 
-    const result = await writeDreamSections({
-      current: { facts: "short", today: "", weekDays: [], longterm: "" },
-      decisions: [],
-      evidence: [],
+    const result = await optimizeDreamMemory({
+      current: { facts: "Known fact.", today: "", weekDays: [], longterm: "" },
+      sourceBlocks,
+      atomicUnits,
+      dedupePlan,
       resolvedModel,
       trigger: "manual",
     });
 
-    expect(result.sections.facts).toHaveLength(4_902);
+    expect(result.sections.facts).toBe("- Known fact.");
     expect(callTextMock).toHaveBeenCalledTimes(2);
-    expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("5003");
-    expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("5000");
   });
 
-  it("grandfathers an existing body above 5000 characters without allowing further growth", async () => {
-    const text = "F".repeat(5_100);
-    const resultFor = (value: string) => ({
-      units: [{
-        sourceUnitIds: ["resident:facts:0"],
-        text: value,
-        section: "facts",
-        relation: "unchanged",
-      }],
-      removedUnits: [],
-    });
-    callTextMock.mockResolvedValueOnce(JSON.stringify(resultFor(text)));
+  it("repairs otherwise atomic output above the loose 5000-character ceiling", async () => {
+    const sourceBlocks = Array.from({ length: 22 }, (_, index) => ({
+      id: `source:facts:${index}`,
+      section: "facts" as const,
+      text: `Known fact ${index}`,
+      order: index,
+    }));
+    const atomicUnits = sourceBlocks.map((block, index) => ({
+      id: `atom:${index}`,
+      sourceBlockIds: [block.id],
+      section: "facts" as const,
+      text: block.text,
+      order: index,
+    }));
+    const dedupePlan = {
+      inputUnits: atomicUnits,
+      units: atomicUnits,
+      exactDuplicateOperations: [],
+      groups: atomicUnits.map((unit, index) => ({
+        id: `group:${index}`,
+        sourceUnitIds: [unit.id],
+        sourceBlockIds: [...unit.sourceBlockIds],
+        section: "facts" as const,
+        relation: "distinct" as const,
+        order: index,
+      })),
+    };
+    const oversized = dedupePlan.groups.map((group, index) => ({
+      groupId: group.id,
+      section: "facts",
+      text: `${index}-`.padEnd(238, "x"),
+    }));
+    const repaired = dedupePlan.groups.map((group, index) => ({
+      groupId: group.id,
+      section: "facts",
+      text: `Known fact ${index}`,
+    }));
+    callTextMock
+      .mockResolvedValueOnce(JSON.stringify({ units: oversized, removedGroups: [] }))
+      .mockResolvedValueOnce(JSON.stringify({ units: repaired, removedGroups: [] }));
 
-    const result = await writeDreamSections({
-      current: { facts: `- ${text}`, today: "", weekDays: [], longterm: "" },
-      decisions: [],
-      evidence: [],
+    const result = await optimizeDreamMemory({
+      current: { facts: sourceBlocks.map((block) => block.text).join("\n"), today: "", weekDays: [], longterm: "" },
+      sourceBlocks,
+      atomicUnits,
+      dedupePlan,
       resolvedModel,
       trigger: "manual",
     });
 
-    expect(result.sections.facts).toBe(`- ${text}`);
-    expect(callTextMock).toHaveBeenCalledTimes(1);
-    const payload = JSON.parse(callTextMock.mock.calls[0]?.[0]?.messages?.[0]?.content);
-    expect(payload.safetyLimit.maxTotalBodyChars).toBe(5_102);
+    expect(result.optimizedUnits).toHaveLength(22);
+    expect(callTextMock).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(callTextMock.mock.calls[1]?.[0])).toContain("safety limit is 5000");
   });
 
-  it("uses an independent verifier to reject unsupported rewrites", async () => {
+  it("uses an independent verifier to reject compound or unsupported output", async () => {
     callTextMock.mockResolvedValueOnce(JSON.stringify({
       ok: false,
-      missingGroupIds: [],
-      unsupportedClaims: ["User owns a spaceship"],
+      missingClaims: [],
+      compoundUnits: ["result:0"],
+      incorrectMerges: [],
+      unsupportedClaims: [],
       subjectLeaks: [],
-      lostStableClaims: [],
+      unsafeRemovals: [],
       duplicateClaims: [],
     }));
-    const sections = { facts: "Concise answers.", today: "", weekDays: [], longterm: "" };
+    const plan: any = {
+      sourceBlocks: [], atomicUnits: [], dedupePlan: { exactDuplicateOperations: [], groups: [] },
+      optimizedUnits: [], removedGroups: [], sections: current,
+    };
 
     await expect(verifyDreamSections({
-      current: sections,
-      proposed: { ...sections, facts: "User owns a spaceship." },
-      decisions: [],
-      evidence: [],
+      current,
+      plan,
       resolvedModel,
       trigger: "manual",
-    })).rejects.toThrow("verification failed");
+    })).rejects.toThrow("compoundUnits=1");
   });
 });

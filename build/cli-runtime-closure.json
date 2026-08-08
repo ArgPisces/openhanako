@@ -6737,33 +6737,6 @@
       "reason": "Reached via esbuild source module graph, imported by lib/memory/memory-ticker.ts (import-statement)."
     },
     {
-      "path": "lib/memory/dream/evidence.ts",
-      "inputType": "source-graph",
-      "provenance": [
-        {
-          "root": "server-bootstrap",
-          "from": "lib/memory/dream/memory-units.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "lib/memory/dream/policy.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "lib/memory/dream/model-runner.ts",
-          "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "lib/memory/dream/runner.ts",
-          "kind": "import-statement"
-        }
-      ],
-      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/memory-units.ts (import-statement); lib/memory/dream/policy.ts (import-statement); lib/memory/dream/model-runner.ts (import-statement); +1 more importer(s)."
-    },
-    {
       "path": "lib/memory/dream/memory-units.ts",
       "inputType": "source-graph",
       "provenance": [
@@ -6771,29 +6744,12 @@
           "root": "server-bootstrap",
           "from": "lib/memory/dream/model-runner.ts",
           "kind": "import-statement"
-        },
-        {
-          "root": "server-bootstrap",
-          "from": "lib/memory/dream/runner.ts",
-          "kind": "import-statement"
         }
       ],
-      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/model-runner.ts (import-statement); lib/memory/dream/runner.ts (import-statement)."
+      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/model-runner.ts (import-statement)."
     },
     {
       "path": "lib/memory/dream/model-runner.ts",
-      "inputType": "source-graph",
-      "provenance": [
-        {
-          "root": "server-bootstrap",
-          "from": "lib/memory/dream/runner.ts",
-          "kind": "import-statement"
-        }
-      ],
-      "reason": "Reached via esbuild source module graph, imported by lib/memory/dream/runner.ts (import-statement)."
-    },
-    {
-      "path": "lib/memory/dream/policy.ts",
       "inputType": "source-graph",
       "provenance": [
         {
@@ -113074,9 +113030,9 @@
     }
   ],
   "stats": {
-    "totalFiles": 9653,
+    "totalFiles": 9651,
     "byInputType": {
-      "source-graph": 672,
+      "source-graph": 670,
       "runtime-asset": 11,
       "nft-runtime-trace": 8970
     }
