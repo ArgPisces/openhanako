@@ -1,5 +1,7 @@
 import { hanaFetch } from '../../api';
 import { refreshSettingsConfigSnapshot } from '../../helpers';
+import { errorWithCode } from '../../../errors/error-presenter';
+import { normalizeSessionRouteError } from '../../../../../../shared/error-user-messages.ts';
 
 export type DreamRunReport = {
   runId: string;
@@ -17,6 +19,7 @@ export type DreamRunReport = {
   changedSections?: Array<'facts' | 'longterm'>;
   appliedOperationCount?: number;
   error?: string;
+  errorCode?: string;
 };
 
 export type DreamStatus = {
@@ -54,7 +57,10 @@ export type DreamRevisionDetail = Omit<DreamRevisionSummary, 'bodyChars' | 'sect
 
 async function responseJson<T>(response: Response): Promise<T> {
   const data = await response.json();
-  if (!response.ok || data?.error) throw new Error(data?.error || `HTTP ${response.status}`);
+  if (!response.ok || data?.error) {
+    const routeError = normalizeSessionRouteError(data);
+    throw errorWithCode(routeError.message || `HTTP ${response.status}`, routeError.code);
+  }
   return data as T;
 }
 

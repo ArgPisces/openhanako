@@ -1890,7 +1890,15 @@
           "close": "Close",
           "restored": "The selected version was restored, and the previous current version was saved."
         },
-        "failed": "Dream failed; the original memory was not changed"
+        "failed": "Dream failed; the original memory was not changed",
+        "errors": {
+          "statusLoadFailed": "Dream status is temporarily unavailable. Try again shortly.",
+          "startFailed": "Dream could not start. Try again shortly.",
+          "autoSaveFailed": "The daily automatic Dream setting could not be saved. Try again shortly.",
+          "revisionsLoadFailed": "Dream versions are temporarily unavailable. Try again shortly.",
+          "revisionLoadFailed": "This Dream version could not be loaded. Try again shortly.",
+          "restoreFailed": "The Dream version could not be restored. Current memory was not changed."
+        }
       },
       "sections": {
         "today": "Today",
@@ -3156,6 +3164,15 @@
       "agentModelNotAvailable": "The model this assistant is set to use is unavailable. Pick a different one in settings.",
       "workspaceNotFound": "That workspace could not be found",
       "capabilityDenied": "This action is not authorized",
+      "dreamUnavailable": "Dream cleanup is temporarily unavailable for this Agent",
+      "dreamMemoryDisabled": "Enable memory for this Agent before running Dream",
+      "dreamMemoryBusy": "Memory maintenance is running in the background. Try again shortly.",
+      "dreamAlreadyRunning": "Dream cleanup is already running for this memory",
+      "dreamNoMemory": "There are no Key Facts or Long-term memories to organize yet",
+      "dreamMemoryChanged": "Memory changed during cleanup. Run Dream again.",
+      "dreamRevisionNotFound": "This Dream version could not be found. It may have been cleaned up.",
+      "dreamRestoreFailed": "The Dream version could not be restored. Current memory was not changed.",
+      "dreamRunFailed": "Dream cleanup failed. The original memory was not changed.",
       "internalContract": "Something went wrong inside the app; this is not on you. The details are recorded and can be attached to a report"
     }
   },

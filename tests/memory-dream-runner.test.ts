@@ -94,6 +94,7 @@ describe("Memory Dream runner", () => {
 
     expect(status.status).toBe("failed");
     expect(status.lastRun?.error).toContain("no memory to organize");
+    expect(status.lastRun?.errorCode).toBe("dream_no_memory");
     expect(atomizeMock).not.toHaveBeenCalled();
     expect(dedupeMock).not.toHaveBeenCalled();
     expect(optimizeMock).not.toHaveBeenCalled();
@@ -246,10 +247,89 @@ describe("Memory Dream runner", () => {
 
     expect(status.status).toBe("failed");
     expect(status.lastRun?.error).toContain("deduper invalid");
+    expect(status.lastRun?.errorCode).toBe("dream_run_failed");
     expect(optimizeMock).not.toHaveBeenCalled();
     expect(composeMock).not.toHaveBeenCalled();
     expect(fs.readFileSync(path.join(memoryDir, "facts.md"), "utf-8")).toBe(before);
     expect(fs.existsSync(path.join(memoryDir, "dream", "revisions"))).toBe(false);
+  });
+
+  it("preserves an existing public code on a failed run", async () => {
+    atomizeMock.mockRejectedValue(Object.assign(new Error("Dream service is offline"), {
+      code: "dream_unavailable",
+    }));
+    const runner = makeRunner();
+
+    runner.start({ trigger: "manual" });
+    const status = await waitForCompletion(runner);
+
+    expect(status.lastRun).toEqual(expect.objectContaining({
+      status: "failed",
+      error: "Dream service is offline",
+      errorCode: "dream_unavailable",
+    }));
+  });
+
+  it("records a precise code when resident memory changes during Dream", async () => {
+    optimizeMock.mockImplementation(async ({ current, dedupePlan }: any) => ({
+      sourceBlocks: [], atomicUnits: [], dedupePlan, optimizedUnits: [], removedGroups: [],
+      sections: current, operations: [], mergedCount: 0, forgottenCount: 0,
+    }));
+    verifyMock.mockImplementationOnce(async () => {
+      fs.writeFileSync(path.join(memoryDir, "facts.md"), "User changed memory while Dream ran.\n");
+      return { ok: true, insufficientCompression: false, compressionFeedback: [] };
+    });
+    const runner = makeRunner();
+
+    runner.start({ trigger: "manual" });
+    const status = await waitForCompletion(runner);
+
+    expect(status.status).toBe("failed");
+    expect(status.lastRun).toEqual(expect.objectContaining({
+      errorCode: "dream_memory_changed",
+      revisionId: null,
+      changed: false,
+    }));
+    expect(status.lastRun?.error).toContain("Memory changed while Dream was running");
+    expect(fs.existsSync(path.join(memoryDir, "dream", "revisions"))).toBe(false);
+  });
+
+  it("reads historical Dream state that predates errorCode", () => {
+    const dreamDir = path.join(memoryDir, "dream");
+    fs.mkdirSync(dreamDir, { recursive: true });
+    fs.writeFileSync(path.join(dreamDir, "state.json"), `${JSON.stringify({
+      schemaVersion: 1,
+      lastAutomaticAttemptDate: null,
+      lastSuccessfulManualDate: null,
+      lastRun: {
+        runId: "old-run",
+        trigger: "manual",
+        status: "failed",
+        startedAt: "2026-08-07T10:00:00.000Z",
+        finishedAt: "2026-08-07T10:00:01.000Z",
+        logicalDate: "2026-08-07",
+        error: "historical failure",
+      },
+      updatedAt: "2026-08-07T10:00:01.000Z",
+    }, null, 2)}\n`);
+
+    const status = makeRunner().getStatus();
+
+    expect(status.status).toBe("failed");
+    expect(status.lastRun).toEqual(expect.objectContaining({
+      runId: "old-run",
+      error: "historical failure",
+    }));
+    expect(status.lastRun).not.toHaveProperty("errorCode");
+  });
+
+  it("codes a missing restore target without hiding the English detail", async () => {
+    const runner = makeRunner();
+
+    await expect(runner.restoreRevision("missing")).rejects.toMatchObject({
+      code: "dream_revision_not_found",
+      message: "Dream revision not found",
+    });
   });
 
   it("records one automatic attempt per logical day before running models", async () => {

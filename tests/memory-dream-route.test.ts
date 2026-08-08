@@ -103,7 +103,7 @@ describe("Memory Dream routes", () => {
 
   it("refuses concurrent starts with a conflict", async () => {
     const error: Error & { code?: string } = new Error("already running");
-    error.code = "DREAM_ALREADY_RUNNING";
+    error.code = "dream_already_running";
     const { app } = mount({
       id: "hana",
       memoryMasterEnabled: true,
@@ -112,5 +112,105 @@ describe("Memory Dream routes", () => {
 
     const response = await app.request("/api/memories/dream/runs?agentId=hana", { method: "POST" });
     expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code: "dream_already_running",
+      error: "already running",
+    });
+  });
+
+  it("returns stable public codes when Dream is unavailable or memory is disabled", async () => {
+    const unavailableApp = mount({ id: "hana", memoryMasterEnabled: true }).app;
+    const unavailableResponse = await unavailableApp.request(
+      "/api/memories/dream/runs?agentId=hana",
+      { method: "POST" },
+    );
+    expect(unavailableResponse.status).toBe(503);
+    expect(await unavailableResponse.json()).toEqual({
+      code: "dream_unavailable",
+      error: "Memory Dream is unavailable for this agent",
+    });
+
+    const disabledApp = mount({
+      id: "hana",
+      memoryMasterEnabled: false,
+      memoryTicker: { startDream: vi.fn() },
+    }).app;
+    const disabledResponse = await disabledApp.request(
+      "/api/memories/dream/runs?agentId=hana",
+      { method: "POST" },
+    );
+    expect(disabledResponse.status).toBe(409);
+    expect(await disabledResponse.json()).toEqual({
+      code: "dream_memory_disabled",
+      error: "Memory is disabled for this agent",
+    });
+  });
+
+  it("maps maintenance conflicts and missing revisions to public codes", async () => {
+    const busy = Object.assign(new Error("maintenance in progress"), { code: "dream_memory_busy" });
+    const busyApp = mount({
+      id: "hana",
+      memoryMasterEnabled: true,
+      memoryTicker: { startDream: vi.fn(() => { throw busy; }) },
+    }).app;
+    const busyResponse = await busyApp.request(
+      "/api/memories/dream/runs?agentId=hana",
+      { method: "POST" },
+    );
+    expect(busyResponse.status).toBe(409);
+    expect(await busyResponse.json()).toEqual({
+      code: "dream_memory_busy",
+      error: "maintenance in progress",
+    });
+
+    const missingApp = mount({
+      id: "hana",
+      memoryTicker: {
+        getDreamRevision: vi.fn(() => { throw new Error("Dream revision not found"); }),
+      },
+    }).app;
+    const missingResponse = await missingApp.request(
+      "/api/memories/dream/revisions/missing?agentId=hana",
+    );
+    expect(missingResponse.status).toBe(404);
+    expect(await missingResponse.json()).toEqual({
+      code: "dream_revision_not_found",
+      error: "Dream revision not found",
+    });
+  });
+
+  it("uses restore_failed only for unknown restore failures and preserves existing codes", async () => {
+    const failedApp = mount({
+      id: "hana",
+      memoryTicker: {
+        restoreDreamRevision: vi.fn(async () => { throw new Error("disk write failed"); }),
+      },
+    }).app;
+    const failedResponse = await failedApp.request(
+      "/api/memories/dream/revisions/rev-1/restore?agentId=hana",
+      { method: "POST" },
+    );
+    expect(failedResponse.status).toBe(500);
+    expect(await failedResponse.json()).toEqual({
+      code: "dream_restore_failed",
+      error: "disk write failed",
+    });
+
+    const codedError = Object.assign(new Error("model output invalid"), { code: "dream_run_failed" });
+    const codedApp = mount({
+      id: "hana",
+      memoryTicker: {
+        restoreDreamRevision: vi.fn(async () => { throw codedError; }),
+      },
+    }).app;
+    const codedResponse = await codedApp.request(
+      "/api/memories/dream/revisions/rev-1/restore?agentId=hana",
+      { method: "POST" },
+    );
+    expect(codedResponse.status).toBe(500);
+    expect(await codedResponse.json()).toEqual({
+      code: "dream_run_failed",
+      error: "model output invalid",
+    });
   });
 });

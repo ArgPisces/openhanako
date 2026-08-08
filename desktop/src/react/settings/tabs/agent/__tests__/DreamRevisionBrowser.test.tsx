@@ -18,7 +18,10 @@ vi.mock('../agent-memory-dream-actions', () => ({
 }));
 
 vi.mock('../../../helpers', () => ({
-  t: (key: string) => key,
+  t: (key: string) => ({
+    'error.code.dreamRevisionNotFound': '找不到这个 Dream 版本，它可能已经被清理',
+    'settings.memory.dream.errors.restoreFailed': '恢复 Dream 版本失败，当前记忆没有改动',
+  } as Record<string, string>)[key] ?? key,
 }));
 
 const summaries = [
@@ -87,5 +90,20 @@ describe('DreamRevisionBrowser', () => {
     await waitFor(() => expect(restoreDream).toHaveBeenCalledWith('hana', 'rev-1'));
     expect(await screen.findByText('settings.memory.dream.revisions.restored')).toBeInTheDocument();
     expect(loadDreamRevisions).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a localized restore error instead of the backend English detail', async () => {
+    const codedError = Object.assign(new Error('Dream revision was not found'), {
+      code: 'dream_revision_not_found',
+    });
+    vi.mocked(restoreDream).mockRejectedValueOnce(codedError);
+    render(<DreamRevisionBrowser agentId="hana" open onClose={vi.fn()} />);
+
+    expect(await screen.findByText('- facts rev-2')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('settings.memory.dream.revisions.restoreThis'));
+    fireEvent.click(screen.getByText('settings.memory.dream.revisions.confirmRestore'));
+
+    expect(await screen.findByText('找不到这个 Dream 版本，它可能已经被清理')).toBeInTheDocument();
+    expect(screen.queryByText('Dream revision was not found')).not.toBeInTheDocument();
   });
 });

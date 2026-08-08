@@ -9,6 +9,7 @@ import {
   type DreamStatus,
 } from './agent-memory-dream-actions';
 import { DreamRevisionBrowser } from './DreamRevisionBrowser';
+import { dreamErrorText, dreamReportErrorText } from './dream-error-presenter';
 import styles from '../../Settings.module.css';
 
 function formatTime(value: string | null | undefined) {
@@ -41,7 +42,7 @@ export function AgentMemoryDream({
         setError(null);
       } catch (err: unknown) {
         if (!active || controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(dreamErrorText(err, 'settings.memory.dream.errors.statusLoadFailed'));
       }
     };
 
@@ -65,7 +66,7 @@ export function AgentMemoryDream({
         setError(null);
       } catch (err: unknown) {
         if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(dreamErrorText(err, 'settings.memory.dream.errors.statusLoadFailed'));
       } finally {
         inFlight = false;
       }
@@ -82,7 +83,7 @@ export function AgentMemoryDream({
       const next = await startDream(agentId);
       setStatus(next);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(dreamErrorText(err, 'settings.memory.dream.errors.startFailed'));
     }
   };
 
@@ -92,7 +93,7 @@ export function AgentMemoryDream({
       await saveDreamAutoEnabled(agentId, enabled);
       setError(null);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(dreamErrorText(err, 'settings.memory.dream.errors.autoSaveFailed'));
     } finally {
       setSavingAuto(false);
     }
@@ -164,7 +165,7 @@ export function AgentMemoryDream({
       )}
       {(error || report?.status === 'failed') && (
         <div className={styles['memory-dream-error']} role="alert">
-          {error || report?.error || t('settings.memory.dream.failed')}
+          {error || (report ? dreamReportErrorText(report) : t('settings.memory.dream.failed'))}
         </div>
       )}
       <DreamRevisionBrowser

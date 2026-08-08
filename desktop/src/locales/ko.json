@@ -1821,7 +1821,15 @@
           "close": "닫기",
           "restored": "선택한 버전으로 복원했고, 복원 전 현재 버전도 저장했어요."
         },
-        "failed": "Dream에 실패했어요. 기존 기억은 변경되지 않았어요"
+        "failed": "Dream에 실패했어요. 기존 기억은 변경되지 않았어요",
+        "errors": {
+          "statusLoadFailed": "Dream 상태를 일시적으로 불러올 수 없어요. 잠시 후 다시 시도하세요",
+          "startFailed": "Dream을 시작하지 못했어요. 잠시 후 다시 시도하세요",
+          "autoSaveFailed": "매일 자동 Dream 설정을 저장하지 못했어요. 잠시 후 다시 시도하세요",
+          "revisionsLoadFailed": "Dream 버전을 일시적으로 불러올 수 없어요. 잠시 후 다시 시도하세요",
+          "revisionLoadFailed": "이 Dream 버전을 불러올 수 없어요. 잠시 후 다시 시도하세요",
+          "restoreFailed": "Dream 버전을 복원하지 못했어요. 현재 기억은 변경되지 않았어요"
+        }
       },
       "sections": {
         "today": "오늘",
@@ -3151,6 +3159,15 @@
       "agentModelNotAvailable": "이 어시스턴트에 설정된 모델을 현재 사용할 수 없습니다. 설정에서 다른 모델로 바꾸세요",
       "workspaceNotFound": "이 작업 공간을 찾을 수 없습니다",
       "capabilityDenied": "이 작업은 권한이 없습니다",
+      "dreamUnavailable": "이 Agent에서는 Dream 정리를 일시적으로 사용할 수 없어요",
+      "dreamMemoryDisabled": "먼저 이 Agent의 기억을 활성화하세요",
+      "dreamMemoryBusy": "백그라운드에서 기억을 정리하고 있어요. 잠시 후 다시 시도하세요",
+      "dreamAlreadyRunning": "이 기억에 대해 Dream 정리가 이미 실행 중이에요",
+      "dreamNoMemory": "아직 정리할 중요한 사실이나 장기 기억이 없어요",
+      "dreamMemoryChanged": "정리 중 기억이 변경됐어요. Dream을 다시 실행하세요",
+      "dreamRevisionNotFound": "이 Dream 버전을 찾을 수 없어요. 이미 정리되었을 수 있어요",
+      "dreamRestoreFailed": "Dream 버전을 복원하지 못했어요. 현재 기억은 변경되지 않았어요",
+      "dreamRunFailed": "Dream 정리에 실패했어요. 기존 기억은 변경되지 않았어요",
       "internalContract": "앱 내부에서 문제가 생겼습니다. 조작 실수가 아닙니다. 자세한 내용은 기록되어 있으며 제보할 때 첨부할 수 있습니다"
     }
   },

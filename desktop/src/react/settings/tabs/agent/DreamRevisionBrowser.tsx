@@ -9,6 +9,7 @@ import {
   type DreamRevisionSummary,
 } from './agent-memory-dream-actions';
 import styles from './DreamRevisionBrowser.module.css';
+import { dreamErrorText } from './dream-error-presenter';
 
 function formatTime(value: string) {
   const date = new Date(value);
@@ -45,7 +46,7 @@ export function DreamRevisionBrowser({
       setError(null);
     } catch (err: unknown) {
       if (signal?.aborted) return;
-      setError(err instanceof Error ? err.message : String(err));
+      setError(dreamErrorText(err, 'settings.memory.dream.errors.revisionsLoadFailed'));
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -79,7 +80,7 @@ export function DreamRevisionBrowser({
       .catch((err: unknown) => {
         if (!controller.signal.aborted) {
           setDetail(null);
-          setError(err instanceof Error ? err.message : String(err));
+          setError(dreamErrorText(err, 'settings.memory.dream.errors.revisionLoadFailed'));
         }
       })
       .finally(() => {
@@ -98,7 +99,7 @@ export function DreamRevisionBrowser({
       setError(null);
       await refresh();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(dreamErrorText(err, 'settings.memory.dream.errors.restoreFailed'));
     } finally {
       setRestoring(false);
     }

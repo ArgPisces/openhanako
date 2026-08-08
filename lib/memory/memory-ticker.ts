@@ -55,6 +55,7 @@ import { CACHE_STRATEGIES } from "../llm/cache-strategy-contract.ts";
 import { atomicWriteSync } from "../../shared/safe-fs.ts";
 import { invalidateSessionDerivedStateSync } from "./session-derived-state.ts";
 import { createMemoryDreamRunner } from "./dream/runner.ts";
+import type { DreamErrorCode } from "./dream/state-store.ts";
 import {
   listDreamRevisions as listDreamRevisionFiles,
   readDreamRevision as readDreamRevisionFile,
@@ -75,6 +76,12 @@ const DAILY_STATE_FILE = "daily-state.json";
 // 步骤内部语义变了，版本号提升让旧 schema 的断点续跑状态失效，走一次性重算。
 const DAILY_STATE_SCHEMA_VERSION = 4;
 const DAILY_STEP_KEYS = ["compileDaily", "compileToday", "rollDailyWindow", "compileFacts", "deepMemory"];
+
+function dreamTickerError(code: DreamErrorCode, message: string, cause?: unknown) {
+  const error: Error & { code: DreamErrorCode; cause?: unknown } = Object.assign(new Error(message), { code });
+  if (cause !== undefined) error.cause = cause;
+  return error;
+}
 
 // ── 主调度器 ──
 
@@ -1312,12 +1319,15 @@ export function createMemoryTicker(opts) {
   }
 
   function startDream(options: any = {}) {
-    if (_stopped) throw new Error("Memory ticker is stopped");
-    if (!_isMemoryMasterOn()) throw new Error("Memory is disabled for this agent");
+    if (_stopped) throw dreamTickerError("dream_unavailable", "Memory ticker is stopped");
+    if (!_isMemoryMasterOn()) {
+      throw dreamTickerError("dream_memory_disabled", "Memory is disabled for this agent");
+    }
     if (_dailyRunning || _aggregateCompileInFlight > 0) {
-      const error: Error & { code?: string } = new Error("Memory maintenance is currently running; try Dream again shortly");
-      error.code = "DREAM_MEMORY_BUSY";
-      throw error;
+      throw dreamTickerError(
+        "dream_memory_busy",
+        "Memory maintenance is currently running; try Dream again shortly",
+      );
     }
     return _dreamRunner.start({
       trigger: options.trigger === "automatic" ? "automatic" : "manual",
@@ -1334,15 +1344,24 @@ export function createMemoryTicker(opts) {
   }
 
   function getDreamRevision(revisionId) {
-    return readDreamRevisionFile(memoryDir, revisionId);
+    try {
+      return readDreamRevisionFile(memoryDir, revisionId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/dream revision not found/i.test(message)) {
+        throw dreamTickerError("dream_revision_not_found", message, error);
+      }
+      throw error;
+    }
   }
 
   async function restoreDreamRevision(revisionId) {
-    if (_stopped) throw new Error("Memory ticker is stopped");
+    if (_stopped) throw dreamTickerError("dream_unavailable", "Memory ticker is stopped");
     if (_dailyRunning || _aggregateCompileInFlight > 0) {
-      const error: Error & { code?: string } = new Error("Memory maintenance is currently running; try restore again shortly");
-      error.code = "DREAM_MEMORY_BUSY";
-      throw error;
+      throw dreamTickerError(
+        "dream_memory_busy",
+        "Memory maintenance is currently running; try restore again shortly",
+      );
     }
     const result = await _dreamRunner.restoreRevision(revisionId);
     return result;

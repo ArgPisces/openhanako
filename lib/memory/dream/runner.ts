@@ -18,19 +18,42 @@ import {
 } from "./revision-store.ts";
 import {
   emptyDreamState,
+  isDreamErrorCode,
   readDreamState,
   writeDreamState,
+  type DreamErrorCode,
   type DreamPersistentState,
   type DreamRunReport,
   type DreamRunTrigger,
 } from "./state-store.ts";
 
 export class DreamAlreadyRunningError extends Error {
-  code = "DREAM_ALREADY_RUNNING";
+  readonly code = "dream_already_running" as const;
 
   constructor() {
     super("A Memory Dream is already running for this agent");
   }
+}
+
+class DreamOperationError extends Error {
+  readonly code: DreamErrorCode;
+
+  constructor(code: DreamErrorCode, message: string, cause?: unknown) {
+    super(message);
+    this.name = "DreamOperationError";
+    this.code = code;
+    if (cause !== undefined) (this as Error & { cause?: unknown }).cause = cause;
+  }
+}
+
+function persistedDreamErrorCode(error: unknown): DreamErrorCode {
+  const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
+  return isDreamErrorCode(code) ? code : "dream_run_failed";
+}
+
+function isRevisionNotFoundError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /dream revision not found/i.test(message);
 }
 
 type DreamRuntimeStatus = {
@@ -121,7 +144,7 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
       before = snapshotDreamSections(options.memoryDir);
       const beforeHash = inputHash(before);
       if (editableBodyChars(before) === 0) {
-        throw new Error("There is no memory to organize yet");
+        throw new DreamOperationError("dream_no_memory", "There is no memory to organize yet");
       }
 
       const resolvedModel = await options.getResolvedMemoryModel();
@@ -187,7 +210,10 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
       if (signal.aborted) throw new DOMException("Dream aborted", "AbortError");
       const current = snapshotDreamSections(options.memoryDir);
       if (inputHash(current) !== beforeHash) {
-        throw new Error("Memory changed while Dream was running; no changes were applied");
+        throw new DreamOperationError(
+          "dream_memory_changed",
+          "Memory changed while Dream was running; no changes were applied",
+        );
       }
 
       const proposedHash = inputHash(writerResult.sections);
@@ -278,6 +304,7 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
         changedSections: [],
         appliedOperationCount: 0,
         error: err?.message || String(err),
+        errorCode: persistedDreamErrorCode(err),
       };
       const currentState = ensureState();
       persist({ ...currentState, lastRun: report });
@@ -334,12 +361,25 @@ export function createMemoryDreamRunner(options: CreateMemoryDreamRunnerOptions)
 
   async function restoreRevision(revisionId: string) {
     if (running) throw new DreamAlreadyRunningError();
-    if (recoverPendingDreamApply(options.memoryDir, options.memoryMdPath)) {
+    try {
+      if (recoverPendingDreamApply(options.memoryDir, options.memoryMdPath)) {
+        options.onCompiled?.();
+      }
+      const restored = restoreRevisionFiles(options.memoryDir, revisionId, options.memoryMdPath);
       options.onCompiled?.();
+      return { revisionId, restoredChars: compiledChars(restored) };
+    } catch (error) {
+      const existingCode = error && typeof error === "object"
+        ? (error as { code?: unknown }).code
+        : undefined;
+      if (isDreamErrorCode(existingCode)) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new DreamOperationError(
+        isRevisionNotFoundError(error) ? "dream_revision_not_found" : "dream_restore_failed",
+        message,
+        error,
+      );
     }
-    const restored = restoreRevisionFiles(options.memoryDir, revisionId, options.memoryMdPath);
-    options.onCompiled?.();
-    return { revisionId, restoredChars: compiledChars(restored) };
   }
 
   async function stop() {

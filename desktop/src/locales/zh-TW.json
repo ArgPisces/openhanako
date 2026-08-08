@@ -1821,7 +1821,15 @@
           "close": "關閉",
           "restored": "已恢復到所選版本；恢復前的目前版本也已儲存。"
         },
-        "failed": "Dream 整理失敗，原記憶未改動"
+        "failed": "Dream 整理失敗，原記憶未改動",
+        "errors": {
+          "statusLoadFailed": "暫時無法讀取 Dream 狀態，請稍後再試",
+          "startFailed": "暫時無法開始 Dream 整理，請稍後再試",
+          "autoSaveFailed": "無法儲存每日自動 Dream 設定，請稍後再試",
+          "revisionsLoadFailed": "暫時無法讀取 Dream 版本，請稍後再試",
+          "revisionLoadFailed": "暫時無法讀取這個 Dream 版本，請稍後再試",
+          "restoreFailed": "恢復 Dream 版本失敗，目前記憶沒有改動"
+        }
       },
       "sections": {
         "today": "今天",
@@ -3151,6 +3159,15 @@
       "agentModelNotAvailable": "這個助手設定的模型目前無法使用，去設定裡幫它換一個",
       "workspaceNotFound": "找不到這個工作台",
       "capabilityDenied": "這個操作沒有取得授權",
+      "dreamUnavailable": "這個 Agent 暫時無法使用 Dream 整理",
+      "dreamMemoryDisabled": "請先為這個 Agent 開啟記憶",
+      "dreamMemoryBusy": "記憶正在背景整理，請稍後再試",
+      "dreamAlreadyRunning": "目前記憶正在進行 Dream 整理",
+      "dreamNoMemory": "目前還沒有重要事實或長期記憶可整理",
+      "dreamMemoryChanged": "整理期間記憶發生變化，請重新執行 Dream",
+      "dreamRevisionNotFound": "找不到這個 Dream 版本，它可能已經被清理",
+      "dreamRestoreFailed": "恢復 Dream 版本失敗，目前記憶沒有改動",
+      "dreamRunFailed": "Dream 整理失敗，原記憶沒有改動",
       "internalContract": "應用程式內部出了點問題，這不是你的操作問題；詳情已記錄，回報時可以附上"
     }
   },
