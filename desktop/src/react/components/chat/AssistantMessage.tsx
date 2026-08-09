@@ -38,6 +38,7 @@ import type { FileRef } from '../../types/file-ref';
 import { openPreview } from '../../stores/preview-actions';
 import type { ForkedSessionHandler, SessionNodeTarget } from '../../stores/message-turn-actions';
 import { selectSelectedIdsBySession } from '../../stores/session-selectors';
+import { normalizeSessionRouteError } from '../../../../../shared/error-user-messages.ts';
 import { extractSelectedTexts, extractTextBlockPlainText } from '../../utils/message-text';
 import { AgentAvatar, resolveAgentDisplayInfo, type AgentDisplayInfo } from '../../utils/agent-display';
 import { ScheduleEditor } from '../automation/ScheduleEditor';
@@ -818,6 +819,8 @@ function defaultAutomationAgentId(agents: any[], currentAgentId: string | null, 
     || null;
 }
 
+class AutomationSubmissionError extends Error {}
+
 function buildAutomationExecutionContext({
   agent,
   agentId,
@@ -874,6 +877,7 @@ const CronConfirmBlock = memo(function CronConfirmBlock({ block, sessionPath }: 
   const confirmLabelKey = operation === 'update' ? 'automation.confirmUpdate' : 'automation.confirmCreate';
   const initialType = (jobData.type || jobData.scheduleType || 'cron') as string;
   const agents = useStore(s => s.agents);
+  const addToast = useStore(s => s.addToast);
   const currentAgentId = useStore(s => s.currentAgentId);
   const sourceSessionId = useStore(state => sessionIdForPathFromLocatorState(state, sessionPath));
   const fallbackAgentName = useStore(s => s.agentName) || 'Hanako';
@@ -882,6 +886,7 @@ const CronConfirmBlock = memo(function CronConfirmBlock({ block, sessionPath }: 
   const [draftLabel, setDraftLabel] = useState((jobData.label as string) || (block.title as string) || initialPrompt.slice(0, 40) || '');
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>(() => scheduleDraftFromStored(initialType, jobData.schedule));
   const [draftPrompt, setDraftPrompt] = useState(initialPrompt);
+  const [submitting, setSubmitting] = useState(false);
   const label = draftLabel || (draftPrompt || '').slice(0, 40) || '';
   const schedulePreview = schedulePreviewFromDraft(scheduleDraft);
   const pending = status === 'pending';
@@ -987,8 +992,12 @@ const CronConfirmBlock = memo(function CronConfirmBlock({ block, sessionPath }: 
             ...(effectiveAgentId ? { targetAgentId: effectiveAgentId } : {}),
           },
         }),
+        throwOnHttpError: false,
       });
-      if (!response.ok) throw new Error(`automation suggestion apply failed: ${response.status}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new AutomationSubmissionError(normalizeSessionRouteError(body).message);
+      }
       return;
     }
     const isUpdate = operation === 'update';
@@ -999,11 +1008,17 @@ const CronConfirmBlock = memo(function CronConfirmBlock({ block, sessionPath }: 
       body: JSON.stringify(isUpdate
         ? { action: 'update', id, ...fields }
         : { action: 'add', ...editedJobData }),
+      throwOnHttpError: false,
     });
-    if (!response.ok) throw new Error(`automation draft submit failed: ${response.status}`);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new AutomationSubmissionError(normalizeSessionRouteError(body).message);
+    }
   };
 
   const handleApprove = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const editedJobData = buildDraftJobData();
       if (isSuggestionCard) {
@@ -1019,7 +1034,13 @@ const CronConfirmBlock = memo(function CronConfirmBlock({ block, sessionPath }: 
       }
       setStatus('approved');
       setModalOpen(false);
-    } catch { /* silent */ }
+    } catch (err) {
+      const prefix = window.t('automation.createFailed');
+      const detail = err instanceof AutomationSubmissionError ? err.message.trim() : '';
+      addToast(detail ? `${prefix}: ${detail}` : prefix, 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReject = async () => {
@@ -1130,8 +1151,8 @@ const CronConfirmBlock = memo(function CronConfirmBlock({ block, sessionPath }: 
               />
             </label>
             <div className={styles.automationDraftActions}>
-              <button className={styles.automationDraftTextButton} type="button" onClick={handleReject}>{window.t('common.cancel')}</button>
-              <button className={styles.automationDraftPrimaryButton} type="button" onClick={handleApprove}>{window.t(confirmLabelKey)}</button>
+              <button className={styles.automationDraftTextButton} type="button" onClick={handleReject} disabled={submitting}>{window.t('common.cancel')}</button>
+              <button className={styles.automationDraftPrimaryButton} type="button" onClick={handleApprove} disabled={submitting} aria-busy={submitting}>{window.t(confirmLabelKey)}</button>
             </div>
           </div>
         </div>
