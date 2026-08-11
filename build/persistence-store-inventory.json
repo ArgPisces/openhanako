@@ -6260,6 +6260,15 @@
     },
     {
       "sourceFile": "lib/desk/cron-store.ts",
+      "kind": "copy-file",
+      "excerpt": "fs.copyFileSync(this._jobsPath, backupPath, fs.constants.COPYFILE_EXCL)",
+      "reason": "Writes cron jobs or execution receipts.",
+      "storeId": "cron-automation",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/desk/cron-store.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(path.dirname(this._jobsPath), { recursive: true })",
       "reason": "Writes cron jobs or execution receipts.",
@@ -6271,6 +6280,24 @@
       "sourceFile": "lib/desk/cron-store.ts",
       "kind": "mkdir",
       "excerpt": "fs.mkdirSync(this._runsDir, { recursive: true })",
+      "reason": "Writes cron jobs or execution receipts.",
+      "storeId": "cron-automation",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/desk/cron-store.ts",
+      "kind": "rename",
+      "excerpt": "fs.renameSync(tmpPath, this._jobsPath)",
+      "reason": "Writes cron jobs or execution receipts.",
+      "storeId": "cron-automation",
+      "exemptionId": null,
+      "ordinal": 0
+    },
+    {
+      "sourceFile": "lib/desk/cron-store.ts",
+      "kind": "write-file",
+      "excerpt": "fs.writeFileSync(backupPath, mainBytes, { flag: \"wx\" })",
       "reason": "Writes cron jobs or execution receipts.",
       "storeId": "cron-automation",
       "exemptionId": null,

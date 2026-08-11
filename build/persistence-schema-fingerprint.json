@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:37140c2d4d6f6d2f032ffee0f9e032211ca9c81f2f785ab0a355246d8d338a89",
+  "payloadFingerprint": "sha256:2e554128cebf16a381a45ca8cc1142bfd8f6c87146ae4edd6f7753e3aabd92fa",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3121,8 +3121,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Adds optional, lazy per-Agent Dream state and revision files under the registered memory store. Existing Agents and readers remain valid because an absent Dream directory is the default-off state, and existing memory file formats are unchanged.",
-    "payloadFingerprint": "sha256:37140c2d4d6f6d2f032ffee0f9e032211ca9c81f2f785ab0a355246d8d338a89"
+    "compatibilityReason": "Adds recovery-path write sites to the cron automation store without changing its persisted document schema. The job document keeps its existing shape (jobs, nextNum, storeRevision). The new sites only create a timestamped backup beside a corrupt job registry, which no reader depends on, and promote an already-written temporary file to the main path by rename, which restores the existing format rather than introducing a new one. Existing data needs no migration and readers are unaffected.",
+    "payloadFingerprint": "sha256:2e554128cebf16a381a45ca8cc1142bfd8f6c87146ae4edd6f7753e3aabd92fa"
   },
   "schemas": [
     {
@@ -3225,7 +3225,7 @@
       "contract": "CronStore job registry and run receipt protocol",
       "kind": "directory-contract",
       "module": "lib/desk/cron-store.ts",
-      "sourceHash": "sha256:cf6c580927341b5004cbbf00d809b5be4fe549e0949c03c7f15f103c4708e219",
+      "sourceHash": "sha256:bb1664a1ce588406d4fafebd71b5726938ff4a8a619b380c0936ceadb217f37c",
       "storeId": "cron-automation"
     },
     {
@@ -3284,7 +3284,7 @@
       "contract": "bounded base64 cover upload temporary-directory lifecycle",
       "kind": "directory-contract",
       "module": "server/routes/desk.ts",
-      "sourceHash": "sha256:dea9b2e28eaf8310c7edab9f8ad5cf477c04ad89b92d592adbd9af873a7a217b",
+      "sourceHash": "sha256:7d2cf25f7dbcdf256dc4188fb0256ddf413fa726fbf1ea934abb8e9514a45fc6",
       "storeId": "desk-cover-upload-staging"
     },
     {
@@ -7076,6 +7076,14 @@
     },
     {
       "exemptionId": null,
+      "kind": "copy-file",
+      "ordinal": 0,
+      "reason": "Writes cron jobs or execution receipts.",
+      "sourceFile": "lib/desk/cron-store.ts",
+      "storeId": "cron-automation"
+    },
+    {
+      "exemptionId": null,
       "kind": "mkdir",
       "ordinal": 0,
       "reason": "Writes cron jobs or execution receipts.",
@@ -7085,6 +7093,22 @@
     {
       "exemptionId": null,
       "kind": "mkdir",
+      "ordinal": 0,
+      "reason": "Writes cron jobs or execution receipts.",
+      "sourceFile": "lib/desk/cron-store.ts",
+      "storeId": "cron-automation"
+    },
+    {
+      "exemptionId": null,
+      "kind": "rename",
+      "ordinal": 0,
+      "reason": "Writes cron jobs or execution receipts.",
+      "sourceFile": "lib/desk/cron-store.ts",
+      "storeId": "cron-automation"
+    },
+    {
+      "exemptionId": null,
+      "kind": "write-file",
       "ordinal": 0,
       "reason": "Writes cron jobs or execution receipts.",
       "sourceFile": "lib/desk/cron-store.ts",
