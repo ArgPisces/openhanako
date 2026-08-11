@@ -28,9 +28,10 @@
  *      gets its own source module graph too;
  *   3. @vercel/nft traces of the compiled bundles for the CLI and server
  *      roots, for bundle externals / third-party runtime files -- same nft
- *      usage pattern as scripts/build-server.mjs:491-535 (read-only
- *      precedent, not modified here). Target-built `.node` addon binaries
- *      are excluded because build-server.mjs installs them with the target
+ *      usage pattern as the server build's pruneServerNodeModulesViaNft()
+ *      in scripts/build-server-phases.mjs (read-only precedent, not
+ *      modified here). Target-built `.node` addon binaries are excluded
+ *      because the server build installs them with the target
  *      server runtime; their local presence depends on npm install-script
  *      policy and is not a stable repository-closure input;
  *   4. an explicit, evidence-backed inventory of non-import runtime assets
@@ -171,8 +172,9 @@ export const CLOSURE_ROOTS = Object.freeze([
       "@vercel/nft trace of an esbuild-compiled bundle of cli/entry.ts (internal repo "
       + "source inlined, npm packages left external) -- bundle externals / runtime "
       + "dependency files for the CLI's own direct npm dependency (ws) and its "
-      + "transitive files. Same nft usage pattern as scripts/build-server.mjs:491-535 "
-      + "(read-only precedent).",
+      + "transitive files. Same nft usage pattern as the server build's "
+      + "pruneServerNodeModulesViaNft() in scripts/build-server-phases.mjs (read-only "
+      + "precedent).",
   },
   {
     id: "nft-server-bundle",
@@ -189,8 +191,9 @@ export const CLOSURE_ROOTS = Object.freeze([
       + "(vite.config.server.js's build.lib.entry) is compiled from "
       + "server/main-full.ts instead, which statically includes this file plus the "
       + "closed-product routes; that closed bundle is out of scope for this "
-      + "open-closure trace by design. Same nft usage pattern as "
-      + "scripts/build-server.mjs:491-535 (read-only precedent).",
+      + "open-closure trace by design. Same nft usage pattern as the server build's "
+      + "pruneServerNodeModulesViaNft() in scripts/build-server-phases.mjs (read-only "
+      + "precedent).",
   },
 ]);
 
@@ -352,36 +355,43 @@ export const RUNTIME_ASSETS = Object.freeze([
   {
     path: "package.json",
     kind: "file",
-    reason: "server/index.ts:266 reads fromRoot(\"package.json\") via fs.readFileSync for version display.",
+    reason:
+      "server/index.ts's startServer() reads fromRoot(\"package.json\") via fs.readFileSync "
+      + "for version display.",
   },
   {
     path: "lib/known-models.json",
     kind: "file",
-    reason: "shared/known-models.ts:34 reads fromRoot(\"lib\", \"known-models.json\") via readFileSync.",
+    reason:
+      "shared/known-models.ts's _ensureLoaded() reads fromRoot(\"lib\", \"known-models.json\") "
+      + "via readFileSync.",
   },
   {
     path: "lib/known-model-fallbacks.json",
     kind: "file",
-    reason: "shared/known-models.ts:35 reads fromRoot(\"lib\", \"known-model-fallbacks.json\") via readFileSync.",
+    reason:
+      "shared/known-models.ts's _ensureLoaded() reads fromRoot(\"lib\", "
+      + "\"known-model-fallbacks.json\") via readFileSync.",
   },
   {
     path: "lib/default-models.json",
     kind: "file",
     reason:
-      "core/migrate-providers.ts:22 and core/provider-registry.ts:45 both read "
-      + "fromRoot(\"lib\", \"default-models.json\") via fs.readFileSync.",
+      "core/migrate-providers.ts and core/provider-registry.ts both read "
+      + "fromRoot(\"lib\", \"default-models.json\") via fs.readFileSync at module load, into "
+      + "their _defaultModels constant.",
   },
   {
     path: "lib/config.example.yaml",
     kind: "file",
     reason:
-      "core/first-run.ts:180 and core/agent-manager.ts:605 read "
+      "core/first-run.ts's seedDefaultAgent() and core/agent-manager.ts's createAgent() read "
       + "path.join(productDir, \"config.example.yaml\") (productDir = fromRoot(\"lib\")).",
   },
   {
     path: "lib/identity.example.md",
     kind: "file",
-    reason: "core/first-run.ts:216 and core/agent.ts fall back to path.join(productDir, \"identity.example.md\").",
+    reason: "core/persona-source.ts KIND_CONFIG falls back to path.join(productDir, \"identity.example.md\").",
   },
   {
     path: "lib/agents.example.md",
@@ -391,7 +401,7 @@ export const RUNTIME_ASSETS = Object.freeze([
   {
     path: "lib/identity-templates",
     kind: "directory",
-    reason: "core/first-run.ts:214-215 and core/agent.ts read path.join(productDir, \"identity-templates\", ...).",
+    reason: "core/persona-source.ts KIND_CONFIG reads path.join(productDir, \"identity-templates\", ...).",
   },
   {
     path: "lib/agents-templates",
@@ -407,8 +417,9 @@ export const RUNTIME_ASSETS = Object.freeze([
     path: "lib/yuan",
     kind: "directory",
     reason:
-      "core/agent.ts:1088-1089 reads path.join(this.productDir, \"yuan\", ...) at prompt-build time "
-      + "(the identity/personality template data the system prompt draws from).",
+      "core/agent.ts's _readYuan() reads path.join(this.productDir, \"yuan\", ...) at "
+      + "prompt-build time (the identity/personality template data the system prompt draws "
+      + "from).",
   },
 ]);
 
