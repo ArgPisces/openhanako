@@ -376,7 +376,7 @@ function isSettingsReadRoute(verb, routePath) {
     || routePath === "/api/memories/export"
     || routePath === "/api/preferences/notifications"
     || routePath === "/api/preferences/computer-use"
-    || /^\/api\/agents\/[^/]+\/(?:identity|ishiki|public-ishiki|pinned|experience)$/.test(routePath)
+    || /^\/api\/agents\/[^/]+\/(?:identity|agents-md|public-agents-md|ishiki|public-ishiki|pinned|experience)$/.test(routePath)
     || /^\/api\/agents\/[^/]+\/config$/.test(routePath);
 }
 
@@ -442,7 +442,7 @@ function isSettingsWriteRoute(verb, routePath) {
     || routePath === "/api/preferences/notifications"
     || routePath === "/api/preferences/computer-use"
     || routePath === "/api/speech-recognition/config"
-    || /^\/api\/agents\/[^/]+\/(?:identity|ishiki|public-ishiki|pinned|experience)$/.test(routePath)
+    || /^\/api\/agents\/[^/]+\/(?:identity|agents-md|public-agents-md|ishiki|public-ishiki|pinned|experience)$/.test(routePath)
     || /^\/api\/agents\/[^/]+\/config$/.test(routePath)
     || routePath === "/api/memories/compiled/facts"
     || routePath === "/api/memories/compiled/today"

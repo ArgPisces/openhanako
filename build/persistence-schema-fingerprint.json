@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:2e554128cebf16a381a45ca8cc1142bfd8f6c87146ae4edd6f7753e3aabd92fa",
+  "payloadFingerprint": "sha256:7b11942374b8c15a4b96c989a232b79dc405b1555279912a0d9e28ac3d767ff3",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -855,7 +855,8 @@
       "id": "agent-profile",
       "identityContract": "agentId owns the profile; each filename has a fixed semantic role.",
       "migrationEntry": [
-        "lib/compat/checks/config-yaml.ts"
+        "lib/compat/checks/config-yaml.ts",
+        "core/agents-md-migration.ts"
       ],
       "openEntry": [
         "AgentManager.loadAgents",
@@ -868,8 +869,8 @@
       "pathPatterns": [
         "agents/{agentId}/config.yaml",
         "agents/{agentId}/identity.md",
-        "agents/{agentId}/ishiki.md",
-        "agents/{agentId}/public-ishiki.md",
+        "agents/{agentId}/AGENTS.md",
+        "agents/{agentId}/AGENTS.public.md",
         "agents/{agentId}/appearance-summary.json",
         "agents/{agentId}/avatars/{fileName}",
         "agents/{agentId}/pinned.md",
@@ -3121,8 +3122,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Adds recovery-path write sites to the cron automation store without changing its persisted document schema. The job document keeps its existing shape (jobs, nextNum, storeRevision). The new sites only create a timestamped backup beside a corrupt job registry, which no reader depends on, and promote an already-written temporary file to the main path by rename, which restores the existing format rather than introducing a new one. Existing data needs no migration and readers are unaffected.",
-    "payloadFingerprint": "sha256:2e554128cebf16a381a45ca8cc1142bfd8f6c87146ae4edd6f7753e3aabd92fa"
+    "compatibilityReason": "Renames the per-agent persona files from ishiki.md and public-ishiki.md to AGENTS.md and AGENTS.public.md. Only the file names change: the Markdown content, its role in the system prompt, and every reader are the same. A startup pass renames existing files in place before anything reads them, so no data needs converting and no reader has to try two names.",
+    "payloadFingerprint": "sha256:7b11942374b8c15a4b96c989a232b79dc405b1555279912a0d9e28ac3d767ff3"
   },
   "schemas": [
     {
@@ -3204,7 +3205,7 @@
       "contract": "agent config and authored Markdown/image profile protocol",
       "kind": "directory-contract",
       "module": "core/agent-manager.ts",
-      "sourceHash": "sha256:a1f883d4596d7fd7abb1ceab44c099deb152351421511933436b765441a4dff2",
+      "sourceHash": "sha256:077173fbec071cc4b86099c186392bb1e85340d689f4d75702130687473f737d",
       "storeId": "agent-profile"
     },
     {
@@ -3218,7 +3219,7 @@
       "contract": "token-scoped import plan/package and export package protocol",
       "kind": "directory-contract",
       "module": "lib/character-cards/service.ts",
-      "sourceHash": "sha256:04d85be0fcff0b7a8d6187e648ced184d79ee1cfbbddba91fec4b40886a26dd0",
+      "sourceHash": "sha256:407c0265bf71fb054c6e4df2bd10320114e24b03e9a1b7e6e837db70165e66c6",
       "storeId": "character-card-staging"
     },
     {
@@ -3543,7 +3544,7 @@
         {
           "contract": "core/session-coordinator.ts Hana metadata extensions",
           "module": "core/session-coordinator.ts",
-          "sourceHash": "sha256:9291ba90a08340f0b4071d0935e4d4abf55103bf9257296f7acedd32ae14b83e"
+          "sourceHash": "sha256:9bd93a7f479b160a2a4133f29769531e23037442d6adada445c43bedd2017922"
         },
         {
           "contract": "core/session-jsonl-file.ts repair contract",
@@ -3641,7 +3642,7 @@
       "contract": "bridge index, legacy session metadata, title, and vision sidecar readers",
       "kind": "runtime-contract",
       "module": "core/bridge-session-manager.ts",
-      "sourceHash": "sha256:c50224c29af58ed7d9753f549c7c2a483844388b0982487365f33ce4b4be06c0",
+      "sourceHash": "sha256:7ed05febd0506adb3cdc38c86a652f1c47a4e1a499f9308a7e940faaae1297ef",
       "storeId": "session-sidecars"
     },
     {
@@ -3881,6 +3882,22 @@
       "reason": "Creates the memory directory and records legacy memories.db import state.",
       "sourceFile": "core/agent.ts",
       "storeId": "agent-memory"
+    },
+    {
+      "exemptionId": null,
+      "kind": "rename",
+      "ordinal": 0,
+      "reason": "Renames agent persona files onto their current names.",
+      "sourceFile": "core/agents-md-migration.ts",
+      "storeId": "agent-profile"
+    },
+    {
+      "exemptionId": null,
+      "kind": "rename",
+      "ordinal": 0,
+      "reason": "Renames agent persona files onto their current names.",
+      "sourceFile": "core/agents-md-migration.ts",
+      "storeId": "agent-profile"
     },
     {
       "exemptionId": null,

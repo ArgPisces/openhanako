@@ -59,7 +59,7 @@ describe("generateDescription", () => {
   it("asks for a third-person roster description without internal tags", async () => {
     await generateDescription(
       { utility: "test-model", api_key: "key", base_url: "http://test", api: "openai" },
-      "identity and ishiki",
+      "identity and AGENTS.md",
       "zh",
     );
 
@@ -68,7 +68,7 @@ describe("generateDescription", () => {
     expect(prompt).toContain("第三方编辑");
     expect(prompt).toContain("第三人称简介");
     expect(prompt).toContain("不要输出 <mood>");
-    expect(call?.messages?.[1]?.content).toBe("identity and ishiki");
+    expect(call?.messages?.[1]?.content).toBe("identity and AGENTS.md");
     expect(call).not.toHaveProperty("maxTokens");
   });
 

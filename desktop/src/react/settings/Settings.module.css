@@ -3232,7 +3232,7 @@
     color: var(--danger, #e74c3c);
 }
 
-/* Textarea（ishiki 人格编辑等）
+/* Textarea（AGENTS.md 人格编辑等）
  * 分层优先 border，不用 shadow（对齐 DESIGN.md 已校准规则）
  * border + radius 与 .settings-input 对齐 */
 .settings-textarea {

@@ -34,7 +34,7 @@
  *      server runtime; their local presence depends on npm install-script
  *      policy and is not a stable repository-closure input;
  *   4. an explicit, evidence-backed inventory of non-import runtime assets
- *      (package.json, lib/ model + identity/ishiki template data) that
+ *      (package.json, lib/ model + identity/AGENTS.md template data) that
  *      core code reads via fs.readFileSync/path.join rather than
  *      import/require, so no static graph walk or nft trace can find them.
  *
@@ -384,9 +384,9 @@ export const RUNTIME_ASSETS = Object.freeze([
     reason: "core/first-run.ts:216 and core/agent.ts fall back to path.join(productDir, \"identity.example.md\").",
   },
   {
-    path: "lib/ishiki.example.md",
+    path: "lib/agents.example.md",
     kind: "file",
-    reason: "core/first-run.ts:229 and core/agent.ts fall back to path.join(productDir, \"ishiki.example.md\").",
+    reason: "core/persona-source.ts KIND_CONFIG falls back to path.join(productDir, \"agents.example.md\").",
   },
   {
     path: "lib/identity-templates",
@@ -394,14 +394,14 @@ export const RUNTIME_ASSETS = Object.freeze([
     reason: "core/first-run.ts:214-215 and core/agent.ts read path.join(productDir, \"identity-templates\", ...).",
   },
   {
-    path: "lib/ishiki-templates",
+    path: "lib/agents-templates",
     kind: "directory",
-    reason: "core/first-run.ts:227-228 and core/agent.ts read path.join(productDir, \"ishiki-templates\", ...).",
+    reason: "core/persona-source.ts KIND_CONFIG reads path.join(productDir, \"agents-templates\", ...).",
   },
   {
-    path: "lib/public-ishiki-templates",
+    path: "lib/agents-public-templates",
     kind: "directory",
-    reason: "core/first-run.ts:237-238 and core/agent.ts read path.join(productDir, \"public-ishiki-templates\", ...).",
+    reason: "core/first-run.ts and core/agent.ts read path.join(productDir, \"agents-public-templates\", ...).",
   },
   {
     path: "lib/yuan",
