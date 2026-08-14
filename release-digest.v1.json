@@ -1,100 +1,121 @@
 {
   "schemaVersion": 1,
-  "tag": "v0.446.6",
-  "version": "0.446.6",
-  "previousTag": "v0.444.1",
-  "generatedAt": "2026-08-08T18:00:10.000Z",
+  "tag": "v0.447.4",
+  "version": "0.447.4",
+  "previousTag": "v0.446.6",
+  "generatedAt": "2026-08-14T17:08:16.000Z",
   "noUserFacingChanges": false,
   "summary": {
-    "zh": "这一版新增 Memory Dream：你可以让每个 Agent 单独整理自己的长期记忆，把 Facts 和 Long-term 中重复、零散的内容重组成有依据的自然段，同时保留 Today 和 Week 原样不动。它可以从设置页手动运行，也可以按 Agent 选择开启每日自动整理；默认关闭，不会改变现有 Agent 的行为。每次整理前都会保留修订版本，历史版本可以先预览、再确认恢复；运行和恢复失败时也会显示本地化、可行动的错误信息。整理只使用当前常驻记忆，不会从事实归档里擅自补写新内容；长度目标只是柔性的压缩引导，只有总正文超过安全上限才会拒绝写入。另外两项是界面修复：上下文圆圈里的普通「压缩」和「压缩并更新」现在排在实验性的「瞬时简易压缩」之前；Markdown 实时预览中的裸网址不再消失，而有名称的链接仍只显示链接文字。",
-    "en": "This release adds Memory Dream, which lets each Agent organize its own long-term memory independently. It reshapes duplicate or scattered material in Facts and Long-term into grounded natural paragraphs while leaving Today and Week untouched. You can run it manually from Settings or opt an individual Agent into a daily automatic run; it is off by default, so existing Agents do not change behavior. Every run preserves a revision first, and earlier revisions can be previewed before you confirm a restore. Run and restore failures now surface localized, actionable messages. Dream works only from the memory currently kept in residence and does not silently enrich it from the fact archive. Length targets guide compression softly, while only the combined hard safety ceiling can reject a write. Two interface fixes are included as well: the ordinary Compact and Compact and update actions now appear before the experimental Instant simple compaction action in the context-ring menu, and bare URLs no longer disappear from Markdown live preview while named links still show only their label."
+    "zh": "这一版把 Agent 的人格文件正式迁移到通用的 AGENTS.md 命名，并为旧文件、旧角色卡和旧接口保留安全兼容；自动化任务存储损坏时会保留原文件并尝试从有效临时副本恢复，无法恢复时也会明确报错；Windows 更新现在会清理旧版本的 seed 安装归档，避免安装目录持续累积历史文件。",
+    "en": "This release moves Agent persona files to the standard AGENTS.md naming while preserving safe compatibility with existing files, character cards, and API clients. Automation storage can now recover from a valid temporary copy while preserving the damaged original, and unrecoverable failures remain visible. Windows updates also remove obsolete seed archives so old installation payloads no longer accumulate."
   },
   "counts": {
-    "feature": 1,
+    "feature": 0,
     "fix": 2,
     "improvement": 0,
-    "migration": 0
+    "migration": 1
   },
   "source": {
     "owner": "liliMozi",
     "repo": "openhanako",
-    "commitRange": "v0.444.1..v0.446.6",
-    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.446.6",
+    "commitRange": "v0.446.6..v0.447.4",
+    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.447.4",
     "releaseNotes": ""
   },
   "items": [
     {
-      "id": "per-agent-memory-dream",
-      "kind": "feature",
+      "id": "agents-md-persona-migration",
+      "kind": "migration",
       "importance": "high",
       "title": {
-        "zh": "Memory Dream：按 Agent 整理长期记忆，并保留可恢复版本",
-        "en": "Memory Dream: organize long-term memory per Agent with restorable revisions"
+        "zh": "人格文件迁移到 AGENTS.md，旧数据自动兼容",
+        "en": "Persona files move to AGENTS.md with automatic legacy compatibility"
       },
       "summary": {
-        "zh": "每个 Agent 的设置页新增 Memory Dream。它会读取这个 Agent 当前可编辑的 Facts 和 Long-term，消除重复、合并零散表达，并写成有来源依据的自然段；Today 和 Week 不参与改写。你可以手动运行，也可以只为需要的 Agent 打开每日自动整理。自动开关默认关闭，其他 Agent 和现有记忆流程不受影响。",
-        "en": "Each Agent's Settings page now includes Memory Dream. It reads that Agent's editable Facts and Long-term memory, removes duplication, combines scattered expressions, and writes grounded natural paragraphs; Today and Week are not rewritten. You can run it manually or enable a daily automatic run only for the Agents that need it. The automatic switch is off by default, leaving other Agents and existing memory flows unchanged."
+        "zh": "Agent 的人格文件现在使用 AGENTS.md，对外版本使用 AGENTS.public.md。启动时会自动迁移旧的 ishiki.md 和 public-ishiki.md，迁移过程不会覆盖已有新文件；发生冲突时保留新文件并把旧文件移到一旁，失败则留待下次启动重试。项目目录里的 AGENTS.md 仍作为独立的项目指令层生效，同时避免 Agent 自己的目录被重复注入。角色卡导出和新接口改用新名称，旧角色卡字段与旧接口路径继续兼容。",
+        "en": "Agent persona files now use AGENTS.md, with AGENTS.public.md for the public-facing variant. Existing ishiki.md and public-ishiki.md files are migrated automatically at startup without overwriting newer files; conflicts preserve the new file and move the legacy copy aside, while failed migrations are retried on the next launch. Project-level AGENTS.md files remain a separate instruction layer without duplicating an Agent's own persona. Character-card exports and new APIs use the new names, while legacy card fields and route aliases remain supported."
       },
       "details": [
         {
-          "zh": "整理只以运行开始时的常驻记忆为依据，不从事实归档补充新材料。输出必须能回溯到原文，避免整理过程悄悄发明事实。",
-          "en": "Organization is grounded only in the resident memory present when the run begins and does not pull in new material from the fact archive. Output must remain traceable to the source text so the process cannot quietly invent facts."
+          "zh": "迁移会在读取人格文件之前执行，并在每次启动时检查，因此之后从备份或同步目录带回来的旧文件也能被处理。新旧文件同时存在时，新文件始终优先，旧文件只会改名保留，不会被删除或覆盖。",
+          "en": "Migration runs before persona files are read and is checked on every launch, so legacy files that arrive later through a backup or sync can still be handled. When both names exist, the new file always wins and the legacy copy is renamed for safekeeping rather than deleted or overwritten."
         },
         {
-          "zh": "Facts 约 400 字、Long-term 约 800 字是柔性的压缩目标：超过目标时会再尝试一次更紧凑的整理，但不会仅因变长就丢弃结果。两部分正文合计超过 5000 字时才触发硬安全上限并停止写入。",
-          "en": "About 400 characters for Facts and 800 for Long-term are soft compression targets. Crossing them prompts one tighter retry, but growth alone does not discard the result. A write is stopped only when the two section bodies together exceed the 5,000-character hard safety ceiling."
+          "zh": "Agent 自己的人格文件和项目目录中的 AGENTS.md 分属全局与项目两层；当工作目录正好是 Agent 自己的目录时，Hana 会跳过重复的工作区注入。",
+          "en": "An Agent's own persona and a project's AGENTS.md remain separate global and project layers. When the working directory is the Agent's own directory, Hana skips the duplicate workspace injection."
         },
         {
-          "zh": "每次改写前都会留下修订版本。版本浏览器会先展示差异和内容预览，恢复还需要再次确认，避免误点直接覆盖当前记忆。",
-          "en": "A revision is preserved before every rewrite. The revision browser shows the differences and a content preview first, and restoring requires a separate confirmation so an accidental click cannot overwrite current memory."
-        },
-        {
-          "zh": "运行、版本读取和恢复失败会按稳定错误类型显示本地化说明；即使后端没有提供已知类型，也会按当前动作给出明确的兜底信息。",
-          "en": "Run, revision-loading, and restore failures are localized from stable error types. If the backend does not provide a known type, the app still shows a clear fallback specific to the action you attempted."
+          "zh": "新角色卡写入 prompts.agents 和 prompts.publicAgents，导入仍永久接受旧字段；旧的 HTTP 路径暂时保留为同一处理器的兼容别名。",
+          "en": "New character cards write prompts.agents and prompts.publicAgents, while imports continue to accept the legacy fields. Older HTTP paths remain temporary compatibility aliases for the same handlers."
         }
       ],
       "sources": [
-        { "type": "commit", "ref": "9dd70cd5c", "title": "feat: add per-agent memory Dream consolidation" },
-        { "type": "commit", "ref": "408b7a184", "title": "feat(memory): organize Dream as grounded units" },
-        { "type": "commit", "ref": "f29d15f2a", "title": "fix(memory): make Dream organize resident memory only" },
-        { "type": "commit", "ref": "ca6dbf955", "title": "fix(memory): compose Dream units into thematic paragraphs" },
-        { "type": "commit", "ref": "483c5fe01", "title": "fix(memory): make Dream compression targets soft" },
-        { "type": "commit", "ref": "476b2d7cd", "title": "fix(memory): use one loose Dream safety ceiling" },
-        { "type": "commit", "ref": "06e173413", "title": "fix(memory): localize Dream failures" }
+        {
+          "type": "commit",
+          "ref": "bed24b93c",
+          "title": "feat(agent): adopt AGENTS.md as the persona file name, replacing ishiki"
+        },
+        {
+          "type": "commit",
+          "ref": "b3927f07b",
+          "title": "docs(skills): align character and user guides with the AGENTS.md persona naming"
+        }
       ]
     },
     {
-      "id": "compaction-menu-priority",
+      "id": "automation-store-recovery",
       "kind": "fix",
-      "importance": "low",
+      "importance": "high",
       "title": {
-        "zh": "常用压缩操作回到菜单前面",
-        "en": "Everyday compaction actions return to the top of the menu"
+        "zh": "自动化存储损坏时可以恢复，失败也不再静默",
+        "en": "Automation storage can recover safely and no longer fails silently"
       },
       "summary": {
-        "zh": "聊天输入框上方的上下文圆圈菜单现在依次显示「压缩」「压缩并更新」「瞬时简易压缩」。普通操作不再被实验性入口抢到后面，更符合日常使用顺序；各项压缩本身的行为没有变化。",
-        "en": "The context-ring menu above the chat input now lists Compact, Compact and update, then Instant simple compaction. The ordinary actions no longer sit behind the experimental entry, matching everyday use more closely; the behavior of each compaction mode is unchanged."
+        "zh": "自动化任务主文件损坏、缺失或暂时不可读时，Hana 会检查写入过程中留下的临时副本。临时副本有效时，损坏的主文件会先按原始字节保留为备份，再由临时副本恢复；无法安全恢复时，自动化面板、聊天里的自动化建议和手动创建操作都会显示明确错误，不再把故障伪装成空任务列表。手动新增按钮在请求期间也会暂时禁用，避免重复创建。",
+        "en": "When the main automation task file is corrupt, missing, or temporarily unreadable, Hana checks the temporary copy left by the write process. If that copy is valid, the damaged primary file is preserved byte-for-byte before the temporary copy is promoted. If recovery cannot be completed safely, the Automation panel, chat suggestions, and manual creation flow show an explicit error instead of presenting an empty task list. The manual add button is also disabled while its request is in flight to prevent duplicate creation."
       },
-      "details": [],
+      "details": [
+        {
+          "zh": "只有结构完整的临时副本才会被提升为主文件；损坏主文件的备份会留在原存储旁边，便于排查和人工恢复。",
+          "en": "Only a structurally valid temporary copy can be promoted to the primary file. A backup of the damaged primary stays beside the store for diagnosis or manual recovery."
+        },
+        {
+          "zh": "服务端会返回稳定、可识别的存储错误，同时隐藏未知底层异常里的本机路径；桌面端据此保留现有任务画面并显示错误状态。",
+          "en": "The server returns stable, recognizable storage errors while hiding local paths from unknown underlying failures. The desktop can keep the existing task view in place and show the error state."
+        }
+      ],
       "sources": [
-        { "type": "commit", "ref": "d356e6ce9", "title": "fix(desktop): prioritize ordinary compaction action" }
+        {
+          "type": "commit",
+          "ref": "a14a13bcc",
+          "title": "fix: recover and surface automation store failures"
+        }
       ]
     },
     {
-      "id": "bare-markdown-urls-visible",
+      "id": "windows-stale-seed-cleanup",
       "kind": "fix",
       "importance": "medium",
       "title": {
-        "zh": "Markdown 实时预览不再藏掉裸网址",
-        "en": "Markdown live preview no longer hides bare URLs"
+        "zh": "Windows 更新不再累积旧版 seed 归档",
+        "en": "Windows updates no longer accumulate old seed archives"
       },
       "summary": {
-        "zh": "在主编辑器和独立查看窗口里，直接粘贴的裸网址以前会被 Markdown 装饰规则当成链接目标隐藏，结果整段网址从实时预览中消失。现在裸网址会保持可见；像「名称 + 链接地址」这样的标准命名链接仍只显示名称，避免把目标地址重复铺开。",
-        "en": "In both the main editor and detached viewer windows, a pasted bare URL could be treated as a hidden Markdown destination and disappear from live preview entirely. Bare URLs now remain visible, while standard named links still show only their label so the destination is not repeated."
+        "zh": "Windows 覆盖更新会在写入新版安装内容前清理安装目录中由 Hana 管理的 resources/seed，卸载清理也遵循同一边界。旧版本归档不会继续占用磁盘，用户数据目录 HANA_HOME 不受影响。",
+        "en": "Before overlaying a new Windows installation, Hana now removes the app-owned resources/seed directory, and uninstall cleanup follows the same boundary. Obsolete versioned archives no longer consume disk space, while the user data directory in HANA_HOME remains untouched."
       },
-      "details": [],
+      "details": [
+        {
+          "zh": "清理范围严格限制在安装目录的应用自有资源树，不会触碰保存会话、设置和 Agent 数据的 HANA_HOME。",
+          "en": "Cleanup is restricted to the app-owned resource tree inside the installation directory and never touches HANA_HOME, where sessions, settings, and Agent data live."
+        }
+      ],
       "sources": [
-        { "type": "commit", "ref": "2870af8e7", "title": "fix(editor): keep bare Markdown URLs visible" }
+        {
+          "type": "commit",
+          "ref": "ecc2c0552",
+          "title": "fix(windows): remove stale seed archives during updates"
+        }
       ]
     }
   ]
