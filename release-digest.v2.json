@@ -6598,6 +6598,85 @@
           ]
         }
       ]
+    },
+    {
+      "schemaVersion": 1,
+      "tag": "v0.448.3",
+      "version": "0.448.3",
+      "previousTag": "v0.448.2",
+      "generatedAt": "2026-08-20T21:57:08.000Z",
+      "noUserFacingChanges": false,
+      "summary": {
+        "zh": "内测通道体验打磨：设置里的通道区更名为「内测通道」并精简了多余说明；新增「检查平台更新」按钮，可以随时手动检查并获取最新内测版本，不再只依赖自动检查。",
+        "en": "Beta channel polish: the channel section in Settings is renamed to “beta channel” with redundant copy removed, and a new “check for platform updates” button lets you manually check for the latest beta build at any time instead of relying only on automatic checks."
+      },
+      "counts": {
+        "feature": 1,
+        "fix": 0,
+        "improvement": 1,
+        "migration": 0
+      },
+      "source": {
+        "owner": "liliMozi",
+        "repo": "openhanako",
+        "commitRange": "v0.448.2..v0.448.3",
+        "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.448.3",
+        "releaseNotes": ""
+      },
+      "items": [
+        {
+          "id": "manual-platform-update-check",
+          "kind": "feature",
+          "importance": "high",
+          "title": {
+            "zh": "内测通道新增「检查平台更新」按钮",
+            "en": "Manual platform-update check arrives in the beta channel section"
+          },
+          "summary": {
+            "zh": "加入内测通道后，可随时点击「检查」立即查询最新内测版本，按钮旁实时显示检查中/发现新版/已就绪等状态。",
+            "en": "Once on the beta channel, click Check to query the latest beta build immediately; live status (checking / available / ready) shows beside the button."
+          },
+          "details": [
+            {
+              "zh": "此前平台更新只有自动触发（启动时与定时检查），没有手动入口。",
+              "en": "Previously the platform update had only automatic triggers (at startup and on a timer) with no manual entry point."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "0948580f7",
+              "title": "feat(updater): beta-channel section cleanup and a manual platform-update check"
+            }
+          ]
+        },
+        {
+          "id": "beta-channel-copy-cleanup",
+          "kind": "improvement",
+          "importance": "medium",
+          "title": {
+            "zh": "通道区更名与文案精简",
+            "en": "Channel section renamed and copy tightened"
+          },
+          "summary": {
+            "zh": "「测试通道」更名为「内测通道」，与旁边的「接收测试版更新」开关区分开；删去两条重复说明文字。",
+            "en": "“Test channel” becomes “beta channel,” distinguishing it from the neighbouring “receive test updates” toggle; two redundant explainer lines are removed."
+          },
+          "details": [
+            {
+              "zh": "五种语言同步更新。",
+              "en": "All five locales updated together."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "0948580f7",
+              "title": "feat(updater): beta-channel section cleanup and a manual platform-update check"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
