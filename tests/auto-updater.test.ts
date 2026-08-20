@@ -691,6 +691,25 @@ describe("auto-updater", () => {
     expect(mod.getState().updateChannel).toBe("alpha");
   });
 
+  it("kicks an immediate update check when the invite channel is activated", async () => {
+    process.env.HANA_INVITE_API_URL = "https://invite.example.com";
+    const home = createTempHome();
+    initWithMockWindow({ hanakoHome: home });
+    mockAutoUpdater.checkForUpdates.mockClear();
+    mockAutoUpdater.setFeedURL.mockClear();
+
+    await ipcHandlers["invite:activate"]({}, { feedUrl: "https://updates.example.com/alpha", inviteCodes: [] });
+    await Promise.resolve();
+
+    // 激活即检查：feed 已切到邀请通道，并立刻发起了一次更新检查——
+    // 测试者不需要等 4 小时轮询或重启应用才能发现内测版本。
+    expect(mockAutoUpdater.setFeedURL).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "generic",
+      url: "https://updates.example.com/alpha/",
+    }));
+    expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalled();
+  });
+
   it("refuses to activate a channel without an https feed address", async () => {
     process.env.HANA_INVITE_API_URL = "https://invite.example.com";
     const home = createTempHome();

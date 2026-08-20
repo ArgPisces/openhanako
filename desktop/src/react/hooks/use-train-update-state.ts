@@ -199,6 +199,11 @@ export function useTrainUpdateState(): UseTrainUpdateStateResult {
       const result = await window.hana?.trainUpdateApply?.();
       if (result && !result.ok) {
         setSnapshot((s) => ({ ...s, lastError: result.error || null }));
+      } else if (result?.ok && (result as { alreadyCurrent?: boolean }).alreadyCurrent) {
+        // 主进程发现本机其实已在最新列车上：不会有窗口重载发生，主动重拉
+        // 一次状态，把陈旧的"有新版本"清掉、回到"已是最新"。
+        const status = await queryStatus();
+        if (status) setSnapshot(snapshotFromStatus(status));
       }
       return result;
     } catch (err) {

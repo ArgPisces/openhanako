@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:bcb270c571658fb11ca1b6086498c57e1d1d9c55d2c5eba3da96df5ef380469c",
+  "payloadFingerprint": "sha256:1729dd12d237b06b3e11fe680d59ec326c52fdcfc019ad77bfe406e3b4bdc657",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3122,8 +3122,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Executable-source drift only: desktop/auto-updater.cjs bakes the production invite gate endpoint into DEFAULT_INVITE_API_URL (the service went live 2026-08-20) and adds a test-only override seam for that constant. The desktop-update-channel record shape — version, device identifier, activation flag, update feed address, activation time, and held invite codes — is unchanged; no store, path ownership, or exemption changed.",
-    "payloadFingerprint": "sha256:bcb270c571658fb11ca1b6086498c57e1d1d9c55d2c5eba3da96df5ef380469c"
+    "compatibilityReason": "Executable-source drift only: desktop/auto-updater.cjs now kicks an immediate update check when the invite channel is activated, and shared/artifact-core/ota-core.cjs resolves an apply that races an already-caught-up machine as a graceful already-current outcome instead of an error. Neither change alters any persisted record shape: update-channel.json keeps its exact fields, and ota-state.json continues to use its existing lastError/available fields (only the writing semantics on one code path changed). No store, path ownership, or exemption changed.",
+    "payloadFingerprint": "sha256:1729dd12d237b06b3e11fe680d59ec326c52fdcfc019ad77bfe406e3b4bdc657"
   },
   "schemas": [
     {
@@ -3306,7 +3306,7 @@
       "contract": "update channel record version, device identifier, activation flag, update feed address, activation time, and held invite codes",
       "kind": "runtime-contract",
       "module": "desktop/auto-updater.cjs",
-      "sourceHash": "sha256:ab9080ae476c809192d5217c94076b68b4c06144807b60c293070ff74cc27809",
+      "sourceHash": "sha256:c55d64f0b00c7ea454b2f7adaba35633703702b3625985f3994fd8501271151f",
       "storeId": "desktop-update-channel"
     },
     {
@@ -3320,7 +3320,7 @@
       "contract": "desktop window bounds, release announcement bookmark, and update cache version marker readers",
       "kind": "directory-contract",
       "module": "desktop/main.cjs",
-      "sourceHash": "sha256:03b3ae01457b17c263ef26b82bca6aa620dc8928eb60ffc171f5f4f489c632fa",
+      "sourceHash": "sha256:01d8babd69c27000a9b45b9b97d00e9b70cde6c87367b24a062fec154ab02d1b",
       "storeId": "desktop-window-version-state"
     },
     {

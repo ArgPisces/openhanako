@@ -788,6 +788,9 @@ function activateInviteChannel(payload) {
   });
   logUpdate("update channel activated from an invite redemption");
   applyUpdateFeedConfig(resolveUpdateFeedConfig());
+  // 激活即检查：测试者刚拿到通道钥匙，就该立刻看到通道里的最新版本，
+  // 而不是等 4 小时轮询或下次启动。检查失败不阻塞激活（轮询兜底）。
+  checkForUpdatesOnce("invite-activate").catch(() => {});
   return inviteStatus();
 }
 

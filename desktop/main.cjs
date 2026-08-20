@@ -5039,6 +5039,13 @@ async function applyTrainUpdateNow(senderWebContents) {
     return { ok: false, error: downloadResult.error };
   }
 
+  if (downloadResult.alreadyCurrent) {
+    // 下载/激活层发现本机已在该列车上（后台拉取或双击竞态）：无可应用，
+    // ota-state 已被刷新为"已是最新"，promote/重启序列整体跳过。
+    console.log("[desktop] train-update-apply: already on the requested train; nothing to apply");
+    return { ok: true, alreadyCurrent: true };
+  }
+
   const result = await trainUpdateApply.runApplyNowSequence({
     verifyPackaged: () => trainUpdateApply.assertPackagedMode(app.isPackaged),
     verifyStaged: async () => {

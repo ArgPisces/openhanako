@@ -1271,7 +1271,7 @@ describe("artifact-ota: downloadAndApplyArtifacts", () => {
     expect(fs.existsSync(stagingDirFor(homeDir))).toBe(false);
   });
 
-  it("fails when the train is not newer than the currently activated train (nothing to apply)", async () => {
+  it("resolves as already-current (not an error) when the train is not newer than the currently activated train", async () => {
     const root = makeTempDir("hana-ota-e2e-");
     const keys = makeKeys();
     const { manifestPath } = await makeOtaFixture(root, keys, { train: 3 });
@@ -1282,9 +1282,14 @@ describe("artifact-ota: downloadAndApplyArtifacts", () => {
       downloadAndApplyArtifacts({ homeDir, keyset: keys.keyset, currentShellVersion: SHELL_VERSION, platformArch: PLATFORM_ARCH, log: () => {} }),
     );
 
-    expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/not newer/i);
+    // 与 checkOnce 的软化闸门同一语义：apply 撞上"本机已在更新的列车上"
+    // 是正常终态而非故障——不报错、不 staging，且通道状态被刷新，陈旧的
+    // "available" 被清空、卡片回到"已是最新"。
+    expect(result).toEqual(expect.objectContaining({ ok: true, alreadyCurrent: true, train: 3 }));
     expect(await pointerStore.readPointer(homeDir, SEED_CHANNEL, "next")).toBeNull();
+    const otaState = JSON.parse(fs.readFileSync(path.join(homeDir, "artifacts", "ota-state.json"), "utf-8"));
+    expect(otaState[SEED_CHANNEL].lastError).toBeNull();
+    expect(otaState[SEED_CHANNEL].available).toBeNull();
   });
 
   it("fails without downloading any artifact archives when the current pointers' version matches the manifest version even though sha256 differs (same version, different bytes across build runners)", async () => {

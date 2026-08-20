@@ -1117,7 +1117,9 @@ async function checkOnce(opts) {
  *   instead of resetting between the server and renderer archives. The
  *   per-artifact `receivedBytes`/`totalBytes` fields are unchanged for
  *   anything that still wants the per-archive view.
- * @returns {Promise<{ok: true, train: number, version: string} | {ok: false, error: string}>}
+ * @returns {Promise<{ok: true, train: number, version: string}
+ *   | {ok: true, alreadyCurrent: true, train: number}
+ *   | {ok: false, error: string}>}
  */
 async function downloadAndApplyArtifacts(opts) {
   const {
@@ -1176,7 +1178,21 @@ async function downloadAndApplyArtifacts(opts) {
     const currentPointer = await pointerStore.readPointer(homeDir, channel, "current");
     const currentTrain = currentPointer && Number.isInteger(currentPointer.train) ? currentPointer.train : null;
     if (currentTrain !== null && manifest.train <= currentTrain) {
-      throw new Error(`train ${manifest.train} is not newer than the current train ${currentTrain}; nothing to apply`);
+      // Softened like checkOnce's monotonic gate: an apply racing a machine
+      // that already caught up (background pull, a double click, or a shell
+      // update that planted a newer seed) is a normal terminal state, not a
+      // fault. Refresh the channel state so a stale "available" clears and
+      // the card returns to "up to date".
+      log(`[ota] apply requested but train ${manifest.train} is not newer than the current train ${currentTrain}; already caught up`);
+      await writeOtaChannelState(homeDir, channel, {
+        ...manifestMeta,
+        lastCheckedAt: nowIso(),
+        lastError: null,
+        available: null,
+        minShellBlocked: false,
+        blockedReason: null,
+      });
+      return { ok: true, alreadyCurrent: true, train: manifest.train };
     }
 
     if (!isShellVersionSufficient(currentShellVersion, manifest.minShell)) {
