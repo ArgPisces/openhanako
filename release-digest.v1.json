@@ -1,56 +1,77 @@
 {
   "schemaVersion": 1,
-  "tag": "v0.448.1",
-  "version": "0.448.1",
-  "previousTag": "v0.447.4",
-  "generatedAt": "2026-08-20T20:24:37.000Z",
+  "tag": "v0.448.2",
+  "version": "0.448.2",
+  "previousTag": "v0.448.1",
+  "generatedAt": "2026-08-20T21:26:00.000Z",
   "noUserFacingChanges": false,
   "summary": {
-    "zh": "这一版在设置的「关于」页新增内测邀请码入口：持有邀请码的用户输入后，确认一次单向数据升级，即可切换到内测更新通道并自动接收内测版本；没有邀请码的用户不受任何影响。其余改动为内部构建与校验维护，不改变日常使用。",
-    "en": "This release adds an invite-code entry to the About page in Settings: users holding an invite code can enter it, confirm a one-way data upgrade, and switch to the beta update channel to receive beta builds automatically. Users without a code are unaffected. Remaining changes are internal build and verification maintenance with no impact on daily use."
+    "zh": "两个内测入场体验修复：输入邀请码切换到内测通道后，应用现在会立即检查并发现内测版本，不再需要重启或等待下一轮自动检查；此外，当本机内容其实已经是最新时点击更新，不再误报红色的“检查更新失败”，而是正确显示“已是最新”。",
+    "en": "Two fixes for the beta onboarding experience: after entering an invite code and switching to the beta channel, the app now checks immediately and discovers the beta build — no restart or waiting for the next scheduled check. Also, clicking update on a machine whose content is already current no longer shows a false red “check failed”; it now correctly reports being up to date."
   },
   "counts": {
-    "feature": 1,
-    "fix": 0,
+    "feature": 0,
+    "fix": 2,
     "improvement": 0,
     "migration": 0
   },
   "source": {
     "owner": "liliMozi",
     "repo": "openhanako",
-    "commitRange": "v0.447.4..v0.448.1",
-    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.448.1",
+    "commitRange": "v0.448.1..v0.448.2",
+    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.448.2",
     "releaseNotes": ""
   },
   "items": [
     {
-      "id": "invite-channel-entry",
-      "kind": "feature",
+      "id": "invite-activation-immediate-check",
+      "kind": "fix",
       "importance": "high",
       "title": {
-        "zh": "设置页新增内测邀请码入口",
-        "en": "Invite-code entry for the beta channel arrives in Settings"
+        "zh": "输码切换通道后立即检查更新",
+        "en": "Update check fires immediately after invite activation"
       },
       "summary": {
-        "zh": "「关于」页现在提供邀请码输入框。输入有效邀请码并确认单向数据升级后，应用会切换到内测更新通道，此后自动发现并下载内测版本（安装仍需你点击确认）。邀请码与设备一一绑定，用过即废；没有邀请码时此功能不产生任何行为。",
-        "en": "The About page now offers an invite-code field. After entering a valid code and confirming the one-way data upgrade, the app switches to the beta update channel and automatically discovers beta builds (installation still requires your click). Each code binds to one device and is spent on use; without a code the feature stays inert."
+        "zh": "此前兑换邀请码切换通道后没有任何即时动作，要等下一轮自动检查（最长 4 小时）或重启应用才会发现内测版本。现在切换完成的瞬间就发起检查，内测版本立刻出现。",
+        "en": "Previously, switching channels after redeeming an invite code triggered nothing until the next scheduled check (up to 4 hours) or an app restart. The check now fires the moment the switch completes, so the beta build appears immediately."
       },
       "details": [
         {
-          "zh": "邀请码兑换成功本身不改变任何本机状态；只有在你于确认对话框里明确同意「单向数据升级」之后，应用才会写入通道记录并切换更新来源。切换后的更新仍遵循既有纪律：自动检查、自动下载，安装永远由你手动触发。",
-          "en": "Redeeming a code changes no local state by itself; only after you explicitly accept the one-way data upgrade in the confirmation dialog does the app persist the channel record and switch its update source. Updates on the new channel keep the existing discipline: automatic check and download, installation always triggered by you."
+          "zh": "该检查失败不会影响已完成的通道切换，后续的定时检查会照常兜底。",
+          "en": "If that immediate check fails, the completed channel switch is unaffected and the scheduled checks still cover it."
         }
       ],
       "sources": [
         {
           "type": "commit",
-          "ref": "be07a5d67",
-          "title": "feat(updater): open the invite entry — bake the production invite gate endpoint"
-        },
+          "ref": "b50d424e4",
+          "title": "fix(updater): check immediately on invite activation; treat an already-current apply as up to date"
+        }
+      ]
+    },
+    {
+      "id": "already-current-apply-not-an-error",
+      "kind": "fix",
+      "importance": "high",
+      "title": {
+        "zh": "“已是最新”不再误报为检查更新失败",
+        "en": "Being already up to date no longer reports as a failed check"
+      },
+      "summary": {
+        "zh": "当本机内容已经追平或超过更新源（例如后台已自动拉取过、或连点了两次更新）时，点击更新会撞上安全防回滚检查并把“并不比当前新”当成错误显示。现在这种情况会被正确识别为“已是最新”，界面状态同步恢复正常。",
+        "en": "When local content already caught up with or passed the update source (a background pull, or clicking update twice), the apply hit the anti-rollback safety gate and displayed “not newer than current” as an error. This situation is now correctly recognized as up to date, and the card state resets accordingly."
+      },
+      "details": [
+        {
+          "zh": "防回滚保护本身保持不变——仍然拒绝应用更旧的内容；改变的只是“无可应用”这一正常终态的呈现方式。",
+          "en": "The anti-rollback protection itself is unchanged — older content is still refused; only the presentation of the normal “nothing to apply” terminal state changed."
+        }
+      ],
+      "sources": [
         {
           "type": "commit",
-          "ref": "355d64d79",
-          "title": "chore(persistence): repin the schema fingerprint for the baked invite endpoint"
+          "ref": "b50d424e4",
+          "title": "fix(updater): check immediately on invite activation; treat an already-current apply as up to date"
         }
       ]
     }

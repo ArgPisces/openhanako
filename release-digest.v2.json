@@ -6519,6 +6519,85 @@
           ]
         }
       ]
+    },
+    {
+      "schemaVersion": 1,
+      "tag": "v0.448.2",
+      "version": "0.448.2",
+      "previousTag": "v0.448.1",
+      "generatedAt": "2026-08-20T21:26:00.000Z",
+      "noUserFacingChanges": false,
+      "summary": {
+        "zh": "两个内测入场体验修复：输入邀请码切换到内测通道后，应用现在会立即检查并发现内测版本，不再需要重启或等待下一轮自动检查；此外，当本机内容其实已经是最新时点击更新，不再误报红色的“检查更新失败”，而是正确显示“已是最新”。",
+        "en": "Two fixes for the beta onboarding experience: after entering an invite code and switching to the beta channel, the app now checks immediately and discovers the beta build — no restart or waiting for the next scheduled check. Also, clicking update on a machine whose content is already current no longer shows a false red “check failed”; it now correctly reports being up to date."
+      },
+      "counts": {
+        "feature": 0,
+        "fix": 2,
+        "improvement": 0,
+        "migration": 0
+      },
+      "source": {
+        "owner": "liliMozi",
+        "repo": "openhanako",
+        "commitRange": "v0.448.1..v0.448.2",
+        "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.448.2",
+        "releaseNotes": ""
+      },
+      "items": [
+        {
+          "id": "invite-activation-immediate-check",
+          "kind": "fix",
+          "importance": "high",
+          "title": {
+            "zh": "输码切换通道后立即检查更新",
+            "en": "Update check fires immediately after invite activation"
+          },
+          "summary": {
+            "zh": "此前兑换邀请码切换通道后没有任何即时动作，要等下一轮自动检查（最长 4 小时）或重启应用才会发现内测版本。现在切换完成的瞬间就发起检查，内测版本立刻出现。",
+            "en": "Previously, switching channels after redeeming an invite code triggered nothing until the next scheduled check (up to 4 hours) or an app restart. The check now fires the moment the switch completes, so the beta build appears immediately."
+          },
+          "details": [
+            {
+              "zh": "该检查失败不会影响已完成的通道切换，后续的定时检查会照常兜底。",
+              "en": "If that immediate check fails, the completed channel switch is unaffected and the scheduled checks still cover it."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "b50d424e4",
+              "title": "fix(updater): check immediately on invite activation; treat an already-current apply as up to date"
+            }
+          ]
+        },
+        {
+          "id": "already-current-apply-not-an-error",
+          "kind": "fix",
+          "importance": "high",
+          "title": {
+            "zh": "“已是最新”不再误报为检查更新失败",
+            "en": "Being already up to date no longer reports as a failed check"
+          },
+          "summary": {
+            "zh": "当本机内容已经追平或超过更新源（例如后台已自动拉取过、或连点了两次更新）时，点击更新会撞上安全防回滚检查并把“并不比当前新”当成错误显示。现在这种情况会被正确识别为“已是最新”，界面状态同步恢复正常。",
+            "en": "When local content already caught up with or passed the update source (a background pull, or clicking update twice), the apply hit the anti-rollback safety gate and displayed “not newer than current” as an error. This situation is now correctly recognized as up to date, and the card state resets accordingly."
+          },
+          "details": [
+            {
+              "zh": "防回滚保护本身保持不变——仍然拒绝应用更旧的内容；改变的只是“无可应用”这一正常终态的呈现方式。",
+              "en": "The anti-rollback protection itself is unchanged — older content is still refused; only the presentation of the normal “nothing to apply” terminal state changed."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "b50d424e4",
+              "title": "fix(updater): check immediately on invite activation; treat an already-current apply as up to date"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
