@@ -533,6 +533,9 @@ describe("auto-updater", () => {
   });
 
   it("reports the invite channel as unconfigured when no redemption endpoint is set", async () => {
+    // 模拟"内置默认端点为空的构建"（如开源侧留空常量的形态）：
+    // 编译期常量测试改不了，走专用复位口注入空值。
+    mod.__setInviteApiUrlOverrideForTests("");
     const home = createTempHome();
     initWithMockWindow({ hanakoHome: home });
 
@@ -540,6 +543,18 @@ describe("auto-updater", () => {
       configured: false,
       active: false,
       inviteCodes: [],
+      channel: "default",
+    }));
+  });
+
+  it("falls back to the baked-in default endpoint when neither env nor override is present", async () => {
+    const home = createTempHome();
+    initWithMockWindow({ hanakoHome: home });
+
+    // 2026-08-20 起内置默认端点随版发布：无任何覆盖时通道即视为已配置。
+    await expect(ipcHandlers["invite:status"]()).resolves.toEqual(expect.objectContaining({
+      configured: true,
+      active: false,
       channel: "default",
     }));
   });
@@ -632,6 +647,7 @@ describe("auto-updater", () => {
   });
 
   it("refuses to redeem when no redemption endpoint is configured", async () => {
+    mod.__setInviteApiUrlOverrideForTests("");
     const home = createTempHome();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
