@@ -6461,6 +6461,64 @@
           ]
         }
       ]
+    },
+    {
+      "schemaVersion": 1,
+      "tag": "v0.448.1",
+      "version": "0.448.1",
+      "previousTag": "v0.447.4",
+      "generatedAt": "2026-08-20T20:24:37.000Z",
+      "noUserFacingChanges": false,
+      "summary": {
+        "zh": "这一版在设置的「关于」页新增内测邀请码入口：持有邀请码的用户输入后，确认一次单向数据升级，即可切换到内测更新通道并自动接收内测版本；没有邀请码的用户不受任何影响。其余改动为内部构建与校验维护，不改变日常使用。",
+        "en": "This release adds an invite-code entry to the About page in Settings: users holding an invite code can enter it, confirm a one-way data upgrade, and switch to the beta update channel to receive beta builds automatically. Users without a code are unaffected. Remaining changes are internal build and verification maintenance with no impact on daily use."
+      },
+      "counts": {
+        "feature": 1,
+        "fix": 0,
+        "improvement": 0,
+        "migration": 0
+      },
+      "source": {
+        "owner": "liliMozi",
+        "repo": "openhanako",
+        "commitRange": "v0.447.4..v0.448.1",
+        "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.448.1",
+        "releaseNotes": ""
+      },
+      "items": [
+        {
+          "id": "invite-channel-entry",
+          "kind": "feature",
+          "importance": "high",
+          "title": {
+            "zh": "设置页新增内测邀请码入口",
+            "en": "Invite-code entry for the beta channel arrives in Settings"
+          },
+          "summary": {
+            "zh": "「关于」页现在提供邀请码输入框。输入有效邀请码并确认单向数据升级后，应用会切换到内测更新通道，此后自动发现并下载内测版本（安装仍需你点击确认）。邀请码与设备一一绑定，用过即废；没有邀请码时此功能不产生任何行为。",
+            "en": "The About page now offers an invite-code field. After entering a valid code and confirming the one-way data upgrade, the app switches to the beta update channel and automatically discovers beta builds (installation still requires your click). Each code binds to one device and is spent on use; without a code the feature stays inert."
+          },
+          "details": [
+            {
+              "zh": "邀请码兑换成功本身不改变任何本机状态；只有在你于确认对话框里明确同意「单向数据升级」之后，应用才会写入通道记录并切换更新来源。切换后的更新仍遵循既有纪律：自动检查、自动下载，安装永远由你手动触发。",
+              "en": "Redeeming a code changes no local state by itself; only after you explicitly accept the one-way data upgrade in the confirmation dialog does the app persist the channel record and switch its update source. Updates on the new channel keep the existing discipline: automatic check and download, installation always triggered by you."
+            }
+          ],
+          "sources": [
+            {
+              "type": "commit",
+              "ref": "be07a5d67",
+              "title": "feat(updater): open the invite entry — bake the production invite gate endpoint"
+            },
+            {
+              "type": "commit",
+              "ref": "355d64d79",
+              "title": "chore(persistence): repin the schema fingerprint for the baked invite endpoint"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
