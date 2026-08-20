@@ -668,7 +668,7 @@
     ],
     "version": 3
   },
-  "payloadFingerprint": "sha256:7b11942374b8c15a4b96c989a232b79dc405b1555279912a0d9e28ac3d767ff3",
+  "payloadFingerprint": "sha256:bcb270c571658fb11ca1b6086498c57e1d1d9c55d2c5eba3da96df5ef380469c",
   "registry": [
     {
       "affectedByEpochMigration": true,
@@ -3122,8 +3122,8 @@
   ],
   "review": {
     "classification": "compatible",
-    "compatibilityReason": "Renames the per-agent persona files from ishiki.md and public-ishiki.md to AGENTS.md and AGENTS.public.md. Only the file names change: the Markdown content, its role in the system prompt, and every reader are the same. A startup pass renames existing files in place before anything reads them, so no data needs converting and no reader has to try two names.",
-    "payloadFingerprint": "sha256:7b11942374b8c15a4b96c989a232b79dc405b1555279912a0d9e28ac3d767ff3"
+    "compatibilityReason": "Executable-source drift only: desktop/auto-updater.cjs bakes the production invite gate endpoint into DEFAULT_INVITE_API_URL (the service went live 2026-08-20) and adds a test-only override seam for that constant. The desktop-update-channel record shape — version, device identifier, activation flag, update feed address, activation time, and held invite codes — is unchanged; no store, path ownership, or exemption changed.",
+    "payloadFingerprint": "sha256:bcb270c571658fb11ca1b6086498c57e1d1d9c55d2c5eba3da96df5ef380469c"
   },
   "schemas": [
     {
@@ -3306,7 +3306,7 @@
       "contract": "update channel record version, device identifier, activation flag, update feed address, activation time, and held invite codes",
       "kind": "runtime-contract",
       "module": "desktop/auto-updater.cjs",
-      "sourceHash": "sha256:739190e68c9f0a66775c72424e335f3182abec97c91dc932179be8aabf46a591",
+      "sourceHash": "sha256:ab9080ae476c809192d5217c94076b68b4c06144807b60c293070ff74cc27809",
       "storeId": "desktop-update-channel"
     },
     {
