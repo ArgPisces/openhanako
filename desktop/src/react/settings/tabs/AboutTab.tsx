@@ -266,6 +266,7 @@ function TrainUpdateArea({
  */
 function InviteChannelSection() {
   const hana = window.hana;
+  const shell = useAutoUpdateState();
   const [status, setStatus] = useState<InviteChannelStatus | null>(null);
   const [code, setCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
@@ -349,8 +350,28 @@ function InviteChannelSection() {
         <>
           <SettingsRow
             label={t('settings.about.inviteChannelActive')}
-            hint={t('settings.about.inviteChannelActiveHint')}
             control={<span />}
+          />
+          <SettingsRow
+            label={t('settings.about.platformCheckLabel')}
+            hint={shell?.status === 'checking' ? t('settings.about.updateChecking')
+              : shell?.status === 'available' || shell?.status === 'downloading'
+                ? t('settings.about.updateAvailable', { version: shell?.version ?? '' })
+                : shell?.status === 'downloaded'
+                  ? t('settings.about.updateReadyInstall', { version: shell?.version ?? '' })
+                  : shell?.status === 'error'
+                    ? t('settings.about.updateError')
+                    : undefined}
+            control={
+              <button
+                type="button"
+                className={styles['settings-btn-secondary']}
+                onClick={() => { void hana?.autoUpdateCheck?.(); }}
+                disabled={shell?.status === 'checking' || shell?.status === 'downloading'}
+              >
+                {t('settings.about.platformCheckBtn')}
+              </button>
+            }
           />
           {status.inviteCodes.length > 0 && (
             <SettingsRow
@@ -384,7 +405,7 @@ function InviteChannelSection() {
               <span>{t(errorKey)}</span>
               {errorDetail && <span title={errorDetail}> {errorDetail}</span>}
             </>
-          ) : t('settings.about.inviteCodeHint')}
+          ) : undefined}
           hintVariant={errorKey ? 'warn' : 'default'}
           layout="stacked"
           control={

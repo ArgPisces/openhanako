@@ -544,6 +544,30 @@ describe('AboutTab', () => {
     expect(screen.getAllByText('settings.about.inviteCopy')).toHaveLength(2);
   });
 
+  it('offers a manual platform-update check inside the active beta channel section', async () => {
+    const autoUpdateCheck = vi.fn().mockResolvedValue(null);
+    installHana({
+      inviteStatus: vi.fn().mockResolvedValue({
+        configured: true, active: true, inviteCodes: [], channel: 'alpha',
+      }),
+      autoUpdateCheck,
+    });
+    useSettingsStore.setState({ settingsConfig: { auto_check_updates: true, update_channel: 'stable' } });
+
+    await act(async () => {
+      render(<AboutTab />);
+      await Promise.resolve();
+    });
+
+    // 激活态下提供「检查平台更新」手动入口：一点即触发壳检查 IPC。
+    expect(screen.getByText('settings.about.platformCheckLabel')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByText('settings.about.platformCheckBtn'));
+      await Promise.resolve();
+    });
+    expect(autoUpdateCheck).toHaveBeenCalledTimes(1);
+  });
+
   it('shows an explicit bundled-history warning when online history is unavailable', async () => {
     installHana({
       getUpdateDigestHistory: vi.fn().mockResolvedValue({
