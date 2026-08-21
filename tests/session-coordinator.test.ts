@@ -1840,10 +1840,10 @@ describe("SessionCoordinator", () => {
       getSessionFile: () => sessionPath,
     };
     const model = {
-      id: "deepseek-vision",
-      provider: "deepseek",
-      name: "DeepSeek Vision",
-      input: ["image"],
+      id: "text-only-model",
+      provider: "custom",
+      name: "Text Only Model",
+      input: ["text"],
     };
     const session = {
       sessionManager,

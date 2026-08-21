@@ -532,4 +532,15 @@ describe("known-models dictionary", () => {
   it("does not treat arbitrary provider-specific entries as generic fallbacks", () => {
     expect(lookupKnown("unknown-provider", "openrouter/auto")).toBeNull();
   });
+
+  it("declares DeepSeek V4 Flash Vision (Exp) as image-capable on the official DeepSeek provider", () => {
+    expect(lookupKnown("deepseek", "deepseek-v4-flash-vision-exp")).toMatchObject({
+      name: "DeepSeek V4 Flash Vision (Exp)",
+      context: 1000000,
+      maxOutput: 384000,
+      image: true,
+      reasoning: true,
+      xhigh: true,
+    });
+  });
 });
