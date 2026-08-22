@@ -543,4 +543,27 @@ describe("known-models dictionary", () => {
       xhigh: true,
     });
   });
+
+  it("declares DeepSeek V4's official three-tier thinking ladder, dropping the unsupported medium", () => {
+    for (const id of ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"]) {
+      expect(lookupKnown("deepseek", id)).toMatchObject({
+        thinkingLevels: ["off", "low", "high", "max"],
+        defaultThinkingLevel: "high",
+      });
+    }
+  });
+
+  it("also reaches DeepSeek V4 Flash Vision (Exp) through the generic fallback table, without inheriting DeepSeek's protocol-level thinking ladder", () => {
+    expect(lookupKnownWithSource("unknown-proxy", "deepseek-v4-flash-vision-exp")).toEqual({
+      source: "fallback",
+      metadata: {
+        name: "DeepSeek V4 Flash Vision (Exp)",
+        context: 1000000,
+        maxOutput: 384000,
+        image: true,
+        reasoning: true,
+        xhigh: true,
+      },
+    });
+  });
 });
