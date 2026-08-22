@@ -1,55 +1,85 @@
 {
   "schemaVersion": 1,
-  "tag": "v0.449.0",
-  "version": "0.449.0",
-  "previousTag": "v0.448.3",
-  "generatedAt": "2026-08-21T14:34:56.000Z",
+  "tag": "v0.450.0",
+  "version": "0.450.0",
+  "previousTag": "v0.449.0",
+  "generatedAt": "2026-08-22T01:36:00.000Z",
   "noUserFacingChanges": false,
   "summary": {
-    "zh": "DeepSeek 图像能力正式接入：新增实验性的 DeepSeek V4 Flash Vision 模型，并让明确声明支持图片的 DeepSeek 模型直接接收图像，不再被静默转交给辅助视觉模型。",
-    "en": "DeepSeek vision support is now available: this release adds the experimental DeepSeek V4 Flash Vision model and lets DeepSeek models that explicitly declare image support receive images directly instead of silently rerouting them through the auxiliary vision model."
+    "zh": "DeepSeek 思考档位按官方规格重整：新增更快更省的低档，并修好此前中档与高档发出完全相同请求的问题；同时补全视觉模型的登记，让它在 Responses 通道和自定义供应商配置中都能正常使用。",
+    "en": "DeepSeek thinking levels now follow the official ladder: a faster, cheaper low tier is available, and the previous behavior where the medium and high tiers sent identical requests is fixed. The vision model's registration is also completed, so it works on the Responses endpoint and in custom provider setups."
   },
   "counts": {
-    "feature": 1,
-    "fix": 0,
+    "feature": 0,
+    "fix": 2,
     "improvement": 0,
     "migration": 0
   },
   "source": {
     "owner": "liliMozi",
     "repo": "openhanako",
-    "commitRange": "v0.448.3..v0.449.0",
-    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.449.0",
+    "commitRange": "v0.449.0..v0.450.0",
+    "releaseUrl": "https://github.com/liliMozi/openhanako/releases/tag/v0.450.0",
     "releaseNotes": ""
   },
   "items": [
     {
-      "id": "deepseek-direct-image-input",
-      "kind": "feature",
+      "id": "deepseek-thinking-levels",
+      "kind": "fix",
       "importance": "high",
       "title": {
-        "zh": "DeepSeek 模型可以直接接收图片",
-        "en": "DeepSeek models can receive images directly"
+        "zh": "DeepSeek 的思考档位每一档都真实生效",
+        "en": "Every DeepSeek thinking level now has a real effect"
       },
       "summary": {
-        "zh": "新增 DeepSeek V4 Flash Vision（实验版），并移除官方 DeepSeek 端点上旧的图片拦截。只要模型明确声明支持图片，Hana 就会按模型协议直接发送图像；未声明图片能力的文本模型保持原有行为。",
-        "en": "DeepSeek V4 Flash Vision (Experimental) is now available, and the previous image block on official DeepSeek endpoints has been removed. When a model explicitly declares image support, Hana sends images directly using that model's protocol; text-only models keep their existing behavior."
+        "zh": "DeepSeek 官方只接受低、高、最高三档思考强度。此前 Hana 对它使用通用档位表，界面上的中档与高档实际发出完全相同的请求，而官方的低档根本选不到。现在按官方规格声明档位：补上低档，去掉重复的中档。",
+        "en": "DeepSeek's API accepts only three thinking effort tiers: low, high and max. Hana previously used the generic ladder for it, where the medium and high tiers produced identical requests and the official low tier was unreachable. The ladder now matches the official one: low is available and the duplicate medium rung is gone."
       },
       "details": [
         {
-          "zh": "内置模型词典加入 DeepSeek V4 Flash Vision（实验版），提供 100 万 token 上下文、最高 38.4 万 token 输出、推理与图片输入能力。",
-          "en": "The built-in model catalog now includes DeepSeek V4 Flash Vision (Experimental), with a 1-million-token context window, up to 384,000 output tokens, reasoning, and image input."
+          "zh": "适用于 DeepSeek V4 Pro、V4 Flash 与 V4 Flash Vision（实验版），默认停在高档，与官方默认一致。",
+          "en": "Applies to DeepSeek V4 Pro, V4 Flash and V4 Flash Vision (Experimental). The default is the high tier, matching DeepSeek's own default."
         },
         {
-          "zh": "此前即使模型声明支持图片，官方 DeepSeek 端点上的图像也会被静默转交给辅助视觉模型或替换成占位文字；现在会直接发送，错误声明则由 API 返回明确错误。",
-          "en": "Previously, images on official DeepSeek endpoints could be silently rerouted to the auxiliary vision model or replaced with placeholder text even when the model declared image support. Images are now sent directly, while an incorrect capability declaration produces a visible API error."
+          "zh": "此前选中中档的会话会自动落到高档。这两档原本就在发送同样的请求，因此实际行为没有变化。",
+          "en": "Sessions that had selected the medium tier now resolve to high. Both tiers were already sending the same request, so actual behavior is unchanged."
         }
       ],
       "sources": [
         {
           "type": "commit",
-          "ref": "b289c311b",
-          "title": "feat(models): support DeepSeek's vision model by removing the provider-level image gate"
+          "ref": "169619375",
+          "title": "feat(models): declare DeepSeek's official thinking levels and finish registering its vision model"
+        }
+      ]
+    },
+    {
+      "id": "deepseek-vision-model-registration",
+      "kind": "fix",
+      "importance": "medium",
+      "title": {
+        "zh": "DeepSeek 视觉模型在更多场景下可用",
+        "en": "The DeepSeek vision model works in more places"
+      },
+      "summary": {
+        "zh": "DeepSeek V4 Flash Vision（实验版）此前只登记在内置模型词典里，于是在 Responses 通道上选不到它，自定义供应商配置也查不出它的规格。现已补全登记。",
+        "en": "DeepSeek V4 Flash Vision (Experimental) was only registered in the built-in model catalog, so it could not be selected on the Responses endpoint and custom provider setups could not resolve its specifications. Its registration is now complete."
+      },
+      "details": [
+        {
+          "zh": "DeepSeek 官方文档确认 Responses 通道支持该模型，现在可以在该通道下正常选用。",
+          "en": "DeepSeek's documentation confirms the Responses endpoint supports this model, and it can now be selected there."
+        },
+        {
+          "zh": "通用模型回退表补上了它的上下文长度、输出上限与图片输入能力，自定义供应商指向 DeepSeek 时不再查不到规格。",
+          "en": "The generic model fallback table now carries its context window, output limit and image input capability, so custom providers pointing at DeepSeek can resolve its specifications."
+        }
+      ],
+      "sources": [
+        {
+          "type": "commit",
+          "ref": "169619375",
+          "title": "feat(models): declare DeepSeek's official thinking levels and finish registering its vision model"
         }
       ]
     }
