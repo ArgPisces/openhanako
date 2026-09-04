@@ -64,9 +64,13 @@ node "%~dp0scripts\build-windows-sandbox-helper.mjs" || (
 echo [完成] Windows 沙盒助手编译成功！
 echo.
 
-echo [3/8] 构建渲染进程...
-rem 必须先于 build:server：build:server 的 seed 打包（build-server-artifact.mjs）消费
-rem desktop/dist-renderer/ 树，顺序颠倒会把上一轮的旧 renderer 打进 seed（UI 改动滞后一轮）。
+echo [3/8] 构建渲染进程 + 主题 + Splash...
+rem 三者都必须先于 build:server，原因有二：
+rem 1) build:server 的 seed 打包（build-server-artifact.mjs）消费 desktop/dist-renderer/
+rem    树，顺序颠倒会把上一轮的旧 renderer 打进 seed（UI 改动滞后一轮）；
+rem 2) build:renderer 的 emptyOutDir 会清空 dist-renderer/，而 lib/theme.js 由
+rem    build:theme 产出——theme 必须紧跟 renderer 之后、seed 打包之前，否则 seed 里
+rem    lib/ 缺 theme.js，前端主题切换全灭（<script src="lib/theme.js"> 404）。
 call npm run build:renderer
 if %errorlevel% neq 0 (
     echo [错误] 渲染进程构建失败！
@@ -74,6 +78,20 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 echo [完成] 渲染进程构建成功！
+call npm run build:theme
+if %errorlevel% neq 0 (
+    echo [错误] 主题模块构建失败！
+    pause
+    exit /b 1
+)
+echo [完成] 主题模块构建成功！
+call npm run build:splash
+if %errorlevel% neq 0 (
+    echo [错误] Splash 构建失败！
+    pause
+    exit /b 1
+)
+echo [完成] Splash 构建成功！
 echo.
 
 echo [4/8] 构建服务器模块...
@@ -94,16 +112,6 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 echo [完成] 主进程构建成功！
-echo.
-
-echo [6/8] 构建主题模块...
-call npm run build:theme
-if %errorlevel% neq 0 (
-    echo [错误] 主题模块构建失败！
-    pause
-    exit /b 1
-)
-echo [完成] 主题模块构建成功！
 echo.
 
 echo [6.5/8] 准备 MinGit 运行时...
