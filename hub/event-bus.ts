@@ -28,6 +28,32 @@ export class BusTimeoutError extends Error {
   }
 }
 
+// ── 可配置的总线请求默认超时 ──
+// 历史上 request() 默认 30s 硬编码：调用方不传 options.timeout 时（如部分内部调用
+// 与 HTTP→bus 桥接路径），长耗时 handler 会被提前掐断。改为模块级可设值，服务端
+// 从用户偏好（LLM 超时设置）加载并热更新推送——改参数不再需要重新构建平台。
+const BUILTIN_BUS_REQUEST_TIMEOUT_MS = 30_000;
+let _defaultBusRequestTimeoutMs = BUILTIN_BUS_REQUEST_TIMEOUT_MS;
+
+/**
+ * 设置总线请求默认超时（毫秒）。
+ * 传 null/undefined 重置为内置默认（30000）；数值限制在 1s~600s。
+ */
+export function setDefaultBusRequestTimeout(ms) {
+  if (ms === null || ms === undefined) {
+    _defaultBusRequestTimeoutMs = BUILTIN_BUS_REQUEST_TIMEOUT_MS;
+    return;
+  }
+  if (typeof ms === "number" && Number.isFinite(ms) && ms >= 1_000 && ms <= 600_000) {
+    _defaultBusRequestTimeoutMs = Math.round(ms);
+  }
+}
+
+/** 读取总线请求默认超时（毫秒），未配置时为内置 30000。 */
+export function getDefaultBusRequestTimeout() {
+  return _defaultBusRequestTimeoutMs;
+}
+
 export class EventBus {
   declare _capabilities: any;
   declare _globalSubs: any;
@@ -160,7 +186,7 @@ export class EventBus {
   async request(type, payload, options: any = {}) {
     const handlers = this._handlers.get(type);
     if (!handlers || handlers.length === 0) throw new BusNoHandlerError(type);
-    const timeout = options.timeout ?? 30000;
+    const timeout = options.timeout ?? getDefaultBusRequestTimeout();
     const requestContext = normalizeRequestContext(options);
 
     let timerId;

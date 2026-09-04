@@ -171,6 +171,7 @@ export function createPreferencesRoute(engine: any, options: Record<string, any>
       return c.json({
         models,
         thinking_level: engine.getThinkingLevel?.() || "medium",
+        timeouts: engine.getLlmTimeoutPrefs?.() || { call_text_timeout_ms: null, bus_request_timeout_ms: null },
         search: {
           provider: search.provider || "",
           api_key: maskSecretValue(search.api_key || ""),
@@ -240,6 +241,18 @@ export function createPreferencesRoute(engine: any, options: Record<string, any>
           secretKeys: new Set(["api_key"]),
         }));
         sections.push("utility_api");
+      }
+
+      // LLM 超时配置（callText 默认超时 / 总线默认超时；保存即热生效，无需重启）
+      if (body.timeouts) {
+        if (typeof body.timeouts !== "object" || Array.isArray(body.timeouts)) {
+          return c.json({ error: "timeouts must be an object" }, 400);
+        }
+        if (typeof engine.setLlmTimeoutPrefs !== "function") {
+          return c.json({ error: "llm timeout preferences unavailable" }, 500);
+        }
+        engine.setLlmTimeoutPrefs(body.timeouts);
+        sections.push("timeouts");
       }
 
       if (needsModelSync) {

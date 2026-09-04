@@ -2444,6 +2444,14 @@
       "dropOrClick": "캐릭터 카드를 끌어다 놓거나 클릭해 열기",
       "readFailed": "캐릭터 카드 읽기 실패",
       "importFailed": "캐릭터 카드 가져오기 실패"
+    },
+    "llmTimeout": {
+      "section": "LLM 타임아웃 설정",
+      "sectionHint": "저장 즉시 적용되며 재시작이 필요 없습니다. 범위 1000~600000밀리초. 비우면 기본 내장값으로 복원됩니다.",
+      "callTextTimeout": "LLM 호출 타임아웃 (ms)",
+      "callTextTimeoutHint": "단일 LLM 요청의 기본 타임아웃(내장 60000). 긴 작업이 60초에 중단(LLM_TIMEOUT)되면 이 값을 늘리세요.",
+      "busRequestTimeout": "버스 요청 타임아웃 (ms)",
+      "busRequestTimeoutHint": "플러그인이 버스로 호출할 때의 기본 대기 한도(내장 30000). 로그에 Request \"…\" timeout이 보이면 늘리세요."
     }
   },
   "onboarding": {

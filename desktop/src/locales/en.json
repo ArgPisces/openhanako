@@ -2443,6 +2443,14 @@
       "dropOrClick": "Drop a character card or click to open",
       "readFailed": "Character card read failed",
       "importFailed": "Character card import failed"
+    },
+    "llmTimeout": {
+      "section": "LLM Timeout Settings",
+      "sectionHint": "Saved values take effect immediately — no restart required. Range 1000–600000 ms; leave empty to restore the built-in default.",
+      "callTextTimeout": "LLM call timeout (ms)",
+      "callTextTimeoutHint": "Default timeout for a single LLM request, built-in 60000. Increase when long plugin tasks get cut off at 60s (LLM_TIMEOUT).",
+      "busRequestTimeout": "Bus request timeout (ms)",
+      "busRequestTimeoutHint": "Default wait limit for plugin bus requests, built-in 30000. Increase when logs show Request \"…\" timeout."
     }
   },
   "onboarding": {

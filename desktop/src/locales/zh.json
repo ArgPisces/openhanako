@@ -2443,6 +2443,14 @@
       "dropOrClick": "拖入角色卡或点击打开",
       "readFailed": "角色卡读取失败",
       "importFailed": "角色卡导入失败"
+    },
+    "llmTimeout": {
+      "section": "LLM 超时设置",
+      "sectionHint": "以下超时保存后立即生效，无需重启平台。范围为 1000~600000 毫秒；留空恢复内置默认值。",
+      "callTextTimeout": "LLM 调用超时（毫秒）",
+      "callTextTimeoutHint": "单次 LLM 请求的默认超时，内置 60000。插件长任务（如多股操作指导）被 60 秒掐断（LLM_TIMEOUT）时调大此项。",
+      "busRequestTimeout": "总线请求超时（毫秒）",
+      "busRequestTimeoutHint": "插件经总线调用平台接口的默认等待上限，内置 30000。日志出现 Request \"…\" timeout 时调大此项。"
     }
   },
   "onboarding": {

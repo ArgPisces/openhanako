@@ -36,6 +36,7 @@ dist-server-open/
 dist-server-artifact/
 dist-renderer-artifact/
 dist-standalone/
+dist-sandbox/
 desktop/dist-splash/
 dist-server-bundle/
 dist-computer-use/
@@ -45,6 +46,7 @@ desktop/preload.bundle.cjs
 .cache/
 desktop/dist-renderer/
 desktop/native/**/.build/
+main.obj
 vendor/
 inbox/
 
@@ -80,6 +82,8 @@ desktop/src/react/animation-mockup/
 credentials.json
 secrets.yaml
 secrets.json
+.local-sign-key.pem
+.local-keyset.json
 auth.json
 
 # 日志

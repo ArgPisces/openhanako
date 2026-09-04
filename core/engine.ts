@@ -614,6 +614,14 @@ export class HanaEngine {
       getCurrentModel: () => this.currentModel?.name,
     });
 
+    // 启动时把用户配置的 LLM 超时推送到运行时（callText 默认超时 / 总线默认超时）。
+    // 此后设置页每次保存也会即时推送（config-coordinator setLlmTimeoutPrefs），无需重启。
+    try {
+      this._configCoord.applyLlmTimeoutRuntime();
+    } catch (err) {
+      this.emitDevLog?.("server", `applyLlmTimeoutRuntime failed: ${err?.message || err}`);
+    }
+
     this._visionBridge = new VisionBridge({
       resolveVisionConfig: () => this.resolveVisionConfigFresh(),
       getUsageLedger: () => this._usageLedger,
@@ -1898,6 +1906,8 @@ export class HanaEngine {
   }
   getSearchConfig() { return this._configCoord.getSearchConfig(); }
   setSearchConfig(p) { return this._configCoord.setSearchConfig(p); }
+  getLlmTimeoutPrefs() { return this._configCoord.getLlmTimeoutPrefs(); }
+  setLlmTimeoutPrefs(p) { return this._configCoord.setLlmTimeoutPrefs(p); }
   getUtilityApi() { return this._configCoord.getUtilityApi(); }
   setUtilityApi(p) { return this._configCoord.setUtilityApi(p); }
   resolveUtilityConfig( options: any = {}) {

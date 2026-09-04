@@ -2444,6 +2444,14 @@
       "dropOrClick": "キャラクターカードをドロップするか、クリックして開く",
       "readFailed": "キャラクターカードの読み込みに失敗しました",
       "importFailed": "キャラクターカードのインポートに失敗しました"
+    },
+    "llmTimeout": {
+      "section": "LLM タイムアウト設定",
+      "sectionHint": "保存後すぐに反映され、再起動は不要です。範囲は 1000〜600000 ミリ秒。空欄で内蔵デフォルトに戻ります。",
+      "callTextTimeout": "LLM 呼び出しタイムアウト（ミリ秒）",
+      "callTextTimeoutHint": "単一の LLM リクエストのデフォルトタイムアウト（内蔵 60000）。長時間タスクが 60 秒で切断（LLM_TIMEOUT）される場合は大きくしてください。",
+      "busRequestTimeout": "バスリクエストタイムアウト（ミリ秒）",
+      "busRequestTimeoutHint": "プラグインがバス経由で呼び出す際のデフォルト待機上限（内蔵 30000）。ログに Request \"…\" timeout が出る場合は大きくしてください。"
     }
   },
   "onboarding": {

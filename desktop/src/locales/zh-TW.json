@@ -2444,6 +2444,14 @@
       "dropOrClick": "拖入角色卡或点击打开",
       "readFailed": "角色卡读取失败",
       "importFailed": "角色卡导入失败"
+    },
+    "llmTimeout": {
+      "section": "LLM 逾時設定",
+      "sectionHint": "儲存後立即生效，無需重新啟動平台。範圍 1000~600000 毫秒；留空恢復內建預設值。",
+      "callTextTimeout": "LLM 呼叫逾時（毫秒）",
+      "callTextTimeoutHint": "單次 LLM 請求的預設逾時，內建 60000。插件長任務（如多股操作指導）被 60 秒掐斷（LLM_TIMEOUT）時調大此項。",
+      "busRequestTimeout": "匯流排請求逾時（毫秒）",
+      "busRequestTimeoutHint": "插件經匯流排呼叫平台介面的預設等待上限，內建 30000。日誌出現 Request \"…\" timeout 時調大此項。"
     }
   },
   "onboarding": {

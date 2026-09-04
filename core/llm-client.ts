@@ -63,6 +63,32 @@ export type CallTextOptions = {
   usageLedger?: CallTextUsageLedger | null;
 };
 
+// ── 可配置的全局默认超时 ──
+// 历史上 callText 默认 60s 硬编码，是 LLM_TIMEOUT 钳制的根源（长任务如多股操作指导
+// 被掐断）。改为模块级可设值：服务端启动时从用户偏好（LLM 超时设置）加载并推送，
+// 设置页修改后热更新推送——改参数不再需要重新构建平台。
+const BUILTIN_CALL_TEXT_TIMEOUT_MS = 60_000;
+let _defaultCallTextTimeoutMs = BUILTIN_CALL_TEXT_TIMEOUT_MS;
+
+/**
+ * 设置 callText 全局默认超时（毫秒）。
+ * 传 null/undefined 重置为内置默认（60000）；数值限制在 1s~600s。
+ */
+export function setDefaultCallTextTimeout(ms: number | null | undefined) {
+  if (ms === null || ms === undefined) {
+    _defaultCallTextTimeoutMs = BUILTIN_CALL_TEXT_TIMEOUT_MS;
+    return;
+  }
+  if (typeof ms === "number" && Number.isFinite(ms) && ms >= 1_000 && ms <= 600_000) {
+    _defaultCallTextTimeoutMs = Math.round(ms);
+  }
+}
+
+/** 读取 callText 全局默认超时（毫秒），未配置时为内置 60000。 */
+export function getDefaultCallTextTimeout() {
+  return _defaultCallTextTimeoutMs;
+}
+
 /**
  * core/llm-client.ts — 统一的非流式 LLM 调用入口
  *
@@ -412,7 +438,7 @@ export async function callText({
   outputBudgetSource = "system",
   outputPolicy,
   callPurpose,
-  timeoutMs = 60_000,
+  timeoutMs,
   signal,
   returnUsage = false,
   usageContext,
@@ -452,7 +478,9 @@ export async function callText({
   }
 
   // ── 2. 超时信号 ──
-  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  // 未显式传入 timeoutMs 时用可配置的全局默认（见 setDefaultCallTextTimeout）
+  const effectiveTimeoutMs = timeoutMs ?? getDefaultCallTextTimeout();
+  const timeoutSignal = AbortSignal.timeout(effectiveTimeoutMs);
   const combinedSignal = signal
     ? AbortSignal.any([signal, timeoutSignal])
     : timeoutSignal;

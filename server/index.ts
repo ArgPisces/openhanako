@@ -89,7 +89,7 @@ import { Hub } from "../hub/index.ts";
 import { startCLI } from "./cli.ts";
 import { fromRoot } from "../shared/hana-root.ts";
 import { callText } from "../core/llm-client.ts";
-import { callTextConfigFromUtilityConfig } from "../core/model-execution-config.ts";
+import { callTextConfigFromUtilityConfig, callTextConfigFromResolvedModel } from "../core/model-execution-config.ts";
 
 const productDir = fromRoot("lib");
 
@@ -768,12 +768,31 @@ export async function startServer(root: CompositionRoot = {}): Promise<void> {
       ? payload.agentId.trim()
       : (sessionPath ? engine.resolveSessionOwnership?.(sessionPath)?.agentId || null : null);
     const utility = await engine.resolveUtilityConfigFresh({ agentId, sessionPath });
+    // 插件显式指定模型路由：providerId+modelId 同时在场时按调用方配置解析模型与凭证，
+    // 覆盖全局 utility 配置（否则插件侧的模型配置形同虚设——全局 utility 是唯一路由）。
+    // 缺省字段时行为与旧版完全一致，既有调用方不受影响。解析失败抛错（fail loud，
+    // 插件侧能看到明确的模型不可用信息，而非静默落到别的模型）。
+    let routeConfig: any;
+    const payloadProviderId = typeof payload.providerId === "string" ? payload.providerId.trim() : "";
+    const payloadModelId = typeof payload.modelId === "string" ? payload.modelId.trim() : "";
+    if (payloadProviderId && payloadModelId) {
+      try {
+        const resolved = await engine.resolveModelWithCredentialsFresh({ id: payloadModelId, provider: payloadProviderId });
+        routeConfig = callTextConfigFromResolvedModel(resolved);
+      } catch (err: any) {
+        throw new Error(`call-text 指定模型不可用: provider=${payloadProviderId} model=${payloadModelId} (${err?.message || err})`);
+      }
+    } else {
+      routeConfig = callTextConfigFromUtilityConfig(utility);
+    }
     const text = await callText({
-      ...callTextConfigFromUtilityConfig(utility),
+      ...routeConfig,
       systemPrompt: payload.systemPrompt || "",
       messages: Array.isArray(payload.messages) ? payload.messages : [],
       temperature: payload.temperature,
       maxTokens: payload.maxTokens,
+      // 透传调用方指定的 fetch 超时（callText 默认 60000ms，长任务如多股操作指导需更大）
+      ...(payload.timeoutMs != null ? { timeoutMs: payload.timeoutMs } : {}),
       usageLedger: utility.usageLedger,
       usageContext: {
         source: {

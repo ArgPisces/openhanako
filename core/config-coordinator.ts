@@ -8,6 +8,8 @@
 import { createModuleLogger } from "../lib/debug-log.ts";
 import { findModel, parseModelRef, requireModelRef } from "../shared/model-ref.ts";
 import { t } from "../lib/i18n.ts";
+import { setDefaultCallTextTimeout } from "./llm-client.ts";
+import { setDefaultBusRequestTimeout } from "../hub/event-bus.ts";
 import { resolveDefaultWorkspacePath } from "../shared/default-workspace.ts";
 import {
   AUTO_SEARCH_PROVIDER,
@@ -43,6 +45,21 @@ export const SHARED_MODEL_KEYS = [
 ];
 
 export const VISION_AUXILIARY_ENABLED_PREF_KEY = "vision_auxiliary_enabled";
+
+// ── LLM 超时配置（设置页「LLM 超时设置」持久化键）──
+export const LLM_CALL_TEXT_TIMEOUT_PREF_KEY = "llm_call_text_timeout_ms";
+export const LLM_BUS_REQUEST_TIMEOUT_PREF_KEY = "llm_bus_request_timeout_ms";
+const LLM_TIMEOUT_MIN_MS = 1_000;
+const LLM_TIMEOUT_MAX_MS = 600_000;
+
+/** 归一化超时值：范围内正整数返回毫秒数，否则返回 null（表示使用内置默认） */
+function normalizeLlmTimeoutValue(v) {
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+  if (typeof n === "number" && Number.isFinite(n) && n >= LLM_TIMEOUT_MIN_MS && n <= LLM_TIMEOUT_MAX_MS) {
+    return Math.round(n);
+  }
+  return null;
+}
 
 function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);
@@ -231,6 +248,50 @@ export class ConfigCoordinator {
     if (changed.length) {
       log.log(`setSharedModels: ${changed.join(", ")}`);
     }
+  }
+
+  // ── LLM 超时配置 ──
+
+  /** 读取 LLM 超时配置；未配置的字段为 null（运行时使用内置默认：callText 60s / bus 30s） */
+  getLlmTimeoutPrefs() {
+    const prefs = this._prefs();
+    return {
+      call_text_timeout_ms: normalizeLlmTimeoutValue(prefs[LLM_CALL_TEXT_TIMEOUT_PREF_KEY]),
+      bus_request_timeout_ms: normalizeLlmTimeoutValue(prefs[LLM_BUS_REQUEST_TIMEOUT_PREF_KEY]),
+    };
+  }
+
+  /** 更新 LLM 超时配置（部分更新）。超范围/非法值归一为 null 即清除，回退内置默认。 */
+  setLlmTimeoutPrefs(partial) {
+    const patch = partial && typeof partial === "object" ? partial : {};
+    const prefs = this._prefs();
+    const changed = [];
+    if (hasOwn(patch, "call_text_timeout_ms")) {
+      const v = normalizeLlmTimeoutValue(patch.call_text_timeout_ms);
+      if (v !== null) prefs[LLM_CALL_TEXT_TIMEOUT_PREF_KEY] = v;
+      else delete prefs[LLM_CALL_TEXT_TIMEOUT_PREF_KEY];
+      changed.push(`call_text_timeout_ms=${v ?? "(default)"}`);
+    }
+    if (hasOwn(patch, "bus_request_timeout_ms")) {
+      const v = normalizeLlmTimeoutValue(patch.bus_request_timeout_ms);
+      if (v !== null) prefs[LLM_BUS_REQUEST_TIMEOUT_PREF_KEY] = v;
+      else delete prefs[LLM_BUS_REQUEST_TIMEOUT_PREF_KEY];
+      changed.push(`bus_request_timeout_ms=${v ?? "(default)"}`);
+    }
+    this._savePrefs(prefs);
+    if (changed.length) {
+      log.log(`setLlmTimeoutPrefs: ${changed.join(", ")}`);
+    }
+    // 保存即生效：推送到运行时模块默认值，无需重启
+    this.applyLlmTimeoutRuntime();
+    return this.getLlmTimeoutPrefs();
+  }
+
+  /** 将当前超时偏好推送到运行时（callText 默认超时 / EventBus 默认超时）；未配置字段重置为内置默认 */
+  applyLlmTimeoutRuntime() {
+    const prefs = this.getLlmTimeoutPrefs();
+    setDefaultCallTextTimeout(prefs.call_text_timeout_ms);
+    setDefaultBusRequestTimeout(prefs.bus_request_timeout_ms);
   }
 
   _syncSharedModelsToAgents(sharedModels) {

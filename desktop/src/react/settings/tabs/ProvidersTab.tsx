@@ -7,6 +7,7 @@ import { loadSettingsConfig } from '../actions';
 import { ProviderDetail } from './providers/ProviderDetail';
 import { AddCustomButton, AddProviderOverlay } from './providers/ProviderList';
 import { OtherModelsSection } from './providers/OtherModelsSection';
+import { LlmTimeoutSection } from './providers/LlmTimeoutSection';
 import { UsageLedgerSection } from './providers/UsageLedgerSection';
 import { SettingsSection } from '../components/SettingsSection';
 import { ProviderIcon } from '@/ui';
@@ -189,6 +190,11 @@ export function ProvidersTab() {
       {/* 全局模型分配：OtherModelsSection 内部结构保持不变，外壳标准化 */}
       <SettingsSection title={t('settings.api.otherModelSection')}>
         <OtherModelsSection providers={providers} />
+      </SettingsSection>
+
+      {/* LLM 超时设置：callText 默认超时 / 总线默认超时，保存即热生效 */}
+      <SettingsSection title={t('settings.llmTimeout.section')}>
+        <LlmTimeoutSection />
       </SettingsSection>
 
       <UsageLedgerSection />
