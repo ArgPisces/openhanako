@@ -4,8 +4,8 @@ name: Stale Issues
 # Automatically marks and later closes long-inactive issues (two-phase).
 #
 # 工作方式 / How it works
-#   阶段 1 / Phase 1: issue 90 天无任何活动 → 打上 `stale` 标签并留言提醒。
-#                     After 90 days with no activity, add the `stale` label + a comment.
+#   阶段 1 / Phase 1: issue 30 天无任何活动 → 打上 `stale` 标签并留言提醒。
+#                     After 30 days with no activity, add the `stale` label + a comment.
 #   阶段 2 / Phase 2: 打上 `stale` 后再 14 天仍无活动 → 以 "not planned" 关闭。
 #                     If still inactive 14 days AFTER being labeled stale, close as "not planned".
 #   任何新评论/更新都会自动移除 `stale` 标签并重新计时（remove-stale-when-updated）。
@@ -58,7 +58,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
           # ---- 时间阈值 / Thresholds ----
-          days-before-issue-stale: 90
+          days-before-issue-stale: 30
           days-before-issue-close: 14
           # 不处理 PR / never touch PRs
           days-before-pr-stale: -1
@@ -91,7 +91,7 @@ jobs:
 
           # ---- 留言模板 / Comment templates ----
           stale-issue-message: |
-            这个 issue 已经 90 天没有任何动态，已被自动标记为 `stale`。
+            这个 issue 已经 30 天没有任何动态，已被自动标记为 `stale`。
             如果 14 天内仍没有新的活动，它将被自动关闭。
 
             **想让它保持打开？** 只需在下面留一条评论（例如补充最新情况、确认问题仍存在），或移除 `stale` 标签即可，计时会重新开始。
@@ -99,7 +99,7 @@ jobs:
 
             ---
 
-            This issue has had no activity for 90 days and has been automatically marked as `stale`.
+            This issue has had no activity for 30 days and has been automatically marked as `stale`.
             It will be closed automatically if there is no further activity within 14 days.
 
             **Want to keep it open?** Just leave a comment below (e.g. an update, or confirming it still applies), or remove the `stale` label — the timer will reset.
